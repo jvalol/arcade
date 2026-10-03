@@ -125,6 +125,17 @@ fn art_of(name: &str) -> Option<TextureData> {
 }
 
 impl Game for Arcade {
+    /// Takes the cursor so the mouse can look, and gives it back when the
+    /// window loses focus or a game is started in front of this one.
+    ///
+    /// Declared and never done at first, so `locked` stayed false and every
+    /// mouse motion was dropped before it reached the camera.
+    fn before_frame(&mut self, renderer: &mut Renderer) {
+        if self.wants_lock != self.locked {
+            self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
+        }
+    }
+
     fn load(&mut self, renderer: &mut Renderer) {
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
         self.floor = Some(renderer.add_mesh(&MeshData::plane()));
@@ -197,7 +208,9 @@ impl Game for Arcade {
         text.reset();
         for (line, say) in vec![
             saying,
-            String::from("Use WASD to walk. Use the mouse to look around. Press escape to quit."),
+            String::from(
+                "WASD or arrow keys to walk around. Use the mouse to look around. Press escape to quit.",
+            ),
         ]
         .into_iter()
         .enumerate()
@@ -291,7 +304,10 @@ impl Game for Arcade {
             KeyboardKey::Return if held => {
                 if let Some(n) = self.room.at(self.at, self.facing()) {
                     let stood = self.room.stood[n].clone();
-                    self.playing.start(&stood.cabinet);
+                    if self.playing.start(&stood.cabinet) {
+                        // the game wants the mouse now
+                        self.wants_lock = false;
+                    }
                 }
             }
             KeyboardKey::Escape => self.quitting = held,
@@ -300,7 +316,7 @@ impl Game for Arcade {
     }
 
     fn process_mouse(&mut self, input: MouseInput) {
-        if input.button == MouseButton::Left {
+        if input.button == MouseButton::Left && input.is_pressed() && !self.locked {
             self.wants_lock = true;
         }
     }
