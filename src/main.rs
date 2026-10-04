@@ -1,5 +1,6 @@
 //! arcade: a room of cabinets, one per game. See `specs/`.
 
+mod aim;
 mod cabinet;
 mod display;
 mod room;
@@ -40,6 +41,13 @@ struct Arcade {
     shown: Vec<MeshId>,
     since: f32,
 
+    /// What the sight is on, per spec 0003. Worked out once in `update` and
+    /// read everywhere else: `draw` asked the room six times a frame, once per
+    /// display and twice over, and the answer cannot change inside a frame.
+    seen: Option<room::Seen>,
+    /// How big the window is, so the sight can sit in the middle of it.
+    window: (f32, f32),
+
     at: Vec3,
     yaw: f32,
     pitch: f32,
@@ -63,6 +71,8 @@ impl Arcade {
             screen: None,
             shown: Vec::new(),
             since: 0.0,
+            seen: None,
+            window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
             yaw: 0.0,
@@ -178,8 +188,13 @@ impl Game for Arcade {
         _geometry: &mut Geometry,
         _text: &mut TextRenderer,
         _sound: &SoundSystem,
-        _size: (f32, f32),
+        size: (f32, f32),
     ) {
+        self.window = size;
+    }
+
+    fn resized(&mut self, window_size: (f32, f32)) {
+        self.window = window_size;
     }
 
     fn update(
@@ -214,45 +229,86 @@ impl Game for Arcade {
         }
 
         let playing = self.playing.now().map(|name| name.to_string());
-        let seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
+        self.seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
 
-        let saying = match (&playing, seen) {
-            (Some(name), _) => format!("{} is playing. Quit to come back.", name),
+        // what is under the sight: its name, and then what to do about it. Two
+        // sizes, because the name is what you are checking and the line under
+        // it is what you are being told.
+        let (name, detail) = match (&playing, self.seen) {
+            (Some(name), _) => (
+                Some(name.clone()),
+                Some(String::from("is playing. Quit to come back.")),
+            ),
             (None, Some(room::Seen::Cabinet(n))) => {
                 let stood = &self.room.stood[n];
-                if stood.cabinet.is_built() {
-                    format!(
-                        "{}. Click or press enter to play.",
-                        stood.cabinet.name
-                    )
-                } else {
-                    format!(
-                        "{} has not been built. Run ./check-all.",
-                        stood.cabinet.name
-                    )
-                }
+                (
+                    Some(stood.cabinet.name.clone()),
+                    Some(String::from(if stood.cabinet.is_built() {
+                        "Press enter to play"
+                    } else {
+                        "Not built. Run ./check-all"
+                    })),
+                )
             }
-            (None, Some(room::Seen::Display(n))) => format!(
-                "{}, showing off the engine. if you know, you know. If you don't, you can look it up.",
-                self.room.displays[n].name
+            (None, Some(room::Seen::Display(n))) => (
+                Some(self.room.displays[n].name.to_string()),
+                Some(String::from(
+                    "showing off the engine. if you know, you know. If you don't, you can look it up.",
+                )),
             ),
-            (None, None) => String::from("Look at a cabinet to play."),
+            (None, None) => (None, None),
         };
 
         text.reset();
+
+        // the corner says how to move and what the room is for. Being able to
+        // walk was never the part that was unclear.
         for (line, say) in vec![
-            saying,
-            String::from(
-                "WASD or arrow keys to walk around. Use the mouse to look around. Press escape to quit.",
-            ),
+            "WASD or arrow keys to walk around. Use the mouse to look around. Press escape to quit.",
+            "Look at a cabinet and press enter to play.",
         ]
         .into_iter()
         .enumerate()
         {
             text.push_render_text(RenderText {
                 position: vec2(20.0, 20.0 + line as f32 * 24.0),
-                text: say,
+                text: String::from(say),
                 size: 14.0,
+                ..Default::default()
+            });
+        }
+
+        // the sight, per spec 0003. Not while a game is up, since there is
+        // nothing in this room to point at then.
+        if playing.is_none() {
+            text.push_render_text(RenderText {
+                position: aim::sight_at(self.window),
+                text: String::from(aim::SIGHT),
+                size: aim::SIGHT_SIZE,
+                color: aim::sight_colour(self.seen.is_some()),
+                centered: true,
+                ..Default::default()
+            });
+        }
+
+        if let Some(name) = name {
+            text.push_render_text(RenderText {
+                position: aim::prompt_at(self.window, 0),
+                bounds: aim::prompt_bounds(self.window),
+                text: name,
+                size: aim::PROMPT_SIZE,
+                centered: true,
+                ..Default::default()
+            });
+        }
+
+        if let Some(detail) = detail {
+            text.push_render_text(RenderText {
+                position: aim::prompt_at(self.window, 1),
+                bounds: aim::prompt_bounds(self.window),
+                text: detail,
+                size: aim::DETAIL_SIZE,
+                centered: true,
                 ..Default::default()
             });
         }
@@ -303,39 +359,27 @@ impl Game for Arcade {
                     .with_scale(vec3(0.5, display::HIGH - 0.6, 0.5)),
                 vec4(0.17, 0.16, 0.20, 1.0),
             );
-            let lit = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing())
-                == Some(room::Seen::Display(n));
             scene.push_colored(
                 mesh,
                 &Transform::at(one.at)
                     .with_rotation(turned)
                     .with_scale(Vec3::splat(one.scale)),
-                if lit {
-                    vec4(0.88, 0.86, 0.96, 1.0)
-                } else {
-                    vec4(0.58, 0.56, 0.66, 1.0)
-                },
+                aim::shape_colour(self.seen == Some(room::Seen::Display(n))),
             );
         }
 
-        let seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
-        let at = match seen {
+        let at = match self.seen {
             Some(room::Seen::Cabinet(n)) => Some(n),
             _ => None,
         };
         for (n, stood) in self.room.stood.iter().enumerate() {
-            let lit = at == Some(n) && stood.cabinet.is_built();
-            let body = if stood.cabinet.is_built() {
-                vec4(0.20, 0.19, 0.24, 1.0)
-            } else {
-                vec4(0.13, 0.13, 0.14, 1.0)
-            };
+            let look = aim::look_of(stood.cabinet.is_built(), at == Some(n));
 
             scene.push_colored(
                 cube,
                 &Transform::at(stood.at + Vec3::Y * room::CABINET.y * 0.5)
                     .with_scale(room::CABINET),
-                body,
+                look.body,
             );
 
             // the screen, a thin slab on the face that looks into the room
@@ -347,14 +391,9 @@ impl Game for Arcade {
             let wide = room::CABINET.z * room::SCREEN;
             let placed =
                 Transform::at(screen).with_scale(vec3(0.05, wide * room::SCREEN_SHAPE, wide));
-            let tint = if lit {
-                vec4(1.0, 1.0, 1.0, 1.0)
-            } else {
-                vec4(0.78, 0.78, 0.84, 1.0)
-            };
 
             match self.art.get(n).copied().flatten() {
-                Some(art) => scene.push_textured(screen_mesh, art, &placed, tint, 32.0),
+                Some(art) => scene.push_textured(screen_mesh, art, &placed, look.screen, 32.0),
                 None => scene.push_colored(screen_mesh, &placed, vec4(0.08, 0.08, 0.1, 1.0)),
             }
         }
