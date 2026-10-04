@@ -6,6 +6,7 @@ mod display;
 mod room;
 
 use blitzkit::camera::Camera;
+use blitzkit::collision::Aabb;
 use blitzkit::geometry::Geometry;
 use blitzkit::keyboard::{KeyboardInput, KeyboardKey, KeyboardKeyState};
 use blitzkit::mesh::{MeshData, Transform};
@@ -27,6 +28,22 @@ const SPEED: f32 = 4.2;
 const LOOK: f32 = 0.0022;
 const PITCH_LIMIT: f32 = 1.3;
 
+/// Whether this run is only here to be photographed, for `refresh-screenshots`
+/// in the project above.
+fn staged() -> bool {
+    std::env::args().any(|arg| arg == "--screenshot")
+}
+
+/// Where the camera stands for a staged shot, and which way it looks.
+///
+/// Spec 0003 made the screens go dark until you are within reach of one, so
+/// the view from the doorway is now a dark room with nothing answering. The
+/// picture has to be taken from where the room is doing something: a step back
+/// from a cabinet, with it lit and named and offering its key.
+const POSED_AT: Vec3 = vec3(0.0, 0.0, 2.45);
+const POSED_YAW: f32 = 1.0;
+const POSED_PITCH: f32 = -0.1;
+
 struct Arcade {
     room: Room,
     playing: Playing,
@@ -47,6 +64,9 @@ struct Arcade {
     seen: Option<room::Seen>,
     /// How big the window is, so the sight can sit in the middle of it.
     window: (f32, f32),
+    /// Which way each shape on the far wall is facing, and which one is in your
+    /// hands. Spec 0004.
+    spin: display::Spin,
 
     at: Vec3,
     yaw: f32,
@@ -60,10 +80,12 @@ struct Arcade {
 impl Arcade {
     fn new() -> Self {
         let room = Room::of(games());
+        let spin = display::Spin::of(room.displays.len());
 
         Self {
-            at: room.doorway(),
+            at: if staged() { POSED_AT } else { room.doorway() },
             room,
+            spin,
             playing: Playing::new(),
             art: Vec::new(),
             cube: None,
@@ -75,8 +97,8 @@ impl Arcade {
             window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
-            yaw: 0.0,
-            pitch: 0.0,
+            yaw: if staged() { POSED_YAW } else { 0.0 },
+            pitch: if staged() { POSED_PITCH } else { 0.0 },
             walking: [false; 4],
             wants_lock: true,
             locked: false,
@@ -84,17 +106,28 @@ impl Arcade {
         }
     }
 
-    /// Starts whatever the middle of the screen is on, which is what both enter
-    /// and a click mean.
-    fn play_what_i_see(&mut self) {
-        let Some(n) = self.room.looked_at(self.at + Vec3::Y * EYE, self.facing()) else {
+    /// Acts on whatever the middle of the screen is on, which is what both
+    /// enter and a click mean.
+    ///
+    /// One rule, and what the sight is on decides what it means: a cabinet is
+    /// played and a shape is taken hold of, per spec 0004. Holding one, it
+    /// means let go, whatever the sight has wandered onto.
+    fn use_what_i_see(&mut self) {
+        if self.spin.holding().is_some() {
+            self.spin.let_go(self.since);
             return;
-        };
+        }
 
-        let stood = self.room.stood[n].clone();
-        if self.playing.start(&stood.cabinet) {
-            // the game wants the mouse now
-            self.wants_lock = false;
+        match self.seen {
+            Some(room::Seen::Cabinet(n)) => {
+                let stood = self.room.stood[n].clone();
+                if self.playing.start(&stood.cabinet) {
+                    // the game wants the mouse now
+                    self.wants_lock = false;
+                }
+            }
+            Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
+            None => (),
         }
     }
 
@@ -168,6 +201,20 @@ impl Game for Arcade {
     }
 
     fn load(&mut self, renderer: &mut Renderer) {
+        // The sun's map covers the room and no more. The default is forty
+        // across, and this room is five by fifteen, so a texel was 0.02 wide
+        // and the shapes on the far wall cast smears rather than shadows: the
+        // Sierpinski tetrahedron's finest face is 0.03 across, under two
+        // texels.
+        renderer.set_scene_bounds(Aabb::from_center_size(
+            vec3(0.0, room::TALL * 0.5, 0.0),
+            vec3(
+                (room::WALL + room::CABINET.x) * 2.0,
+                room::TALL,
+                self.room.reaches * 2.0,
+            ),
+        ));
+
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
         self.floor = Some(renderer.add_mesh(&MeshData::plane()));
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
@@ -231,6 +278,14 @@ impl Game for Arcade {
         let playing = self.playing.now().map(|name| name.to_string());
         self.seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
 
+        // walking away lets go. Looking away cannot happen: while you hold one
+        // the mouse is turning it rather than the view.
+        if let Some(held) = self.spin.holding() {
+            if self.seen != Some(room::Seen::Display(held)) {
+                self.spin.let_go(self.since);
+            }
+        }
+
         // what is under the sight: its name, and then what to do about it. Two
         // sizes, because the name is what you are checking and the line under
         // it is what you are being told.
@@ -250,29 +305,39 @@ impl Game for Arcade {
                     })),
                 )
             }
+            // spec 0004 gave a shape something to press, so it says what the
+            // button would do, as a cabinet does
             (None, Some(room::Seen::Display(n))) => (
                 Some(self.room.displays[n].name.to_string()),
-                Some(String::from(
-                    "showing off the engine. if you know, you know. If you don't, you can look it up.",
-                )),
+                Some(String::from(if self.spin.holding() == Some(n) {
+                    "Click to let go"
+                } else {
+                    "Click to turn it"
+                })),
             ),
             (None, None) => (None, None),
         };
 
         text.reset();
 
-        // the corner says how to move and what the room is for. Being able to
-        // walk was never the part that was unclear.
-        for (line, say) in vec![
-            "WASD or arrow keys to walk around. Use the mouse to look around. Press escape to quit.",
-            "Look at a cabinet and press enter to play.",
-        ]
-        .into_iter()
-        .enumerate()
-        {
+        // the corner says how to move, and nothing else. What to press is under
+        // the sight, and saying it here as well is saying it twice.
+        text.push_render_text(RenderText {
+            position: vec2(20.0, 20.0),
+            text: String::from(
+                "WASD or arrow keys to walk around. Use the mouse to look around. Press escape to quit.",
+            ),
+            size: 14.0,
+            ..Default::default()
+        });
+
+        // and the wink, once, while the sight is on any of the five. Spec 0004:
+        // it was under every shape, five times, which is five times too many
+        // for a joke.
+        if matches!(self.seen, Some(room::Seen::Display(_))) || self.spin.holding().is_some() {
             text.push_render_text(RenderText {
-                position: vec2(20.0, 20.0 + line as f32 * 24.0),
-                text: String::from(say),
+                position: vec2(20.0, 44.0),
+                text: String::from("If you know, you know. If you don't, play with one."),
                 size: 14.0,
                 ..Default::default()
             });
@@ -281,33 +346,48 @@ impl Game for Arcade {
         // the sight, per spec 0003. Not while a game is up, since there is
         // nothing in this room to point at then.
         if playing.is_none() {
+            let at = aim::sight_at(self.window);
+            let colour = aim::sight_colour(self.seen.is_some());
+
+            // its own shadow, as the prompt has. On nothing the sight is dim
+            // on purpose, and dim grey on a lit grey wall disappeared outright.
+            for (at, colour) in [
+                (aim::shadow_at(at), aim::SHADOW_COLOUR.with_w(colour.w)),
+                (at, colour),
+            ] {
+                text.push_render_text(RenderText {
+                    position: at,
+                    text: String::from(aim::SIGHT),
+                    size: aim::SIGHT_SIZE,
+                    color: colour,
+                    centered: true,
+                    ..Default::default()
+                });
+            }
+        }
+
+        for (line, say, size) in vec![(0, name, aim::PROMPT_SIZE), (1, detail, aim::DETAIL_SIZE)]
+            .into_iter()
+            .filter_map(|(line, say, size)| say.map(|say| (line, say, size)))
+        {
+            let at = aim::prompt_at(self.window, line);
+
+            // its own shadow first, since it lands on whatever the sight just
+            // lit and that is the brightest thing in the room
             text.push_render_text(RenderText {
-                position: aim::sight_at(self.window),
-                text: String::from(aim::SIGHT),
-                size: aim::SIGHT_SIZE,
-                color: aim::sight_colour(self.seen.is_some()),
+                position: aim::shadow_at(at),
+                bounds: aim::prompt_bounds(self.window),
+                text: say.clone(),
+                size,
+                color: aim::SHADOW_COLOUR,
                 centered: true,
                 ..Default::default()
             });
-        }
-
-        if let Some(name) = name {
             text.push_render_text(RenderText {
-                position: aim::prompt_at(self.window, 0),
+                position: at,
                 bounds: aim::prompt_bounds(self.window),
-                text: name,
-                size: aim::PROMPT_SIZE,
-                centered: true,
-                ..Default::default()
-            });
-        }
-
-        if let Some(detail) = detail {
-            text.push_render_text(RenderText {
-                position: aim::prompt_at(self.window, 1),
-                bounds: aim::prompt_bounds(self.window),
-                text: detail,
-                size: aim::DETAIL_SIZE,
+                text: say,
+                size,
                 centered: true,
                 ..Default::default()
             });
@@ -347,24 +427,25 @@ impl Game for Arcade {
         }
 
         // the engine's own shapes, turning at the end of the room
-        let turned = glam::Quat::from_rotation_y(display::turned(self.since));
         for (n, one) in self.room.displays.iter().enumerate() {
             let Some(mesh) = self.shown.get(n).copied() else {
                 continue;
             };
 
+            let (plinth, size) = display::plinth_under(one);
             scene.push_colored(
                 cube,
-                &Transform::at(vec3(one.at.x, display::HIGH * 0.5 - 0.3, one.at.z))
-                    .with_scale(vec3(0.5, display::HIGH - 0.6, 0.5)),
+                &Transform::at(plinth).with_scale(size),
                 vec4(0.17, 0.16, 0.20, 1.0),
             );
             scene.push_colored(
                 mesh,
                 &Transform::at(one.at)
-                    .with_rotation(turned)
+                    .with_rotation(self.spin.facing(n, self.since))
                     .with_scale(Vec3::splat(one.scale)),
-                aim::shape_colour(self.seen == Some(room::Seen::Display(n))),
+                aim::shape_colour(
+                    self.seen == Some(room::Seen::Display(n)) || self.spin.holding() == Some(n),
+                ),
             );
         }
 
@@ -407,7 +488,7 @@ impl Game for Arcade {
             KeyboardKey::A | KeyboardKey::Left => self.walking[2] = held,
             KeyboardKey::D | KeyboardKey::Right => self.walking[3] = held,
             KeyboardKey::Return if held => {
-                self.play_what_i_see();
+                self.use_what_i_see();
             }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
@@ -423,7 +504,7 @@ impl Game for Arcade {
         // middle of the screen, so a click is a click on what you are looking
         // at. Unlocked, the first click is for taking the cursor back.
         if self.locked {
-            self.play_what_i_see();
+            self.use_what_i_see();
         } else {
             self.wants_lock = true;
         }
@@ -431,6 +512,15 @@ impl Game for Arcade {
 
     fn mouse_motion(&mut self, delta: Vec2) {
         if !self.locked {
+            return;
+        }
+
+        // with one in your hands the mouse turns it rather than the view. The
+        // view is already pointing at the thing you are holding, so there is
+        // nothing to lose by stopping it.
+        if self.spin.holding().is_some() {
+            let right = self.forward().cross(Vec3::Y);
+            self.spin.turn(display::Spin::drag(delta, right));
             return;
         }
 

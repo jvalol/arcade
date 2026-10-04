@@ -11,6 +11,7 @@ not a priority, and it never changes once a spec exists.
 | [0001](0001-the-room.md) | A room of cabinets, one per game, and the key that plays one |
 | [0002](0002-what-is-on-the-far-wall.md) | The engine's own shapes, turning at the end of the room |
 | [0003](0003-what-you-are-pointing-at.md) | The sight in the middle of the screen, and the lit cabinet |
+| [0004](0004-taking-hold-of-one.md) | Turning a shape on the far wall with the mouse |
 
 ---
 

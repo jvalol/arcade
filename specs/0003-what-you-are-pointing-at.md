@@ -26,6 +26,21 @@ could not tell the arcade was interactive at all.
 you to point, so it is drawn whether or not you are on anything. Dim on nothing
 and bright on something.
 
+**The sight only reaches what you could walk up to.** It carried the length of
+the room: from the doorway it lit a cabinet thirteen units off, named it, and
+offered to play it, and after spec 0004 it offered to turn a Klein bottle at a
+size where you cannot see what you would be turning.
+
+Spec 0001 replaced "the nearest one in front of you, within reach and nearly
+enough faced" with pointing and nothing else, because having to face a thing
+meant walking the aisle to learn what anything was. Dropping the facing was
+right. Dropping the reach along with it is what put the far wall in your hands
+from the door.
+
+One reach for everything, so the room has one rule, and it governs the light,
+the name and the click together. Beyond it the sight is on nothing, which is
+what it already draws when it is on nothing.
+
 **The screens are dark until you point at one.** Dimming the rest is what makes
 one stand out, and it is what an arcade looks like anyway. The one you are on
 shows its picture at full strength and the others sit well under it, far enough
@@ -41,12 +56,19 @@ than only in the corner. The name of the thing, and the key.
 playable, so lighting it would be a promise the room cannot keep. Spec 0001
 already refuses to start it.
 
-**The shapes on the far wall name themselves and offer no key.** Spec 0002 says
-looking at one says what it is and nothing else, and that does not change.
+**The shapes on the far wall answer more quietly.** Brightening is this room's
+way of saying press enter, and a shape has nothing to press. Lighting one as a
+cabinet lights is the same promise an unbuilt cabinet is kept dark to avoid
+making, and it was: 0.51 against a cabinet's 0.58.
 
-**The corner keeps the controls**, and gains the one sentence that says what the
-room is for. Walking and looking were already there and being able to walk was
-never the part that was unclear.
+Not none, though, which was the first thing tried on paper. Five of them stand
+0.72 apart and the name under the sight belongs to exactly one. Enough to say
+which, held at under half a cabinet's step so the two never read as the same
+offer. Spec 0002 still stands: looking at one says what it is and nothing else.
+
+**The corner keeps the controls and nothing else.** It gained a line saying to
+look at a cabinet and press enter, and that is the same instruction the sight
+already gives, in the place you are not looking. Said once.
 
 ## What it asks of blitzkit
 
@@ -61,8 +83,10 @@ reports the window, so the sight is text at a position this crate works out.
 - The sight is brighter on something than on nothing. — `aim::tests::the_sight_brightens_on_something`
 - A cabinet you are pointing at is brighter than one you are not, body and screen both. — `aim::tests::the_one_you_point_at_is_brighter`
 - Far enough brighter to read across the room. — `aim::tests::the_difference_is_worth_seeing`
+- A shape says which one it is without saying press. — `aim::tests::a_shape_answers_more_quietly_than_a_cabinet`
 - A cabinet that has not been built does not light up. — `aim::tests::an_unbuilt_cabinet_stays_dark`
 - Only the thing you are pointing at is lit. — `room::tests::the_one_you_are_looking_at_is_the_one`
+- The sight does not reach the far wall from the doorway. — `room::tests::the_sight_does_not_reach_across_the_room`
 
 ### Verified by hand
 

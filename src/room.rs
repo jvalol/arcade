@@ -29,6 +29,19 @@ pub const APART: f32 = 2.2;
 pub const WALL: f32 = 2.0;
 pub const TALL: f32 = 3.2;
 
+/// How far the sight carries. Spec 0003.
+///
+/// Spec 0001 replaced "the nearest one in front of you, within reach and
+/// nearly enough faced" with pointing and nothing else, because having to face
+/// a thing meant walking the aisle to learn what anything was. Dropping the
+/// facing was right and dropping the reach with it was not: from the doorway
+/// the room named the Klein bottle thirteen units away and offered to turn it,
+/// at a size where you cannot see what you would be turning.
+///
+/// Just under two steps down the aisle, so a thing comes alive as you reach it
+/// rather than when you merely aim at it.
+pub const REACH: f32 = 4.0;
+
 /// The screen itself: one quad facing +x, so the screenshot sits on it the way
 /// it was taken.
 ///
@@ -179,23 +192,19 @@ impl Room {
         out
     }
 
-    /// Which cabinet you are looking at: the nearest one the line of sight
-    /// meets.
+    /// What you are looking at: the nearest thing the line of sight meets, said
+    /// as a cabinet or as one of the shapes on the far wall, so the room reads
+    /// one way throughout.
     ///
     /// Pointing rather than standing. It was "the nearest one in front of you,
     /// within reach and nearly enough faced", which meant walking the aisle to
     /// find out what anything was. With the cursor held by the window there is
     /// no pointer but the middle of the screen, so looking at a thing is
     /// pointing at it, and a click is a click on it.
-    pub fn looked_at(&self, from: Vec3, way: Vec3) -> Option<usize> {
-        match self.looking_at(from, way) {
-            Some(Seen::Cabinet(n)) => Some(n),
-            _ => None,
-        }
-    }
-
-    /// The same, saying whether it is a cabinet or one of the shapes on the far
-    /// wall, so the room reads one way throughout.
+    ///
+    /// There was a `looked_at` beside this that answered cabinets only. Spec
+    /// 0004 gave the shapes something a click does, so every caller wants both
+    /// and the room is read one way.
     pub fn looking_at(&self, from: Vec3, way: Vec3) -> Option<Seen> {
         let way = way.normalize_or_zero();
         if way == Vec3::ZERO {
@@ -214,6 +223,7 @@ impl Room {
 
         cabinets
             .chain(shapes)
+            .filter(|(_, far)| *far <= REACH)
             .min_by(|one, other| one.1.total_cmp(&other.1))
             .map(|(what, _)| what)
     }
@@ -228,6 +238,14 @@ impl Room {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    /// Which cabinet the sight is on, for the tests that are about cabinets.
+    fn cabinet_at(room: &Room, from: Vec3, way: Vec3) -> Option<usize> {
+        match room.looking_at(from, way) {
+            Some(Seen::Cabinet(n)) => Some(n),
+            _ => None,
+        }
+    }
 
     fn some(count: usize) -> Vec<Cabinet> {
         (0..count)
@@ -290,11 +308,11 @@ mod tests {
 
         // in front of it, looking at it
         let you = first - vec3(1.4, 0.0, 0.0) + eye;
-        assert_eq!(room.looked_at(you, vec3(1.0, 0.0, 0.0)), Some(0));
+        assert_eq!(cabinet_at(&room, you, vec3(1.0, 0.0, 0.0)), Some(0));
 
         // the same spot, looking the other way: the opposite row, not nothing.
         // Which is the change. Standing somewhere no longer decides anything.
-        let across = room.looked_at(you, vec3(-1.0, 0.0, 0.0));
+        let across = cabinet_at(&room, you, vec3(-1.0, 0.0, 0.0));
         assert!(
             across.is_some_and(|n| room.stood[n].at.x < 0.0),
             "looking across the aisle found {:?}",
@@ -302,12 +320,12 @@ mod tests {
         );
 
         // and up the aisle at nothing
-        assert_eq!(room.looked_at(Vec3::Y * 1.55, vec3(0.0, 0.0, 1.0)), None);
+        assert_eq!(cabinet_at(&room, Vec3::Y * 1.55, vec3(0.0, 0.0, 1.0)), None);
 
         // and from the far end of the aisle, looking across at it, which the
         // old rule could not reach
         let along = vec3(0.0, 0.0, first.z + 4.0) + eye;
-        assert_eq!(room.looked_at(along, first + eye - along), Some(0));
+        assert_eq!(cabinet_at(&room, along, first + eye - along), Some(0));
 
         // the near one wins when two are in line
         let behind = room
@@ -317,8 +335,37 @@ mod tests {
             .expect("a far side");
         let through = room.stood[behind].at + eye - (first + eye);
         assert_eq!(
-            room.looked_at(first + eye - through.normalize() * 3.0, through),
+            cabinet_at(&room, first + eye - through.normalize() * 3.0, through),
             Some(0)
+        );
+    }
+
+    /// Spec 0003: the sight does not carry the length of the room.
+    ///
+    /// From the doorway it named a shape on the far wall and offered to turn
+    /// it, which is a thing to do to something you cannot see.
+    #[test]
+    fn the_sight_does_not_reach_across_the_room() {
+        let room = Room::of(some(12));
+        let eye = room.doorway() + Vec3::Y * 1.55;
+        let shape = room.displays[2].at;
+
+        assert!(
+            eye.distance(shape) > REACH,
+            "the room is too small for this test to mean anything"
+        );
+        assert_eq!(
+            room.looking_at(eye, shape - eye),
+            None,
+            "the doorway can still see the far wall"
+        );
+
+        // and the same one is seen from a couple of units away
+        let near = shape + Vec3::Z * 2.0;
+        assert_eq!(
+            room.looking_at(near, shape - near),
+            Some(Seen::Display(2)),
+            "it cannot be seen from two units away either"
         );
     }
 
@@ -338,7 +385,7 @@ mod tests {
             "the shapes on the wall are not pickable"
         );
         assert_eq!(
-            room.looked_at(you, one.at - you),
+            cabinet_at(&room, you, one.at - you),
             None,
             "a shape read as a cabinet"
         );

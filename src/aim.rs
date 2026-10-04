@@ -55,6 +55,26 @@ pub fn prompt_bounds(window: (f32, f32)) -> Vec2 {
 /// What the engine calls a bound that does not bind.
 pub const UNBOUNDED: f32 = blitzkit::renderer::render_text::UNBOUNDED_F32;
 
+/// How far the shadow under the sight and the prompt is offset, and what
+/// colour it is.
+///
+/// The prompt lands on whatever you are pointing at, and what you are pointing
+/// at is the brightest thing in the room because the sight just lit it. White
+/// on white is what that gives you: the name of the Sierpinski tetrahedron was
+/// legible only where a dark face happened to sit behind a letter. Two pushes
+/// rather than a pass the engine does not have.
+///
+/// The sight carries one too, and needs it more. On nothing it is dim on
+/// purpose, and dim grey on a lit grey wall is nothing at all: from the
+/// doorway it disappeared outright.
+pub const SHADOW: f32 = 2.0;
+pub const SHADOW_COLOUR: Vec4 = vec4(0.0, 0.0, 0.0, 0.85);
+
+/// Where the shadow under a line of the prompt goes.
+pub fn shadow_at(at: Vec2) -> Vec2 {
+    at + Vec2::splat(SHADOW)
+}
+
 /// The sight's colour. Dim on nothing so it is not a thing in the way, and up
 /// to full when it is on something, which is the room answering you.
 pub fn sight_colour(on_something: bool) -> Vec4 {
@@ -114,10 +134,18 @@ pub fn look_of(built: bool, lit: bool) -> Look {
     }
 }
 
-/// How bright one of the far wall's shapes is, which follows the same rule.
+/// How bright one of the far wall's shapes is.
+///
+/// A smaller step than a cabinet's, and that is the whole point. Brightening
+/// is this room's way of saying press enter, and a shape has nothing to press:
+/// it lit up exactly as a cabinet does and then did nothing, which is the same
+/// promise an unbuilt cabinet is kept dark to avoid making.
+///
+/// Not none, though. Five of them stand 0.72 apart and the name under the
+/// sight belongs to one of them. Enough to say which, not enough to say press.
 pub fn shape_colour(lit: bool) -> Vec4 {
     if lit {
-        vec4(0.95, 0.93, 1.0, 1.0)
+        vec4(0.58, 0.56, 0.66, 1.0)
     } else {
         vec4(0.44, 0.42, 0.52, 1.0)
     }
@@ -183,6 +211,46 @@ mod tests {
                 at.y
             );
         }
+    }
+
+    /// Spec 0003: the sight is drawn whether or not it is on anything, so the
+    /// dim one has to survive a light wall.
+    #[test]
+    fn the_dim_sight_is_still_there() {
+        let dim = sight_colour(false);
+
+        assert!(dim.w > 0.3, "at {} alpha there is nothing to see", dim.w);
+
+        let sight = sight_at(WINDOW);
+        assert!(
+            shadow_at(sight) != sight,
+            "the sight has no shadow to stand against a light wall"
+        );
+    }
+
+    /// Spec 0003: the prompt is readable against the thing it lands on, which
+    /// is the brightest thing in the room.
+    #[test]
+    fn the_prompt_carries_its_own_background() {
+        let text = prompt_at(WINDOW, 0);
+        let shadow = shadow_at(text);
+
+        assert!(shadow != text, "the shadow is not offset from the text");
+        assert!(
+            shadow.y > text.y,
+            "the shadow is above the text rather than under it"
+        );
+
+        let under = SHADOW_COLOUR;
+        assert!(
+            under.w > 0.5,
+            "a shadow at {} alpha is not a background",
+            under.w
+        );
+        assert!(
+            under.x + under.y + under.z < sight_colour(true).truncate().element_sum(),
+            "the shadow is no darker than what it sits under"
+        );
     }
 
     /// Spec 0003: a line under the sight wraps rather than running off both
@@ -275,9 +343,31 @@ mod tests {
             "the screens are {} apart, which spec 0003 says is not enough",
             lit.screen.x - not.screen.x
         );
+    }
 
+    /// Spec 0003: a shape says which one it is and does not say press.
+    ///
+    /// Held as a fraction of a cabinet's step rather than as a number of its
+    /// own, since what matters is that the two do not read as the same offer.
+    /// They were 0.51 and 0.58, near enough the same, and a shape that comes
+    /// on like a cabinet and then does nothing is the promise an unbuilt
+    /// cabinet is kept dark to avoid making.
+    #[test]
+    fn a_shape_answers_more_quietly_than_a_cabinet() {
         let shapes = shape_colour(true).x - shape_colour(false).x;
-        assert!(shapes >= WORTH_SEEING, "the shapes are {} apart", shapes);
+        let cabinets = look_of(true, true).screen.x - look_of(true, false).screen.x;
+
+        assert!(
+            shapes > 0.05,
+            "a step of {} does not say which one the name belongs to",
+            shapes
+        );
+        assert!(
+            shapes < cabinets * 0.5,
+            "a shape steps {} against a cabinet's {}, which reads as the same offer",
+            shapes,
+            cabinets
+        );
     }
 
     /// Spec 0003: one that will not run never lights up, however long you
