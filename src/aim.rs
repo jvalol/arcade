@@ -4,7 +4,7 @@
 //! Nothing here draws. Where the sight goes and how much brighter the lit
 //! cabinet is are arithmetic, so both can be checked without a window.
 
-use glam::{vec2, vec4, Vec2, Vec4};
+use glam::{vec2, vec4, Vec2, Vec3, Vec4};
 
 /// The sight itself. A cross, because it is one glyph in the font the engine
 /// already loads and it has a middle.
@@ -106,6 +106,141 @@ pub const DIMMED: f32 = 0.42;
 const BODY: Vec4 = vec4(0.20, 0.19, 0.24, 1.0);
 const BODY_LIT: Vec4 = vec4(0.46, 0.44, 0.52, 1.0);
 const BODY_UNBUILT: Vec4 = vec4(0.13, 0.13, 0.14, 1.0);
+
+/// The light in the room: a warm overhead sun and a cool fill under it.
+///
+/// This is what was making the room grey, and tinting the surfaces first was
+/// treating the symptom. The sun was pure white and the fill was
+/// `Vec3::splat(0.28)`, a perfectly neutral grey, and under a neutral light a
+/// tinted surface comes back the colour it started as, at a lower brightness.
+/// Nothing in the room could be any colour until the light was one.
+///
+/// Warm from above and cool in what it does not reach, which is how a room
+/// with a light in it looks and is why a shadow reads as blue.
+pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
+pub const SUN_STRENGTH: f32 = 0.62;
+pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
+
+/// The room's own surfaces.
+///
+/// The floor, the walls and the plinths were all one colour at four
+/// brightnesses, every one of them between 0.12 and 0.24 of the same hue, and
+/// a plinth was the wall behind it exactly, so the row of shapes had nothing
+/// to stand against.
+///
+/// The floor is cool and the darkest thing here. The walls are properly warm
+/// rather than nudged, so the cabinets read as cool objects in a warm room.
+/// The plinths are lighter than both, because what stands on them is pale.
+pub const FLOOR: Vec4 = vec4(0.11, 0.12, 0.17, 1.0);
+pub const WALL: Vec4 = vec4(0.30, 0.22, 0.16, 1.0);
+pub const PLINTH: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
+
+/// The lamp a cabinet's band throws into the room: how far it reaches, how
+/// bright it burns, and how much brighter the one you are standing at is.
+///
+/// A band on its own is a bright rectangle and nothing else. The engine has no
+/// bloom, so what makes a tube read as a tube is not the tube, it is the
+/// colour it puts on the wall behind it and the floor under it. Thirteen
+/// glowing bars that lit nothing were thirteen coloured bars, which is what
+/// Jake called them.
+///
+/// Calibrated against lantern's candle, which is 0.5 over a range of 9.
+pub const LAMP_RANGE: f32 = 3.0;
+pub const LAMP_INTENSITY: f32 = 0.5;
+pub const LAMP_LIT: f32 = 2.2;
+
+/// How many cabinets can be lighting the room at once.
+///
+/// The engine carries eight point lights and drops the rest with a warning, and
+/// the room has thirteen cabinets. The nearest eight are the ones that can be
+/// seen to be lighting anything.
+pub const LAMPS: usize = 8;
+
+/// The neon on a cabinet: how bright the band burns, how thick it is, and
+/// where up the front it sits.
+///
+/// Colour here is an unclamped multiplier, so anything past 1 glows with no
+/// light on it. securitysweep's tripwires are 7.0 and its finish line 5.6,
+/// which is where this number comes from.
+///
+/// It is the one thing in the room that is lit from the doorway. Spec 0003
+/// keeps a screen dark until you are within reach of it, and that is about
+/// what the room is offering you rather than about what it looks like. A real
+/// cabinet's trim is on whether or not anyone is standing at it.
+pub const NEON: f32 = 3.2;
+pub const NEON_THICK: f32 = 0.055;
+pub const NEON_UP: f32 = 0.93;
+
+/// The marquee: how tall the name is drawn in texels, how tall the band is in
+/// the world, and how much of the cabinet's front it spans.
+///
+/// A lit bar with nothing on it is a lit bar, which is what Jake called it.
+/// Every cabinet ever built has the game's name across the top, and that is
+/// most of what tells you to walk up to one. Spec 0037 of the engine is what
+/// lets a word go on a thing in the world rather than on the glass.
+pub const SIGN_TEXELS: f32 = 48.0;
+pub const SIGN_TALL: f32 = 0.17;
+pub const SIGN_SPAN: f32 = 0.86;
+
+/// How much of its grey a tint loses before it is burnt into a band.
+///
+/// A tint straight off a picture is pale, something like (0.5, 1.0, 0.75), and
+/// multiplying that by anything bright puts every channel past 1 and the
+/// screen clamps all three to white. Thirteen white tubes is what the first
+/// build of this gave.
+///
+/// So the grey comes out first: each channel is remapped from its own weakest
+/// up to its brightest, which leaves the weakest at nothing and the brightest
+/// at full, and only then is it burnt. Neon is a saturated colour in life as
+/// well.
+pub const NEON_FLOOR: f32 = 0.2;
+
+/// A cabinet's band, in its own game's colour.
+pub fn neon_of(glow: Vec3) -> Vec4 {
+    let dullest = glow.min_element();
+    let range = (1.0 - dullest).max(NEON_FLOOR);
+    let saturated = ((glow - Vec3::splat(dullest)) / range).clamp(Vec3::ZERO, Vec3::ONE);
+
+    // a picture with no colour in it gets a white tube rather than a black one
+    let colour = if saturated.max_element() < 0.15 {
+        Vec3::ONE
+    } else {
+        saturated
+    };
+
+    (colour * NEON).extend(1.0)
+}
+
+/// What colour a screenshot lends the room.
+///
+/// The smallest level of its own mip chain is the picture averaged down to
+/// almost nothing, which is the average colour and costs nothing to read.
+/// Normalised to its brightest channel, so this is a tint and `LAMP_INTENSITY`
+/// alone says how bright the lamp is. A picture with no colour in it at all
+/// lends white rather than nothing.
+pub fn glow_of(art: &blitzkit::texture::TextureData) -> Vec3 {
+    let Some(level) = art.levels.last() else {
+        return Vec3::ONE;
+    };
+
+    let mut sum = Vec3::ZERO;
+    let mut seen = 0.0;
+    for texel in level.pixels.chunks_exact(4) {
+        sum += glam::vec3(texel[0] as f32, texel[1] as f32, texel[2] as f32);
+        seen += 1.0;
+    }
+    if seen == 0.0 {
+        return Vec3::ONE;
+    }
+
+    let mean = sum / (seen * 255.0);
+    let brightest = mean.max_element();
+    if brightest < 1e-3 {
+        Vec3::ONE
+    } else {
+        mean / brightest
+    }
+}
 
 /// How bright this cabinet is, given whether it can be played and whether the
 /// sight is on it.
@@ -368,6 +503,123 @@ mod tests {
             shapes,
             cabinets
         );
+    }
+
+    /// Spec 0003: the room's surfaces are told apart.
+    ///
+    /// Floor, walls and plinths were one colour at four brightnesses, every
+    /// one between 0.12 and 0.24 of the same hue, and a plinth was the wall
+    /// behind it exactly. The room read as a grey box and the row of shapes
+    /// had nothing to stand against.
+    #[test]
+    fn the_room_is_not_one_colour() {
+        let body = look_of(true, false).body;
+        let surfaces = [
+            ("floor", FLOOR),
+            ("wall", WALL),
+            ("plinth", PLINTH),
+            ("cabinet", body),
+        ];
+
+        for (n, (name, one)) in surfaces.iter().enumerate() {
+            for (other_name, other) in surfaces.iter().skip(n + 1) {
+                let apart = (one.truncate() - other.truncate()).abs().max_element();
+                assert!(
+                    apart > 0.03,
+                    "{} and {} are {} apart, which is the same colour",
+                    name,
+                    other_name,
+                    apart
+                );
+            }
+        }
+
+        // and the floor is the darkest thing in the room, so what stands on it
+        // reads as standing on it
+        let darkest = surfaces
+            .iter()
+            .map(|(_, c)| c.truncate().element_sum())
+            .fold(f32::INFINITY, f32::min);
+        assert!(
+            (FLOOR.truncate().element_sum() - darkest).abs() < 1e-6,
+            "something in the room is darker than the floor"
+        );
+    }
+
+    /// Spec 0003: the light itself has a colour, warm above and cool below.
+    ///
+    /// A pure white sun over a neutral fill is what made the room grey: under
+    /// a neutral light a tinted surface comes back the colour it started as,
+    /// so tinting the walls first did nothing.
+    /// How warm a light is: how much more red it carries than blue. Negative
+    /// is cool, nought is the neutral that greyed the room.
+    fn warmth(light: Vec3) -> f32 {
+        light.x - light.z
+    }
+
+    #[test]
+    fn the_light_is_not_neutral() {
+        assert!(
+            warmth(SUN) > 0.1,
+            "the sun is {:?}, which is neutral enough to grey the room",
+            SUN
+        );
+        assert!(
+            warmth(FILL) < -0.05,
+            "the fill is {:?}, which does not cool what the sun misses",
+            FILL
+        );
+    }
+
+    /// Spec 0003: a band keeps its game's colour rather than burning white.
+    ///
+    /// A tint off a picture is pale, and multiplying a pale colour up puts
+    /// every channel past 1 and the screen clamps all three. The first build
+    /// of this gave thirteen white tubes.
+    #[test]
+    fn a_band_burns_in_its_own_colour() {
+        let green = neon_of(glam::vec3(0.5, 1.0, 0.75)).truncate();
+
+        assert!(
+            green.y > green.x * 2.0,
+            "a green picture gave a band of {:?}",
+            green
+        );
+        assert!(green.y > 1.0, "the band does not glow: {:?}", green);
+        assert!(
+            green.x < 1.0,
+            "every channel is past 1, so it clamps to white: {:?}",
+            green
+        );
+
+        // and a picture with no colour in it lights a white tube
+        let grey = neon_of(Vec3::splat(0.6)).truncate();
+        assert!(
+            (grey.x - grey.y).abs() < 1e-4 && grey.x > 1.0,
+            "a colourless picture gave {:?}",
+            grey
+        );
+    }
+
+    /// Spec 0003: a screenshot lends its own colour and not its brightness.
+    #[test]
+    fn a_picture_lends_a_tint_rather_than_a_light() {
+        use blitzkit::texture::TextureData;
+
+        // a dim green picture and a bright one lend the same colour
+        let dim = TextureData::from_pixels(1, 1, vec![0, 60, 0, 255]);
+        let bright = TextureData::from_pixels(1, 1, vec![0, 255, 0, 255]);
+        let apart = (glow_of(&dim) - glow_of(&bright)).abs().max_element();
+
+        assert!(apart < 1e-3, "the dim one lends {:?}", glow_of(&dim));
+        assert!(
+            (glow_of(&bright).max_element() - 1.0).abs() < 1e-3,
+            "a tint should reach 1.0 somewhere"
+        );
+
+        // and a black one lends white rather than nothing at all
+        let black = TextureData::from_pixels(1, 1, vec![0, 0, 0, 255]);
+        assert_eq!(glow_of(&black), Vec3::ONE);
     }
 
     /// Spec 0003: one that will not run never lights up, however long you

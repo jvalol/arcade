@@ -62,13 +62,23 @@ pub fn screen_mesh() -> MeshData {
     ];
 
     // both ways round, because half the cabinets are turned to face the other
-    // side of the aisle and a one sided quad is an invisible screen on those
+    // side of the aisle and a one sided quad is an invisible screen on those.
+    //
+    // The back face runs u the other way. Seen from behind, a quad is left to
+    // right reversed, so the same u on both faces draws the picture mirrored on
+    // one side of the aisle. Nothing could show that while the only thing on
+    // these quads was a screenshot: it took spec 0037 putting a game's name on
+    // the marquee, and half the room reading backwards.
     let back = [-1.0, 0.0, 0.0];
     let mut vertices: Vec<Vertex> = corners
         .iter()
         .map(|(at, uv)| Vertex::new(*at, normal, *uv))
         .collect();
-    vertices.extend(corners.iter().map(|(at, uv)| Vertex::new(*at, back, *uv)));
+    vertices.extend(
+        corners
+            .iter()
+            .map(|(at, uv)| Vertex::new(*at, back, [1.0 - uv[0], uv[1]])),
+    );
 
     MeshData::new(vertices, vec![0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7])
 }
@@ -338,6 +348,35 @@ mod tests {
             cabinet_at(&room, first + eye - through.normalize() * 3.0, through),
             Some(0)
         );
+    }
+
+    /// Spec 0004: the back of a screen is not a mirror of its front.
+    ///
+    /// Half the cabinets face the other way down the aisle and read the back
+    /// face of this quad. With the same u on both, the picture comes out left
+    /// to right reversed on one side, which nothing could show while the only
+    /// thing on these was a screenshot.
+    #[test]
+    fn the_back_of_a_screen_is_not_mirrored() {
+        let mesh = screen_mesh();
+        let (front, back) = mesh.vertices.split_at(4);
+
+        for (f, b) in front.iter().zip(back) {
+            assert_eq!(
+                f.position, b.position,
+                "the two faces are not the same quad"
+            );
+            assert!(
+                (f.uv[0] + b.uv[0] - 1.0).abs() < 1e-5,
+                "u is {} on the front and {} on the back, so one side is mirrored",
+                f.uv[0],
+                b.uv[0]
+            );
+            assert!(
+                (f.uv[1] - b.uv[1]).abs() < 1e-5,
+                "v differs between the faces"
+            );
+        }
     }
 
     /// Spec 0003: the sight does not carry the length of the room.

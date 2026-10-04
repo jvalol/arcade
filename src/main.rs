@@ -50,6 +50,10 @@ struct Arcade {
     /// One per cabinet, in the room's own order. A game with no screenshot gets
     /// none and its screen stays blank.
     art: Vec<Option<TextureId>>,
+    /// What colour each cabinet's screenshot lends the room when it is lit.
+    glows: Vec<Vec3>,
+    /// Each game's name, drawn into a texture for its marquee. Spec 0037.
+    signs: Vec<TextureId>,
     cube: Option<MeshId>,
     floor: Option<MeshId>,
     screen: Option<MeshId>,
@@ -88,6 +92,8 @@ impl Arcade {
             spin,
             playing: Playing::new(),
             art: Vec::new(),
+            glows: Vec::new(),
+            signs: Vec::new(),
             cube: None,
             floor: None,
             screen: None,
@@ -222,11 +228,28 @@ impl Game for Arcade {
             .iter()
             .map(|mesh| renderer.add_mesh(mesh))
             .collect();
-        self.art = self
+        let pictures: Vec<Option<TextureData>> = self
             .room
             .stood
             .iter()
-            .map(|stood| art_of(&stood.cabinet.name).map(|art| renderer.add_texture(&art)))
+            .map(|stood| art_of(&stood.cabinet.name))
+            .collect();
+        self.glows = pictures
+            .iter()
+            .map(|art| art.as_ref().map(aim::glow_of).unwrap_or(Vec3::ONE))
+            .collect();
+        self.art = pictures
+            .iter()
+            .map(|art| art.as_ref().map(|art| renderer.add_texture(art)))
+            .collect();
+        self.signs = self
+            .room
+            .stood
+            .iter()
+            .map(|stood| {
+                let name = blitzkit::text::drawn(&stood.cabinet.name, aim::SIGN_TEXELS);
+                renderer.add_texture(&name)
+            })
             .collect();
     }
 
@@ -404,9 +427,12 @@ impl Game for Arcade {
         camera.target = camera.position + self.facing();
 
         // dim and overhead, like the room it is: bright enough to walk, dark
-        // enough that a lit cabinet is the thing you look at
-        scene.light.intensity = 0.55;
-        scene.light.ambient = Vec3::splat(0.28);
+        // enough that a lit cabinet is the thing you look at. Warm from above
+        // and cool in what it misses, because a white sun over a neutral fill
+        // is what made every surface in here grey.
+        scene.light.color = aim::SUN;
+        scene.light.intensity = aim::SUN_STRENGTH;
+        scene.light.ambient = aim::FILL;
 
         scene.push_colored(
             floor,
@@ -415,14 +441,14 @@ impl Game for Arcade {
                 1.0,
                 self.room.reaches * 2.0,
             )),
-            vec4(0.12, 0.11, 0.14, 1.0),
+            aim::FLOOR,
         );
 
         for wall in self.room.walls.iter() {
             scene.push_colored(
                 cube,
                 &Transform::at(wall.center()).with_scale(wall.size()),
-                vec4(0.17, 0.16, 0.20, 1.0),
+                aim::WALL,
             );
         }
 
@@ -433,11 +459,7 @@ impl Game for Arcade {
             };
 
             let (plinth, size) = display::plinth_under(one);
-            scene.push_colored(
-                cube,
-                &Transform::at(plinth).with_scale(size),
-                vec4(0.17, 0.16, 0.20, 1.0),
-            );
+            scene.push_colored(cube, &Transform::at(plinth).with_scale(size), aim::PLINTH);
             // a turned shape reaches lower than an upright one, so where its
             // middle goes follows which way it is facing. It sank into its
             // plinth otherwise.
@@ -458,6 +480,39 @@ impl Game for Arcade {
             Some(room::Seen::Cabinet(n)) => Some(n),
             _ => None,
         };
+
+        // every band lights the room around it, because a glowing rectangle
+        // that throws nothing is a coloured rectangle. The engine carries
+        // eight, so the nearest eight get one.
+        let eye = camera.position;
+        let mut near: Vec<(f32, usize)> = self
+            .room
+            .stood
+            .iter()
+            .enumerate()
+            .filter(|(_, stood)| stood.cabinet.is_built())
+            .map(|(n, stood)| (eye.distance_squared(stood.at), n))
+            .collect();
+        near.sort_by(|one, other| one.0.total_cmp(&other.0));
+
+        for (_, n) in near.into_iter().take(aim::LAMPS) {
+            let stood = &self.room.stood[n];
+            let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
+            let strength = if at == Some(n) {
+                aim::LAMP_LIT
+            } else {
+                aim::LAMP_INTENSITY
+            };
+
+            scene.push_light(blitzkit::lighting::PointLight::new(
+                stood.at
+                    + Vec3::Y * room::CABINET.y * aim::NEON_UP
+                    + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK),
+                glow.truncate().normalize_or(Vec3::ONE),
+                strength,
+                aim::LAMP_RANGE,
+            ));
+        }
         for (n, stood) in self.room.stood.iter().enumerate() {
             let look = aim::look_of(stood.cabinet.is_built(), at == Some(n));
 
@@ -467,6 +522,23 @@ impl Game for Arcade {
                     .with_scale(room::CABINET),
                 look.body,
             );
+
+            // the marquee: the game's name lit across the top of its front, in
+            // its own game's colour. The one thing in here that is lit from
+            // the doorway, and what an arcade actually looks like.
+            let glow = self.glows.get(n).copied().unwrap_or(Vec3::ONE);
+            let marquee = stood.at
+                + Vec3::Y * room::CABINET.y * aim::NEON_UP
+                + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK);
+            let span = room::CABINET.z * aim::SIGN_SPAN;
+            let placed = Transform::at(marquee).with_scale(vec3(0.02, aim::SIGN_TALL, span));
+
+            match self.signs.get(n).copied() {
+                Some(sign) => {
+                    scene.push_textured(screen_mesh, sign, &placed, aim::neon_of(glow), 8.0)
+                }
+                None => scene.push_colored(screen_mesh, &placed, aim::neon_of(glow)),
+            }
 
             // the screen, a thin slab on the face that looks into the room
             let screen = stood.at
