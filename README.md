@@ -3,7 +3,7 @@
 A room with a cabinet for every game built on blitzkit. Walk up to one and press
 enter to play it.
 
-![Looking down an aisle in a dark room, a row of arcade cabinets on either side, each with a game's screenshot lit on its screen](media/screenshot.png)
+![The arcade](media/screenshot.png)
 
 ```
 cargo run --release
