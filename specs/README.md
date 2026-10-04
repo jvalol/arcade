@@ -9,6 +9,7 @@ not a priority, and it never changes once a spec exists.
 | Spec | Covers |
 | --- | --- |
 | [0001](0001-the-room.md) | A room of cabinets, one per game, and the key that plays one |
+| [0002](0002-what-is-on-the-far-wall.md) | The engine's own shapes, turning at the end of the room |
 
 ---
 

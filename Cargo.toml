@@ -9,3 +9,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 blitzkit = "0.10"
 glam = "0.33"
+
+# The arcade only works inside the project checkout anyway, since it runs the
+# games' own binaries, so a path here is not the exception it would be in a game.
+blitzkit-shapes = { path = "../blitzkit/shapes" }

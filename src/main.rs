@@ -1,6 +1,7 @@
 //! arcade: a room of cabinets, one per game. See `specs/`.
 
 mod cabinet;
+mod display;
 mod room;
 
 use blitzkit::camera::Camera;
@@ -34,6 +35,10 @@ struct Arcade {
     cube: Option<MeshId>,
     floor: Option<MeshId>,
     screen: Option<MeshId>,
+    /// The engine's own shapes, turning at the end of the room. Spec 0002.
+    /// Where they stand is the room's; these are the meshes.
+    shown: Vec<MeshId>,
+    since: f32,
 
     at: Vec3,
     yaw: f32,
@@ -56,6 +61,8 @@ impl Arcade {
             cube: None,
             floor: None,
             screen: None,
+            shown: Vec::new(),
+            since: 0.0,
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
             yaw: 0.0,
@@ -64,6 +71,20 @@ impl Arcade {
             wants_lock: true,
             locked: false,
             quitting: false,
+        }
+    }
+
+    /// Starts whatever the middle of the screen is on, which is what both enter
+    /// and a click mean.
+    fn play_what_i_see(&mut self) {
+        let Some(n) = self.room.looked_at(self.at + Vec3::Y * EYE, self.facing()) else {
+            return;
+        };
+
+        let stood = self.room.stood[n].clone();
+        if self.playing.start(&stood.cabinet) {
+            // the game wants the mouse now
+            self.wants_lock = false;
         }
     }
 
@@ -140,6 +161,10 @@ impl Game for Arcade {
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
         self.floor = Some(renderer.add_mesh(&MeshData::plane()));
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
+        self.shown = display::meshes()
+            .iter()
+            .map(|mesh| renderer.add_mesh(mesh))
+            .collect();
         self.art = self
             .room
             .stood
@@ -164,6 +189,8 @@ impl Game for Arcade {
         text: &mut TextRenderer,
         _sound: &SoundSystem,
     ) {
+        self.since += dt;
+
         let mut wish = Vec3::ZERO;
         let right = self.forward().cross(Vec3::Y);
         for (held, way) in self
@@ -187,14 +214,17 @@ impl Game for Arcade {
         }
 
         let playing = self.playing.now().map(|name| name.to_string());
-        let at = self.room.at(self.at, self.facing());
+        let seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
 
-        let saying = match (&playing, at) {
+        let saying = match (&playing, seen) {
             (Some(name), _) => format!("{} is playing. Quit to come back.", name),
-            (None, Some(n)) => {
+            (None, Some(room::Seen::Cabinet(n))) => {
                 let stood = &self.room.stood[n];
                 if stood.cabinet.is_built() {
-                    format!("{}. Press enter to play.", stood.cabinet.name)
+                    format!(
+                        "{}. Click or press enter to play.",
+                        stood.cabinet.name
+                    )
                 } else {
                     format!(
                         "{} has not been built. Run ./check-all.",
@@ -202,7 +232,11 @@ impl Game for Arcade {
                     )
                 }
             }
-            (None, None) => String::from("Walk up to a cabinet to play."),
+            (None, Some(room::Seen::Display(n))) => format!(
+                "{}, showing off the engine. if you know, you know. If you don't, you can look it up.",
+                self.room.displays[n].name
+            ),
+            (None, None) => String::from("Look at a cabinet to play."),
         };
 
         text.reset();
@@ -256,7 +290,39 @@ impl Game for Arcade {
             );
         }
 
-        let at = self.room.at(self.at, self.facing());
+        // the engine's own shapes, turning at the end of the room
+        let turned = glam::Quat::from_rotation_y(display::turned(self.since));
+        for (n, one) in self.room.displays.iter().enumerate() {
+            let Some(mesh) = self.shown.get(n).copied() else {
+                continue;
+            };
+
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(one.at.x, display::HIGH * 0.5 - 0.3, one.at.z))
+                    .with_scale(vec3(0.5, display::HIGH - 0.6, 0.5)),
+                vec4(0.17, 0.16, 0.20, 1.0),
+            );
+            let lit = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing())
+                == Some(room::Seen::Display(n));
+            scene.push_colored(
+                mesh,
+                &Transform::at(one.at)
+                    .with_rotation(turned)
+                    .with_scale(Vec3::splat(one.scale)),
+                if lit {
+                    vec4(0.88, 0.86, 0.96, 1.0)
+                } else {
+                    vec4(0.58, 0.56, 0.66, 1.0)
+                },
+            );
+        }
+
+        let seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
+        let at = match seen {
+            Some(room::Seen::Cabinet(n)) => Some(n),
+            _ => None,
+        };
         for (n, stood) in self.room.stood.iter().enumerate() {
             let lit = at == Some(n) && stood.cabinet.is_built();
             let body = if stood.cabinet.is_built() {
@@ -302,13 +368,7 @@ impl Game for Arcade {
             KeyboardKey::A | KeyboardKey::Left => self.walking[2] = held,
             KeyboardKey::D | KeyboardKey::Right => self.walking[3] = held,
             KeyboardKey::Return if held => {
-                if let Some(n) = self.room.at(self.at, self.facing()) {
-                    let stood = self.room.stood[n].clone();
-                    if self.playing.start(&stood.cabinet) {
-                        // the game wants the mouse now
-                        self.wants_lock = false;
-                    }
-                }
+                self.play_what_i_see();
             }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
@@ -316,7 +376,16 @@ impl Game for Arcade {
     }
 
     fn process_mouse(&mut self, input: MouseInput) {
-        if input.button == MouseButton::Left && input.is_pressed() && !self.locked {
+        if input.button != MouseButton::Left || !input.is_pressed() {
+            return;
+        }
+
+        // with the cursor held by the window there is nothing to click but the
+        // middle of the screen, so a click is a click on what you are looking
+        // at. Unlocked, the first click is for taking the cursor back.
+        if self.locked {
+            self.play_what_i_see();
+        } else {
             self.wants_lock = true;
         }
     }

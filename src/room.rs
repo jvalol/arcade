@@ -29,16 +29,6 @@ pub const APART: f32 = 2.2;
 pub const WALL: f32 = 2.0;
 pub const TALL: f32 = 3.2;
 
-/// How close you have to be for a cabinet to be the one you are at, and how
-/// nearly you have to be facing it.
-///
-/// Less than the room is wide, which is the whole of it. The cabinets stand
-/// `WALL` from the middle, so anything more generous than that makes one across
-/// the room yours while you are standing in the aisle, and the room stops being
-/// something you walk through.
-pub const WITHIN: f32 = WALL - 0.4;
-pub const FACING: f32 = 0.35;
-
 /// The screen itself: one quad facing +x, so the screenshot sits on it the way
 /// it was taken.
 ///
@@ -70,6 +60,32 @@ pub fn screen_mesh() -> MeshData {
     MeshData::new(vertices, vec![0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7])
 }
 
+/// How far along a ray a box is first met, if it is. The slab test, which the
+/// engine has for an `Aabb` only through `Ray`, and this wants no `Ray`.
+fn slab(from: Vec3, way: Vec3, box_: &Aabb) -> Option<f32> {
+    let (lo, hi) = (
+        box_.center() - box_.size() * 0.5,
+        box_.center() + box_.size() * 0.5,
+    );
+    let mut entry = f32::NEG_INFINITY;
+    let mut exit = f32::INFINITY;
+
+    for n in 0..3 {
+        if way[n].abs() < 1e-6 {
+            if from[n] < lo[n] || from[n] > hi[n] {
+                return None;
+            }
+            continue;
+        }
+
+        let (near, far) = ((lo[n] - from[n]) / way[n], (hi[n] - from[n]) / way[n]);
+        entry = entry.max(near.min(far));
+        exit = exit.min(near.max(far));
+    }
+
+    (exit >= entry.max(0.0)).then_some(entry.max(0.0))
+}
+
 /// A cabinet, where it stands and which way it faces.
 #[derive(Debug, Clone)]
 pub struct Stood {
@@ -79,8 +95,18 @@ pub struct Stood {
     pub facing: Vec3,
 }
 
+/// What the middle of the screen is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Seen {
+    Cabinet(usize),
+    Display(usize),
+}
+
 pub struct Room {
     pub stood: Vec<Stood>,
+    /// The engine's own shapes along the far wall, per spec 0002. Where they
+    /// stand, not what they are made of.
+    pub displays: Vec<crate::display::Display>,
     pub walls: Vec<Aabb>,
     /// How far the room reaches from its middle, worked out from how many
     /// cabinets there are.
@@ -135,6 +161,7 @@ impl Room {
 
         Self {
             stood,
+            displays: crate::display::all_of_them(-reaches),
             walls,
             reaches,
         }
@@ -152,31 +179,43 @@ impl Room {
         out
     }
 
-    /// Which cabinet you are at: the nearest one in front of you, near enough
-    /// to reach and nearly enough faced to mean it.
+    /// Which cabinet you are looking at: the nearest one the line of sight
+    /// meets.
     ///
-    /// Both halves matter. Nearest alone picks the one behind you when you walk
-    /// past; facing alone picks one across the room.
-    pub fn at(&self, you: Vec3, looking: Vec3) -> Option<usize> {
-        let flat = vec3(looking.x, 0.0, looking.z).normalize_or_zero();
+    /// Pointing rather than standing. It was "the nearest one in front of you,
+    /// within reach and nearly enough faced", which meant walking the aisle to
+    /// find out what anything was. With the cursor held by the window there is
+    /// no pointer but the middle of the screen, so looking at a thing is
+    /// pointing at it, and a click is a click on it.
+    pub fn looked_at(&self, from: Vec3, way: Vec3) -> Option<usize> {
+        match self.looking_at(from, way) {
+            Some(Seen::Cabinet(n)) => Some(n),
+            _ => None,
+        }
+    }
 
-        self.stood
-            .iter()
-            .enumerate()
-            .filter_map(|(n, stood)| {
-                let out = stood.at - vec3(you.x, 0.0, you.z);
-                let away = out.length();
-                if away > WITHIN || away < 1e-4 {
-                    return None;
-                }
-                if out.normalize().dot(flat) < FACING {
-                    return None;
-                }
+    /// The same, saying whether it is a cabinet or one of the shapes on the far
+    /// wall, so the room reads one way throughout.
+    pub fn looking_at(&self, from: Vec3, way: Vec3) -> Option<Seen> {
+        let way = way.normalize_or_zero();
+        if way == Vec3::ZERO {
+            return None;
+        }
 
-                Some((n, away))
-            })
+        let cabinets = self.stood.iter().enumerate().filter_map(|(n, stood)| {
+            let box_ = Aabb::from_center_size(stood.at + Vec3::Y * CABINET.y * 0.5, CABINET);
+            slab(from, way, &box_).map(|far| (Seen::Cabinet(n), far))
+        });
+
+        let shapes = self.displays.iter().enumerate().filter_map(|(n, one)| {
+            let box_ = Aabb::from_center_size(one.at, Vec3::splat(one.scale.max(0.4)));
+            slab(from, way, &box_).map(|far| (Seen::Display(n), far))
+        });
+
+        cabinets
+            .chain(shapes)
             .min_by(|one, other| one.1.total_cmp(&other.1))
-            .map(|(n, _)| n)
+            .map(|(what, _)| what)
     }
 
     /// Where you start: the middle of the room, looking down it.
@@ -241,21 +280,76 @@ mod tests {
         }
     }
 
-    /// Spec 0001: the one you are at is the nearest in front of you.
+    /// Spec 0001: the one you are looking at is the nearest the line of sight
+    /// meets.
     #[test]
-    fn the_nearest_one_in_front_is_the_one() {
+    fn the_one_you_are_looking_at_is_the_one() {
         let room = Room::of(some(12));
         let first = room.stood[0].at;
+        let eye = Vec3::Y * 1.55;
 
-        // standing in front of it, looking at it
-        let you = first - vec3(1.4, 0.0, 0.0);
-        assert_eq!(room.at(you, vec3(1.0, 0.0, 0.0)), Some(0));
+        // in front of it, looking at it
+        let you = first - vec3(1.4, 0.0, 0.0) + eye;
+        assert_eq!(room.looked_at(you, vec3(1.0, 0.0, 0.0)), Some(0));
 
-        // the same spot, looking away
-        assert_eq!(room.at(you, vec3(-1.0, 0.0, 0.0)), None);
+        // the same spot, looking the other way: the opposite row, not nothing.
+        // Which is the change. Standing somewhere no longer decides anything.
+        let across = room.looked_at(you, vec3(-1.0, 0.0, 0.0));
+        assert!(
+            across.is_some_and(|n| room.stood[n].at.x < 0.0),
+            "looking across the aisle found {:?}",
+            across
+        );
 
-        // and from the middle of the room, nothing is close enough to be yours
-        assert_eq!(room.at(Vec3::ZERO, vec3(0.0, 0.0, 1.0)), None);
+        // and up the aisle at nothing
+        assert_eq!(room.looked_at(Vec3::Y * 1.55, vec3(0.0, 0.0, 1.0)), None);
+
+        // and from the far end of the aisle, looking across at it, which the
+        // old rule could not reach
+        let along = vec3(0.0, 0.0, first.z + 4.0) + eye;
+        assert_eq!(room.looked_at(along, first + eye - along), Some(0));
+
+        // the near one wins when two are in line
+        let behind = room
+            .stood
+            .iter()
+            .position(|s| s.at.x < 0.0)
+            .expect("a far side");
+        let through = room.stood[behind].at + eye - (first + eye);
+        assert_eq!(
+            room.looked_at(first + eye - through.normalize() * 3.0, through),
+            Some(0)
+        );
+    }
+
+    /// Spec 0002: looking at a display names it, and a cabinet when it is a
+    /// cabinet.
+    #[test]
+    fn looking_at_a_display_names_it() {
+        let room = Room::of(some(12));
+        let eye = Vec3::Y * 1.55;
+        let one = room.displays[2];
+
+        // down the room at it, from the middle of the aisle
+        let you = vec3(one.at.x, 0.0, one.at.z + 4.0) + eye;
+        assert_eq!(
+            room.looking_at(you, one.at - you),
+            Some(Seen::Display(2)),
+            "the shapes on the wall are not pickable"
+        );
+        assert_eq!(
+            room.looked_at(you, one.at - you),
+            None,
+            "a shape read as a cabinet"
+        );
+
+        // and a cabinet still reads as a cabinet
+        let first = room.stood[0].at;
+        let at_it = first - vec3(1.4, 0.0, 0.0) + eye;
+        assert_eq!(
+            room.looking_at(at_it, vec3(1.0, 0.0, 0.0)),
+            Some(Seen::Cabinet(0))
+        );
     }
 
     /// Spec 0001: walking into a cabinet or a wall stops you.

@@ -33,10 +33,15 @@ list that disagrees with itself. Each cabinet wears that game's own screenshot. 
 makes sure every game has one, so the arcade draws what is there rather than
 keeping its own pictures.
 
-**The one you are standing at is lit**, and named, so what a key would start is
-never a guess.
+**The one you are looking at is lit**, and named, so what a key or a click would
+start is never a guess.
 
-**A key plays it**, by running the game's own binary. The games are not changed,
+This was the one you were standing at, near enough to reach and nearly enough
+faced, which meant walking the aisle to find out what anything was. The window
+holds the cursor so you can look with the mouse, which leaves no pointer but the
+middle of the screen, so looking at a cabinet is pointing at it.
+
+**A click or enter plays it**, by running the game's own binary. The games are not changed,
 not linked, and not built into this: each still runs on its own from its own
 folder exactly as before, and the arcade runs the same binary a person would.
 
@@ -57,7 +62,7 @@ guessing at paths or being told where the project is.
 - There is a cabinet for every game the project has. — `room::tests::every_game_gets_a_cabinet`
 - And it knows every game the project does, without being told. — `tests::it_knows_every_game_the_project_does`
 - No two cabinets share a place, and none of them is inside a wall. — `room::tests::the_cabinets_all_fit`
-- The one you are standing at is the nearest one you are facing. — `room::tests::the_nearest_one_in_front_is_the_one`
+- The one you are looking at is the nearest the line of sight meets. — `room::tests::the_one_you_are_looking_at_is_the_one`
 - Walking into a cabinet or a wall stops you. — `room::tests::you_cannot_walk_through_anything`
 - A game that is not built is a cabinet that will not start. — `cabinet::tests::one_that_is_not_built_will_not_start`
 - Only one game runs at a time. — `cabinet::tests::only_one_runs_at_a_time`

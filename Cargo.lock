@@ -172,6 +172,7 @@ name = "arcade"
 version = "0.1.0"
 dependencies = [
  "blitzkit",
+ "blitzkit-shapes",
  "glam",
 ]
 
@@ -256,6 +257,14 @@ dependencies = [
  "wgpu",
  "wgpu_text",
  "winit",
+]
+
+[[package]]
+name = "blitzkit-shapes"
+version = "0.1.0"
+dependencies = [
+ "blitzkit",
+ "glam",
 ]
 
 [[package]]
