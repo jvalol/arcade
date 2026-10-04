@@ -1,6 +1,6 @@
 # 0002 What is on the far wall
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-03
 
 ## Goal
@@ -36,8 +36,11 @@ over its plinth, and with a sharp shadow the shadow lands clear of the thing
 casting it.
 
 **They do not start anything.** A cabinet plays a game; these are a
-demonstration and there is nothing to play. Looking at one says what it is and
-nothing else.
+demonstration and there is nothing to play.
+
+Looking at one said what it was "and nothing else", which was right while there
+was nothing to do to one. Spec 0004 gave them a verb: a click takes hold of one
+and the mouse turns it. Still nothing started, and it is still not a cabinet.
 
 **The other five examples are not here.** cubes, rolling, stacking, tower and
 tunnel are scenes with physics and input rather than shapes, and putting those
