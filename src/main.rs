@@ -438,10 +438,15 @@ impl Game for Arcade {
                 &Transform::at(plinth).with_scale(size),
                 vec4(0.17, 0.16, 0.20, 1.0),
             );
+            // a turned shape reaches lower than an upright one, so where its
+            // middle goes follows which way it is facing. It sank into its
+            // plinth otherwise.
+            let facing = self.spin.facing(n, self.since);
+            let sits = vec3(one.at.x, display::sits_at(one, facing), one.at.z);
             scene.push_colored(
                 mesh,
-                &Transform::at(one.at)
-                    .with_rotation(self.spin.facing(n, self.since))
+                &Transform::at(sits)
+                    .with_rotation(facing)
                     .with_scale(Vec3::splat(one.scale)),
                 aim::shape_colour(
                     self.seen == Some(room::Seen::Display(n)) || self.spin.holding() == Some(n),

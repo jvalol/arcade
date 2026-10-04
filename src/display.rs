@@ -56,6 +56,11 @@ pub struct Display {
     pub name: &'static str,
     pub at: Vec3,
     pub scale: f32,
+    /// Half of how big it is drawn, along each axis of its own.
+    ///
+    /// Carried rather than looked up, because where a turned one has to sit to
+    /// rest on its plinth depends on all three and the room has no mesh.
+    pub half: Vec3,
 }
 
 /// What each one is, in the order they are laid out along the wall.
@@ -77,10 +82,16 @@ pub fn all_of_them(wall: f32) -> Vec<Display> {
         .iter()
         .zip(meshes())
         .enumerate()
-        .map(|(n, (name, mesh))| Display {
-            name,
-            at: vec3(n as f32 * APART - along * 0.5, HIGH, wall + OFF_THE_WALL),
-            scale: ACROSS / mesh.bounds().size().max_element().max(1e-4),
+        .map(|(n, (name, mesh))| {
+            let size = mesh.bounds().size();
+            let scale = ACROSS / size.max_element().max(1e-4);
+
+            Display {
+                name,
+                at: vec3(n as f32 * APART - along * 0.5, HIGH, wall + OFF_THE_WALL),
+                scale,
+                half: size * scale * 0.5,
+            }
         })
         .collect()
 }
@@ -106,6 +117,24 @@ pub fn meshes() -> Vec<MeshData> {
 /// each.
 pub fn stands_at() -> f32 {
     HIGH - ACROSS * 0.5
+}
+
+/// Where a shape's middle has to be for it to rest on its plinth, facing this
+/// way.
+///
+/// A turned shape is lower at the bottom than an upright one, by however much
+/// its own corners reach: the drop is the box's half extents projected onto the
+/// upright. Spec 0004 turned them about every axis and left them sinking a
+/// seventh of a unit into the plinth when they were tipped, with the number
+/// written down as a trade rather than a defect. It is a defect. A thing rests
+/// on the thing it is standing on, whichever way up it is.
+pub fn sits_at(one: &Display, facing: Quat) -> f32 {
+    let m = glam::Mat3::from_quat(facing);
+    let reach = one.half.x * m.x_axis.y.abs()
+        + one.half.y * m.y_axis.y.abs()
+        + one.half.z * m.z_axis.y.abs();
+
+    stands_at() + reach
 }
 
 /// The plinth under a shape: where its middle is and how big it is.
@@ -323,13 +352,51 @@ mod tests {
         );
     }
 
+    /// Spec 0004: a shape rests on its plinth whichever way it is turned.
+    ///
+    /// Not only upright. Turned about every axis it reaches lower than it does
+    /// standing, and it sank a seventh of a unit into the plinth.
+    #[test]
+    fn a_turned_one_still_rests_on_its_plinth() {
+        let quarter = std::f32::consts::FRAC_PI_2;
+        let facings = [
+            Quat::IDENTITY,
+            Quat::from_rotation_x(quarter),
+            Quat::from_rotation_z(quarter),
+            Quat::from_rotation_x(0.7) * Quat::from_rotation_y(1.2),
+            Quat::from_rotation_x(quarter * 0.5) * Quat::from_rotation_z(quarter * 0.5),
+        ];
+
+        for one in all_of_them(-6.0).iter() {
+            let (at, size) = plinth_under(one);
+            let top = at.y + size.y * 0.5;
+
+            for facing in facings {
+                let m = glam::Mat3::from_quat(facing);
+                let reach = one.half.x * m.x_axis.y.abs()
+                    + one.half.y * m.y_axis.y.abs()
+                    + one.half.z * m.z_axis.y.abs();
+                let bottom = sits_at(one, facing) - reach;
+
+                assert!(
+                    (bottom - top).abs() < 1e-4,
+                    "{} turned {:?} has its lowest point at {} over a plinth reaching {}",
+                    one.name,
+                    facing,
+                    bottom,
+                    top
+                );
+            }
+        }
+    }
+
     /// Spec 0002: a shape sits on its plinth rather than over it.
     #[test]
     fn each_one_sits_on_its_plinth() {
-        for (one, mesh) in all_of_them(-6.0).iter().zip(meshes()) {
+        for one in all_of_them(-6.0).iter() {
             let (at, size) = plinth_under(one);
             let top = at.y + size.y * 0.5;
-            let bottom = one.at.y - mesh.bounds().size().max_element() * one.scale * 0.5;
+            let bottom = sits_at(one, Quat::IDENTITY) - one.half.y;
 
             assert!(
                 (top - bottom).abs() < 1e-3,

@@ -60,9 +60,16 @@ That is smaller than they were, and they were made bigger one change ago for a
 reason that still holds. It buys free rotation, which is worth more: a Klein
 bottle you can turn over is worth more than a slightly larger one you cannot.
 
-A tipped shape still dips 0.152 into its plinth, because a plinth that cleared
-the sweep would leave every upright shape floating that far over it, and upright
-is what they are nearly all of the time.
+**And it rests on its plinth whichever way it is turned.** A turned shape reaches
+lower than an upright one by however much its own corners hang down, which is
+its half extents projected onto the upright, so where its middle goes follows
+which way it is facing.
+
+This was written down as a trade first: a tipped shape dipping 0.152 into its
+plinth, against a plinth clearing the whole sweep and every upright shape
+floating that far over it. Both of those are wrong and the choice between them
+was false. A thing rests on the thing it is standing on, whichever way up it is,
+and the arithmetic for where that puts it is three multiplications.
 
 **A tilt survives letting go.** The row's slow turn is about the upright, and it
 is applied over wherever a hand left a shape rather than under it, so one you
@@ -114,6 +121,7 @@ it is the game's.
 - A free one does. — `display::tests::a_free_one_turns`
 - It turns about every axis, not only the upright. — `display::tests::it_turns_in_every_direction`
 - A tilt survives letting go. — `display::tests::a_tilted_one_goes_on_turning_tilted`
+- And a turned one still rests on its plinth. — `display::tests::a_turned_one_still_rests_on_its_plinth`
 - Turning moves the one in your hands and no other. — `display::tests::turning_moves_only_the_held_one`
 - Letting go carries on from where you left it. — `display::tests::it_carries_on_from_where_you_left_it`
 - Nothing can be turned while nothing is held. — `display::tests::turning_nothing_turns_nothing`
