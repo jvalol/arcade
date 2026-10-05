@@ -303,18 +303,18 @@ impl Arcade {
                 let dial = format!("Spin {} of {}", self.gyro.notch + 1, gyro::SPINS);
                 if !self.gyro.going {
                     format!(
-                        "Press enter to spin it up. {}, shift with up or down changes it. [COPY - Jake]",
+                        "Press enter to spin it up. {}, shift with up or down changes it.",
                         dial
                     )
                 } else if self.gyro.moving_at() > 0.02 {
                     format!(
-                        "The axis is moving {:.1} a second, sideways to your push. {}. [COPY - Jake]",
+                        "The axis is moving {:.1} a second, sideways to your push. {}.",
                         self.gyro.moving_at(),
                         dial
                     )
                 } else {
                     format!(
-                        "{}. Hold an arrow to lean on the spindle and the axis should walk {:.1} a second, sideways. [COPY - Jake]",
+                        "{}. Hold an arrow to lean on the spindle and the axis should walk {:.1} a second, sideways.",
                         dial,
                         gyro::walks_at(self.gyro.notch)
                     )
