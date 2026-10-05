@@ -154,9 +154,9 @@ exactly as long as you keep pushing. Let go and it stops walking.
 
 Spin it harder and the same push moves it *slower*. The rate is the torque you
 are leaning on it with over the spin's own momentum, so more spin is a bigger
-denominator. The dial carries five, from 6 to 15, and the walk comes out within
-2.5% of `τ / I ω` at every one of them, walking a radian a second at the bottom
-and four tenths at the top. The axis takes about half a second to settle into
+denominator. The dial carries five, from 10 to 20, and the walk comes out within
+4% of `τ / I ω` at every one of them, walking 1.32 a second at the bottom and
+0.67 at the top, which is round in five to nine seconds. The axis takes about half a second to settle into
 walking after a push starts, because the wobble's own period is that long at
 these spins, so you watch it dip and then go.
 
@@ -174,9 +174,9 @@ walk / spin    sideways
      0.410       29%
 ```
 
-It was half this and stayed at 96% everywhere, and the axis took thirteen seconds
-to go round. A toy you lean on for thirteen seconds before anything happens is
-not one anybody leans on.
+It has been a quarter of this and half of it, and both made a toy you lean on for
+ten or thirty seconds before anything happens, which is not one anybody leans
+on.
 
 **The push eases on and off over a quarter of a second** rather than switching.
 A hand leaning on something is a ramp and not a hammer, and a hammer is exactly
@@ -223,17 +223,18 @@ as going round:
 ```text
 240 radians a second   153 degrees a frame   reads as standing still
  60                     57                   reads as flickering
- 15                     14                   reads as turning
+ 20                     19                   reads as turning
 ```
 
 Drawing the spoke as the ring it would blur into was tried in between, and it is
 steadier than steady: nothing moves at all and the rotor looks stopped. What
 coming down costs is the walk, since the push came down with the spin to keep the
-response gyroscopic. The dial walks 0.95 to 0.38 a second, a turn in
-six to sixteen seconds.
+response gyroscopic. The dial runs 10 to 20 rather than 6 to 15 because the
+slow end is what gives first: leaned on hard enough to walk in five seconds, a
+rotor at 6 goes only 65% sideways while one at 10 goes 86%.
 
 Stop the rotor and push again and it does the obvious thing instead: it goes
-where you pushed, at 10.8 radians a second squared, which is eleven times the
+where you pushed, at 26 radians a second squared, which is twenty times the
 fastest walk. That is the comparison, and it is why the push is a third of the
 rotor's own weight. There is nothing to lean against in a balanced rotor.
 

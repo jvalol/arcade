@@ -98,16 +98,16 @@ pub const BOSS: f32 = 0.034;
 ///      0.410       29%
 /// ```
 ///
-/// It was half this, which kept the slow end at 96% and had the axis taking
-/// thirteen seconds to go round, and a toy you lean on for thirteen seconds
-/// before anything happens is not one anybody leans on. At this the slow end
-/// walks a radian a second, round in six, and is 87% sideways.
+/// It has been a quarter of this and half of it, and both made a toy you lean on
+/// for ten or thirty seconds before anything happens, which is not one anybody
+/// leans on. At this the dial walks 1.32 down to 0.67 a second, round in five to
+/// nine, and the worst notch is 86% sideways.
 ///
 /// There is nothing to lean against in a balanced rotor, so the same push that
 /// ambles a spun one sideways sends a stopped one end over end at nearly fifty
 /// radians a second squared, which is forty times the fastest walk. The gap
 /// between the two is the toy.
-pub const PUSH: f32 = 0.05;
+pub const PUSH: f32 = 0.12;
 
 /// How far the spindle reaches past the rotor on each side: out to the frame,
 /// which is what holds it.
@@ -131,21 +131,19 @@ pub const SPINDLE_OUT: f32 = FRAME;
 /// ```text
 /// 240 radians a second   153 degrees a frame   reads as standing still
 ///  60                     57                   reads as flickering
-///  15                     14                   reads as turning
+///  20                     19                   reads as turning
 /// ```
 ///
 /// Drawing the spoke as the ring it would blur into was tried in between, and
 /// it is steadier than steady: nothing moves at all and the rotor looks stopped.
 ///
-/// What coming down costs is the walk. The push came down with the spin to keep
-/// the response gyroscopic, so the dial walks 0.48 to 0.19 a second now rather
-/// than 1.2 to 0.4, which is a turn in thirteen to thirty three seconds. And the
-/// axis takes about half a second to settle into walking after a push starts:
-/// the wobble's own period is that long at these spins, so you watch it dip and
-/// then go.
+/// What coming down costs is the walk, since the push has to come down with the
+/// spin to keep the response gyroscopic. It is 10 to 20 rather than 6 to 15
+/// because the slow end is what gives first: leaned on hard enough to walk in
+/// five seconds, a rotor at 6 goes only 65% sideways while one at 10 goes 86%.
 pub const SPINS: usize = 5;
-pub const SLOWEST: f32 = 6.0;
-pub const FASTEST: f32 = 15.0;
+pub const SLOWEST: f32 = 10.0;
+pub const FASTEST: f32 = 20.0;
 
 /// Which spin it is found at.
 pub const STARTS_AT: usize = 2;
