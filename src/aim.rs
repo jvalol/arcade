@@ -168,8 +168,8 @@ pub const LAMP_LIT: f32 = 2.2;
 /// How many cabinets can be lighting the room at once.
 ///
 /// The engine carries eight point lights and drops the rest with a warning, and
-/// the room has thirteen cabinets. The nearest eight are the ones that can be
-/// seen to be lighting anything.
+/// the room has a cabinet per game, which is well past eight. The nearest eight
+/// are the ones that can be seen to be lighting anything.
 pub const LAMPS: usize = 8;
 
 /// The neon on a cabinet: how bright the band burns, how thick it is, and
