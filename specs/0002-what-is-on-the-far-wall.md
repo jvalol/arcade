@@ -57,10 +57,12 @@ which spec 0001 ruled out and this does not change.
 - And a plinth is wider than what it carries. — `display::tests::a_plinth_is_wider_than_its_shape`
 - Each one turns. — `display::tests::they_turn`
 - Looking at one names it, and names a cabinet when you look at a cabinet. — `room::tests::looking_at_a_display_names_it`
+- And a plinth stops you, the way a cabinet does. — `room::tests::you_cannot_walk_through_a_plinth`
 
 ### Verified by hand
 
 - Walking to the end of the room and watching them turn.
+- Walking into one and being stopped rather than standing inside it.
 
 ## Out of scope
 

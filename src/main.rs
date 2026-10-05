@@ -108,6 +108,9 @@ struct Arcade {
     yaw: f32,
     pitch: f32,
     walking: [bool; 4],
+    /// Whether a shift key is down, which is what turns the arrows from hauling
+    /// a toy about into working its one other control.
+    shifted: bool,
     wants_lock: bool,
     locked: bool,
     quitting: bool,
@@ -150,6 +153,7 @@ impl Arcade {
             yaw: if staged() { POSED_YAW } else { 0.0 },
             pitch: if staged() { POSED_PITCH } else { 0.0 },
             walking: [false; 4],
+            shifted: false,
             wants_lock: true,
             locked: false,
             quitting: false,
@@ -180,7 +184,7 @@ impl Arcade {
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
                 metronome::NAME => self.metronome.press(),
-                wrecker::NAME => self.wrecker.build(),
+                wrecker::NAME => self.wrecker.rebuild_wall(),
                 _ => cradle::set_going(&mut self.cradle, 0),
             },
             None => (),
@@ -211,13 +215,28 @@ impl Arcade {
             }
             wrecker::NAME if arrow => {
                 if !input.repeat {
-                    // left and right as the nook sees them: you come in off the
-                    // aisle looking along -x, so your right hand is -z
-                    match input.key {
-                        KeyboardKey::Left => self.wrecker.haul(1.0),
-                        KeyboardKey::Right => self.wrecker.haul(-1.0),
-                        KeyboardKey::Up => self.wrecker.wind(-wrecker::WINDS_BY),
-                        _ => self.wrecker.wind(wrecker::WINDS_BY),
+                    // shift and the arrows wind the chain. Hauling the ball
+                    // about is what you do with this and winding is what you do
+                    // once, so the plain arrows are the hauling.
+                    if self.shifted {
+                        let by = match input.key {
+                            KeyboardKey::Up => -wrecker::WINDS_BY,
+                            KeyboardKey::Down => wrecker::WINDS_BY,
+                            _ => 0.0,
+                        };
+                        self.wrecker.wind(by);
+                    } else {
+                        // all four haul the ball about the tray, so a swing can
+                        // be aimed rather than only pumped. Laid out as the nook
+                        // sees them: you come in off the aisle looking along -x,
+                        // so your right hand is -z and away from you is -x.
+                        let way = match input.key {
+                            KeyboardKey::Left => Vec3::Z,
+                            KeyboardKey::Right => Vec3::NEG_Z,
+                            KeyboardKey::Up => Vec3::NEG_X,
+                            _ => Vec3::X,
+                        };
+                        self.wrecker.haul(way);
                     }
                 }
             }
@@ -246,7 +265,7 @@ impl Arcade {
                 ),
             },
             wrecker::NAME => format!(
-                "{} of {} bricks standing. Arrows swing the ball and wind the chain. Enter rebuilds it.",
+                "{} of {} standing. Swing the ball with arrow keys. Use shift with up and down keys to wind the chain up or down. Press enter to rebuild the wall.",
                 self.wrecker.standing(),
                 wrecker::bricks()
             ),
@@ -808,39 +827,49 @@ impl Game for Arcade {
                 );
             }
 
-            // the gantry: a post across the tray and a jib out to the hook
-            scene.push_colored(
-                cube,
-                &Transform::at(
-                    top + vec3(
-                        wrecker::POST_AT,
-                        wrecker::HANGS_FROM.y * 0.5,
-                        wrecker::HANGS_FROM.z,
-                    ),
-                )
-                .with_scale(vec3(
-                    wrecker::POST,
-                    wrecker::HANGS_FROM.y,
-                    wrecker::POST,
-                )),
-                aim::GANTRY,
-            );
-            scene.push_colored(
-                cube,
-                &Transform::at(
-                    top + vec3(
-                        wrecker::POST_AT * 0.5,
-                        wrecker::HANGS_FROM.y,
-                        wrecker::HANGS_FROM.z,
-                    ),
-                )
-                .with_scale(vec3(
-                    wrecker::POST_AT.abs(),
-                    wrecker::POST,
-                    wrecker::POST,
-                )),
-                aim::GANTRY,
-            );
+            // the gantry: a post in the corner, and a jib round to the hook in
+            // two legs. The corner is the furthest from the hook anything
+            // standing on the tray can be, which is what keeps the ball from
+            // being hauled through it.
+            let post = wrecker::POST_AT;
+            let high = wrecker::HANGS_FROM.y;
+            let along = wrecker::HANGS_FROM.z - post.z;
+            for (at, size) in [
+                (
+                    vec3(post.x, high * 0.5, post.z),
+                    vec3(wrecker::POST, high, wrecker::POST),
+                ),
+                (
+                    vec3(post.x, high, post.z + along * 0.5),
+                    vec3(wrecker::POST, wrecker::POST, along),
+                ),
+                (
+                    vec3(post.x * 0.5, high, wrecker::HANGS_FROM.z),
+                    vec3(post.x.abs(), wrecker::POST, wrecker::POST),
+                ),
+            ] {
+                scene.push_colored(cube, &Transform::at(top + at).with_scale(size), aim::GANTRY);
+            }
+
+            // the links themselves. The beads are 0.03 across at 0.045 apart,
+            // so drawing the beads alone leaves half a bead of nothing between
+            // each pair and the chain reads as a dotted line.
+            for link in &self.wrecker.chain {
+                let (one, other) = link.ends(&self.wrecker.bodies);
+                let along = other - one;
+                let length = along.length();
+                if length < 1e-4 {
+                    continue;
+                }
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + one + along * 0.5)
+                        .with_rotation(glam::Quat::from_rotation_arc(Vec3::NEG_Y, along / length))
+                        .with_scale(vec3(wrecker::BEAD * 0.4, length, wrecker::BEAD * 0.4)),
+                    aim::CHAIN,
+                );
+            }
 
             for (n, body) in self.wrecker.bodies.iter().enumerate() {
                 let at = top + body.position;
@@ -1039,6 +1068,9 @@ impl Game for Arcade {
 
     fn process_keyboard(&mut self, input: KeyboardInput) {
         let held = input.state == KeyboardKeyState::Pressed;
+        if matches!(input.key, KeyboardKey::LShift | KeyboardKey::RShift) {
+            self.shifted = held;
+        }
 
         // the arrows work whatever toy the sight is on, and walk you about when
         // it is on nothing. WASD walks whatever you are looking at, so there is

@@ -33,6 +33,19 @@ with nothing behind it: from the aisle you saw through its back into the nook,
 and from the nook you saw the back of a cabinet. The nook is a room behind that
 wall and you get to it round the end of it.
 
+The far end of the room carries more than it used to. It was one cabinet step
+past the last cabinet, which was enough while that end held nothing but the
+shapes on their plinths and you could walk straight through them. Making the
+plinths solid, per spec 0002, closed the only route in: it runs between the last
+cabinet and the nearest plinth, and that gap was 0.74 wide for someone 0.9
+across. It is 2.8 now, flooded rather than worked out, and the way opens between
+2.35 and 2.4.
+
+The reaching is flooded too. A grid of the floor is filled from where you come
+in, and every bench has to be somewhere that fill got to. Arithmetic about one
+wall at a time cannot see a pinch between two things that were never thought
+about together, and this one was invisible until somebody walked at it.
+
 Not in the aisle. The first attempt before that stood a bench down the middle of
 the room and it was in front of the far wall from every angle, which is the one
 place nothing should stand. A bench is solid, like a cabinet, so you cannot walk
@@ -60,6 +73,41 @@ one stays where it is, at `cargo run --release --example chain`.
 It stands in a tray with a lip, because a knocked brick needs somewhere to end
 up and without the lip it slides off the bench and falls through a room this
 solver knows nothing about.
+
+The four arrows haul the ball about the tray, both ways about rather than only
+at the wall, because the whole of what a wrecking ball asks of you is where to
+put it. Shift and up or down wind the chain in and out, which is the one control
+a crane actually has and the hardest thing to ask of a link: the length changes
+while the ball is hanging on it, so every link has to take up slack or pay out
+under load rather than settle something that was already still.
+
+Enter builds the wall again and nothing else. It built the lot, which put the
+ball back on its hook wherever it had got to, so pressing it mid swing threw the
+ball across the tray. The chain stays where it is now, and stops moving: you
+cannot build a wall round a swinging ball, so pressing this catches it first. The
+swing is yours to put back.
+
+Nothing is laid through the chain either. A brick built inside something forty
+times its weight is a brick the solver has to get out of there, and what it does
+is throw it, one of them fifty six units down through the bench. The whole chain
+and not just the ball: the beads hang from 0.25 down and the wall stands 0.26
+high, so swinging the ball in puts beads over the wall as well. The wall comes
+back with a hole where the chain is, and pressing again once it has swung clear
+fills the hole.
+
+**The wall is built where it comes to rest**, not where the arithmetic puts the
+courses. Laid on the arithmetic's own spots each contact gives up a little before
+the solver pushes back, and stacked six deep that came to 0.032 by the top
+course, which is 73% of a brick's own height. The wall slumped the moment it
+appeared, every brick sat within a whisker of the distance that counts as knocked
+down, and rebuilding snapped the lot back up, which was a hop you got pressing
+enter at a wall that was already standing. A wall stood up and let go once, with
+the resting places read off it, settles 0.0008 instead. A wall with nothing wrong
+with it is now left alone entirely.
+
+The gantry's post stands in the corner of the tray rather than beside the hook.
+Once the arrows hauled both ways, a post level with the hook was a post the first
+pull across the tray put the ball inside.
 
 Two numbers came out of sweeps rather than out of the example. The pull is 0.7:
 above it two presses do the whole job and there is nothing left to work, below it
@@ -155,6 +203,7 @@ nothing, because a pull is a press and not forty a second.
 - The nook has a way in, wide enough to walk through. — `room::tests::the_nook_has_a_way_in`
 - And every cabinet still has a wall behind it. — `room::tests::every_cabinet_has_a_wall_behind_it`
 - The benches fit down the nook, inside it and clear of each other. — `room::tests::the_benches_fit_down_the_nook`
+- And you can walk from where you come in to every one of them. — `room::tests::you_can_walk_to_every_bench`
 - A bench is something you bump into. — `room::tests::a_bench_is_something_you_bump_into`
 - The sight lands on a bench. — `room::tests::the_sight_lands_on_a_bench`
 - And not on one across the room. — `room::tests::a_bench_out_of_reach_is_not_seen`
@@ -165,6 +214,10 @@ nothing, because a pull is a press and not forty a second.
 - The chain carries the ball without stretching further than it did. — `wrecker::tests::the_chain_carries_the_ball_without_stretching`
 - The winch hauls the ball up, and never winds a link shorter than what it ties. — `wrecker::tests::the_winch_moves_the_ball`
 - The wall can be stood back up. — `wrecker::tests::building_it_again_stands_the_wall_back_up`
+- And standing it back up leaves the chain where it is. — `wrecker::tests::rebuilding_the_wall_leaves_the_chain_where_it_is`
+- And throws nothing when the ball is in the way. — `wrecker::tests::rebuilding_round_the_ball_throws_nothing`
+- The wall is built where it rests, so it does not slump. — `wrecker::tests::the_wall_is_built_where_it_rests`
+- And a wall with nothing wrong with it is left alone. — `wrecker::tests::rebuilding_a_whole_wall_changes_nothing`
 - The balls hang touching. — `cradle::tests::the_balls_hang_touching`
 - Each hangs from a hook that does not move. — `cradle::tests::every_ball_hangs_from_its_own_hook`
 - A row left alone stays put. — `cradle::tests::a_row_left_alone_stays_put`
@@ -192,6 +245,8 @@ nothing, because a pull is a press and not forty a second.
 - Pressing enter sends the far cradle ball out and leaves the middle three still.
 - The metronome's lit notch is where the weight is, read from across the nook.
 - Four pulls on the ball and most of the wall is down.
+- The chain reads as a chain. The beads are half a bead apart, so the links
+  between them are drawn as well, or it is a dotted line.
 
 ## Out of scope
 

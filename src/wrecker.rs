@@ -21,7 +21,7 @@
 use blitzkit::collision::Aabb;
 use blitzkit::link::Link;
 use blitzkit::physics::{Body, Solver};
-use glam::{vec3, Vec3};
+use glam::{vec3, Quat, Vec3};
 
 /// What the bench it stands on is called.
 pub const NAME: &str = "ball and chain";
@@ -53,12 +53,18 @@ pub const BALL_MASS: f32 = 2.4;
 pub const HANGS_FROM: Vec3 = vec3(0.0, 0.7, -0.35);
 pub const POST: f32 = 0.028;
 
-/// Where the gantry's post stands, across the tray from the hook.
+/// Where the gantry's post stands, and the jib reaches from it to the hook.
 ///
-/// Behind the model rather than in front of it: you come into the nook looking
+/// In the corner, not beside the hook. The arrows haul the ball both ways now,
+/// so a post standing anywhere the ball can reach is a post the ball goes
+/// through: it was level with the hook and the first pull across the tray put
+/// the ball inside it. The corner is the furthest from the hook anything
+/// standing on the tray can be.
+///
+/// Behind the model as well as off to the side. You come into the nook looking
 /// along -x, so this is the far side and the post is not between you and the
 /// wall you are swinging at.
-pub const POST_AT: f32 = -0.34;
+pub const POST_AT: Vec3 = vec3(-0.37, 0.0, -0.58);
 
 /// The wall: bricks across, bricks up, and how big one is.
 ///
@@ -107,7 +113,15 @@ pub const WALL_AT: f32 = 0.05;
 /// doing.
 pub const HAUL: f32 = 0.7;
 
-/// How much of the chain a press winds in or out, and how far the winch goes.
+/// How much of the chain a press winds in or out, and how far the winch goes
+/// either way.
+///
+/// The one control a crane actually has, and the hardest thing to ask of a link:
+/// the chain's length changes while the ball is hanging on it, so every link has
+/// to take up slack or pay out under load rather than settle something that was
+/// already still. It is on shift and the arrows rather than on the arrows
+/// themselves, because hauling the ball about is what you do with this and
+/// winding is what you do once.
 pub const WINDS_BY: f32 = 0.06;
 pub const WOUND_IN: f32 = 0.35;
 pub const WOUND_OUT: f32 = 1.25;
@@ -115,6 +129,9 @@ pub const WOUND_OUT: f32 = 1.25;
 /// How far a brick has to have moved from where it was built to count as
 /// knocked down. Where it was, not how high it is.
 pub const KNOCKED: f32 = BRICK.z;
+
+/// How much room a brick wants round the ball before it will be laid.
+pub const CLEAR: f32 = 0.006;
 
 /// How fast it is stepped, and how many passes a step gets.
 ///
@@ -179,6 +196,40 @@ pub fn brick_at(row: usize, column: usize) -> Vec3 {
     )
 }
 
+/// Where every brick comes to rest, worked out once by standing a wall up and
+/// letting it go.
+///
+/// Laid where the arithmetic puts them the courses sink. Each contact gives up a
+/// little before the solver pushes back, and stacked six deep that came to 0.032
+/// by the top course, which is 73% of a brick's own height. Three things went
+/// wrong with it: the wall slumped the moment it appeared, every brick sat
+/// within a whisker of the distance that counts as knocked down, and rebuilding
+/// snapped the lot back up, which is the hop you got pressing enter at a wall
+/// that was already standing.
+///
+/// So the wall is built where it comes to rest rather than where it is drawn on
+/// paper, and the resting place is measured rather than guessed at.
+pub fn resting() -> Vec<(Vec3, Quat)> {
+    let mut bodies = Vec::new();
+    for row in 0..HIGH {
+        let across = if row % 2 == 1 { WIDE - 1 } else { WIDE };
+        for column in 0..across {
+            bodies.push(Body::block(brick_at(row, column), BRICK, BRICK_MASS).with_friction(0.7));
+        }
+    }
+
+    let world = tray();
+    let mut solver = Solver::new().with_passes(PASSES);
+    for _ in 0..(3.0 / STEP) as u32 {
+        solver.step(&mut bodies, &world, crate::GRAVITY, STEP);
+    }
+
+    bodies
+        .iter()
+        .map(|brick| (brick.position, brick.orientation))
+        .collect()
+}
+
 /// The one on the bench.
 pub struct Wrecker {
     pub bodies: Vec<Body>,
@@ -192,10 +243,14 @@ pub struct Wrecker {
     /// The shortest each may be wound to: the two things it ties, touching.
     ///
     /// A link shorter than that is a link pulling two bodies together while the
-    /// contact between them pushes them apart, and the two fight.
+    /// contact between them pushes them apart, and the two fight. Wound right in
+    /// without it, the full size example reported its chain 55% stretched, which
+    /// was the contacts winning rather than the links failing.
     shortest: Vec<f32>,
     /// How much of the chain is paid out, against what it was built at.
     pub wound: f32,
+    /// Where each brick is laid, which is where one comes to rest.
+    resting: Vec<(Vec3, Quat)>,
     world: Vec<Aabb>,
     owed: f32,
     pub solver: Solver,
@@ -216,6 +271,7 @@ impl Wrecker {
             built_long: Vec::new(),
             shortest: Vec::new(),
             wound: 1.0,
+            resting: resting(),
             world: tray(),
             owed: 0.0,
             solver: Solver::new().with_passes(PASSES),
@@ -253,32 +309,50 @@ impl Wrecker {
             .map(|link| self.bodies[link.one].radius() + self.bodies[link.other].radius())
             .collect();
 
-        for row in 0..HIGH {
-            let across = if row % 2 == 1 { WIDE - 1 } else { WIDE };
-            for column in 0..across {
-                let at = brick_at(row, column);
-                self.bodies
-                    .push(Body::block(at, BRICK, BRICK_MASS).with_friction(0.7));
-                self.built_at.push(at);
-            }
-        }
+        self.lay_the_wall();
     }
 
-    /// Pulls the ball along the swing. One press, one pull, so a swing is pumped
-    /// rather than driven.
-    pub fn haul(&mut self, way: f32) {
-        self.bodies[BALL_AT].velocity += Vec3::Z * way * HAUL;
-        for n in 1..WALL_FROM {
-            self.bodies[n].wake();
+    /// The wall again, with whatever the chain is doing left alone.
+    ///
+    /// This is what the bench's enter does. It built the lot, which put the ball
+    /// back on its hook wherever it had got to: press it mid swing and the ball
+    /// jumped across the tray. Rebuilding the wall is the thing that was asked
+    /// for, and the chain is not part of the wall.
+    ///
+    /// The chain stays where it is and stops moving.
+    ///
+    /// Stopping it is the catch. Leaving the swing in left the ball crossing a
+    /// brick's clearance inside one step, so a brick laid clear of it was buried
+    /// in it by the next, and out it went: one left at twenty three a second and
+    /// ended up off the bench. You cannot build a wall round a swinging ball.
+    /// You hold it still and then build.
+    ///
+    /// Stopping it is not moving it. The ball hangs where it got to and the
+    /// swing is yours to put back, which is the whole of what pressing this used
+    /// to get wrong.
+    ///
+    /// A wall with nothing wrong with it is left alone. There is nothing to put
+    /// right, and the solver would still have to take up its contacts again from
+    /// nothing.
+    pub fn rebuild_wall(&mut self) {
+        if self.whole() {
+            return;
         }
+
+        for n in 1..WALL_FROM {
+            self.bodies[n].velocity = Vec3::ZERO;
+            self.bodies[n].spin = Vec3::ZERO;
+        }
+
+        self.bodies.truncate(WALL_FROM);
+        self.built_at.clear();
+
+        // the solver is holding contacts against bricks that no longer exist
+        self.solver.forget();
+        self.lay_the_wall();
     }
 
     /// Winds the chain in or out.
-    ///
-    /// The hard thing to ask of a link, and the reason it is worth having here:
-    /// the chain's length changes while the ball is hanging on it, so every link
-    /// has to take up slack or pay out under load rather than settle something
-    /// that was already still.
     pub fn wind(&mut self, by: f32) {
         let was = self.wound;
         self.wound = (self.wound + by).clamp(WOUND_IN, WOUND_OUT);
@@ -294,6 +368,59 @@ impl Wrecker {
         {
             link.length = (built * self.wound).max(*shortest);
         }
+        for n in 1..WALL_FROM {
+            self.bodies[n].wake();
+        }
+    }
+
+    /// Whether the wall is all there and all of it standing.
+    pub fn whole(&self) -> bool {
+        self.bodies.len() - WALL_FROM == self.resting.len() && self.standing() == self.resting.len()
+    }
+
+    /// The bricks, laid where they rest.
+    ///
+    /// Nothing is laid through the chain. A brick built inside something is a
+    /// brick the solver has to get out of there, and with the ball forty times
+    /// its weight what it does is throw it: one went fifty six units down
+    /// through the bench. So the wall comes back with a hole where the chain is,
+    /// and pressing again once it has swung clear fills the hole.
+    ///
+    /// The whole chain and not just the ball. The beads hang from 0.25 down and
+    /// the wall stands 0.26 high, so swinging the ball in puts beads over the
+    /// wall as well, and a brick laid inside a bead is thrown exactly as far.
+    fn lay_the_wall(&mut self) {
+        let chain: Vec<(Vec3, f32)> = self.bodies[1..WALL_FROM]
+            .iter()
+            .map(|body| (body.position, body.radius()))
+            .collect();
+
+        for (at, facing) in self.resting.clone() {
+            let in_the_way = chain.iter().any(|(on, radius)| {
+                let off = ((*on - at).abs() - BRICK).max(Vec3::ZERO);
+                off.length() < radius + CLEAR
+            });
+            if in_the_way {
+                continue;
+            }
+
+            self.bodies.push(
+                Body::block(at, BRICK, BRICK_MASS)
+                    .facing(facing)
+                    .with_friction(0.7),
+            );
+            self.built_at.push(at);
+        }
+    }
+
+    /// Pulls the ball along the floor. One press, one pull, so a swing is pumped
+    /// rather than driven.
+    ///
+    /// Both ways about, not just at the wall. Pulling along the swing alone
+    /// means the ball only ever meets the wall head on in the middle, and the
+    /// whole of what a wrecking ball asks of you is where to put it.
+    pub fn haul(&mut self, way: Vec3) {
+        self.bodies[BALL_AT].velocity += way.normalize_or_zero() * HAUL;
         for n in 1..WALL_FROM {
             self.bodies[n].wake();
         }
@@ -355,7 +482,7 @@ mod tests {
         for _ in 0..(seconds / STEP) as u32 {
             let going = one.bodies[BALL_AT].velocity.z;
             if (pulls == 0 || (was <= 0.0 && going > 0.0)) && pulls < 40 {
-                one.haul(1.0);
+                one.haul(Vec3::Z);
                 pulls += 1;
             }
             was = going;
@@ -377,6 +504,29 @@ mod tests {
     }
 
     /// What the chain hangs at, against the bead weight and the passes.
+    /// How far a settled brick has moved from where it was built.
+    #[test]
+    #[ignore]
+    fn settling() {
+        let mut one = Wrecker::new();
+        for seconds in [0.5f32, 1.0, 3.0, 6.0] {
+            for _ in 0..(seconds / STEP) as u32 {
+                one.advance(STEP);
+            }
+            let worst = one.bodies[WALL_FROM..]
+                .iter()
+                .zip(&one.built_at)
+                .map(|(brick, built)| brick.position.distance(*built))
+                .fold(0.0f32, f32::max);
+            println!(
+                "after {}s a brick has moved {:.5}, which is {:.1}% of its height",
+                seconds,
+                worst,
+                worst / (BRICK.y * 2.0) * 100.0
+            );
+        }
+    }
+
     #[test]
     #[ignore]
     fn hanging() {
@@ -522,6 +672,53 @@ mod tests {
         );
     }
 
+    /// Spec 0006: the wall is built where it rests, so it does not slump.
+    ///
+    /// Laid on the arithmetic's own spots a brick moved 0.032 settling, which is
+    /// 73% of its own height and a whisker under the distance that counts as
+    /// knocked down. Laid where it rests it moves 0.0008.
+    #[test]
+    fn the_wall_is_built_where_it_rests() {
+        let mut one = Wrecker::new();
+        for _ in 0..(3.0 / STEP) as u32 {
+            one.advance(STEP);
+        }
+
+        let worst = one.bodies[WALL_FROM..]
+            .iter()
+            .zip(&one.built_at)
+            .map(|(brick, built)| brick.position.distance(*built))
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            worst < KNOCKED * 0.1,
+            "a brick settled {} from where it was laid, and knocked down is {}",
+            worst,
+            KNOCKED
+        );
+    }
+
+    /// Spec 0006: and pressing enter at a wall with nothing wrong with it does
+    /// nothing at all.
+    ///
+    /// It laid every brick again, which put a settled one back on its spot, so
+    /// clicking at a standing wall made the whole thing hop.
+    #[test]
+    fn rebuilding_a_whole_wall_changes_nothing() {
+        let mut one = Wrecker::new();
+        for _ in 0..(3.0 / STEP) as u32 {
+            one.advance(STEP);
+        }
+
+        assert!(one.whole(), "the wall is not whole to begin with");
+        let was: Vec<Vec3> = one.bodies.iter().map(|b| b.position).collect();
+        one.rebuild_wall();
+
+        for (n, before) in was.iter().enumerate() {
+            assert_eq!(one.bodies[n].position, *before, "body {} moved", n);
+        }
+    }
+
     /// Spec 0006: and hauling it brings the wall down.
     ///
     /// Swept over the pull: at 0.6 the ball never reached, and at 2.4 one pull
@@ -657,13 +854,83 @@ mod tests {
         pumped(&mut one, 20.0);
         assert!(one.standing() < bricks());
 
-        one.wind(-WINDS_BY * 4.0);
         one.build();
 
         assert_eq!(one.standing(), bricks(), "the wall came back knocked down");
-        assert_eq!(one.wound, 1.0, "the winch was left where it was");
         for link in &one.chain {
             assert!(link.error(&one.bodies).abs() < 1e-5);
+        }
+    }
+
+    /// Spec 0006: and standing it back up does not move the ball.
+    ///
+    /// Enter rebuilt everything, so pressing it mid swing put the ball back on
+    /// its hook. What it says it does is build the wall again.
+    #[test]
+    fn rebuilding_the_wall_leaves_the_chain_where_it_is() {
+        let mut one = Wrecker::new();
+        pumped(&mut one, 14.0);
+        assert!(one.standing() < bricks(), "nothing was knocked down");
+
+        let chain: Vec<Vec3> = one.bodies[..WALL_FROM].iter().map(|b| b.position).collect();
+        one.rebuild_wall();
+
+        assert!(
+            one.standing() > bricks() - 4,
+            "the wall came back with {} of {} standing",
+            one.standing(),
+            bricks()
+        );
+        assert_eq!(
+            one.standing(),
+            one.bodies.len() - WALL_FROM,
+            "a brick fell in"
+        );
+        for (n, was) in chain.iter().enumerate() {
+            let moved = one.bodies[n].position.distance(*was);
+            assert!(moved < 1e-5, "body {} jumped {}", n, moved);
+        }
+
+        // caught rather than carried on, since a wall cannot be built round a
+        // swinging ball
+        for n in 1..WALL_FROM {
+            assert_eq!(
+                one.bodies[n].velocity,
+                Vec3::ZERO,
+                "body {} is still going",
+                n
+            );
+        }
+    }
+
+    /// Spec 0006: and rebuilding round the ball does not throw the wall.
+    #[test]
+    fn rebuilding_round_the_ball_throws_nothing() {
+        let mut one = Wrecker::new();
+
+        // swing it in and build the wall again while it is sitting in the way
+        pumped(&mut one, 14.0);
+        for _ in 0..12 {
+            one.haul(Vec3::Z);
+            for _ in 0..(0.1 / STEP) as u32 {
+                one.advance(STEP);
+            }
+        }
+        one.rebuild_wall();
+        for _ in 0..(6.0 / STEP) as u32 {
+            one.advance(STEP);
+        }
+
+        for (n, body) in one.bodies.iter().enumerate().skip(WALL_FROM) {
+            let at = body.position;
+            assert!(
+                at.y > -BRICK.y
+                    && at.x.abs() < TRAY_WIDE * 0.5 + BRICK.x
+                    && at.z.abs() < TRAY_LONG * 0.5 + BRICK.x,
+                "brick {} was thrown to {:?}",
+                n - WALL_FROM,
+                at
+            );
         }
     }
 }

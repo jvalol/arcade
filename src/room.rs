@@ -52,6 +52,19 @@ pub const BENCH_GAP: f32 = 0.3;
 pub const NOOK_DEEP: f32 = 3.0;
 pub const NOOK_SPAN: f32 = 5.6;
 
+/// How much room the far end of the room carries past the last cabinet.
+///
+/// It was one cabinet step. That was enough while that end held nothing but the
+/// shapes on their plinths and you could walk straight through them. The plinths
+/// are solid now, and the way into the nook runs between the last cabinet and
+/// the nearest plinth: at one step that gap came out 0.74 wide for someone 0.9
+/// across, so the nook had a doorway you could see through and not get to.
+///
+/// Flooded rather than worked out. The way opens between 2.35 and 2.4, and this
+/// is the next round number clear of that, which leaves about half a step of
+/// room either side of you going through.
+pub const END: f32 = 2.8;
+
 /// How wide the way in is.
 ///
 /// The stretch of left wall past the last cabinet, which is where this spec
@@ -60,7 +73,7 @@ pub const NOOK_SPAN: f32 = 5.6;
 /// its back into the nook, and from the nook you saw the back of a cabinet.
 /// Taking the wall away where the cabinets are was never the point. The nook is
 /// behind that wall and you get to it round the end of it.
-pub const NOOK_DOOR: f32 = APART - CABINET.z * 0.5;
+pub const NOOK_DOOR: f32 = END - CABINET.z * 0.5;
 
 /// How far the room's walls are from its middle, and how high.
 pub const WALL: f32 = 2.0;
@@ -265,7 +278,7 @@ impl Room {
     pub fn of(cabinets: Vec<Cabinet>) -> Self {
         let each_side = cabinets.len().div_ceil(2);
         let along = (each_side.max(1) - 1) as f32 * APART;
-        let reaches = along * 0.5 + APART;
+        let reaches = along * 0.5 + END;
 
         let stood = cabinets
             .into_iter()
@@ -338,8 +351,21 @@ impl Room {
         Aabb::from_center_size(bench.at + Vec3::Y * bench.size.y * 0.5, bench.size)
     }
 
-    /// Everything you cannot walk through: the walls, the cabinets and the
-    /// benches.
+    /// The box a plinth fills, which is what holds you off the shape standing
+    /// on it. A plinth is wider than the shape it carries, so stopping at the
+    /// plinth stops you short of the shape as well.
+    pub fn plinth_box(one: &crate::display::Display) -> Aabb {
+        let (at, size) = crate::display::plinth_under(one);
+
+        Aabb::from_center_size(at, size)
+    }
+
+    /// Everything you cannot walk through: the walls, the cabinets, the benches
+    /// and the plinths.
+    ///
+    /// The plinths were the one thing in the room that let you through. You
+    /// could walk into the far wall's row and stand inside a Klein bottle,
+    /// which is a thing the room says you may pick up and turn.
     pub fn solid(&self) -> Vec<Aabb> {
         let mut out = self.walls.clone();
         out.extend(
@@ -348,6 +374,7 @@ impl Room {
                 .map(|stood| Aabb::from_center_size(stood.at + Vec3::Y * CABINET.y * 0.5, CABINET)),
         );
         out.extend(self.benches.iter().map(Self::bench_box));
+        out.extend(self.displays.iter().map(Self::plinth_box));
 
         out
     }
@@ -649,7 +676,10 @@ mod tests {
 
         let room = Room::of(some(12));
         let solid = room.solid();
-        assert_eq!(solid.len(), room.walls.len() + 12 + room.benches.len());
+        assert_eq!(
+            solid.len(),
+            room.walls.len() + 12 + room.benches.len() + room.displays.len()
+        );
 
         // straight at the first cabinet from the middle of the room
         let target = room.stood[0].at;
@@ -669,6 +699,113 @@ mod tests {
             you.x,
             target.x
         );
+    }
+
+    /// How far a point is from a box, and nought when it is inside it.
+    fn clear_of(at: Vec3, box_: &Aabb) -> f32 {
+        (box_.min - at).max(at - box_.max).max(Vec3::ZERO).length()
+    }
+
+    /// Spec 0006: you can walk from where you come in to every bench.
+    ///
+    /// Flooded rather than reasoned about. Making the plinths solid closed the
+    /// only way into the nook and nothing said so: the route runs between the
+    /// last cabinet and the nearest plinth, and that gap was 0.74 wide for
+    /// someone 0.9 across. Arithmetic about one wall at a time cannot see a
+    /// pinch between two things that were never thought about together.
+    #[test]
+    fn you_can_walk_to_every_bench() {
+        const GRID: f32 = 0.12;
+
+        let room = Room::of(some(13));
+        let solid = room.solid();
+        let radius = crate::RADIUS;
+        let free = |at: Vec3| solid.iter().all(|box_| clear_of(at, box_) > radius);
+
+        let low = vec3(-(WALL + CABINET.x) - NOOK_DEEP, 0.0, -room.reaches);
+        let wide = ((WALL + CABINET.x) * 2.0 + NOOK_DEEP) / GRID;
+        let long = room.reaches * 2.0 / GRID;
+        let (wide, long) = (wide as usize + 1, long as usize + 1);
+        let cell = |x: usize, z: usize| low + vec3(x as f32 * GRID, radius, z as f32 * GRID);
+
+        let start = room.doorway();
+        let from = (
+            ((start.x - low.x) / GRID).round() as usize,
+            ((start.z - low.z) / GRID).round() as usize,
+        );
+        assert!(free(cell(from.0, from.1)), "you start inside something");
+
+        let mut reached = vec![false; wide * long];
+        let mut todo = vec![from];
+        reached[from.0 * long + from.1] = true;
+        while let Some((x, z)) = todo.pop() {
+            for (dx, dz) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
+                let (nx, nz) = (x as i32 + dx, z as i32 + dz);
+                if nx < 0 || nz < 0 || nx as usize >= wide || nz as usize >= long {
+                    continue;
+                }
+                let (nx, nz) = (nx as usize, nz as usize);
+                if reached[nx * long + nz] || !free(cell(nx, nz)) {
+                    continue;
+                }
+                reached[nx * long + nz] = true;
+                todo.push((nx, nz));
+            }
+        }
+
+        for bench in &room.benches {
+            // the floor in front of it, on the side you stand to work it
+            let at = bench.at + Vec3::X * (bench.size.x * 0.5 + radius + 0.1);
+            let (x, z) = (
+                ((at.x - low.x) / GRID).round() as usize,
+                ((at.z - low.z) / GRID).round() as usize,
+            );
+
+            assert!(
+                free(cell(x, z)),
+                "there is no standing at the {}",
+                bench.name
+            );
+            assert!(
+                reached[x * long + z],
+                "you cannot walk from the door to the {}",
+                bench.name
+            );
+        }
+    }
+
+    /// Spec 0002: a plinth stops you the way a cabinet does.
+    ///
+    /// They were the one thing in the room you could walk straight through, so
+    /// the shapes on the far wall could be stood inside.
+    #[test]
+    fn you_cannot_walk_through_a_plinth() {
+        use blitzkit::collision::{move_and_slide, Sphere};
+
+        let room = Room::of(some(13));
+        let solid = room.solid();
+
+        for one in &room.displays {
+            // straight down the room at it, from well short
+            let mut you = vec3(one.at.x, 0.45, one.at.z + 3.0);
+            for _ in 0..240 {
+                you = move_and_slide(
+                    Sphere::new(you, 0.45),
+                    vec3(0.0, 0.0, -4.0),
+                    1.0 / 60.0,
+                    &solid,
+                );
+            }
+
+            let plinth = Room::plinth_box(one);
+            assert!(
+                you.z > plinth.max.z,
+                "you walked to {} and the {} plinth ends at {}",
+                you.z,
+                one.name,
+                plinth.max.z
+            );
+        }
     }
 
     #[test]
@@ -780,7 +917,10 @@ mod tests {
             }
         }
 
-        assert_eq!(solid.len(), room.walls.len() + 13 + room.benches.len());
+        assert_eq!(
+            solid.len(),
+            room.walls.len() + 13 + room.benches.len() + room.displays.len()
+        );
     }
 
     #[test]
