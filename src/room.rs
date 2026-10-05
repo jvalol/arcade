@@ -74,27 +74,29 @@ pub fn screen_mesh() -> MeshData {
         ([0.0, -0.5, -0.5], [1.0, 1.0]),
     ];
 
-    // One face. It was two, so the half of the cabinets turned the other way
-    // down the aisle had something to show, and both faces carried the same u,
-    // which drew the picture left to right reversed on one side of the room.
+    // Two faces carrying the same u, which is what a lit sign does: from
+    // behind you read it backwards, through it.
     //
-    // Giving the back face its own u fixed that and broke something quieter.
-    // A sign that reads the right way round from behind is not a sign, it is
-    // two signs back to back, and walking past a cabinet and reading its
-    // marquee through it is what that looks like.
+    // It began as two with the same u and nothing turning the quad, so the two
+    // sides of the aisle were reading opposite faces of it and half the room
+    // came out mirrored. Then one face, turned, which made the back of a sign
+    // nothing at all.
     //
-    // So: one face, and `turned_to` points it the way the cabinet faces. The
-    // opaque pass culls back faces, so from behind there is nothing, which is
-    // what the back of a sign looks like.
-    let vertices: Vec<Vertex> = corners
+    // Both: `turned_to` points the front the way its cabinet faces, so each
+    // side of the room reads its own cabinets the right way round, and the
+    // back is the same sign seen through itself.
+    let back = [-1.0, 0.0, 0.0];
+    let mut vertices: Vec<Vertex> = corners
         .iter()
         .map(|(at, uv)| Vertex::new(*at, normal, *uv))
         .collect();
+    vertices.extend(corners.iter().map(|(at, uv)| Vertex::new(*at, back, *uv)));
 
-    // wound so the face is counter clockwise seen from +x, which is the side
-    // its normal points. The other winding is a back face and the opaque pass
-    // culls those, so the first one sided build of this drew nothing at all.
-    MeshData::new(vertices, vec![0, 1, 2, 0, 2, 3])
+    // The front is wound counter clockwise seen from +x, which is the side its
+    // normal points, and the back the other way about. A face wound the wrong
+    // way is culled and drawn nowhere: the one sided build of this drew
+    // nothing at all until the winding was turned round.
+    MeshData::new(vertices, vec![0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6])
 }
 
 /// How far along a ray a box is first met, if it is. The slab test, which the
@@ -364,44 +366,48 @@ mod tests {
         );
     }
 
-    /// Spec 0004: a screen has one face, turned the way its cabinet faces.
+    /// Spec 0004: a screen reads the right way round from the front and
+    /// backwards from behind, like a lit sign seen through itself.
     ///
-    /// Two faces is two signs back to back: you walk past a cabinet and read
-    /// its marquee through it. One face and a turn is a sign, and the opaque
-    /// pass culls the back so there is nothing behind it.
+    /// Two faces carrying the same u. Giving the back its own u is what makes
+    /// a sign read forwards from behind, which is two signs back to back.
     #[test]
-    fn a_screen_has_one_face() {
+    fn a_screen_reads_backwards_from_behind() {
         let mesh = screen_mesh();
+        let (front, back) = mesh.vertices.split_at(4);
 
-        assert_eq!(mesh.vertices.len(), 4, "a quad is four corners");
+        assert_eq!(mesh.vertices.len(), 8, "a two faced quad is eight corners");
+        for (f, b) in front.iter().zip(back) {
+            assert_eq!(f.position, b.position, "the faces are not the same quad");
+            assert_eq!(f.uv, b.uv, "the back has its own u, so it reads forwards");
+            assert_eq!(f.normal, [1.0, 0.0, 0.0]);
+            assert_eq!(b.normal, [-1.0, 0.0, 0.0]);
+        }
 
-        // and it is wound so that face is the one drawn. Seen from +x the
-        // screen's right runs towards -z, and a triangle has to come out
-        // counter clockwise there or the opaque pass culls it.
+        // and each face is wound to be drawn from its own side. Seen from +x
+        // the screen's right runs towards -z and a triangle has to come out
+        // counter clockwise there, or the opaque pass culls it; from -x it is
+        // the other way about.
         let corner = |n: usize| {
             let at = mesh.vertices[mesh.indices[n] as usize].position;
             glam::vec2(-at[2], at[1])
         };
-        for triangle in [0usize, 3] {
+        for (triangle, from_the_front) in [(0usize, true), (3, true), (6, false), (9, false)] {
             let (a, b, c) = (corner(triangle), corner(triangle + 1), corner(triangle + 2));
             let turning = (b - a).perp_dot(c - b);
 
             assert!(
-                turning > 0.0,
+                if from_the_front {
+                    turning > 0.0
+                } else {
+                    turning < 0.0
+                },
                 "a triangle winds the wrong way and is culled: {}",
                 turning
             );
         }
 
-        for vertex in &mesh.vertices {
-            assert_eq!(
-                vertex.normal,
-                [1.0, 0.0, 0.0],
-                "a corner faces the wrong way"
-            );
-        }
-
-        // and turning it by a cabinet's facing points that face into the aisle
+        // and turning it by a cabinet's facing points the front into the aisle
         for facing in [vec3(1.0, 0.0, 0.0), vec3(-1.0, 0.0, 0.0)] {
             let looks = turned_to(facing) * Vec3::X;
 
