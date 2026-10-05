@@ -154,9 +154,43 @@ exactly as long as you keep pushing. Let go and it stops walking.
 
 Spin it harder and the same push moves it *slower*. The rate is the torque you
 are leaning on it with over the spin's own momentum, so more spin is a bigger
-denominator. The dial carries five, from 20 to 60, and the walk comes out within
-0.6% of `τ / I ω` at every one of them, with 92% or more of the movement
-sideways.
+denominator. The dial carries five, from 6 to 15, and the walk comes out within
+2.5% of `τ / I ω` at every one of them, walking a radian a second at the bottom
+and four tenths at the top. The axis takes about half a second to settle into
+walking after a push starts, because the wobble's own period is that long at
+these spins, so you watch it dip and then go.
+
+**The push is as hard as it can be while the axis still goes sideways**, which is
+the whole demonstration. Swept, by how much of the movement came out sideways
+against how fast the axis walked compared to its own spin:
+
+```text
+walk / spin    sideways
+     0.013       99%
+     0.025       98%
+     0.051       92%
+     0.080       87%
+     0.300       60%
+     0.410       29%
+```
+
+It was half this and stayed at 96% everywhere, and the axis took thirteen seconds
+to go round. A toy you lean on for thirteen seconds before anything happens is
+not one anybody leans on.
+
+**The push eases on and off over a quarter of a second** rather than switching.
+A hand leaning on something is a ramp and not a hammer, and a hammer is exactly
+what sets a gyroscope ringing: a torque switched on in one step excites the
+nutation with everything it has. Slowing the rotor down to where its spoke could
+be read as turning made that ring-up thirty times bigger, six point nine degrees
+at the bottom of the dial against four tenths before, and easing the push is what
+took it out. The speed the axis walks at swings 1.3 to one over the first second
+now rather than 1.6, and the movement comes out *more* sideways rather than less,
+91% at the bottom of the dial against 87%.
+
+Dragging harder on the bearings was tried first and is the wrong lever. It
+flattened the ring-up a little and took up to 39% off the walk doing it, which is
+paying in the thing the toy is for.
 
 **The gimbal's bearings drag**, by a thousandth, and that is what makes it watch
 properly. A pushed axis does not settle on its new heading, it rings. The wobble
@@ -182,27 +216,25 @@ percent. Worth noting what the lurch does to the measurement as well as to the
 look: undamped, the axis covers a fifth more ground than it travels, because the
 wobble is path and not progress.
 
-**The mark on the rotor is a spoke when it is stopped and a ring when it is
-spinning**, which is the same mark drawn honestly at both speeds: a stopped wheel
-shows you a spoke and a turning one shows you the ring it blurs into. Keeping the
-spoke while it spins is what made the thing look broken. At forty radians a
-second it steps thirty eight degrees between frames, and on an object that is
-otherwise perfectly still, which is what a balanced gyroscope is, that reads as a
-flicker rather than as a wheel going round. The ring is drawn with the axis and
-not the spin, so it does not move at all.
+**The dial's top end is set by the frame rate and not by the physics.** The spoke
+on the rotor has to move little enough between one frame and the next to be read
+as going round:
 
-**The dial stops at 60 for a reason that is nothing to do with physics.** A frame
-is a sixtieth of a second, and a mark on a rim turning 240 radians a second moves
-153 degrees between one frame and the next, which is past the angle an eye can
-tell the direction of. It read as a wheel standing still, and the only thing that
-looked alive was the walk, so letting go looked like the spin running out. At 60
-the mark moves 57 degrees a frame and reads as a wheel turning. Nothing was lost
-coming down: the walk is the torque over the spin's momentum, so the push came
-down with it and the dial walks at the same five rates it did before.
+```text
+240 radians a second   153 degrees a frame   reads as standing still
+ 60                     57                   reads as flickering
+ 15                     14                   reads as turning
+```
+
+Drawing the spoke as the ring it would blur into was tried in between, and it is
+steadier than steady: nothing moves at all and the rotor looks stopped. What
+coming down costs is the walk, since the push came down with the spin to keep the
+response gyroscopic. The dial walks 0.95 to 0.38 a second, a turn in
+six to sixteen seconds.
 
 Stop the rotor and push again and it does the obvious thing instead: it goes
-where you pushed, at 45 radians a second squared, which is 38 times the fastest
-walk. That is the comparison, and it is why the push is a third of the
+where you pushed, at 10.8 radians a second squared, which is eleven times the
+fastest walk. That is the comparison, and it is why the push is a third of the
 rotor's own weight. There is nothing to lean against in a balanced rotor.
 
 The engine has carried Euler's equation since spec 0034, solved implicitly in
@@ -389,7 +421,7 @@ nothing, because a pull is a press and not forty a second.
 - Its rods hold. — `gyro::tests::the_rods_hold`
 - The axis walks evenly rather than lurching. — `gyro::tests::it_walks_evenly`
 - The outer frame stays on its pedestal. — `gyro::tests::the_frame_stays_on_its_pedestal`
-- The rotor turns slowly enough to be seen turning. — `gyro::tests::the_rotor_does_not_strobe`
+- The rotor turns slowly enough to be read as turning. — `gyro::tests::the_rotor_can_be_seen_turning`
 - The drawn rotor is a closed disc, wound to be seen. — `gyro::tests::the_rotor_is_a_closed_disc`
 
 ### Verified by hand

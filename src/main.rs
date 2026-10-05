@@ -966,48 +966,24 @@ impl Game for Arcade {
                 aim::SPINDLE,
                 64.0,
             );
-            // the mark on the rotor. Stopped it is one spoke, and spinning it is
-            // the ring that spoke blurs into.
+            // one spoke on each face, which is what says it is turning.
             //
-            // A spoke is what a stopped wheel shows and a ring is what a turning
-            // one shows, so this is the same mark drawn honestly at both speeds.
-            // Keeping the spoke while it spins is what made the thing look
-            // broken: at forty radians a second it steps thirty eight degrees
-            // between frames, and on an object that is otherwise perfectly still
-            // that reads as a flicker rather than as a wheel going round. The
-            // ring is drawn with the axis and not the spin, so it does not move
-            // at all.
+            // It has to turn slowly enough to be read as turning, and that is
+            // what sets the dial rather than anything in the physics. Drawn as
+            // a ring instead, which is what a mark on a fast rim blurs into, it
+            // was perfectly steady and the rotor looked stopped. Drawn as a
+            // spoke at 60 radians a second it stepped 57 degrees a frame and
+            // flickered. At 15 it steps 14 degrees and goes round.
             let at = gyro::RADIUS * gyro::MARK;
-            if self.gyro.going {
-                let round = std::f32::consts::TAU / gyro::BLUR_PIECES as f32;
-                let chord = 2.0 * at * (round * 0.5).sin() * 1.1;
-
-                for piece in 0..gyro::BLUR_PIECES {
-                    let turn = piece as f32 * round;
-                    let (sin, cos) = turn.sin_cos();
-
-                    for side in [-1.0f32, 1.0] {
-                        let out = vec3(side * (gyro::THICK * 0.5 + 0.002), cos * at, sin * at);
-                        scene.push_colored(
-                            cube,
-                            &Transform::at(top + wheel.position + frame * out)
-                                .with_rotation(frame * glam::Quat::from_rotation_x(turn))
-                                .with_scale(vec3(0.004, gyro::RADIUS * 0.1, chord)),
-                            aim::STUD,
-                        );
-                    }
-                }
-            } else {
-                for side in [-1.0f32, 1.0] {
-                    let out = vec3(side * (gyro::THICK * 0.5 + 0.002), at * 0.76, 0.0);
-                    scene.push_colored(
-                        cube,
-                        &Transform::at(top + wheel.position + wheel.orientation * out)
-                            .with_rotation(wheel.orientation)
-                            .with_scale(vec3(0.004, gyro::RADIUS * 0.78, gyro::RADIUS * 0.1)),
-                        aim::STUD,
-                    );
-                }
+            for side in [-1.0f32, 1.0] {
+                let out = vec3(side * (gyro::THICK * 0.5 + 0.002), at * 0.76, 0.0);
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + wheel.position + wheel.orientation * out)
+                        .with_rotation(wheel.orientation)
+                        .with_scale(vec3(0.004, gyro::RADIUS * 0.78, gyro::RADIUS * 0.1)),
+                    aim::STUD,
+                );
             }
 
             // the two rings, across each other: the gimbal in the rotor's own

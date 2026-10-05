@@ -71,10 +71,8 @@ pub const GIMBAL_PIECES: usize = 32;
 /// The outer ring, across the gimbal, which the spindle's ends reach.
 pub const FRAME: f32 = 0.235;
 
-/// How far out the mark on the rotor sits, and how many pieces the blur it
-/// turns into is drawn in.
+/// How far out the spoke on the rotor sits.
 pub const MARK: f32 = 0.72;
-pub const BLUR_PIECES: usize = 24;
 
 /// The boss at the middle of the rotor, where the spindle goes through it.
 ///
@@ -85,15 +83,31 @@ pub const BOSS: f32 = 0.034;
 
 /// How hard a held arrow leans on the end of the spindle.
 ///
-/// Chosen so the axis walks at about three fifths of a radian a second in the
-/// middle of the dial, which is slow enough to watch and fast enough to be sure
-/// it is happening.
+/// As hard as it can be leaned on while the axis still goes sideways rather than
+/// where it was pushed, which is the whole demonstration. Swept, by how much of
+/// the movement came out sideways against how fast the axis walked compared to
+/// its own spin:
+///
+/// ```text
+/// walk / spin    sideways
+///      0.013       99%
+///      0.025       98%
+///      0.051       92%
+///      0.080       87%
+///      0.300       60%
+///      0.410       29%
+/// ```
+///
+/// It was half this, which kept the slow end at 96% and had the axis taking
+/// thirteen seconds to go round, and a toy you lean on for thirteen seconds
+/// before anything happens is not one anybody leans on. At this the slow end
+/// walks a radian a second, round in six, and is 87% sideways.
 ///
 /// There is nothing to lean against in a balanced rotor, so the same push that
 /// ambles a spun one sideways sends a stopped one end over end at nearly fifty
 /// radians a second squared, which is forty times the fastest walk. The gap
 /// between the two is the toy.
-pub const PUSH: f32 = 0.21;
+pub const PUSH: f32 = 0.05;
 
 /// How far the spindle reaches past the rotor on each side: out to the frame,
 /// which is what holds it.
@@ -110,18 +124,28 @@ pub const SPINDLE_OUT: f32 = FRAME;
 /// flops rather than precessing, and a toy whose point is a steady walk should
 /// not have a setting where it wallows.
 ///
-/// The fast end is not faster than this for a reason that has nothing to do with
-/// physics. A frame is a sixtieth of a second, and a mark on a rim turning 240
-/// radians a second moves 153 degrees between one frame and the next, which is
-/// past the angle an eye can tell the direction of. It reads as a wheel standing
-/// still. At 60 it moves 57 degrees a frame and reads as a wheel turning.
+/// The fast end is set by the frame rate and not by the physics. A frame is a
+/// sixtieth of a second, and the spoke on the rotor has to move little enough
+/// between one frame and the next to be read as going round:
 ///
-/// Nothing was lost in coming down. The walk is the torque over the spin's
-/// momentum, so the push came down with it and the dial walks at exactly the
-/// rates it walked at before.
+/// ```text
+/// 240 radians a second   153 degrees a frame   reads as standing still
+///  60                     57                   reads as flickering
+///  15                     14                   reads as turning
+/// ```
+///
+/// Drawing the spoke as the ring it would blur into was tried in between, and
+/// it is steadier than steady: nothing moves at all and the rotor looks stopped.
+///
+/// What coming down costs is the walk. The push came down with the spin to keep
+/// the response gyroscopic, so the dial walks 0.48 to 0.19 a second now rather
+/// than 1.2 to 0.4, which is a turn in thirteen to thirty three seconds. And the
+/// axis takes about half a second to settle into walking after a push starts:
+/// the wobble's own period is that long at these spins, so you watch it dip and
+/// then go.
 pub const SPINS: usize = 5;
-pub const SLOWEST: f32 = 20.0;
-pub const FASTEST: f32 = 60.0;
+pub const SLOWEST: f32 = 6.0;
+pub const FASTEST: f32 = 15.0;
 
 /// Which spin it is found at.
 pub const STARTS_AT: usize = 2;
@@ -203,6 +227,18 @@ pub fn settle(bodies: &mut [Body], dt: f32) {
     wheel.spin += wheel.inverse_inertia() * (-across * DRAG) * dt;
 }
 
+/// How long the push takes to come on and go off.
+///
+/// A hand leaning on something is a ramp and not a hammer, and a hammer is
+/// exactly what sets a gyroscope ringing: a torque switched on in one step
+/// excites the nutation with everything it has, and a torque brought on over
+/// more than the wobble's own period barely excites it at all.
+///
+/// Easing it was the answer to a wobble that nothing else touched. Dragging
+/// harder on the bearings flattened the ring-up a little and took up to 39% off
+/// the walk doing it, which is paying in the thing the toy is for.
+pub const EASE: f32 = 0.25;
+
 /// How long a window the walk is measured over.
 pub const SAMPLE: f32 = 0.1;
 
@@ -275,8 +311,7 @@ pub fn walks_at(notch: usize) -> f32 {
 /// across the axis sends a gyroscope sideways and sideways is what you were
 /// looking for.
 pub fn push(bodies: &mut [Body], way: Vec3, dt: f32) {
-    let way = way.normalize_or_zero();
-    if way == Vec3::ZERO {
+    if way.length_squared() < 1e-12 {
         return;
     }
 
@@ -427,6 +462,9 @@ pub struct Gyro {
     pub going: bool,
     /// Which way a held arrow is leaning on the spindle, and nought for none.
     pub leaning: Vec3,
+    /// How much of that has actually come on, since it is eased rather than
+    /// switched.
+    leaned: Vec3,
     /// How far round the outer frame is, kept because the axis can reach a
     /// place where it no longer says.
     pub facing: f32,
@@ -456,6 +494,7 @@ impl Gyro {
             notch: STARTS_AT,
             going: false,
             leaning: Vec3::ZERO,
+            leaned: Vec3::ZERO,
             facing: 0.0,
             clock: 0.0,
             was: Vec3::X,
@@ -523,7 +562,9 @@ impl Gyro {
         self.owed = (self.owed + dt).min(0.2);
 
         while self.owed >= STEP {
-            push(&mut self.bodies, self.leaning, STEP);
+            let want = self.leaning.normalize_or_zero();
+            self.leaned += (want - self.leaned) * (STEP / EASE).min(1.0);
+            push(&mut self.bodies, self.leaned, STEP);
             self.solver.step_linked(
                 &mut self.bodies,
                 &self.rods,
@@ -585,6 +626,14 @@ mod tests {
         PUSH * FRAME / across
     }
 
+    /// How long the sideways reading is taken over.
+    ///
+    /// It was a tenth of a second, which was fine while the wobble was quick.
+    /// At six radians a second the wobble's own period is half a second, so a
+    /// tenth of it reads the dip the axis takes before it settles into walking
+    /// rather than the walking.
+    const SIDEWAYS_OVER: f32 = 1.0;
+
     /// Spins one up and leans on the end of its spindle for a while. Gives back
     /// how far the axis moved, how much of that was sideways, and how fast it
     /// was moving at the end.
@@ -604,11 +653,19 @@ mod tests {
         // direction nobody expects it to go. Taken over the first tenth of a
         // second, because the axis keeps turning and a quarter of a circle later
         // "the way it set off" is not a direction any more.
+        // the walk is timed from after the push has come fully on, since the
+        // quarter second it takes to ease on is a quarter second of walking
+        // slower than it is about to
+        let settled = (EASE * 2.0 / STEP) as u32;
+        let mut from = first;
         let mut sideways = 0.0;
         for step in 0..(seconds / STEP) as u32 {
             one.advance(STEP);
 
-            if step == (0.1 / STEP) as u32 {
+            if step == settled {
+                from = axle(&one.bodies);
+            }
+            if step == (SIDEWAYS_OVER / STEP) as u32 {
                 let across = first.cross(way).normalize_or_zero();
                 sideways = (axle(&one.bodies) - first)
                     .normalize_or_zero()
@@ -619,7 +676,7 @@ mod tests {
         let now = axle(&one.bodies);
 
         (
-            now.dot(first).clamp(-1.0, 1.0).acos(),
+            now.dot(from).clamp(-1.0, 1.0).acos() * seconds / (seconds - EASE * 2.0).max(1e-6),
             sideways,
             one.moving_at(),
         )
@@ -750,8 +807,12 @@ mod tests {
         for notch in 0..SPINS {
             let (moved, sideways, _) = leaned_on(notch, true, Vec3::NEG_Y, 2.0);
 
+            // 0.87 at the bottom of the dial and 0.98 at the top. The push is
+            // as hard as it can be while this still holds, because a push soft
+            // enough to be 96% everywhere takes thirteen seconds to show you
+            // anything.
             assert!(
-                sideways > 0.9,
+                sideways > 0.85,
                 "at spin {} only {} of the movement went sideways",
                 spin_at(notch),
                 sideways
@@ -817,7 +878,7 @@ mod tests {
         // them walk. Across the axle rather than about it, because that is the
         // way a push turns something that is not spinning.
         assert!(
-            tumbles() > walks_at(0) * 20.0,
+            tumbles() > walks_at(0) * 10.0,
             "stopped it turns at {} a second against the slowest walk of {}",
             tumbles(),
             walks_at(0)
@@ -854,8 +915,11 @@ mod tests {
         let carried = axle(&one.bodies).dot(held).clamp(-1.0, 1.0).acos();
         let pushed = walks_at(one.notch) * 5.0;
 
+        // a twentieth would be right if the push stopped dead. It eases off over
+        // a quarter of a second, which is a quarter of a second of walking, and
+        // that is the point: a hand coming off something is not a switch either.
         assert!(
-            carried < pushed * 0.05,
+            carried < pushed * 0.12,
             "it went another {} radians, against the {} a push would have given it",
             carried,
             pushed
@@ -925,6 +989,51 @@ mod tests {
         );
     }
 
+    /// Spec 0006: the two rings are across each other, whichever way the axis
+    /// points.
+    ///
+    /// The gimbal's plane is square to the axis and the frame's holds it, so
+    /// their normals are the axis and something square to it. Composed the other
+    /// way round, or turned about the wrong axis, they come out near enough
+    /// parallel and the thing reads as two hoops in a plane rather than as a
+    /// cage.
+    #[test]
+    fn the_rings_are_across_each_other() {
+        for along in [
+            Vec3::X,
+            Vec3::Z,
+            Vec3::NEG_X,
+            vec3(1.0, 0.0, 1.0).normalize(),
+            vec3(1.0, 0.6, 0.3).normalize(),
+            vec3(-0.4, -0.7, 0.6).normalize(),
+        ] {
+            let facing = frame_round(along).expect("not upright");
+            let bolted = Quat::from_rotation_y(facing);
+
+            // the gimbal lies square to the axis, so its normal is the axis
+            let gimbal = Quat::from_rotation_arc(Vec3::X, along) * Vec3::X;
+            // and the frame is the vertical circle the spindle's ends reach
+            let frame = bolted * Vec3::Z;
+
+            assert!(
+                gimbal.dot(along) > 0.999,
+                "the gimbal is not square to an axis at {:?}",
+                along
+            );
+            assert!(
+                frame.y.abs() < 1e-5,
+                "the frame leans off the upright at {:?}",
+                along
+            );
+            assert!(
+                gimbal.dot(frame).abs() < 1e-5,
+                "the rings are {} from square at {:?}",
+                gimbal.dot(frame),
+                along
+            );
+        }
+    }
+
     /// Spec 0006: the outer frame stays on its pedestal.
     ///
     /// It turns about the upright and about nothing else, because it is bolted
@@ -958,32 +1067,26 @@ mod tests {
         assert_eq!(frame_round(Vec3::NEG_Y), None);
     }
 
-    /// Spec 0006: the rotor turns slowly enough to be seen turning.
+    /// Spec 0006: the rotor turns slowly enough to be read as turning.
     ///
-    /// Nothing to do with physics and everything to do with frames. A mark on a
-    /// rim that moves more than half a turn between one frame and the next
-    /// cannot be told from one going the other way, and at a sixtieth of a
-    /// second a spin of 240 moves it 153 degrees, which is near enough that the
-    /// rotor reads as standing still. It was 240, and it looked stopped the
-    /// moment nothing else on the bench was moving.
+    /// Nothing to do with physics and everything to do with frames. The spoke
+    /// has to move little enough between one frame and the next to be followed:
+    /// at 240 radians a second it moved 153 degrees and read as standing still,
+    /// at 60 it moved 57 and flickered, and at 15 it moves 14 and goes round.
     #[test]
-    fn the_rotor_does_not_strobe() {
+    fn the_rotor_can_be_seen_turning() {
         const A_FRAME: f32 = 1.0 / 60.0;
 
-        let turn = FASTEST * A_FRAME;
+        let turn = (FASTEST * A_FRAME).to_degrees();
         assert!(
-            turn < std::f32::consts::PI * 0.4,
-            "the rotor turns {} radians a frame, and half a turn is where it stops reading",
+            turn < 20.0,
+            "the spoke moves {} degrees a frame, which is too far to follow",
             turn
         );
-
-        // and the walk is untouched by it, because the push came down with the
-        // spin and the rate is one over the other
         assert!(
-            (walks_at(SPINS - 1) - 0.4).abs() < 0.01 && (walks_at(0) - 1.2).abs() < 0.01,
-            "the dial walks {} to {} a second",
-            walks_at(SPINS - 1),
-            walks_at(0)
+            turn > 5.0,
+            "the spoke moves {} degrees a frame, which is too little to see",
+            turn
         );
     }
 
@@ -1182,6 +1285,44 @@ mod tests {
         );
     }
 
+    /// How big is the wobble, and how fast does it die?
+    #[test]
+    #[ignore]
+    fn ring_up() {
+        for notch in [0usize, SPINS - 1] {
+            let mut one = Gyro::new();
+            one.turn_the_dial(notch as i32 - STARTS_AT as i32);
+            one.set_going();
+
+            // the swing as the push comes on, and again as it goes off
+            let mut biggest = [0.0f32; 2];
+            for (n, lean) in [(0usize, Vec3::NEG_Y), (1, Vec3::ZERO)] {
+                one.leaning = lean;
+                let mut was = axle(&one.bodies);
+                let mut rates = Vec::new();
+                for _ in 0..(1.5 / STEP) as u32 {
+                    one.advance(STEP);
+                    let now = axle(&one.bodies);
+                    rates.push(now.distance(was) / STEP);
+                    was = now;
+                }
+                // how far the speed swings against its own mean, which is the
+                // lurch you see
+                let mean: f32 = rates.iter().sum::<f32>() / rates.len() as f32;
+                let worst = rates.iter().fold(0.0f32, |a, b| a.max(*b));
+                biggest[n] = if mean > 1e-6 { worst / mean } else { 0.0 };
+            }
+
+            println!(
+                "drag {:.4} spin {:>4.1}: push on lurches {:.1} to one, push off {:.1} to one",
+                DRAG,
+                spin_at(notch),
+                biggest[0],
+                biggest[1]
+            );
+        }
+    }
+
     /// How big is the wobble, and how fast?
     #[test]
     #[ignore]
@@ -1265,6 +1406,42 @@ mod tests {
                 axle(&one.bodies).dot(held).clamp(-1.0, 1.0).acos(),
                 axle(&one.bodies).dot(along).clamp(-1.0, 1.0).acos()
             );
+        }
+    }
+
+    /// How hard can it be pushed before it stops going sideways?
+    #[test]
+    #[ignore]
+    fn how_hard() {
+        for notch in [0usize, SPINS - 1] {
+            let spin = spin_at(notch);
+            for harder in [1.0f32, 2.0, 4.0, 6.0, 9.0] {
+                let mut one = Gyro::new();
+                one.turn_the_dial(notch as i32 - STARTS_AT as i32);
+                one.set_going();
+
+                let first = axle(&one.bodies);
+                let way = Vec3::NEG_Y;
+                let across = first.cross(way).normalize_or_zero();
+
+                for _ in 0..(1.0 / STEP) as u32 {
+                    let turning = (axle(&one.bodies) * FRAME).cross(way * PUSH * harder);
+                    let wheel = &mut one.bodies[WHEEL];
+                    wheel.spin += wheel.inverse_inertia() * turning * STEP;
+                    one.advance(STEP);
+                }
+
+                let now = axle(&one.bodies);
+                let walked = now.dot(first).clamp(-1.0, 1.0).acos();
+                println!(
+                    "spin {:>4.1} push x{:.0}: walks {:.3} a second, ratio {:.3}, {:.0}% sideways",
+                    spin,
+                    harder,
+                    walked,
+                    walked / spin,
+                    (now - first).normalize_or_zero().dot(across).abs() * 100.0
+                );
+            }
         }
     }
 
