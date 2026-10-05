@@ -187,6 +187,16 @@ pub const LAMP_LIT: f32 = 2.2;
 /// are the ones that can be seen to be lighting anything.
 pub const LAMPS: usize = 8;
 
+/// How many of those the nook takes, and what its one is like.
+///
+/// The nook has no cabinet in it, so nothing lit it but what spilled through
+/// the mouth. A room light rather than a neon band: warm, soft and always on,
+/// which is what a workbench corner has.
+pub const NOOK_LAMPS: usize = 1;
+pub const NOOK_LAMP: Vec3 = Vec3::new(1.0, 0.94, 0.84);
+pub const NOOK_LIT: f32 = 0.85;
+pub const NOOK_RANGE: f32 = 5.5;
+
 /// The neon on a cabinet: how bright the band burns, how thick it is, and
 /// where up the front it sits.
 ///

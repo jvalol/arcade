@@ -499,9 +499,14 @@ impl Game for Arcade {
         scene.light.intensity = aim::SUN_STRENGTH;
         scene.light.ambient = aim::FILL;
 
-        let across = (room::WALL + room::CABINET.x) * 2.0;
+        // wide enough to reach under the nook as well as the aisle, and shifted
+        // to cover it. One quad rather than two: the weave's tile count is
+        // baked into the mesh's uvs, so a second quad of a different size would
+        // lay a carpet of a different scale beside the first.
+        let across = (room::WALL + room::CABINET.x) * 2.0 + room::NOOK_DEEP;
         let along = self.room.reaches * 2.0;
-        let laid = Transform::at(Vec3::ZERO).with_scale(vec3(across, 1.0, along));
+        let laid = Transform::at(vec3(-room::NOOK_DEEP * 0.5, 0.0, 0.0))
+            .with_scale(vec3(across, 1.0, along));
 
         match self.carpet {
             // matte. A low shininess is a specular highlight spread over the
@@ -542,7 +547,7 @@ impl Game for Arcade {
             let top = bench.at + Vec3::Y * room::BENCH.y;
 
             // two uprights and the bar they carry
-            let span = cradle::BALL * 2.0 * cradle::BALLS as f32 + cradle::STOCK * 2.0;
+            let span = cradle::upright_at() * 2.0;
             for end in [-1.0f32, 1.0] {
                 scene.push_colored(
                     cube,
@@ -666,7 +671,18 @@ impl Game for Arcade {
             .collect();
         near.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        for (_, n) in near.into_iter().take(aim::LAMPS) {
+        // one of the eight is the nook's, which has no cabinet in it and was
+        // lit only by what spilled through its mouth
+        if let Some(bench) = self.room.benches.first() {
+            scene.push_light(blitzkit::lighting::PointLight::new(
+                bench.at + Vec3::Y * (room::TALL - 0.4),
+                aim::NOOK_LAMP,
+                aim::NOOK_LIT,
+                aim::NOOK_RANGE,
+            ));
+        }
+
+        for (_, n) in near.into_iter().take(aim::LAMPS - aim::NOOK_LAMPS) {
             let stood = &self.room.stood[n];
             let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
             let strength = if at == Some(n) {

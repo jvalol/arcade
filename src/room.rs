@@ -30,7 +30,10 @@ pub const APART: f32 = 2.2;
 /// Waist high and deep enough to lean over. Not a cabinet, because there is no
 /// game on it and nothing to win; not a plinth, because you work it rather than
 /// walk round it. It is the third thing the room holds.
-pub const BENCH: Vec3 = vec3(1.8, 0.95, 0.9);
+/// Turned so its long side runs down the nook, which is where the toy on it
+/// needs the room: a cradle's frame has to clear the swing of its end balls,
+/// and that is longer than the row of them hanging still.
+pub const BENCH: Vec3 = vec3(0.9, 0.95, 2.1);
 
 /// The nook the toys live in: how far it cuts into the left wall and how much
 /// of that wall it takes.

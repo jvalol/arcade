@@ -30,6 +30,19 @@ pub const ROPE: f32 = 0.52;
 pub const BAR_UP: f32 = ROPE + BALL * 2.0 + 0.18;
 pub const STOCK: f32 = 0.045;
 
+/// How far out an upright stands, measured from the middle.
+///
+/// From the swing and not from the row. Sized to the row, the frame was exactly
+/// as long as the balls hanging still, and the first thing the end one did was
+/// swing through it. The ropes hold the balls and nothing holds them off the
+/// frame, so the frame has to be built where they never reach.
+pub fn upright_at() -> f32 {
+    let end = resting(0).z.abs();
+    let swing = ROPE * LIFTED.sin();
+
+    end + swing + BALL + STOCK
+}
+
 /// How much of a blow a ball gives back.
 ///
 /// High, because the whole point is that the row passes it along rather than
@@ -38,7 +51,11 @@ pub const STOCK: f32 = 0.045;
 pub const BOUNCE: f32 = 0.92;
 
 /// How far the end ball is lifted when it is set going, as an angle.
-pub const LIFTED: f32 = 0.9;
+///
+/// About a third of a right angle, which is what a hand does to one of these.
+/// It was half a right angle, and at that the end ball swung clean through the
+/// upright beside it.
+pub const LIFTED: f32 = 0.6;
 
 /// How fast the toy is stepped, and how many passes a step gets.
 ///
@@ -236,5 +253,36 @@ mod tests {
             "still going at {} after half a minute",
             stirring(&bodies)
         );
+    }
+
+    #[test]
+    fn a_swinging_ball_never_reaches_an_upright() {
+        let upright = upright_at();
+
+        for end in [0, BALLS - 1] {
+            let (mut bodies, links) = strung();
+            set_going(&mut bodies, end);
+            let mut solver = solver();
+
+            for _ in 0..(4.0 / STEP) as u32 {
+                solver.step_linked(&mut bodies, &links, &NO_WORLD, GRAVITY, STEP);
+
+                for ball in 0..BALLS {
+                    let reach = bodies[ball_at(ball)].position.z.abs() + BALL;
+                    assert!(
+                        reach < upright - STOCK * 0.5,
+                        "ball {} reached {} against an upright at {}",
+                        ball,
+                        reach,
+                        upright
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_frame_is_wider_than_the_row() {
+        assert!(upright_at() > resting(0).z.abs() + BALL);
     }
 }

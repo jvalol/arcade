@@ -51,7 +51,14 @@ delivery before anything is solved. It wants 240 steps a second and 48 passes,
 against the engine's default of 32 passes at whatever rate the game picks.
 
 Restitution is 0.92 and not 1. At 1 the row never stops, which is a perpetual
-motion machine and a bug. At 0.92 it runs down in about half a minute.
+motion machine and a bug.
+
+The frame is sized from the swing, not from the row. Built to the row it was
+exactly as long as the balls hanging still, and the first thing the end one did
+was swing clean through an upright: the ropes hold the balls and nothing holds
+them off the frame, so the frame has to stand where they never reach. The bench
+is turned so its long side runs down the nook, because that swing is longer than
+the row. At 0.92 it runs down in about half a minute.
 
 ## Acceptance criteria
 
@@ -67,6 +74,8 @@ motion machine and a bug. At 0.92 it runs down in about half a minute.
 - Lifting one end swings the other. — `cradle::tests::lifting_one_end_swings_the_other`
 - The middle is left alone. — `cradle::tests::the_middle_is_left_alone`
 - It runs down rather than going on forever. — `cradle::tests::it_runs_down_rather_than_on_forever`
+- A swinging ball never reaches an upright. — `cradle::tests::a_swinging_ball_never_reaches_an_upright`
+- The frame is wider than the row. — `cradle::tests::the_frame_is_wider_than_the_row`
 
 ### Verified by hand
 
