@@ -134,10 +134,41 @@ pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
 /// plinths are lighter than both, because what stands on them is pale.
 pub const FLOOR: Vec4 = vec4(0.95, 0.95, 1.0, 1.0);
 pub const WALL: Vec4 = vec4(0.30, 0.22, 0.16, 1.0);
-/// The toy on the bench: its frame, its ropes and its balls. Spec 0006.
+/// The cradle on its bench: its frame, its ropes and its balls. Spec 0006.
 pub const CRADLE_FRAME: Vec4 = vec4(0.20, 0.21, 0.25, 1.0);
 pub const CRADLE_ROPE: Vec4 = vec4(0.62, 0.60, 0.56, 1.0);
 pub const CRADLE_BALL: Vec4 = vec4(0.80, 0.82, 0.88, 1.0);
+
+/// The metronome: its case, the plate the needle swings against, the needle,
+/// the bob under the pivot and the weight that slides up it. Spec 0006.
+///
+/// Wood and brass, which is what one of these is made of, and the one thing in
+/// the nook that is not grey or steel.
+pub const CASE: Vec4 = vec4(0.32, 0.19, 0.11, 1.0);
+pub const CASE_PLATE: Vec4 = vec4(0.50, 0.44, 0.36, 1.0);
+pub const NEEDLE: Vec4 = vec4(0.72, 0.70, 0.64, 1.0);
+pub const PENDULUM: Vec4 = vec4(0.22, 0.23, 0.27, 1.0);
+pub const SLIDING_WEIGHT: Vec4 = vec4(0.88, 0.72, 0.32, 1.0);
+
+/// The notches up the plate, and the one the weight is in.
+///
+/// The one it is in glows, which is the only way to see where the weight is set
+/// from more than a step away. Colour past 1 glows with no light on it, as the
+/// cabinets' bands do.
+pub const NOTCH: Vec4 = vec4(0.34, 0.30, 0.25, 1.0);
+pub const NOTCH_ON: Vec4 = vec4(1.8, 1.5, 0.7, 1.0);
+
+/// The ball and chain: the gantry it hangs from, the chain, the ball, the brick
+/// and the tray it all stands in. Spec 0006.
+///
+/// The chain, the ball and the brick are the example's own three colours, so
+/// the model on the bench and the full size one in its own window are the same
+/// thing to look at.
+pub const GANTRY: Vec4 = vec4(0.34, 0.33, 0.30, 1.0);
+pub const CHAIN: Vec4 = vec4(0.42, 0.44, 0.50, 1.0);
+pub const WRECKING_BALL: Vec4 = vec4(0.30, 0.31, 0.36, 1.0);
+pub const BRICK: Vec4 = vec4(0.70, 0.56, 0.38, 1.0);
+pub const TRAY: Vec4 = vec4(0.19, 0.20, 0.23, 1.0);
 
 /// A bench and its legs, and how thick its top is. Spec 0006.
 ///
@@ -187,12 +218,15 @@ pub const LAMP_LIT: f32 = 2.2;
 /// are the ones that can be seen to be lighting anything.
 pub const LAMPS: usize = 8;
 
-/// How many of those the nook takes, and what its one is like.
+/// How many of those the nook takes, and what they are like.
 ///
 /// The nook has no cabinet in it, so nothing lit it but what spilled through
-/// the mouth. A room light rather than a neon band: warm, soft and always on,
+/// the way in. Room lights rather than neon bands: warm, soft and always on,
 /// which is what a workbench corner has.
-pub const NOOK_LAMPS: usize = 1;
+///
+/// Two, one over each end of the row of benches, because the nook is now long
+/// enough that one over the middle left both ends of it dim.
+pub const NOOK_LAMPS: usize = 2;
 pub const NOOK_LAMP: Vec3 = Vec3::new(1.0, 0.94, 0.84);
 pub const NOOK_LIT: f32 = 0.85;
 pub const NOOK_RANGE: f32 = 5.5;

@@ -30,26 +30,37 @@ pub const APART: f32 = 2.2;
 /// Waist high and deep enough to lean over. Not a cabinet, because there is no
 /// game on it and nothing to win; not a plinth, because you work it rather than
 /// walk round it. It is the third thing the room holds.
-/// Turned so its long side runs down the nook, which is where the toy on it
-/// needs the room: a cradle's frame has to clear the swing of its end balls,
-/// and that is longer than the row of them hanging still.
-pub const BENCH: Vec3 = vec3(0.9, 0.95, 2.1);
+///
+/// How tall and how deep are the same for all of them, because that is what
+/// makes a row of them read as a row. How long is not: the size travels with
+/// the toy, since a cradle's frame has to clear the swing of its end balls and
+/// a metronome wants a square foot.
+pub const BENCH_TALL: f32 = 0.95;
+pub const BENCH_WIDE: f32 = 0.9;
 
-/// The nook the toys live in: how far it cuts into the left wall and how much
-/// of that wall it takes.
+/// How far from the nook's back wall a bench stands, and how much floor is
+/// left between two of them.
+pub const BENCH_OFF: f32 = 1.1;
+pub const BENCH_GAP: f32 = 0.3;
+
+/// The nook the toys live in: how far it cuts in behind the left wall and how
+/// much of that wall it runs along.
 ///
 /// A room off the room, not a table in it. Standing the benches in the aisle
 /// put them in front of the plinths from every angle, which is the one place
-/// nothing should stand. The nook opens past the last cabinet, so you walk the
-/// cabinets, reach the shapes, and the toys are in the corner beside them.
+/// nothing should stand.
 pub const NOOK_DEEP: f32 = 3.0;
-pub const NOOK_SPAN: f32 = 4.0;
+pub const NOOK_SPAN: f32 = 5.6;
 
-/// How far from the nook's back wall a bench stands.
-pub const BENCH_OFF: f32 = 1.1;
-
-/// How far apart two benches are, across the room.
-pub const BENCH_APART: f32 = 2.4;
+/// How wide the way in is.
+///
+/// The stretch of left wall past the last cabinet, which is where this spec
+/// always said the nook opens. It was the whole span instead, so a cabinet
+/// stood in the opening with nothing behind it: from the aisle you saw through
+/// its back into the nook, and from the nook you saw the back of a cabinet.
+/// Taking the wall away where the cabinets are was never the point. The nook is
+/// behind that wall and you get to it round the end of it.
+pub const NOOK_DOOR: f32 = APART - CABINET.z * 0.5;
 
 /// How far the room's walls are from its middle, and how high.
 pub const WALL: f32 = 2.0;
@@ -188,29 +199,41 @@ pub struct Stood {
 pub struct Benched {
     pub name: &'static str,
     pub at: Vec3,
+    /// How big this one is, which the toy on it decides.
+    pub size: Vec3,
 }
 
-/// Where the benches stand: in a row across the far end, in front of the
-/// shapes, so you meet them walking down the room rather than behind you at the
-/// door.
+/// Where the benches stand: a row along the nook's back wall, centred in it,
+/// in the order you meet them coming through the way in.
 ///
-/// One for now. The row is centred, so a second does not push the first off the
-/// middle, it puts them either side of it.
+/// The ball and chain first. It is the reason there is a nook: it is worked
+/// rather than watched, so it is not one of the shapes, and there is nothing to
+/// win, so it is not one of the games. The room had nowhere to put it and that
+/// is what this is.
 pub fn benches(far: f32) -> Vec<Benched> {
-    const ON_THEM: [&str; 1] = ["newton's cradle"];
+    /// What is on them, and how much of the nook's length each one takes.
+    const ON_THEM: [(&str, f32); 3] = [
+        ("ball and chain", 1.4),
+        ("newton's cradle", 2.1),
+        ("metronome", 0.9),
+    ];
 
-    // down the nook rather than across it, so another toy lengthens the row
-    // into the nook's depth instead of out through its mouth
     let back = -(WALL + CABINET.x) - NOOK_DEEP + BENCH_OFF;
-    let along = (ON_THEM.len() - 1) as f32 * BENCH_APART;
-    let middle = far + NOOK_SPAN * 0.5;
+    let row: f32 =
+        ON_THEM.iter().map(|(_, long)| long).sum::<f32>() + (ON_THEM.len() - 1) as f32 * BENCH_GAP;
+    let mut z = far + NOOK_SPAN * 0.5 - row * 0.5;
 
     ON_THEM
         .iter()
-        .enumerate()
-        .map(|(n, name)| Benched {
-            name,
-            at: vec3(back, 0.0, middle + n as f32 * BENCH_APART - along * 0.5),
+        .map(|(name, long)| {
+            let at = vec3(back, 0.0, z + long * 0.5);
+            z += long + BENCH_GAP;
+
+            Benched {
+                name,
+                at,
+                size: vec3(BENCH_WIDE, BENCH_TALL, *long),
+            }
         })
         .collect()
 }
@@ -262,8 +285,9 @@ impl Room {
 
         let thick = 0.3;
         let side = WALL + CABINET.x;
-        // the nook's mouth, at the far end of the left wall
-        let mouth = -reaches + NOOK_SPAN;
+        // where the way in ends, and the nook's other end
+        let door = -reaches + NOOK_DOOR;
+        let shut = -reaches + NOOK_SPAN;
 
         let walls = vec![
             // the right wall, whole
@@ -271,18 +295,20 @@ impl Room {
                 vec3(side, TALL * 0.5, 0.0),
                 vec3(thick, TALL, reaches * 2.0),
             ),
-            // the left wall, stopping at the nook's mouth
+            // the left wall, which backs the cabinets and closes the nook's
+            // long side both. It starts past the last cabinet, and the gap it
+            // leaves there is the way in.
             Aabb::from_center_size(
-                vec3(-side, TALL * 0.5, (reaches + mouth) * 0.5),
-                vec3(thick, TALL, reaches - mouth),
+                vec3(-side, TALL * 0.5, (reaches + door) * 0.5),
+                vec3(thick, TALL, reaches - door),
             ),
-            // the nook: its back, and the wall across its mouth
+            // the nook: its back, and the end that is not the way in
             Aabb::from_center_size(
                 vec3(-side - NOOK_DEEP, TALL * 0.5, -reaches + NOOK_SPAN * 0.5),
                 vec3(thick, TALL, NOOK_SPAN),
             ),
             Aabb::from_center_size(
-                vec3(-side - NOOK_DEEP * 0.5, TALL * 0.5, mouth),
+                vec3(-side - NOOK_DEEP * 0.5, TALL * 0.5, shut),
                 vec3(NOOK_DEEP, TALL, thick),
             ),
             // the near end
@@ -309,7 +335,7 @@ impl Room {
     /// The box a bench fills, which is what you cannot walk through and what
     /// the sight has to land on.
     pub fn bench_box(bench: &Benched) -> Aabb {
-        Aabb::from_center_size(bench.at + Vec3::Y * BENCH.y * 0.5, BENCH)
+        Aabb::from_center_size(bench.at + Vec3::Y * bench.size.y * 0.5, bench.size)
     }
 
     /// Everything you cannot walk through: the walls, the cabinets and the
@@ -377,6 +403,11 @@ impl Room {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    /// Whether two boxes share any room at all.
+    fn overlapping(one: &Aabb, other: &Aabb) -> bool {
+        (0..3).all(|n| one.min[n] < other.max[n] - 1e-4 && other.min[n] < one.max[n] - 1e-4)
+    }
 
     /// Which cabinet the sight is on, for the tests that are about cabinets.
     fn cabinet_at(room: &Room, from: Vec3, way: Vec3) -> Option<usize> {
@@ -674,23 +705,89 @@ mod tests {
 
     #[test]
     fn the_nook_has_a_way_in() {
-        // the left wall stops short, and the gap it leaves is the doorway. A
-        // nook with four walls is a cupboard.
+        // the left wall starts past the last cabinet, and the gap it leaves
+        // there is the doorway. A nook with four walls is a cupboard.
         let room = Room::of(some(12));
-        let mouth = -room.reaches + NOOK_SPAN;
-        let into = vec3(-(WALL + CABINET.x), 1.0, mouth - NOOK_SPAN * 0.5);
+        let into = vec3(-(WALL + CABINET.x), 1.0, -room.reaches + NOOK_DOOR * 0.5);
 
         assert!(
             !room.solid().iter().any(|box_| box_.contains_point(into)),
             "the nook is walled in"
         );
+
+        // and you can walk through it, which a gap narrower than you is not
+        let wide = NOOK_DOOR;
+        assert!(wide > 1.0, "a way in {} wide is not one", wide);
+    }
+
+    /// Spec 0006: and taking the wall away to make that way in is not it.
+    ///
+    /// The nook opened over the whole far end of the left wall, so the last
+    /// cabinet on that side stood in the opening with nothing behind it: from
+    /// the aisle you saw through its back into the nook.
+    #[test]
+    fn every_cabinet_has_a_wall_behind_it() {
+        for count in [1usize, 2, 7, 12, 13] {
+            let room = Room::of(some(count));
+
+            for (n, stood) in room.stood.iter().enumerate() {
+                let behind = room
+                    .walls
+                    .iter()
+                    .filter_map(|wall| {
+                        slab(stood.at + Vec3::Y * CABINET.y * 0.5, -stood.facing, wall)
+                    })
+                    .fold(f32::INFINITY, f32::min);
+
+                assert!(
+                    behind < CABINET.x,
+                    "cabinet {} of {} has nothing behind it for {} units",
+                    n,
+                    count,
+                    behind
+                );
+            }
+        }
+    }
+
+    /// Spec 0006: and the benches stand in a row down the nook, inside it.
+    #[test]
+    fn the_benches_fit_down_the_nook() {
+        let room = Room::of(some(13));
+        let solid = room.solid();
+
+        for bench in &room.benches {
+            let box_ = Room::bench_box(bench);
+
+            for wall in &room.walls {
+                assert!(
+                    !overlapping(&box_, wall),
+                    "the bench holding the {} is inside a wall",
+                    bench.name
+                );
+            }
+        }
+
+        // and not inside each other
+        for (n, one) in room.benches.iter().enumerate() {
+            for other in &room.benches[n + 1..] {
+                assert!(
+                    !overlapping(&Room::bench_box(one), &Room::bench_box(other)),
+                    "the {} and the {} share a bench",
+                    one.name,
+                    other.name
+                );
+            }
+        }
+
+        assert_eq!(solid.len(), room.walls.len() + 13 + room.benches.len());
     }
 
     #[test]
     fn a_bench_is_something_you_bump_into() {
         let room = Room::of(some(12));
         let bench = room.benches.first().expect("a bench");
-        let middle = bench.at + Vec3::Y * BENCH.y * 0.5;
+        let middle = bench.at + Vec3::Y * bench.size.y * 0.5;
 
         assert!(room.solid().iter().any(|box_| box_.contains_point(middle)));
     }
@@ -700,9 +797,9 @@ mod tests {
         let room = Room::of(some(12));
         let bench = room.benches.first().expect("a bench");
 
-        // stood in the nook's mouth, looking at it
+        // stood in the nook, looking at it
         let from = bench.at + Vec3::X * 1.4 + Vec3::Y * 1.5;
-        let way = (bench.at + Vec3::Y * BENCH.y - from).normalize();
+        let way = (bench.at + Vec3::Y * bench.size.y - from).normalize();
 
         assert_eq!(room.looking_at(from, way), Some(Seen::Bench(0)));
     }
@@ -715,7 +812,7 @@ mod tests {
         // out in the aisle, where the cabinets are nearer than the bench. What
         // matters is that the bench is not what you are pointing at.
         let from = bench.at + Vec3::X * (REACH + 2.0) + Vec3::Y * 1.5;
-        let way = (bench.at + Vec3::Y * BENCH.y - from).normalize();
+        let way = (bench.at + Vec3::Y * bench.size.y - from).normalize();
 
         assert_ne!(room.looking_at(from, way), Some(Seen::Bench(0)));
     }

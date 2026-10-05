@@ -5,7 +5,9 @@ mod cabinet;
 mod carpet;
 mod cradle;
 mod display;
+mod metronome;
 mod room;
+mod wrecker;
 
 use blitzkit::camera::Camera;
 use blitzkit::collision::Aabb;
@@ -74,15 +76,22 @@ struct Arcade {
     /// The engine's own shapes, turning at the end of the room. Spec 0002.
     /// Where they stand is the room's; these are the meshes.
     shown: Vec<MeshId>,
-    /// The toy on the bench: five balls on ropes, stepped in this room's own
-    /// loop. The first physics the arcade has ever run. Spec 0006.
+    /// The toys on the benches, stepped in this room's own loop. The first
+    /// physics the arcade has ever run. Spec 0006.
+    ///
+    /// Each keeps its own step and its own solver. They are three separate
+    /// things on three separate benches and nothing one does reaches another, so
+    /// one solver holding all of them would only mean the cradle paying for the
+    /// wall's contacts and the wall paying for the cradle's forty eight passes.
     cradle: Vec<blitzkit::physics::Body>,
     ropes: Vec<blitzkit::link::Link>,
     solver: blitzkit::physics::Solver,
-    /// Seconds owed to the toy, so it steps at its own rate and not the
+    /// Seconds owed to the cradle, so it steps at its own rate and not the
     /// frame's.
     owed: f32,
     ball_mesh: Option<MeshId>,
+    metronome: metronome::Metronome,
+    wrecker: wrecker::Wrecker,
     since: f32,
 
     /// What the sight is on, per spec 0003. Worked out once in `update` and
@@ -131,6 +140,8 @@ impl Arcade {
             solver: cradle::solver(),
             owed: 0.0,
             ball_mesh: None,
+            metronome: metronome::Metronome::new(),
+            wrecker: wrecker::Wrecker::new(),
             since: 0.0,
             seen: None,
             window: (800.0, 600.0),
@@ -166,9 +177,83 @@ impl Arcade {
                 }
             }
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
-            // the toy: enter lifts the end ball and lets it go
-            Some(room::Seen::Bench(_)) => cradle::set_going(&mut self.cradle, 0),
+            // a toy: enter does the one thing that toy's enter does
+            Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
+                metronome::NAME => self.metronome.press(),
+                wrecker::NAME => self.wrecker.build(),
+                _ => cradle::set_going(&mut self.cradle, 0),
+            },
             None => (),
+        }
+    }
+
+    /// The arrows, on the toy the sight is on. Says whether the key was one the
+    /// toy wanted, which is what decides whether it also walks you.
+    ///
+    /// A held arrow repeats, and a repeat is swallowed without doing anything: a
+    /// pull is a press, so holding the key down is one pull, not forty a second.
+    fn work_a_toy(&mut self, input: &KeyboardInput) -> bool {
+        let Some(room::Seen::Bench(n)) = self.seen else {
+            return false;
+        };
+
+        let arrow = matches!(
+            input.key,
+            KeyboardKey::Up | KeyboardKey::Down | KeyboardKey::Left | KeyboardKey::Right
+        );
+        match self.room.benches[n].name {
+            metronome::NAME if arrow => {
+                if !input.repeat {
+                    // up the needle is slower, which is the thing the toy is for
+                    let by = if input.key == KeyboardKey::Up { 1 } else { -1 };
+                    self.metronome.slide(by);
+                }
+            }
+            wrecker::NAME if arrow => {
+                if !input.repeat {
+                    // left and right as the nook sees them: you come in off the
+                    // aisle looking along -x, so your right hand is -z
+                    match input.key {
+                        KeyboardKey::Left => self.wrecker.haul(1.0),
+                        KeyboardKey::Right => self.wrecker.haul(-1.0),
+                        KeyboardKey::Up => self.wrecker.wind(-wrecker::WINDS_BY),
+                        _ => self.wrecker.wind(wrecker::WINDS_BY),
+                    }
+                }
+            }
+            _ => return false,
+        }
+
+        true
+    }
+
+    /// What the line under the sight says about a toy.
+    fn about(&self, toy: &str) -> String {
+        match toy {
+            metronome::NAME => match self.metronome.ticking() {
+                Some(rate) => format!(
+                    "{:.0} beats a minute. Up and down move the weight. Higher is slower.",
+                    rate
+                ),
+                // about, because what the arithmetic works out and what the rods
+                // do are a few percent apart. Once it is going this says what it
+                // counted instead.
+                None => format!(
+                    "Press enter to start. The weight is on notch {} of {}, about {:.0} beats a minute.",
+                    self.metronome.notch + 1,
+                    metronome::NOTCHES,
+                    metronome::beats(self.metronome.notch)
+                ),
+            },
+            wrecker::NAME => format!(
+                "{} of {} bricks standing. Arrows swing the ball and wind the chain. Enter rebuilds it.",
+                self.wrecker.standing(),
+                wrecker::bricks()
+            ),
+            _ if cradle::stirring(&self.cradle) > 0.05 => {
+                String::from("Press enter to set it going again")
+            }
+            _ => String::from("Press enter to set it going"),
         }
     }
 
@@ -247,10 +332,12 @@ impl Game for Arcade {
         // and the shapes on the far wall cast smears rather than shadows: the
         // Sierpinski tetrahedron's finest face is 0.03 across, under two
         // texels.
+        // the nook included. It was the aisle only, so the nook stood outside
+        // the sun's map entirely and nothing in it cast anything.
         renderer.set_scene_bounds(Aabb::from_center_size(
-            vec3(0.0, room::TALL * 0.5, 0.0),
+            vec3(-room::NOOK_DEEP * 0.5, room::TALL * 0.5, 0.0),
             vec3(
-                (room::WALL + room::CABINET.x) * 2.0,
+                (room::WALL + room::CABINET.x) * 2.0 + room::NOOK_DEEP,
                 room::TALL,
                 self.room.reaches * 2.0,
             ),
@@ -332,6 +419,8 @@ impl Game for Arcade {
             );
             self.owed -= cradle::STEP;
         }
+        self.metronome.advance(dt);
+        self.wrecker.advance(dt);
 
         let mut wish = Vec3::ZERO;
         let right = self.forward().cross(Vec3::Y);
@@ -395,14 +484,10 @@ impl Game for Arcade {
                     "Click to turn it"
                 })),
             ),
-            (None, Some(room::Seen::Bench(n))) => (
-                Some(self.room.benches[n].name.to_string()),
-                Some(String::from(if cradle::stirring(&self.cradle) > 0.05 {
-                    "Press enter to set it going again"
-                } else {
-                    "Press enter to set it going"
-                })),
-            ),
+            (None, Some(room::Seen::Bench(n))) => {
+                let name = self.room.benches[n].name;
+                (Some(name.to_string()), Some(self.about(name)))
+            }
             (None, None) => (None, None),
         };
 
@@ -413,7 +498,7 @@ impl Game for Arcade {
         text.push_render_text(RenderText {
             position: vec2(20.0, 20.0),
             text: String::from(
-                "WASD or arrow keys to walk around. Use the mouse to look around. Press escape to quit.",
+                "WASD and the mouse to get about. Arrow keys work the toy you are looking at. Escape quits.",
             ),
             size: 14.0,
             ..Default::default()
@@ -521,9 +606,12 @@ impl Game for Arcade {
         if let Some(ceiling) = self.ceiling_mesh {
             // turned over, because a plane faces up and from underneath that is
             // a back face, which the opaque pass culls
+            // shifted with the carpet, not centred on the aisle. It was wide
+            // enough to cover the nook and sitting a nook's depth away from it,
+            // so from inside the nook half the ceiling was open sky.
             scene.push_colored(
                 ceiling,
-                &Transform::at(Vec3::Y * room::TALL)
+                &Transform::at(vec3(-room::NOOK_DEEP * 0.5, room::TALL, 0.0))
                     .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
                     .with_scale(vec3(across, 1.0, along)),
                 aim::CEILING,
@@ -543,8 +631,14 @@ impl Game for Arcade {
         // the toy on the first bench: the frame, the ropes and the balls. The
         // cradle is built about the middle of a bench top, so everything is
         // placed from there.
-        if let (Some(ball_mesh), Some(bench)) = (self.ball_mesh, self.room.benches.first()) {
-            let top = bench.at + Vec3::Y * room::BENCH.y;
+        if let (Some(ball_mesh), Some(bench)) = (
+            self.ball_mesh,
+            self.room
+                .benches
+                .iter()
+                .find(|bench| bench.name == cradle::NAME),
+        ) {
+            let top = bench.at + Vec3::Y * bench.size.y;
 
             // two uprights and the bar they carry
             let span = cradle::upright_at() * 2.0;
@@ -593,13 +687,205 @@ impl Game for Arcade {
             }
         }
 
+        // the metronome on its bench, placed from the middle of the bench top the
+        // way the cradle is. Spec 0006.
+        if let (Some(ball_mesh), Some(bench)) = (
+            self.ball_mesh,
+            self.room
+                .benches
+                .iter()
+                .find(|bench| bench.name == metronome::NAME),
+        ) {
+            let top = bench.at + Vec3::Y * bench.size.y;
+            let arm = self.metronome.bodies[metronome::ARM];
+            let pivot = top + metronome::pivot();
+
+            scene.push_colored(
+                cube,
+                &Transform::at(top + Vec3::Y * (metronome::FOOT.y * 0.5))
+                    .with_scale(metronome::FOOT),
+                aim::CASE,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(
+                    top + vec3(
+                        -metronome::PLATE_BACK,
+                        metronome::FOOT.y + metronome::PLATE_TALL * 0.5,
+                        0.0,
+                    ),
+                )
+                .with_scale(vec3(
+                    metronome::PLATE_THICK,
+                    metronome::PLATE_TALL,
+                    metronome::PLATE_WIDE,
+                )),
+                aim::CASE_PLATE,
+            );
+
+            // the notches up the plate, with the one the weight is in lit. It is
+            // the only way to read the setting from more than a step away, and
+            // colour past 1 glows with no light on it, as a cabinet's band does.
+            for notch in 0..metronome::NOTCHES {
+                let up = metronome::PIVOT_Y + metronome::weight_at(notch);
+                let set = notch == self.metronome.notch;
+
+                // the one it is set to is bigger as well as brighter. At the
+                // same size it was five millimetres of glow at arm's length,
+                // which is nothing from across the nook.
+                let mark = if set {
+                    vec3(0.014, 0.011, metronome::NOTCH_LONG * 1.4)
+                } else {
+                    vec3(0.008, 0.006, metronome::NOTCH_LONG)
+                };
+                scene.push_colored(
+                    cube,
+                    &Transform::at(
+                        top + vec3(
+                            -metronome::PLATE_BACK + metronome::PLATE_THICK,
+                            up,
+                            metronome::NOTCH_AT,
+                        ),
+                    )
+                    .with_scale(mark),
+                    if set { aim::NOTCH_ON } else { aim::NOTCH },
+                );
+            }
+
+            // the pivot, the needle above it, the bob under it, and the weight
+            // riding the needle
+            scene.push_colored(
+                cube,
+                &Transform::at(pivot).with_scale(vec3(metronome::HINGE_HALF * 3.0, 0.014, 0.014)),
+                aim::PENDULUM,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(pivot + arm.orientation * (Vec3::Y * metronome::NEEDLE * 0.5))
+                    .with_rotation(arm.orientation)
+                    .with_scale(vec3(
+                        metronome::NEEDLE_THICK,
+                        metronome::NEEDLE,
+                        metronome::NEEDLE_THICK,
+                    )),
+                aim::NEEDLE,
+            );
+            scene.push_material(
+                cube,
+                &Transform::at(top + arm.position)
+                    .with_rotation(arm.orientation)
+                    .with_scale(metronome::BOB * 2.0),
+                aim::PENDULUM,
+                48.0,
+            );
+            scene.push_material(
+                ball_mesh,
+                &Transform::at(top + self.metronome.bodies[metronome::SLIDER].position)
+                    .with_scale(Vec3::splat(metronome::WEIGHT * 2.0)),
+                aim::SLIDING_WEIGHT,
+                96.0,
+            );
+        }
+
+        // the ball and chain on its bench, which is the toy the nook was built
+        // for. Spec 0006.
+        if let (Some(ball_mesh), Some(bench)) = (
+            self.ball_mesh,
+            self.room
+                .benches
+                .iter()
+                .find(|bench| bench.name == wrecker::NAME),
+        ) {
+            let top = bench.at + Vec3::Y * bench.size.y;
+
+            // the lip round the tray. The tray's floor is the bench top itself,
+            // so there is nothing to draw for it.
+            for lip in wrecker::tray().iter().skip(1) {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + lip.center()).with_scale(lip.size()),
+                    aim::TRAY,
+                );
+            }
+
+            // the gantry: a post across the tray and a jib out to the hook
+            scene.push_colored(
+                cube,
+                &Transform::at(
+                    top + vec3(
+                        wrecker::POST_AT,
+                        wrecker::HANGS_FROM.y * 0.5,
+                        wrecker::HANGS_FROM.z,
+                    ),
+                )
+                .with_scale(vec3(
+                    wrecker::POST,
+                    wrecker::HANGS_FROM.y,
+                    wrecker::POST,
+                )),
+                aim::GANTRY,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(
+                    top + vec3(
+                        wrecker::POST_AT * 0.5,
+                        wrecker::HANGS_FROM.y,
+                        wrecker::HANGS_FROM.z,
+                    ),
+                )
+                .with_scale(vec3(
+                    wrecker::POST_AT.abs(),
+                    wrecker::POST,
+                    wrecker::POST,
+                )),
+                aim::GANTRY,
+            );
+
+            for (n, body) in self.wrecker.bodies.iter().enumerate() {
+                let at = top + body.position;
+
+                if n == wrecker::HOOK {
+                    // the ring on the jib, which is part of the gantry rather
+                    // than part of the chain
+                    scene.push_colored(
+                        ball_mesh,
+                        &Transform::at(at).with_scale(Vec3::splat(wrecker::BEAD * 1.4)),
+                        aim::GANTRY,
+                    );
+                } else if n < wrecker::BALL_AT {
+                    scene.push_colored(
+                        ball_mesh,
+                        &Transform::at(at).with_scale(Vec3::splat(wrecker::BEAD)),
+                        aim::CHAIN,
+                    );
+                } else if n == wrecker::BALL_AT {
+                    scene.push_material(
+                        ball_mesh,
+                        &Transform::at(at).with_scale(Vec3::splat(wrecker::BALL * 2.0)),
+                        aim::WRECKING_BALL,
+                        36.0,
+                    );
+                } else {
+                    scene.push_material(
+                        cube,
+                        &Transform::at(at)
+                            .with_rotation(body.orientation)
+                            .with_scale(wrecker::BRICK * 2.0),
+                        aim::BRICK,
+                        36.0,
+                    );
+                }
+            }
+        }
+
         // the benches, which hold the toys. Spec 0006.
         for (n, bench) in self.room.benches.iter().enumerate() {
             let lit = self.seen == Some(room::Seen::Bench(n));
             let look = if lit { aim::BENCH_ON } else { aim::BENCH };
 
-            let top = Transform::at(bench.at + Vec3::Y * (room::BENCH.y - aim::BENCH_TOP * 0.5))
-                .with_scale(vec3(room::BENCH.x, aim::BENCH_TOP, room::BENCH.z));
+            let top = Transform::at(bench.at + Vec3::Y * (bench.size.y - aim::BENCH_TOP * 0.5))
+                .with_scale(vec3(bench.size.x, aim::BENCH_TOP, bench.size.z));
             match self.cabinet_grain {
                 Some(grain) => scene.push_textured(cube, grain, &top, look, aim::MATTE),
                 None => scene.push_colored(cube, &top, look),
@@ -612,15 +898,15 @@ impl Game for Arcade {
                 for across in [-1.0f32, 1.0] {
                     let at = bench.at
                         + vec3(
-                            along * (room::BENCH.x * 0.5 - inset),
-                            (room::BENCH.y - aim::BENCH_TOP) * 0.5,
-                            across * (room::BENCH.z * 0.5 - inset),
+                            along * (bench.size.x * 0.5 - inset),
+                            (bench.size.y - aim::BENCH_TOP) * 0.5,
+                            across * (bench.size.z * 0.5 - inset),
                         );
                     scene.push_colored(
                         cube,
                         &Transform::at(at).with_scale(vec3(
                             aim::BENCH_LEG,
-                            room::BENCH.y - aim::BENCH_TOP,
+                            bench.size.y - aim::BENCH_TOP,
                             aim::BENCH_LEG,
                         )),
                         aim::BENCH_LEG_LOOK,
@@ -671,9 +957,12 @@ impl Game for Arcade {
             .collect();
         near.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        // one of the eight is the nook's, which has no cabinet in it and was
-        // lit only by what spilled through its mouth
-        if let Some(bench) = self.room.benches.first() {
+        // two of the eight are the nook's, which has no cabinet in it and was
+        // lit only by what spilled through the way in. One over each end of the
+        // row, because the nook is long enough now that one over the middle left
+        // both ends of it dim.
+        let ends = [self.room.benches.first(), self.room.benches.last()];
+        for bench in ends.iter().flatten() {
             scene.push_light(blitzkit::lighting::PointLight::new(
                 bench.at + Vec3::Y * (room::TALL - 0.4),
                 aim::NOOK_LAMP,
@@ -750,6 +1039,18 @@ impl Game for Arcade {
 
     fn process_keyboard(&mut self, input: KeyboardInput) {
         let held = input.state == KeyboardKeyState::Pressed;
+
+        // the arrows work whatever toy the sight is on, and walk you about when
+        // it is on nothing. WASD walks whatever you are looking at, so there is
+        // never nothing that does.
+        //
+        // Only a press is taken. A release always goes on to clear the walking,
+        // or an arrow held down on the way to a bench would leave you walking
+        // into it with nothing to let go of.
+        if held && self.work_a_toy(&input) {
+            return;
+        }
+
         match input.key {
             KeyboardKey::W | KeyboardKey::Up => self.walking[0] = held,
             KeyboardKey::S | KeyboardKey::Down => self.walking[1] = held,

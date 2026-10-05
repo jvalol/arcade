@@ -16,6 +16,9 @@ use blitzkit::link::Link;
 use blitzkit::physics::{Body, Solver};
 use glam::{vec3, Vec3};
 
+/// What the bench it stands on is called.
+pub const NAME: &str = "newton's cradle";
+
 /// How many balls hang.
 pub const BALLS: usize = 5;
 
