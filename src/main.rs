@@ -5,6 +5,7 @@ mod cabinet;
 mod carpet;
 mod cradle;
 mod display;
+mod gyro;
 mod metronome;
 mod room;
 mod wrecker;
@@ -34,6 +35,10 @@ const PITCH_LIMIT: f32 = 1.3;
 
 /// What the toy on the bench falls under.
 const GRAVITY: Vec3 = vec3(0.0, -9.81, 0.0);
+
+/// How wide the gyroscope's ring is across the axle, which is wider than it is
+/// deep so it reads as a hoop rather than a wire.
+const GIMBAL_WIDE: f32 = 0.022;
 
 /// Whether this run is only here to be photographed, for `refresh-screenshots`
 /// in the project above.
@@ -92,6 +97,8 @@ struct Arcade {
     ball_mesh: Option<MeshId>,
     metronome: metronome::Metronome,
     wrecker: wrecker::Wrecker,
+    gyro: gyro::Gyro,
+    wheel_mesh: Option<MeshId>,
     since: f32,
 
     /// What the sight is on, per spec 0003. Worked out once in `update` and
@@ -111,6 +118,9 @@ struct Arcade {
     /// Whether a shift key is down, which is what turns the arrows from hauling
     /// a toy about into working its one other control.
     shifted: bool,
+    /// Which arrows are being held on a toy that is leaned on rather than
+    /// pressed, in the same order as `walking`.
+    leaning: [bool; 4],
     wants_lock: bool,
     locked: bool,
     quitting: bool,
@@ -145,6 +155,8 @@ impl Arcade {
             ball_mesh: None,
             metronome: metronome::Metronome::new(),
             wrecker: wrecker::Wrecker::new(),
+            gyro: gyro::Gyro::new(),
+            wheel_mesh: None,
             since: 0.0,
             seen: None,
             window: (800.0, 600.0),
@@ -154,6 +166,7 @@ impl Arcade {
             pitch: if staged() { POSED_PITCH } else { 0.0 },
             walking: [false; 4],
             shifted: false,
+            leaning: [false; 4],
             wants_lock: true,
             locked: false,
             quitting: false,
@@ -184,6 +197,7 @@ impl Arcade {
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
                 metronome::NAME => self.metronome.press(),
+                gyro::NAME => self.gyro.press(),
                 wrecker::NAME => self.wrecker.rebuild_wall(),
                 _ => cradle::set_going(&mut self.cradle, 0),
             },
@@ -196,21 +210,42 @@ impl Arcade {
     ///
     /// A held arrow repeats, and a repeat is swallowed without doing anything: a
     /// pull is a press, so holding the key down is one pull, not forty a second.
-    fn work_a_toy(&mut self, input: &KeyboardInput) -> bool {
+    fn work_a_toy(&mut self, input: &KeyboardInput, held: bool) -> bool {
         let Some(room::Seen::Bench(n)) = self.seen else {
             return false;
         };
 
-        let arrow = matches!(
-            input.key,
-            KeyboardKey::Up | KeyboardKey::Down | KeyboardKey::Left | KeyboardKey::Right
-        );
+        let arrow = arrow_at(input.key);
+        if let Some(which) = arrow {
+            // whatever the toy does with it, the arrow is not walking you, and
+            // letting go always says so: an arrow held on the way to a bench
+            // would otherwise leave you walking into it
+            self.walking[which] = false;
+            self.leaning[which] = false;
+        }
+        let arrow = arrow.is_some();
+        if arrow && !held {
+            return true;
+        }
         match self.room.benches[n].name {
             metronome::NAME if arrow => {
                 if !input.repeat {
                     // up the needle is slower, which is the thing the toy is for
                     let by = if input.key == KeyboardKey::Up { 1 } else { -1 };
                     self.metronome.slide(by);
+                }
+            }
+            gyro::NAME if arrow => {
+                // held rather than pressed. A push is a thing you lean on, and
+                // the axis walks for as long as you lean, so a press would be a
+                // flick and tell you nothing.
+                if self.shifted {
+                    if !input.repeat {
+                        let by = if input.key == KeyboardKey::Up { 1 } else { -1 };
+                        self.gyro.turn_the_dial(by);
+                    }
+                } else if let Some(which) = arrow_at(input.key) {
+                    self.leaning[which] = true;
                 }
             }
             wrecker::NAME if arrow => {
@@ -264,6 +299,27 @@ impl Arcade {
                     metronome::beats(self.metronome.notch)
                 ),
             },
+            gyro::NAME => {
+                let dial = format!("Spin {} of {}", self.gyro.notch + 1, gyro::SPINS);
+                if !self.gyro.going {
+                    format!(
+                        "Press enter to spin it up. {}, shift with up or down changes it. [COPY - Jake]",
+                        dial
+                    )
+                } else if self.gyro.moving_at() > 0.02 {
+                    format!(
+                        "The axis is moving {:.1} a second, sideways to your push. {}. [COPY - Jake]",
+                        self.gyro.moving_at(),
+                        dial
+                    )
+                } else {
+                    format!(
+                        "{}. Hold an arrow to lean on the spindle and the axis should walk {:.1} a second, sideways. [COPY - Jake]",
+                        dial,
+                        gyro::walks_at(self.gyro.notch)
+                    )
+                }
+            }
             wrecker::NAME => format!(
                 "{} of {} standing. Swing the ball with arrow keys. Use shift with up and down keys to wind the chain up or down. Press enter to rebuild the wall.",
                 self.wrecker.standing(),
@@ -286,6 +342,20 @@ impl Arcade {
     fn forward(&self) -> Vec3 {
         let (sin, cos) = self.yaw.sin_cos();
         vec3(sin, 0.0, -cos)
+    }
+}
+
+/// Which of the four walking slots an arrow is, if it is one.
+///
+/// The same order the walking itself uses, so a key the toy takes can be let go
+/// of in the one place rather than in every arm that handles one.
+fn arrow_at(key: KeyboardKey) -> Option<usize> {
+    match key {
+        KeyboardKey::Up => Some(0),
+        KeyboardKey::Down => Some(1),
+        KeyboardKey::Left => Some(2),
+        KeyboardKey::Right => Some(3),
+        _ => None,
     }
 }
 
@@ -372,6 +442,7 @@ impl Game for Arcade {
             Some(renderer.add_texture(&carpet::mottled(carpet::CABINET_SEED, [228, 228, 228], 22)));
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
         self.ball_mesh = Some(renderer.add_mesh(&MeshData::sphere(18, 12)));
+        self.wheel_mesh = Some(renderer.add_mesh(&gyro::wheel_mesh(28)));
 
         self.shown = display::meshes()
             .iter()
@@ -410,6 +481,9 @@ impl Game for Arcade {
         size: (f32, f32),
     ) {
         self.window = size;
+        if staged() {
+            self.gyro.set_going();
+        }
     }
 
     fn resized(&mut self, window_size: (f32, f32)) {
@@ -440,6 +514,23 @@ impl Game for Arcade {
         }
         self.metronome.advance(dt);
         self.wrecker.advance(dt);
+
+        // what the held arrows are leaning on the gyroscope with, as the nook
+        // sees them: you come in off the aisle looking along -x, so your right
+        // hand is -z
+        let lean = [Vec3::Y, Vec3::NEG_Y, Vec3::Z, Vec3::NEG_Z];
+        self.gyro.leaning = if matches!(self.seen, Some(room::Seen::Bench(_))) {
+            self.leaning
+                .iter()
+                .zip(lean)
+                .filter(|(held, _)| **held)
+                .map(|(_, way)| way)
+                .sum()
+        } else {
+            self.leaning = [false; 4];
+            Vec3::ZERO
+        };
+        self.gyro.advance(dt);
 
         let mut wish = Vec3::ZERO;
         let right = self.forward().cross(Vec3::Y);
@@ -806,6 +897,161 @@ impl Game for Arcade {
             );
         }
 
+        // the gyroscope on its bench. Spec 0006.
+        if let (Some(wheel_mesh), Some(bench)) = (
+            self.wheel_mesh,
+            self.room
+                .benches
+                .iter()
+                .find(|bench| bench.name == gyro::NAME),
+        ) {
+            let top = bench.at + Vec3::Y * bench.size.y;
+            let wheel = self.gyro.bodies[gyro::WHEEL];
+            let hub = top + gyro::hub();
+
+            // a pedestal: a narrow neck on a flared foot, stopping under the
+            // outer ring, which is what one of these stands on
+            let neck = gyro::HUB_UP - gyro::FRAME;
+            for (up, tall, wide) in [
+                (neck * 0.5, neck, gyro::STAND),
+                (0.012, 0.024, gyro::STAND * 3.0),
+                (0.004, 0.008, gyro::STAND * 5.0),
+            ] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + Vec3::Y * up).with_scale(vec3(wide, tall, wide)),
+                    aim::STAND,
+                );
+            }
+
+            // the spindle, right through the rotor and out to the frame at each
+            // end, which is what holds it.
+            //
+            // Turned with the axis and not with the rotor. It is a square bar
+            // and a real one is round, so spinning it about its own length does
+            // nothing a round rod would do: what it does instead is swell and
+            // shrink by the 41% between a square's side and its diagonal, forty
+            // times a second, and since the spindle is the spine of the whole
+            // object the object reads as shaking.
+            let frame = gyro::gimbal(&self.gyro.bodies);
+            scene.push_colored(
+                cube,
+                &Transform::at(hub).with_rotation(frame).with_scale(vec3(
+                    gyro::SPINDLE_OUT * 2.0,
+                    gyro::AXLE,
+                    gyro::AXLE,
+                )),
+                aim::SPINDLE,
+            );
+
+            // the rotor, drawn as the disc its block weighs like
+            scene.push_material(
+                wheel_mesh,
+                &Transform::at(top + wheel.position)
+                    .with_rotation(wheel.orientation)
+                    .with_scale(vec3(gyro::THICK, gyro::RADIUS * 2.0, gyro::RADIUS * 2.0)),
+                aim::FLYWHEEL,
+                64.0,
+            );
+
+            // the hub the spindle goes through, and one short spoke out of it.
+            // A flat disc with a line across it is a slice of lemon whatever
+            // ring you put round it; a thick wheel with a hub and one spoke is a
+            // flywheel, and the spoke still says it is turning.
+            scene.push_material(
+                wheel_mesh,
+                &Transform::at(top + wheel.position)
+                    .with_rotation(wheel.orientation)
+                    .with_scale(vec3(gyro::THICK * 1.3, gyro::BOSS * 2.0, gyro::BOSS * 2.0)),
+                aim::SPINDLE,
+                64.0,
+            );
+            // the mark on the rotor. Stopped it is one spoke, and spinning it is
+            // the ring that spoke blurs into.
+            //
+            // A spoke is what a stopped wheel shows and a ring is what a turning
+            // one shows, so this is the same mark drawn honestly at both speeds.
+            // Keeping the spoke while it spins is what made the thing look
+            // broken: at forty radians a second it steps thirty eight degrees
+            // between frames, and on an object that is otherwise perfectly still
+            // that reads as a flicker rather than as a wheel going round. The
+            // ring is drawn with the axis and not the spin, so it does not move
+            // at all.
+            let at = gyro::RADIUS * gyro::MARK;
+            if self.gyro.going {
+                let round = std::f32::consts::TAU / gyro::BLUR_PIECES as f32;
+                let chord = 2.0 * at * (round * 0.5).sin() * 1.1;
+
+                for piece in 0..gyro::BLUR_PIECES {
+                    let turn = piece as f32 * round;
+                    let (sin, cos) = turn.sin_cos();
+
+                    for side in [-1.0f32, 1.0] {
+                        let out = vec3(side * (gyro::THICK * 0.5 + 0.002), cos * at, sin * at);
+                        scene.push_colored(
+                            cube,
+                            &Transform::at(top + wheel.position + frame * out)
+                                .with_rotation(frame * glam::Quat::from_rotation_x(turn))
+                                .with_scale(vec3(0.004, gyro::RADIUS * 0.1, chord)),
+                            aim::STUD,
+                        );
+                    }
+                }
+            } else {
+                for side in [-1.0f32, 1.0] {
+                    let out = vec3(side * (gyro::THICK * 0.5 + 0.002), at * 0.76, 0.0);
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(top + wheel.position + wheel.orientation * out)
+                            .with_rotation(wheel.orientation)
+                            .with_scale(vec3(0.004, gyro::RADIUS * 0.78, gyro::RADIUS * 0.1)),
+                        aim::STUD,
+                    );
+                }
+            }
+
+            // the two rings, across each other: the gimbal in the rotor's own
+            // plane and the frame holding the spindle's ends. Both follow the
+            // axis and neither follows the rotor, because that is what a gimbal
+            // does: it carries the wheel rather than turning with it.
+            let step = std::f32::consts::TAU / gyro::GIMBAL_PIECES as f32;
+            let bolted = glam::Quat::from_rotation_y(self.gyro.facing);
+            for (radius, across) in [(gyro::GIMBAL, false), (gyro::FRAME, true)] {
+                // the gimbal tips with the axis and the frame only swings round
+                // the upright, because the frame is bolted to the pedestal. Both
+                // following the axis is what carried the whole cage off its own
+                // stand whenever the axis tipped towards upright.
+                let turned = if across { bolted } else { frame };
+                let chord = 2.0 * radius * (step * 0.5).sin() * 1.08;
+
+                for piece in 0..gyro::GIMBAL_PIECES {
+                    let round = piece as f32 * step;
+                    let (sin, cos) = round.sin_cos();
+                    let (at, turn, size) = if across {
+                        (
+                            vec3(cos, sin, 0.0),
+                            glam::Quat::from_rotation_z(round + std::f32::consts::FRAC_PI_2),
+                            vec3(chord, gyro::GIMBAL_THICK, GIMBAL_WIDE),
+                        )
+                    } else {
+                        (
+                            vec3(0.0, cos, sin),
+                            glam::Quat::from_rotation_x(round),
+                            vec3(GIMBAL_WIDE, gyro::GIMBAL_THICK, chord),
+                        )
+                    };
+
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(top + wheel.position + turned * (at * radius))
+                            .with_rotation(turned * turn)
+                            .with_scale(size),
+                        aim::GIMBAL,
+                    );
+                }
+            }
+        }
+
         // the ball and chain on its bench, which is the toy the nook was built
         // for. Spec 0006.
         if let (Some(ball_mesh), Some(bench)) = (
@@ -1079,7 +1325,7 @@ impl Game for Arcade {
         // Only a press is taken. A release always goes on to clear the walking,
         // or an arrow held down on the way to a bench would leave you walking
         // into it with nothing to let go of.
-        if held && self.work_a_toy(&input) {
+        if self.work_a_toy(&input, held) {
             return;
         }
 

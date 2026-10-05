@@ -51,8 +51,8 @@ the room and it was in front of the far wall from every angle, which is the one
 place nothing should stand. A bench is solid, like a cabinet, so you cannot walk
 through one.
 
-Three of them, in the order you meet them coming through the way in: the ball
-and chain, the Newton's cradle, the metronome.
+Four of them, in the order you meet them coming through the way in: the ball and
+chain, the gyroscope, the Newton's cradle, the metronome.
 
 ### The arcade runs physics
 
@@ -139,6 +139,145 @@ The frame is sized from the swing, not from the row. Built to the row it was
 exactly as long as the balls hanging still, and the first thing the end one did
 was swing clean through an upright: the ropes hold the balls and nothing holds
 them off the frame, so the frame has to stand where they never reach.
+
+### The gyroscope
+
+A rotor in two rings on a pedestal, pinned through its own middle, which is what
+balanced means: gravity pulls on it with no arm to pull on, so it has no reason
+to fall and none to walk. Left alone it holds its axis, and holds it to nought
+over twenty seconds, spun or stopped.
+
+The demonstration is what happens when you lean on it. Hold an arrow and it
+pushes the end of the spindle, and the axis does not go where you pushed. **It
+goes sideways**, at a right angle to the push, and it keeps going sideways for
+exactly as long as you keep pushing. Let go and it stops walking.
+
+Spin it harder and the same push moves it *slower*. The rate is the torque you
+are leaning on it with over the spin's own momentum, so more spin is a bigger
+denominator. The dial carries five, from 20 to 60, and the walk comes out within
+0.6% of `τ / I ω` at every one of them, with 92% or more of the movement
+sideways.
+
+**The gimbal's bearings drag**, by a thousandth, and that is what makes it watch
+properly. A pushed axis does not settle on its new heading, it rings. The wobble
+is four tenths of a degree wide and invisible to look at, so it was measured and
+dismissed; what matters is that it is quick, so the speed it adds is the size of
+the walk's own. The axis does not walk, it lurches, 23 to one between its fastest
+and its slowest, twelve times a second. A real gyroscope does not do that because
+its bearings drag.
+
+The drag is on the axis's turning and not on the spin, and the two separate
+themselves by speed: the wobble turns at about twice the spin and the walk at
+under a radian a second. Swept, against an arithmetic walk of 0.6008:
+
+```text
+0.0000   lurches 23.1 to one   walks 0.7224
+0.0010            1.1           0.5987
+0.0035            1.0           0.5926
+0.0100            1.1           0.5499
+```
+
+A thousandth is the least that settles it and it costs the walk a third of a
+percent. Worth noting what the lurch does to the measurement as well as to the
+look: undamped, the axis covers a fifth more ground than it travels, because the
+wobble is path and not progress.
+
+**The mark on the rotor is a spoke when it is stopped and a ring when it is
+spinning**, which is the same mark drawn honestly at both speeds: a stopped wheel
+shows you a spoke and a turning one shows you the ring it blurs into. Keeping the
+spoke while it spins is what made the thing look broken. At forty radians a
+second it steps thirty eight degrees between frames, and on an object that is
+otherwise perfectly still, which is what a balanced gyroscope is, that reads as a
+flicker rather than as a wheel going round. The ring is drawn with the axis and
+not the spin, so it does not move at all.
+
+**The dial stops at 60 for a reason that is nothing to do with physics.** A frame
+is a sixtieth of a second, and a mark on a rim turning 240 radians a second moves
+153 degrees between one frame and the next, which is past the angle an eye can
+tell the direction of. It read as a wheel standing still, and the only thing that
+looked alive was the walk, so letting go looked like the spin running out. At 60
+the mark moves 57 degrees a frame and reads as a wheel turning. Nothing was lost
+coming down: the walk is the torque over the spin's momentum, so the push came
+down with it and the dial walks at the same five rates it did before.
+
+Stop the rotor and push again and it does the obvious thing instead: it goes
+where you pushed, at 45 radians a second squared, which is 38 times the fastest
+walk. That is the comparison, and it is why the push is a third of the
+rotor's own weight. There is nothing to lean against in a balanced rotor.
+
+The engine has carried Euler's equation since spec 0034, solved implicitly in
+the body's own frame, and this is the first thing in the project that shows what
+that bought. Everywhere else it is a block toppling, where a right answer and a
+plausible one look the same.
+
+**The body is a block and the drawn rotor is a disc.** The engine has spheres and
+blocks and nothing else, and a sphere resists turning the same way about every
+axis, which is the one thing a gyroscope must not do. They are not a compromise
+between each other: a block half as thick as the disc and `√3/2` of its radius
+across has the disc's inertia exactly, about its axle and across it both. Two
+equations, two unknowns, no remainder.
+
+**The rings carry no weight and are not in the arithmetic at all.** Without them
+the thing is a disc on a post, which is a desk fan. They follow the axis and not
+the rotor, because that is what a gimbal does: it carries the wheel rather than
+turning with it.
+
+**Being balanced is also why it is cheap.** The first build hung the rotor off an
+arm, where gravity had something to pull on and it walked round the stand by
+itself. That one needed 61,440 steps a second and 4.5% of a core: turning a body
+is integrated to first order, and with gravity working on an arm the whole
+behaviour sits inside that error. Let go level it must stay level, since the
+upright part of its momentum is nought and gravity cannot change it, and instead
+the axle climbed +0.99 of the arm's own length in thirty seconds at 960 a second.
+Halving the step halved the climb, all the way to nothing at 30,720.
+
+Balanced there is no arm and no climb to integrate away. At the top of the dial,
+by where a two second push left the axis:
+
+```text
+   960 a second   0.0299 rad, 99% of it sideways, 0.1% of a core
+ 3,840            0.0293       100%                0.2%
+15,360            0.0292       100%                0.8%
+61,440            0.0290       100%                3.1%
+```
+
+It runs at 3,840. Six passes, because three rods holding one body converge at
+once: 6, 12 and 24 gave the same answer to three decimals.
+
+**The walk is measured over a window and not over a step.** Over a step it reads
+the wobble instead. A pushed gyroscope goes on nutating after the push stops, at
+about twice its own spin, and although that wobble is two thousandths of a radian
+wide and invisible to look at, two thousandths at three hundred a second is a
+large speed. Measured a step at a time the bench said it was still moving half a
+radian a second for ten seconds after it had stopped walking, which reads as the
+spin running out. Over a tenth of a second the wobbles cancel and what is left is
+the walk: it now reads 0.006 a second within a second of letting go. The spin
+itself holds to +1.5% over thirty one seconds, and the axis moves another two
+thousandths of a radian and stays there.
+
+**The outer ring turns about the upright and about nothing else**, because it is
+bolted to the pedestal, and only the gimbal inside it tips with the axis. Drawn
+following the axis, both of them swung, so an axis tipped towards the upright
+carried the whole cage over and lifted it clean off its own base. Upright the
+axis no longer says which way the frame should face, which is gimbal lock and is
+real, so the frame keeps the last answer it had.
+
+**The spindle is drawn turning with the axis and not with the rotor.** It is a
+square bar and a real one is round, so spinning it about its own length does
+nothing a round rod would do. What it does instead is swell and shrink by the 41%
+between a square's side and its diagonal, forty times a second, and since the
+spindle is the spine of the whole object the object reads as shaking. Three
+things were measured and cleared before this was found: the wobble is 0.4 degrees
+at the slow end of the dial and nought at the fast end, the rings' orientation
+moves at the walk's own rate and no faster, and the pinned middle sits 0.002 off
+and moves 0.00000 between frames at six passes or at sixty four.
+
+The push is applied as a torque rather than through `Body::strike`. Strike is for
+hitting a thing: it takes a place in the world and pulls it onto the body's own
+surface, which for a push on the end of a spindle rewrites the lever you meant
+into whatever lever the block has. Used that way the walk came out seventeen
+times too slow, and the error was invisible, because any torque across the axis
+sends a gyroscope sideways and sideways was what we were looking for.
 
 ### The metronome
 
@@ -238,6 +377,20 @@ nothing, because a pull is a press and not forty a second.
 - Pressing it again stops it dead and stands it up. — `metronome::tests::pressing_it_again_stops_it`
 - The weight can be moved while it is going. — `metronome::tests::sliding_the_weight_while_it_goes_changes_the_rate`
 - The rods hold. — `metronome::tests::the_rods_hold`
+- The block weighs what the drawn disc weighs, exactly. — `gyro::tests::the_block_weighs_what_the_disc_weighs`
+- It is pinned through its own middle, which is what balanced means. — `gyro::tests::it_is_pinned_through_its_middle`
+- No anchor stands where the rings sweep. — `gyro::tests::the_anchors_are_out_of_the_way`
+- Left alone it holds its axis, spun or not. — `gyro::tests::left_alone_it_holds_its_axis`
+- Stopped, a push puts it where you pushed it. — `gyro::tests::stopped_it_goes_where_you_push_it`
+- Spun, the same push sends it sideways instead. — `gyro::tests::spun_it_goes_sideways_instead`
+- And the harder it spins the slower it goes. — `gyro::tests::spinning_it_harder_moves_it_slower`
+- The walk is the rate the arithmetic works out. — `gyro::tests::the_walk_is_what_the_arithmetic_says`
+- Letting go stops it walking. — `gyro::tests::letting_go_stops_it`
+- Its rods hold. — `gyro::tests::the_rods_hold`
+- The axis walks evenly rather than lurching. — `gyro::tests::it_walks_evenly`
+- The outer frame stays on its pedestal. — `gyro::tests::the_frame_stays_on_its_pedestal`
+- The rotor turns slowly enough to be seen turning. — `gyro::tests::the_rotor_does_not_strobe`
+- The drawn rotor is a closed disc, wound to be seen. — `gyro::tests::the_rotor_is_a_closed_disc`
 
 ### Verified by hand
 
@@ -245,6 +398,8 @@ nothing, because a pull is a press and not forty a second.
 - Pressing enter sends the far cradle ball out and leaves the middle three still.
 - The metronome's lit notch is where the weight is, read from across the nook.
 - Four pulls on the ball and most of the wall is down.
+- Leaning on the gyroscope and watching the axis go the other way.
+- And stopping it and leaning on it again, which sends it tumbling.
 - The chain reads as a chain. The beads are half a bead apart, so the links
   between them are drawn as well, or it is a dotted line.
 

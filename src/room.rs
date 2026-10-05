@@ -50,7 +50,7 @@ pub const BENCH_GAP: f32 = 0.3;
 /// put them in front of the plinths from every angle, which is the one place
 /// nothing should stand.
 pub const NOOK_DEEP: f32 = 3.0;
-pub const NOOK_SPAN: f32 = 5.6;
+pub const NOOK_SPAN: f32 = 6.8;
 
 /// How much room the far end of the room carries past the last cabinet.
 ///
@@ -225,8 +225,9 @@ pub struct Benched {
 /// is what this is.
 pub fn benches(far: f32) -> Vec<Benched> {
     /// What is on them, and how much of the nook's length each one takes.
-    const ON_THEM: [(&str, f32); 3] = [
+    const ON_THEM: [(&str, f32); 4] = [
         ("ball and chain", 1.4),
+        ("gyroscope", 0.9),
         ("newton's cradle", 2.1),
         ("metronome", 0.9),
     ];

@@ -158,6 +158,18 @@ pub const SLIDING_WEIGHT: Vec4 = vec4(0.88, 0.72, 0.32, 1.0);
 pub const NOTCH: Vec4 = vec4(0.34, 0.30, 0.25, 1.0);
 pub const NOTCH_ON: Vec4 = vec4(1.8, 1.5, 0.7, 1.0);
 
+/// The gyroscope: its stand, its axle, the wheel, and the stud on the rim that
+/// says it is turning. Spec 0006.
+///
+/// A wheel is a round thing and a round thing spinning looks still, so without
+/// the stud the only way to tell a spun one from a stopped one is that it has
+/// not fallen over. Which is the point, but it should not be the only evidence.
+pub const STAND: Vec4 = vec4(0.30, 0.29, 0.33, 1.0);
+pub const SPINDLE: Vec4 = vec4(0.62, 0.60, 0.56, 1.0);
+pub const FLYWHEEL: Vec4 = vec4(0.72, 0.60, 0.30, 1.0);
+pub const STUD: Vec4 = vec4(1.7, 0.9, 0.5, 1.0);
+pub const GIMBAL: Vec4 = vec4(0.78, 0.79, 0.84, 1.0);
+
 /// The ball and chain: the gantry it hangs from, the chain, the ball, the brick
 /// and the tray it all stands in. Spec 0006.
 ///
