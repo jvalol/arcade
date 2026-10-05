@@ -40,7 +40,16 @@ pub const BENCH_WIDE: f32 = 0.9;
 
 /// How far from the nook's back wall a bench stands, and how much floor is
 /// left between two of them.
-pub const BENCH_OFF: f32 = 1.1;
+///
+/// Off the wall rather than against it, so there is floor behind the benches as
+/// well as in front and the room reads as a room rather than as a corridor with
+/// a counter down it.
+///
+/// Far enough off to walk behind them and get at the books, which is a stronger
+/// thing than it sounds: you are 0.9 across, and at 1.9 the gap came out 0.98,
+/// which is a gap you scrape through rather than one you walk down. It is 1.55
+/// now.
+pub const BENCH_OFF: f32 = 2.4;
 pub const BENCH_GAP: f32 = 0.3;
 
 /// The nook the toys live in: how far it cuts in behind the left wall and how
@@ -49,7 +58,7 @@ pub const BENCH_GAP: f32 = 0.3;
 /// A room off the room, not a table in it. Standing the benches in the aisle
 /// put them in front of the plinths from every angle, which is the one place
 /// nothing should stand.
-pub const NOOK_DEEP: f32 = 3.0;
+pub const NOOK_DEEP: f32 = 5.4;
 pub const NOOK_SPAN: f32 = 8.0;
 
 /// How much room the far end of the room carries past the last cabinet.
@@ -253,6 +262,46 @@ pub fn benches(far: f32) -> Vec<Benched> {
         .collect()
 }
 
+/// A bookcase, where it stands and which way its face looks.
+#[derive(Debug, Clone, Copy)]
+pub struct Shelved {
+    pub at: Vec3,
+    pub facing: Vec3,
+}
+
+/// Where the bookcases stand: a run of them the length of the nook's back wall.
+///
+/// Behind the benches rather than among them, with floor enough between the two
+/// to walk along and read the spines. That gap is what `BENCH_OFF` is for.
+///
+/// One wall and no more. The open side is the one wall the nook has not got,
+/// the far end is the way in and a bookcase in a doorway is a door, and the
+/// closed end is where the last bench stands.
+pub fn bookcases(far: f32) -> Vec<Shelved> {
+    let back = -(WALL + CABINET.x) - NOOK_DEEP;
+    let case = crate::study::CASE;
+    let mut out = Vec::new();
+
+    // the back wall, filled with as many as go into it
+    let run = NOOK_SPAN - 0.3;
+    let fits = (run / case.x) as usize;
+    let along = fits as f32 * case.x;
+    let from = far + NOOK_SPAN * 0.5 - along * 0.5;
+
+    for n in 0..fits {
+        out.push(Shelved {
+            at: vec3(
+                back + 0.15 + case.y * 0.5,
+                0.0,
+                from + (n as f32 + 0.5) * case.x,
+            ),
+            facing: Vec3::X,
+        });
+    }
+
+    out
+}
+
 /// What the middle of the screen is on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Seen {
@@ -268,6 +317,8 @@ pub struct Room {
     pub displays: Vec<crate::display::Display>,
     /// The benches in front of that wall, per spec 0006.
     pub benches: Vec<Benched>,
+    /// The bookcases round them, which hold nothing up and do nothing.
+    pub bookcases: Vec<Shelved>,
     pub walls: Vec<Aabb>,
     /// How far the room reaches from its middle, worked out from how many
     /// cabinets there are.
@@ -338,10 +389,14 @@ impl Room {
             ),
         ];
 
+        let benches = benches(-reaches);
+        let bookcases = bookcases(-reaches);
+
         Self {
             stood,
             displays: crate::display::all_of_them(-reaches),
-            benches: benches(-reaches),
+            benches,
+            bookcases,
             walls,
             reaches,
         }
@@ -362,6 +417,18 @@ impl Room {
         Aabb::from_center_size(at, size)
     }
 
+    /// The box a bookcase fills, turned to face the way it does.
+    pub fn bookcase_box(shelved: &Shelved) -> Aabb {
+        let case = crate::study::CASE;
+        let size = if shelved.facing.x.abs() > 0.5 {
+            vec3(case.y, case.z, case.x)
+        } else {
+            vec3(case.x, case.z, case.y)
+        };
+
+        Aabb::from_center_size(shelved.at + Vec3::Y * case.z * 0.5, size)
+    }
+
     /// Everything you cannot walk through: the walls, the cabinets, the benches
     /// and the plinths.
     ///
@@ -377,6 +444,7 @@ impl Room {
         );
         out.extend(self.benches.iter().map(Self::bench_box));
         out.extend(self.displays.iter().map(Self::plinth_box));
+        out.extend(self.bookcases.iter().map(Self::bookcase_box));
 
         out
     }
@@ -680,7 +748,7 @@ mod tests {
         let solid = room.solid();
         assert_eq!(
             solid.len(),
-            room.walls.len() + 12 + room.benches.len() + room.displays.len()
+            room.walls.len() + 12 + room.benches.len() + room.displays.len() + room.bookcases.len()
         );
 
         // straight at the first cabinet from the middle of the room
@@ -772,6 +840,31 @@ mod tests {
                 reached[x * long + z],
                 "you cannot walk from the door to the {}",
                 bench.name
+            );
+        }
+    }
+
+    /// Spec 0006: and you can get behind the benches to the books.
+    ///
+    /// The aisle behind them was 0.98 wide for someone 0.9 across, which is a
+    /// gap you scrape through rather than one you walk down, and the books it
+    /// leads to are the whole reason the nook has a back wall.
+    #[test]
+    fn you_can_walk_behind_the_benches() {
+        let room = Room::of(some(13));
+        let solid = room.solid();
+        let radius = crate::RADIUS;
+
+        for case in &room.bookcases {
+            // the floor in front of a bookcase, which is the aisle behind the
+            // benches
+            let face = Room::bookcase_box(case).max.x + radius + 0.08;
+            let at = vec3(face, radius, case.at.z);
+
+            assert!(
+                solid.iter().all(|box_| clear_of(at, box_) > radius),
+                "there is no standing in front of the bookcase at {}",
+                case.at.z
             );
         }
     }
@@ -921,7 +1014,7 @@ mod tests {
 
         assert_eq!(
             solid.len(),
-            room.walls.len() + 13 + room.benches.len() + room.displays.len()
+            room.walls.len() + 13 + room.benches.len() + room.displays.len() + room.bookcases.len()
         );
     }
 

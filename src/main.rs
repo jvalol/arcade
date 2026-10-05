@@ -9,6 +9,7 @@ mod globe;
 mod gyro;
 mod metronome;
 mod room;
+mod study;
 mod wrecker;
 
 use blitzkit::camera::Camera;
@@ -74,6 +75,9 @@ struct Arcade {
     floor: Option<MeshId>,
     /// The carpet, and the ceiling that stops the room opening onto nothing.
     carpet: Option<TextureId>,
+    /// The rug in the nook, which is not the arcade's carpet.
+    rug: Option<TextureId>,
+    rug_mesh: Option<MeshId>,
     /// The grain on the walls and on the cabinets, so neither is a flat face.
     wall_grain: Option<TextureId>,
     cabinet_grain: Option<TextureId>,
@@ -148,6 +152,8 @@ impl Arcade {
             cube: None,
             floor: None,
             carpet: None,
+            rug: None,
+            rug_mesh: None,
             wall_grain: None,
             cabinet_grain: None,
             ceiling_mesh: None,
@@ -359,6 +365,45 @@ impl Arcade {
         }
     }
 
+    /// Every wall of the nook worth dressing: the face of it, which way it
+    /// looks into the room, whether its run is along z, and where that run
+    /// starts and ends.
+    ///
+    /// Not the back wall, which is four hundred books deep, and not the stretch
+    /// of the open side that is the way in, because panelling across a doorway
+    /// is a door.
+    fn nook_walls(&self) -> Vec<(f32, f32, bool, f32, f32)> {
+        let side = room::WALL + room::CABINET.x;
+        let far = -self.room.reaches;
+        let (back, front) = (-side - room::NOOK_DEEP + 0.15, -side - 0.15);
+
+        vec![
+            (
+                front,
+                -1.0,
+                true,
+                far + room::NOOK_DOOR,
+                far + room::NOOK_SPAN,
+            ),
+            (far + 0.15, 1.0, false, back, front),
+            (far + room::NOOK_SPAN - 0.15, -1.0, false, back, front),
+        ]
+    }
+
+    /// The two long walls of the nook that carry sconces, as the face of the
+    /// wall and which way a bracket reaches off it.
+    ///
+    /// Both of them, because one was not enough: lit from the open side alone
+    /// the light fell on the wall it came out of and the four hundred books
+    /// across the room sat in the dark, which is the wrong way round. The ones
+    /// on the back wall hang above the cases rather than beside them, which is
+    /// how a library lights a wall of shelves.
+    fn sconce_walls(&self) -> [(f32, f32); 2] {
+        let side = room::WALL + room::CABINET.x;
+
+        [(-side - 0.15, -1.0), (-side - room::NOOK_DEEP + 0.15, 1.0)]
+    }
+
     fn facing(&self) -> Vec3 {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
@@ -463,6 +508,8 @@ impl Game for Arcade {
         self.floor = Some(renderer.add_mesh(&room::tiled_floor(carpet::TILES)));
         self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
         self.carpet = Some(renderer.add_texture(&carpet::woven()));
+        self.rug = Some(renderer.add_texture(&carpet::rug()));
+        self.rug_mesh = Some(renderer.add_mesh(&room::tiled_floor(carpet::RUG_TILES)));
         self.wall_grain =
             Some(renderer.add_texture(&carpet::mottled(carpet::WALL_SEED, [220, 220, 220], 34)));
         self.cabinet_grain =
@@ -1060,6 +1107,171 @@ impl Game for Arcade {
             }
         }
 
+        // the rug, laid over the nook's own floor. The arcade's carpet is
+        // confetti on black and the nook is a study off it, so its floor is the
+        // largest single thing saying which of the two you are standing in.
+        if let (Some(rug), Some(rug_mesh)) = (self.rug, self.rug_mesh) {
+            let side = room::WALL + room::CABINET.x;
+            let laid = Transform::at(vec3(
+                -side - room::NOOK_DEEP * 0.5,
+                0.004,
+                -self.room.reaches + room::NOOK_SPAN * 0.5,
+            ))
+            .with_scale(vec3(room::NOOK_DEEP - 0.12, 1.0, room::NOOK_SPAN - 0.12));
+
+            scene.push_textured(rug_mesh, rug, &laid, aim::FLOOR, aim::MATTE);
+        }
+
+        // the bookcases, stocked. None of it does anything, which is what
+        // furniture is. Spec 0006.
+        let bench_floor = 0.0;
+        for (n, shelved) in self.room.bookcases.iter().enumerate() {
+            let case = study::CASE;
+            let turn = glam::Quat::from_rotation_y(if shelved.facing.x.abs() > 0.5 {
+                std::f32::consts::FRAC_PI_2
+            } else {
+                0.0
+            });
+            let put = |at: Vec3| shelved.at + turn * at;
+
+            // the carcass: two sides, a back and a top
+            for (at, size) in [
+                (
+                    vec3(-case.x * 0.5 + study::BOARD * 0.5, case.z * 0.5, 0.0),
+                    vec3(study::BOARD, case.z, case.y),
+                ),
+                (
+                    vec3(case.x * 0.5 - study::BOARD * 0.5, case.z * 0.5, 0.0),
+                    vec3(study::BOARD, case.z, case.y),
+                ),
+                (
+                    vec3(0.0, case.z * 0.5, -case.y * 0.5 + study::BOARD * 0.5),
+                    vec3(case.x, case.z, study::BOARD),
+                ),
+                (
+                    vec3(0.0, case.z - study::BOARD * 0.5, 0.0),
+                    vec3(case.x, study::BOARD, case.y),
+                ),
+            ] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(put(at)).with_rotation(turn).with_scale(size),
+                    aim::BOOKCASE,
+                );
+            }
+
+            for shelf in 0..study::SHELVES {
+                let up = study::shelf_at(shelf);
+                scene.push_colored(
+                    cube,
+                    &Transform::at(put(vec3(0.0, up - study::BOARD * 0.5, 0.0)))
+                        .with_rotation(turn)
+                        .with_scale(vec3(case.x, study::BOARD, case.y)),
+                    aim::SHELF,
+                );
+
+                let books = study::stock(n as u32, shelf);
+                for (which, book) in books.iter().enumerate() {
+                    let along = study::along(&books, which) - case.x * 0.5;
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(put(vec3(
+                            along,
+                            up + book.tall * 0.5,
+                            -case.y * 0.5 + study::BOOK_BACK + book.tall * 0.22,
+                        )))
+                        .with_rotation(turn)
+                        .with_scale(vec3(
+                            book.thick * 0.9,
+                            book.tall,
+                            book.tall * 0.44,
+                        )),
+                        vec4(book.spine[0], book.spine[1], book.spine[2], 1.0),
+                    );
+                }
+            }
+        }
+
+        // the panelling. Every wall of the nook you can actually see, which is
+        // not the back one: that is four hundred books deep. Spec 0006.
+        for (face, out, along, from, to) in self.nook_walls() {
+            // skirting, rail and cornice, the length of it
+            for (up, tall, deep) in [
+                (study::SKIRTING * 0.5, study::SKIRTING, study::PROUD * 1.6),
+                (study::DADO, study::RAIL, study::PROUD * 2.0),
+                (
+                    room::TALL - study::CORNICE * 0.5,
+                    study::CORNICE,
+                    study::PROUD * 2.0,
+                ),
+            ] {
+                let middle = face + out * deep * 0.5;
+                let (at, size) = if along {
+                    (
+                        vec3(middle, up, (from + to) * 0.5),
+                        vec3(deep, tall, to - from),
+                    )
+                } else {
+                    (
+                        vec3((from + to) * 0.5, up, middle),
+                        vec3(to - from, tall, deep),
+                    )
+                };
+
+                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::TRIM);
+            }
+
+            // and the panels between the skirting and the rail
+            let middle = face + out * study::PROUD * 0.5;
+            for place in study::panels(from, to) {
+                let (at, size) = if along {
+                    (
+                        vec3(middle, study::panel_up(), place),
+                        vec3(study::PROUD, study::panel_tall(), study::PANEL_WIDE),
+                    )
+                } else {
+                    (
+                        vec3(place, study::panel_up(), middle),
+                        vec3(study::PANEL_WIDE, study::panel_tall(), study::PROUD),
+                    )
+                };
+
+                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::PANEL);
+            }
+        }
+
+        // the sconces down both long walls, which is where the light in here
+        // comes from and is why there is any. Spec 0006.
+        for (face, out) in self.sconce_walls() {
+            for along in study::sconces(
+                -self.room.reaches + 0.2,
+                -self.room.reaches + room::NOOK_SPAN - 0.2,
+            ) {
+                let at = vec3(face, bench_floor + study::SCONCE_UP, along);
+
+                // a back plate on the wall, a bracket off it, and a shade on the
+                // end of that
+                for (reach, size) in [
+                    (-study::SCONCE_BACK, vec3(0.03, 0.09, 0.09)),
+                    (
+                        study::SCONCE_OUT * 0.5,
+                        vec3(study::SCONCE_OUT, 0.018, 0.018),
+                    ),
+                ] {
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(at + Vec3::X * out * reach).with_scale(size),
+                        aim::SCONCE,
+                    );
+                }
+                scene.push_colored(
+                    cube,
+                    &Transform::at(at + Vec3::X * out * study::SCONCE_OUT).with_scale(study::SHADE),
+                    aim::SHADE,
+                );
+            }
+        }
+
         // the globe on its bench. Spec 0006.
         if let (Some(globe_mesh), Some(world), Some(bench)) = (
             self.globe_mesh,
@@ -1298,21 +1510,37 @@ impl Game for Arcade {
             .collect();
         near.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        // two of the eight are the nook's, which has no cabinet in it and was
-        // lit only by what spilled through the way in. One over each end of the
-        // row, because the nook is long enough now that one over the middle left
-        // both ends of it dim.
-        let ends = [self.room.benches.first(), self.room.benches.last()];
-        for bench in ends.iter().flatten() {
+        // the sconces nearest you, because a light with no fitting is a bright
+        // patch on a wall and no reason for it. These are what lights the nook,
+        // so they take the larger share of the engine's eight while you are in
+        // here; the cabinets out in the aisle are too far to be throwing
+        // anything you could see from this room anyway.
+        let walls = self.sconce_walls();
+        let mut shades: Vec<(f32, Vec3)> = walls
+            .iter()
+            .copied()
+            .flat_map(|(face, out)| {
+                study::sconces(
+                    -self.room.reaches + 0.2,
+                    -self.room.reaches + room::NOOK_SPAN - 0.2,
+                )
+                .into_iter()
+                .map(move |along| vec3(face + out * study::SCONCE_OUT, study::SCONCE_UP, along))
+            })
+            .map(|at| (eye.distance_squared(at), at))
+            .collect();
+        shades.sort_by(|one, other| one.0.total_cmp(&other.0));
+
+        for (_, at) in shades.into_iter().take(aim::SCONCE_LAMPS) {
             scene.push_light(blitzkit::lighting::PointLight::new(
-                bench.at + Vec3::Y * (room::TALL - 0.4),
-                aim::NOOK_LAMP,
-                aim::NOOK_LIT,
-                aim::NOOK_RANGE,
+                at,
+                study::SCONCE_COLOUR,
+                study::SCONCE_LIT,
+                study::SCONCE_RANGE,
             ));
         }
 
-        for (_, n) in near.into_iter().take(aim::LAMPS - aim::NOOK_LAMPS) {
+        for (_, n) in near.into_iter().take(aim::LAMPS - aim::SCONCE_LAMPS) {
             let stood = &self.room.stood[n];
             let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
             let strength = if at == Some(n) {

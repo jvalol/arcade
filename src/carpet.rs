@@ -57,6 +57,92 @@ pub fn ground() -> glam::Vec3 {
     )
 }
 
+/// The rug in the nook, which is not the arcade's carpet.
+///
+/// The room out there is a dim neon hall and its floor is confetti on black,
+/// which is right for it. The nook is a study off it, and a study's floor is a
+/// rug: a dark ground, a border, and a figure repeated across it. The whole
+/// point of the nook is that it is not the arcade, and the floor is the largest
+/// single thing in anybody's view of it.
+/// One rug and not a tiled floor, which is the whole difference between a rug
+/// and lino. Laid three times over it came out as three stretched lozenges in a
+/// row, because a tile count stretches with the quad and the nook is twice as
+/// long as it is deep.
+pub const RUG: u32 = 512;
+pub const RUG_TILES: f32 = 1.0;
+const RUG_GROUND: [u8; 3] = [52, 20, 24];
+const RUG_FIGURE: [u8; 3] = [122, 48, 44];
+const RUG_THREAD: [u8; 3] = [168, 132, 72];
+
+pub fn rug() -> TextureData {
+    let mut pixels = Vec::with_capacity((RUG * RUG * 4) as usize);
+    for _ in 0..RUG * RUG {
+        pixels.extend_from_slice(&[RUG_GROUND[0], RUG_GROUND[1], RUG_GROUND[2], 255]);
+    }
+
+    let mut ink = |x: i32, y: i32, colour: [u8; 3]| {
+        let n = ((x.rem_euclid(RUG as i32) as u32 * RUG + y.rem_euclid(RUG as i32) as u32) * 4)
+            as usize;
+        pixels[n] = colour[0];
+        pixels[n + 1] = colour[1];
+        pixels[n + 2] = colour[2];
+    };
+
+    let edge = RUG as i32 - 1;
+    for along in 0..RUG as i32 {
+        // a band round the outside, and a pair of threads inside it
+        for inset in [
+            10,
+            11,
+            12,
+            20,
+            24,
+            edge - 24,
+            edge - 20,
+            edge - 12,
+            edge - 11,
+            edge - 10,
+        ] {
+            ink(along, inset, RUG_THREAD);
+            ink(inset, along, RUG_THREAD);
+        }
+    }
+    for along in 13..RUG as i32 - 13 {
+        for inset in 13..20 {
+            ink(along.clamp(13, edge - 13), inset, RUG_FIGURE);
+            ink(along.clamp(13, edge - 13), edge - inset, RUG_FIGURE);
+            ink(inset, along.clamp(13, edge - 13), RUG_FIGURE);
+            ink(edge - inset, along.clamp(13, edge - 13), RUG_FIGURE);
+        }
+    }
+
+    // and one lozenge in the middle of it, which is what a rug has: a medallion
+    // drawn twice, once in thread and once a little inside it in the figure
+    let middle = RUG as i32 / 2;
+    for (reach, colour) in [
+        (RUG as i32 * 7 / 20, RUG_THREAD),
+        (RUG as i32 * 6 / 20, RUG_FIGURE),
+        (RUG as i32 / 8, RUG_THREAD),
+    ] {
+        for step in 0..=reach {
+            let out = reach - step;
+            for (x, y) in [
+                (middle + step, middle + out),
+                (middle + step, middle - out),
+                (middle - step, middle + out),
+                (middle - step, middle - out),
+            ] {
+                for thick in 0..3 {
+                    ink(x, y + thick, colour);
+                    ink(x + thick, y, colour);
+                }
+            }
+        }
+    }
+
+    TextureData::from_pixels(RUG, RUG, pixels)
+}
+
 /// A number from a number, so the same tile is woven every time.
 fn from(seed: u32) -> u32 {
     let mut n = seed.wrapping_mul(0x9E37_79B9);

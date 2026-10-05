@@ -170,6 +170,38 @@ pub const FLYWHEEL: Vec4 = vec4(0.72, 0.60, 0.30, 1.0);
 pub const STUD: Vec4 = vec4(1.7, 0.9, 0.5, 1.0);
 pub const GIMBAL: Vec4 = vec4(0.78, 0.79, 0.84, 1.0);
 
+/// The study the nook is furnished as: the bookcases, the candles and their
+/// flames. Spec 0006.
+///
+/// Dark wood against the arcade's cool grey, because the whole point of the nook
+/// is that it is not the arcade. A flame is past 1 in every channel, so it glows
+/// with no light on it, the way a cabinet's band does.
+pub const BOOKCASE: Vec4 = vec4(0.26, 0.15, 0.09, 1.0);
+pub const SHELF: Vec4 = vec4(0.32, 0.19, 0.11, 1.0);
+/// The panelling: the panels themselves, and the skirting, rail and cornice
+/// that frame them.
+///
+/// Dark wood against the arcade's grain. Panelled below the rail and plain
+/// above it, which is what a panelled room is, and the trim a shade lighter
+/// than the panels so the mouldings read as mouldings rather than as a flat
+/// wall of one brown.
+pub const PANEL: Vec4 = vec4(0.23, 0.13, 0.08, 1.0);
+pub const TRIM: Vec4 = vec4(0.34, 0.21, 0.12, 1.0);
+
+/// The sconces on the wall: the bracket, and the shade that glows.
+///
+/// A shade past 1 in every channel burns with no light on it, the way a
+/// cabinet's band does, so the fitting looks lit rather than painted.
+pub const SCONCE: Vec4 = vec4(0.46, 0.34, 0.14, 1.0);
+pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
+
+/// How many lights the sconces may take.
+///
+/// The engine carries eight. These are what lights the nook, so they get the
+/// larger share of them while you are in it, and the cabinets out in the aisle
+/// are too far away to be throwing anything you can see from here anyway.
+pub const SCONCE_LAMPS: usize = 6;
+
 /// The globe: its stand and the meridian ring round it. Spec 0006.
 ///
 /// Brass, because that is what they are made of, and because the nook is
@@ -238,19 +270,15 @@ pub const LAMP_LIT: f32 = 2.2;
 /// are the ones that can be seen to be lighting anything.
 pub const LAMPS: usize = 8;
 
-/// How many of those the nook takes, and what they are like.
+/// How much of the engine's eight the nook's sconces take.
 ///
-/// The nook has no cabinet in it, so nothing lit it but what spilled through
-/// the way in. Room lights rather than neon bands: warm, soft and always on,
-/// which is what a workbench corner has.
+/// It had two bare lamps in the ceiling with nothing to hang them on, so what
+/// you saw was a bright patch on a surface and no reason for it. The sconces are
+/// the light in here now, they are a thing you can look at, and they take most
+/// of the eight while you are in the room. The cabinets out in the aisle are too
+/// far to be throwing anything you could see from here, which is why they get
+/// what is left.
 ///
-/// Two, one over each end of the row of benches, because the nook is now long
-/// enough that one over the middle left both ends of it dim.
-pub const NOOK_LAMPS: usize = 2;
-pub const NOOK_LAMP: Vec3 = Vec3::new(1.0, 0.94, 0.84);
-pub const NOOK_LIT: f32 = 0.85;
-pub const NOOK_RANGE: f32 = 5.5;
-
 /// The neon on a cabinet: how bright the band burns, how thick it is, and
 /// where up the front it sits.
 ///

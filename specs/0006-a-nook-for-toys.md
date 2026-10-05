@@ -54,6 +54,63 @@ through one.
 Five of them, in the order you meet them coming through the way in: the ball and
 chain, the gyroscope, the Newton's cradle, the metronome, the globe.
 
+### It is furnished
+
+The nook is a study off an arcade, and for a while it was a corridor with a
+counter down it: benches end to end against a wall, under the same brown grain
+and the same confetti carpet as the hall outside. The room out there is a dim
+neon box and that is right for it. This one is the one place in the building
+that is not selling you a game, so it is furnished rather than lit up.
+
+It is 5.4 deep rather than 3.0, and the benches stand 2.4 off the back wall
+rather than 1.1, so there is floor to walk on both sides of them. Walk on, and
+not squeeze along: at 1.9 the aisle behind came out 0.98 wide for someone 0.9
+across, which is a gap you scrape through, and the books it leads to are the
+whole reason the nook has a back wall.
+
+**A wall of bookcases** runs the length of the back wall behind the benches,
+with floor enough between the two to walk along and read the spines. One wall
+and no more: the open side is the wall the nook has not got, the far end is the
+way in and a bookcase in a doorway is a door, and the closed end is where the
+last bench stands. The books are generated and stocked from a seed, so a shelf
+holds the same books every time it is drawn. A bookcase restocked every frame is
+a bookcase that boils.
+
+**Sconces** down both long walls are what the room is lit by. There were candles
+on the shelves first and they were the wrong thing twice over. There is no
+lavishly furnished room in the world with an open flame two inches from four
+hundred books, and a room that makes you think about that is a room nobody
+relaxes in.
+
+They also answer something the nook never did, which is where the light comes
+from. It had two bare lamps in the ceiling with nothing to hang them on, so what
+you saw was a bright patch on a surface and no reason for it. A sconce is a thing
+you can look at.
+
+Both walls and not one. Lit from the open side alone the light fell on the wall
+it came out of and the four hundred books across the room sat in the dark, which
+is the wrong way round. The ones on the back wall hang above the cases rather
+than beside them, which is how a library lights a wall of shelves. Six of the
+engine's eight go to the nearest of them while you are in here; the cabinets out
+in the aisle are too far to be throwing anything you could see from this room.
+
+**A rug**, which is one rug and not a tiled floor. Laid three times over it came
+out as three stretched lozenges in a row, because a tile count stretches with the
+quad and the nook is nearly twice as long as it is deep. One tile, a band round
+the outside, and a medallion in the middle. The floor is the largest single thing
+in anybody's view of a room, so it is the largest single thing saying which of
+the two rooms you are standing in.
+
+**Panelled walls**, with a skirting, a dado rail, panels between the two and a
+cornice at the top. Panelled below the rail and plain above it, which is what a
+panelled room is. Every wall of it you can actually see: not the back one, which
+is four hundred books deep, and not the stretch of the open side that is the way
+in, because panelling across a doorway is a door. A wall is the largest flat
+thing in any view of a room after the floor, and the grain in here was the same
+grain as the hall outside, which was the last surface still saying arcade.
+
+None of it does anything. That is what furniture is.
+
 ### The arcade runs physics
 
 This is the first thing in the room with solvers in it. Each toy keeps its own
@@ -411,6 +468,7 @@ nothing, because a pull is a press and not forty a second.
 - The nook has a way in, wide enough to walk through. — `room::tests::the_nook_has_a_way_in`
 - And every cabinet still has a wall behind it. — `room::tests::every_cabinet_has_a_wall_behind_it`
 - The benches fit down the nook, inside it and clear of each other. — `room::tests::the_benches_fit_down_the_nook`
+- And you can walk behind them to the books. — `room::tests::you_can_walk_behind_the_benches`
 - And you can walk from where you come in to every one of them. — `room::tests::you_can_walk_to_every_bench`
 - A bench is something you bump into. — `room::tests::a_bench_is_something_you_bump_into`
 - The sight lands on a bench. — `room::tests::the_sight_lands_on_a_bench`
@@ -465,6 +523,13 @@ nothing, because a pull is a press and not forty a second.
 - The circles with names are the lean and nothing else. — `globe::tests::the_named_circles_are_the_lean`
 - The land is all there, and every ring closes. — `globe::tests::the_land_is_all_there`
 - Flicked, it spins and runs down. — `globe::tests::it_runs_down`
+- A shelf is stocked, and the books fit on it. — `study::tests::the_shelves_are_full`
+- No book is taller than the shelf above it. — `study::tests::nothing_is_taller_than_its_shelf`
+- The books stand in a row without overlapping, centred on the case. — `study::tests::the_books_stand_in_a_row`
+- The shelves are evenly spaced and all inside the case. — `study::tests::the_shelves_fit_the_case`
+- The sconces are spread along a wall, over the bookcases and under the ceiling. — `study::tests::the_sconces_are_spread_along_the_wall`
+- The panelling fits between the skirting and the rail. — `study::tests::the_panelling_fits_its_wall`
+- And a case holds the same books every time it is drawn. — `study::tests::a_shelf_is_stocked_the_same_every_time`
 
 ### Verified by hand
 
@@ -474,6 +539,7 @@ nothing, because a pull is a press and not forty a second.
 - Four pulls on the ball and most of the wall is down.
 - Leaning on the gyroscope and watching the axis go the other way.
 - Finding where you live on the globe.
+- Walking in and seeing a study rather than more arcade.
 - And stopping it and leaning on it again, which sends it tumbling.
 - The chain reads as a chain. The beads are half a bead apart, so the links
   between them are drawn as well, or it is a dotted line.
