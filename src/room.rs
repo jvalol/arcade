@@ -42,6 +42,29 @@ pub const TALL: f32 = 3.2;
 /// rather than when you merely aim at it.
 pub const REACH: f32 = 4.0;
 
+/// A floor quad whose u and v run past one, so a tiling texture repeats across
+/// it rather than being stretched over the whole thing.
+///
+/// `MeshData::plane` runs its corners 0 to 1, which is one carpet tile thirty
+/// units wide. The engine's sampler repeats, so the count belongs here.
+pub fn tiled_floor(tiles: f32) -> MeshData {
+    let normal = [0.0, 1.0, 0.0];
+    let corners = [
+        ([-0.5, 0.0, 0.5], [0.0, tiles]),
+        ([0.5, 0.0, 0.5], [tiles, tiles]),
+        ([0.5, 0.0, -0.5], [tiles, 0.0]),
+        ([-0.5, 0.0, -0.5], [0.0, 0.0]),
+    ];
+
+    MeshData::new(
+        corners
+            .iter()
+            .map(|(at, uv)| Vertex::new(*at, normal, *uv))
+            .collect(),
+        vec![0, 1, 2, 0, 2, 3],
+    )
+}
+
 /// Which way to turn a quad so its one face looks the way a cabinet does.
 pub fn turned_to(facing: Vec3) -> glam::Quat {
     glam::Quat::from_rotation_y(if facing.x >= 0.0 {
@@ -364,6 +387,25 @@ mod tests {
             cabinet_at(&room, first + eye - through.normalize() * 3.0, through),
             Some(0)
         );
+    }
+
+    /// Spec 0005: the floor repeats its carpet rather than stretching one tile
+    /// over thirty units.
+    #[test]
+    fn the_floor_tiles_its_carpet() {
+        let floor = tiled_floor(8.0);
+        let widest = floor
+            .vertices
+            .iter()
+            .map(|v| v.uv[0].max(v.uv[1]))
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            widest > 1.0,
+            "the carpet is stretched, not tiled: u reaches {}",
+            widest
+        );
+        assert_eq!(widest, 8.0, "it does not tile the number it was asked for");
     }
 
     /// Spec 0004: a screen reads the right way round from the front and

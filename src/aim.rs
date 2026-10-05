@@ -128,12 +128,28 @@ pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
 /// a plinth was the wall behind it exactly, so the row of shapes had nothing
 /// to stand against.
 ///
-/// The floor is cool and the darkest thing here. The walls are properly warm
-/// rather than nudged, so the cabinets read as cool objects in a warm room.
-/// The plinths are lighter than both, because what stands on them is pale.
-pub const FLOOR: Vec4 = vec4(0.11, 0.12, 0.17, 1.0);
+/// FLOOR is a tint on the carpet rather than a colour of its own, near white so
+/// the weave comes through as it was made. The walls are properly warm rather
+/// than nudged, so the cabinets read as cool objects in a warm room. The
+/// plinths are lighter than both, because what stands on them is pale.
+pub const FLOOR: Vec4 = vec4(0.95, 0.95, 1.0, 1.0);
 pub const WALL: Vec4 = vec4(0.30, 0.22, 0.16, 1.0);
 pub const PLINTH: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
+
+/// What the carpet is multiplied by, and the lid over the room.
+///
+/// The floor is a texture now, so this is a tint on it rather than its colour,
+/// and it is near white so the carpet comes through as it was woven. The
+/// ceiling is darker than anything else, which is where a dim room's light
+/// does not reach.
+pub const CEILING: Vec4 = vec4(0.09, 0.08, 0.10, 1.0);
+
+/// How tight a highlight a matte surface gets.
+///
+/// Shininess is the power the half vector is raised to, so a small number is a
+/// highlight spread over everything. The carpet went down at 4.0 and its dark
+/// ground came back pale grey, because every texel of it was catching the sun.
+pub const MATTE: f32 = 64.0;
 
 /// The lamp a cabinet's band throws into the room: how far it reaches, how
 /// bright it burns, and how much brighter the one you are standing at is.
@@ -514,12 +530,7 @@ mod tests {
     #[test]
     fn the_room_is_not_one_colour() {
         let body = look_of(true, false).body;
-        let surfaces = [
-            ("floor", FLOOR),
-            ("wall", WALL),
-            ("plinth", PLINTH),
-            ("cabinet", body),
-        ];
+        let surfaces = [("wall", WALL), ("plinth", PLINTH), ("cabinet", body)];
 
         for (n, (name, one)) in surfaces.iter().enumerate() {
             for (other_name, other) in surfaces.iter().skip(n + 1) {
@@ -534,16 +545,19 @@ mod tests {
             }
         }
 
-        // and the floor is the darkest thing in the room, so what stands on it
-        // reads as standing on it
-        let darkest = surfaces
-            .iter()
-            .map(|(_, c)| c.truncate().element_sum())
-            .fold(f32::INFINITY, f32::min);
-        assert!(
-            (FLOOR.truncate().element_sum() - darkest).abs() < 1e-6,
-            "something in the room is darker than the floor"
-        );
+        // and the carpet's own ground is darker than anything standing on it,
+        // so what stands on it reads as standing on it. FLOOR is a tint on a
+        // texture now rather than the floor's colour, so the ground is where
+        // the floor's darkness actually lives.
+        let ground = crate::carpet::ground();
+        for (name, one) in surfaces {
+            assert!(
+                ground.element_sum() < one.truncate().element_sum(),
+                "the carpet's ground {:?} is no darker than the {}",
+                ground,
+                name
+            );
+        }
     }
 
     /// Spec 0003: the light itself has a colour, warm above and cool below.

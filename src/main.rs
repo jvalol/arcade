@@ -2,6 +2,7 @@
 
 mod aim;
 mod cabinet;
+mod carpet;
 mod display;
 mod room;
 
@@ -56,6 +57,9 @@ struct Arcade {
     signs: Vec<TextureId>,
     cube: Option<MeshId>,
     floor: Option<MeshId>,
+    /// The carpet, and the ceiling that stops the room opening onto nothing.
+    carpet: Option<TextureId>,
+    ceiling_mesh: Option<MeshId>,
     screen: Option<MeshId>,
     /// The engine's own shapes, turning at the end of the room. Spec 0002.
     /// Where they stand is the room's; these are the meshes.
@@ -96,6 +100,8 @@ impl Arcade {
             signs: Vec::new(),
             cube: None,
             floor: None,
+            carpet: None,
+            ceiling_mesh: None,
             screen: None,
             shown: Vec::new(),
             since: 0.0,
@@ -222,7 +228,9 @@ impl Game for Arcade {
         ));
 
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
-        self.floor = Some(renderer.add_mesh(&MeshData::plane()));
+        self.floor = Some(renderer.add_mesh(&room::tiled_floor(carpet::TILES)));
+        self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
+        self.carpet = Some(renderer.add_texture(&carpet::woven()));
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
         self.shown = display::meshes()
             .iter()
@@ -434,15 +442,31 @@ impl Game for Arcade {
         scene.light.intensity = aim::SUN_STRENGTH;
         scene.light.ambient = aim::FILL;
 
-        scene.push_colored(
-            floor,
-            &Transform::at(Vec3::ZERO).with_scale(vec3(
-                (room::WALL + room::CABINET.x) * 2.0,
-                1.0,
-                self.room.reaches * 2.0,
-            )),
-            aim::FLOOR,
-        );
+        let across = (room::WALL + room::CABINET.x) * 2.0;
+        let along = self.room.reaches * 2.0;
+        let laid = Transform::at(Vec3::ZERO).with_scale(vec3(across, 1.0, along));
+
+        match self.carpet {
+            // matte. A low shininess is a specular highlight spread over the
+            // whole floor, which washed the weave's dark ground out to pale
+            // grey the first time this was laid.
+            Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
+            None => scene.push_colored(floor, &laid, aim::FLOOR),
+        }
+
+        // a ceiling, because the room opened onto nothing and a corridor with
+        // no lid is a corridor you are standing outside of
+        if let Some(ceiling) = self.ceiling_mesh {
+            // turned over, because a plane faces up and from underneath that is
+            // a back face, which the opaque pass culls
+            scene.push_colored(
+                ceiling,
+                &Transform::at(Vec3::Y * room::TALL)
+                    .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
+                    .with_scale(vec3(across, 1.0, along)),
+                aim::CEILING,
+            );
+        }
 
         for wall in self.room.walls.iter() {
             scene.push_colored(
