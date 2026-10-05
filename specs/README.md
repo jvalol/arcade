@@ -13,6 +13,7 @@ not a priority, and it never changes once a spec exists.
 | [0003](0003-what-you-are-pointing-at.md) | The sight in the middle of the screen, and the lit cabinet |
 | [0004](0004-taking-hold-of-one.md) | Turning a shape on the far wall with the mouse |
 | [0005](0005-a-room-you-want-to-be-in.md) | Carpet, a ceiling, and light with a colour in it |
+| [0006](0006-a-nook-for-toys.md) | A third kind of thing in the room: toys on benches, in a nook |
 
 ---
 

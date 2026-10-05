@@ -3,6 +3,7 @@
 mod aim;
 mod cabinet;
 mod carpet;
+mod cradle;
 mod display;
 mod room;
 
@@ -29,6 +30,9 @@ const SPEED: f32 = 4.2;
 const LOOK: f32 = 0.0022;
 const PITCH_LIMIT: f32 = 1.3;
 
+/// What the toy on the bench falls under.
+const GRAVITY: Vec3 = vec3(0.0, -9.81, 0.0);
+
 /// Whether this run is only here to be photographed, for `refresh-screenshots`
 /// in the project above.
 fn staged() -> bool {
@@ -41,8 +45,11 @@ fn staged() -> bool {
 /// the view from the doorway is now a dark room with nothing answering. The
 /// picture has to be taken from where the room is doing something: a step back
 /// from a cabinet, with it lit and named and offering its key.
-const POSED_AT: Vec3 = vec3(0.0, 0.0, 2.45);
-const POSED_YAW: f32 = 1.0;
+/// Aimed at a cabinet rather than at a bearing. It was a bearing, and adding a
+/// thirteenth game moved the rows under it: the sight landed in the gap between
+/// two cabinets and the picture was a wall.
+const POSED_AT: Vec3 = vec3(0.0, 0.0, 3.6);
+const POSED_YAW: f32 = 0.96;
 const POSED_PITCH: f32 = -0.1;
 
 struct Arcade {
@@ -67,6 +74,15 @@ struct Arcade {
     /// The engine's own shapes, turning at the end of the room. Spec 0002.
     /// Where they stand is the room's; these are the meshes.
     shown: Vec<MeshId>,
+    /// The toy on the bench: five balls on ropes, stepped in this room's own
+    /// loop. The first physics the arcade has ever run. Spec 0006.
+    cradle: Vec<blitzkit::physics::Body>,
+    ropes: Vec<blitzkit::link::Link>,
+    solver: blitzkit::physics::Solver,
+    /// Seconds owed to the toy, so it steps at its own rate and not the
+    /// frame's.
+    owed: f32,
+    ball_mesh: Option<MeshId>,
     since: f32,
 
     /// What the sight is on, per spec 0003. Worked out once in `update` and
@@ -92,6 +108,7 @@ impl Arcade {
     fn new() -> Self {
         let room = Room::of(games());
         let spin = display::Spin::of(room.displays.len());
+        let (cradle, ropes) = cradle::strung();
 
         Self {
             at: if staged() { POSED_AT } else { room.doorway() },
@@ -109,6 +126,11 @@ impl Arcade {
             ceiling_mesh: None,
             screen: None,
             shown: Vec::new(),
+            cradle,
+            ropes,
+            solver: cradle::solver(),
+            owed: 0.0,
+            ball_mesh: None,
             since: 0.0,
             seen: None,
             window: (800.0, 600.0),
@@ -144,6 +166,8 @@ impl Arcade {
                 }
             }
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
+            // the toy: enter lifts the end ball and lets it go
+            Some(room::Seen::Bench(_)) => cradle::set_going(&mut self.cradle, 0),
             None => (),
         }
     }
@@ -241,6 +265,8 @@ impl Game for Arcade {
         self.cabinet_grain =
             Some(renderer.add_texture(&carpet::mottled(carpet::CABINET_SEED, [228, 228, 228], 22)));
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
+        self.ball_mesh = Some(renderer.add_mesh(&MeshData::sphere(18, 12)));
+
         self.shown = display::meshes()
             .iter()
             .map(|mesh| renderer.add_mesh(mesh))
@@ -292,6 +318,20 @@ impl Game for Arcade {
         _sound: &SoundSystem,
     ) {
         self.since += dt;
+
+        // the toy on the bench, stepped at its own rate so a slow frame does
+        // not change how it swings. Spec 0006.
+        self.owed = (self.owed + dt).min(0.2);
+        while self.owed >= cradle::STEP {
+            self.solver.step_linked(
+                &mut self.cradle,
+                &self.ropes,
+                &cradle::NO_WORLD,
+                GRAVITY,
+                cradle::STEP,
+            );
+            self.owed -= cradle::STEP;
+        }
 
         let mut wish = Vec3::ZERO;
         let right = self.forward().cross(Vec3::Y);
@@ -353,6 +393,14 @@ impl Game for Arcade {
                     "Click to let go"
                 } else {
                     "Click to turn it"
+                })),
+            ),
+            (None, Some(room::Seen::Bench(n))) => (
+                Some(self.room.benches[n].name.to_string()),
+                Some(String::from(if cradle::stirring(&self.cradle) > 0.05 {
+                    "Press enter to set it going again"
+                } else {
+                    "Press enter to set it going"
                 })),
             ),
             (None, None) => (None, None),
@@ -487,6 +535,95 @@ impl Game for Arcade {
         }
 
         // the engine's own shapes, turning at the end of the room
+        // the toy on the first bench: the frame, the ropes and the balls. The
+        // cradle is built about the middle of a bench top, so everything is
+        // placed from there.
+        if let (Some(ball_mesh), Some(bench)) = (self.ball_mesh, self.room.benches.first()) {
+            let top = bench.at + Vec3::Y * room::BENCH.y;
+
+            // two uprights and the bar they carry
+            let span = cradle::BALL * 2.0 * cradle::BALLS as f32 + cradle::STOCK * 2.0;
+            for end in [-1.0f32, 1.0] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + vec3(0.0, cradle::BAR_UP * 0.5, end * span * 0.5))
+                        .with_scale(vec3(cradle::STOCK, cradle::BAR_UP, cradle::STOCK)),
+                    aim::CRADLE_FRAME,
+                );
+            }
+            scene.push_colored(
+                cube,
+                &Transform::at(top + Vec3::Y * cradle::BAR_UP).with_scale(vec3(
+                    cradle::STOCK,
+                    cradle::STOCK,
+                    span + cradle::STOCK,
+                )),
+                aim::CRADLE_FRAME,
+            );
+
+            for ball in 0..cradle::BALLS {
+                let hung = top + self.cradle[cradle::ball_at(ball)].position;
+                let hook = top + cradle::hook(ball);
+
+                // the rope, a thin box turned to lie along it
+                let along = hung - hook;
+                let length = along.length();
+                if length > 1e-4 {
+                    let turn = glam::Quat::from_rotation_arc(Vec3::NEG_Y, along / length);
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(hook + along * 0.5)
+                            .with_rotation(turn)
+                            .with_scale(vec3(0.006, length, 0.006)),
+                        aim::CRADLE_ROPE,
+                    );
+                }
+
+                scene.push_material(
+                    ball_mesh,
+                    &Transform::at(hung).with_scale(Vec3::splat(cradle::BALL * 2.0)),
+                    aim::CRADLE_BALL,
+                    96.0,
+                );
+            }
+        }
+
+        // the benches, which hold the toys. Spec 0006.
+        for (n, bench) in self.room.benches.iter().enumerate() {
+            let lit = self.seen == Some(room::Seen::Bench(n));
+            let look = if lit { aim::BENCH_ON } else { aim::BENCH };
+
+            let top = Transform::at(bench.at + Vec3::Y * (room::BENCH.y - aim::BENCH_TOP * 0.5))
+                .with_scale(vec3(room::BENCH.x, aim::BENCH_TOP, room::BENCH.z));
+            match self.cabinet_grain {
+                Some(grain) => scene.push_textured(cube, grain, &top, look, aim::MATTE),
+                None => scene.push_colored(cube, &top, look),
+            }
+
+            // four legs, so it reads as something you stand at rather than a
+            // block on the floor
+            let inset = aim::BENCH_LEG * 1.6;
+            for along in [-1.0f32, 1.0] {
+                for across in [-1.0f32, 1.0] {
+                    let at = bench.at
+                        + vec3(
+                            along * (room::BENCH.x * 0.5 - inset),
+                            (room::BENCH.y - aim::BENCH_TOP) * 0.5,
+                            across * (room::BENCH.z * 0.5 - inset),
+                        );
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(at).with_scale(vec3(
+                            aim::BENCH_LEG,
+                            room::BENCH.y - aim::BENCH_TOP,
+                            aim::BENCH_LEG,
+                        )),
+                        aim::BENCH_LEG_LOOK,
+                    );
+                }
+            }
+        }
+
         for (n, one) in self.room.displays.iter().enumerate() {
             let Some(mesh) = self.shown.get(n).copied() else {
                 continue;

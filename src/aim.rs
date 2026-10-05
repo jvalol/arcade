@@ -134,6 +134,21 @@ pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
 /// plinths are lighter than both, because what stands on them is pale.
 pub const FLOOR: Vec4 = vec4(0.95, 0.95, 1.0, 1.0);
 pub const WALL: Vec4 = vec4(0.30, 0.22, 0.16, 1.0);
+/// The toy on the bench: its frame, its ropes and its balls. Spec 0006.
+pub const CRADLE_FRAME: Vec4 = vec4(0.20, 0.21, 0.25, 1.0);
+pub const CRADLE_ROPE: Vec4 = vec4(0.62, 0.60, 0.56, 1.0);
+pub const CRADLE_BALL: Vec4 = vec4(0.80, 0.82, 0.88, 1.0);
+
+/// A bench and its legs, and how thick its top is. Spec 0006.
+///
+/// Warmer than the cabinets, which are cool grey, because a bench is furniture
+/// you lean on rather than a machine you feed.
+pub const BENCH: Vec4 = vec4(0.46, 0.33, 0.24, 1.0);
+pub const BENCH_ON: Vec4 = vec4(0.72, 0.54, 0.34, 1.0);
+pub const BENCH_LEG_LOOK: Vec4 = vec4(0.24, 0.23, 0.26, 1.0);
+pub const BENCH_TOP: f32 = 0.09;
+pub const BENCH_LEG: f32 = 0.07;
+
 pub const PLINTH: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
 
 /// What the carpet is multiplied by, and the lid over the room.
