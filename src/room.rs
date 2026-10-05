@@ -42,6 +42,15 @@ pub const TALL: f32 = 3.2;
 /// rather than when you merely aim at it.
 pub const REACH: f32 = 4.0;
 
+/// Which way to turn a quad so its one face looks the way a cabinet does.
+pub fn turned_to(facing: Vec3) -> glam::Quat {
+    glam::Quat::from_rotation_y(if facing.x >= 0.0 {
+        0.0
+    } else {
+        std::f32::consts::PI
+    })
+}
+
 /// The screen itself: one quad facing +x, so the screenshot sits on it the way
 /// it was taken.
 ///
@@ -51,36 +60,41 @@ pub const REACH: f32 = 4.0;
 /// down is three lines and leaves nothing to find out.
 pub fn screen_mesh() -> MeshData {
     let normal = [1.0, 0.0, 0.0];
-    // u runs -z to +z. Worked out the other way round first, from which way
-    // the room's axes point, and the pictures came out mirrored: every
-    // screenshot has a window title bar in it and it was on the wrong side.
+    // u runs +z to -z, which is left to right for someone standing in front of
+    // this face, since the screen's right runs towards -z from there.
+    //
+    // Twice now this has been written down the other way round from reasoning
+    // about which way the room's axes point, and twice the pictures came out
+    // mirrored. The winding and the u direction decide it together, and the
+    // only reliable way to settle it is to draw a word and read it.
     let corners = [
-        ([0.0, 0.5, -0.5], [0.0, 0.0]),
-        ([0.0, 0.5, 0.5], [1.0, 0.0]),
-        ([0.0, -0.5, 0.5], [1.0, 1.0]),
-        ([0.0, -0.5, -0.5], [0.0, 1.0]),
+        ([0.0, 0.5, -0.5], [1.0, 0.0]),
+        ([0.0, 0.5, 0.5], [0.0, 0.0]),
+        ([0.0, -0.5, 0.5], [0.0, 1.0]),
+        ([0.0, -0.5, -0.5], [1.0, 1.0]),
     ];
 
-    // both ways round, because half the cabinets are turned to face the other
-    // side of the aisle and a one sided quad is an invisible screen on those.
+    // One face. It was two, so the half of the cabinets turned the other way
+    // down the aisle had something to show, and both faces carried the same u,
+    // which drew the picture left to right reversed on one side of the room.
     //
-    // The back face runs u the other way. Seen from behind, a quad is left to
-    // right reversed, so the same u on both faces draws the picture mirrored on
-    // one side of the aisle. Nothing could show that while the only thing on
-    // these quads was a screenshot: it took spec 0037 putting a game's name on
-    // the marquee, and half the room reading backwards.
-    let back = [-1.0, 0.0, 0.0];
-    let mut vertices: Vec<Vertex> = corners
+    // Giving the back face its own u fixed that and broke something quieter.
+    // A sign that reads the right way round from behind is not a sign, it is
+    // two signs back to back, and walking past a cabinet and reading its
+    // marquee through it is what that looks like.
+    //
+    // So: one face, and `turned_to` points it the way the cabinet faces. The
+    // opaque pass culls back faces, so from behind there is nothing, which is
+    // what the back of a sign looks like.
+    let vertices: Vec<Vertex> = corners
         .iter()
         .map(|(at, uv)| Vertex::new(*at, normal, *uv))
         .collect();
-    vertices.extend(
-        corners
-            .iter()
-            .map(|(at, uv)| Vertex::new(*at, back, [1.0 - uv[0], uv[1]])),
-    );
 
-    MeshData::new(vertices, vec![0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7])
+    // wound so the face is counter clockwise seen from +x, which is the side
+    // its normal points. The other winding is a back face and the opaque pass
+    // culls those, so the first one sided build of this drew nothing at all.
+    MeshData::new(vertices, vec![0, 1, 2, 0, 2, 3])
 }
 
 /// How far along a ray a box is first met, if it is. The slab test, which the
@@ -350,31 +364,52 @@ mod tests {
         );
     }
 
-    /// Spec 0004: the back of a screen is not a mirror of its front.
+    /// Spec 0004: a screen has one face, turned the way its cabinet faces.
     ///
-    /// Half the cabinets face the other way down the aisle and read the back
-    /// face of this quad. With the same u on both, the picture comes out left
-    /// to right reversed on one side, which nothing could show while the only
-    /// thing on these was a screenshot.
+    /// Two faces is two signs back to back: you walk past a cabinet and read
+    /// its marquee through it. One face and a turn is a sign, and the opaque
+    /// pass culls the back so there is nothing behind it.
     #[test]
-    fn the_back_of_a_screen_is_not_mirrored() {
+    fn a_screen_has_one_face() {
         let mesh = screen_mesh();
-        let (front, back) = mesh.vertices.split_at(4);
 
-        for (f, b) in front.iter().zip(back) {
+        assert_eq!(mesh.vertices.len(), 4, "a quad is four corners");
+
+        // and it is wound so that face is the one drawn. Seen from +x the
+        // screen's right runs towards -z, and a triangle has to come out
+        // counter clockwise there or the opaque pass culls it.
+        let corner = |n: usize| {
+            let at = mesh.vertices[mesh.indices[n] as usize].position;
+            glam::vec2(-at[2], at[1])
+        };
+        for triangle in [0usize, 3] {
+            let (a, b, c) = (corner(triangle), corner(triangle + 1), corner(triangle + 2));
+            let turning = (b - a).perp_dot(c - b);
+
+            assert!(
+                turning > 0.0,
+                "a triangle winds the wrong way and is culled: {}",
+                turning
+            );
+        }
+
+        for vertex in &mesh.vertices {
             assert_eq!(
-                f.position, b.position,
-                "the two faces are not the same quad"
+                vertex.normal,
+                [1.0, 0.0, 0.0],
+                "a corner faces the wrong way"
             );
+        }
+
+        // and turning it by a cabinet's facing points that face into the aisle
+        for facing in [vec3(1.0, 0.0, 0.0), vec3(-1.0, 0.0, 0.0)] {
+            let looks = turned_to(facing) * Vec3::X;
+
             assert!(
-                (f.uv[0] + b.uv[0] - 1.0).abs() < 1e-5,
-                "u is {} on the front and {} on the back, so one side is mirrored",
-                f.uv[0],
-                b.uv[0]
-            );
-            assert!(
-                (f.uv[1] - b.uv[1]).abs() < 1e-5,
-                "v differs between the faces"
+                looks.dot(facing) > 0.99,
+                "turned to {:?} the face looks {:?}",
+                facing,
+                looks
             );
         }
     }

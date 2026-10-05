@@ -122,7 +122,7 @@ it is the game's.
 - It turns about every axis, not only the upright. — `display::tests::it_turns_in_every_direction`
 - A tilt survives letting go. — `display::tests::a_tilted_one_goes_on_turning_tilted`
 - And a turned one still rests on its plinth. — `display::tests::a_turned_one_still_rests_on_its_plinth`
-- The back of a screen is not a mirror of its front. — `room::tests::the_back_of_a_screen_is_not_mirrored`
+- A screen has one face, turned the way its cabinet faces. — `room::tests::a_screen_has_one_face`
 - Turning moves the one in your hands and no other. — `display::tests::turning_moves_only_the_held_one`
 - Letting go carries on from where you left it. — `display::tests::it_carries_on_from_where_you_left_it`
 - Nothing can be turned while nothing is held. — `display::tests::turning_nothing_turns_nothing`

@@ -531,7 +531,9 @@ impl Game for Arcade {
                 + Vec3::Y * room::CABINET.y * aim::NEON_UP
                 + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK);
             let span = room::CABINET.z * aim::SIGN_SPAN;
-            let placed = Transform::at(marquee).with_scale(vec3(0.02, aim::SIGN_TALL, span));
+            let placed = Transform::at(marquee)
+                .with_rotation(room::turned_to(stood.facing))
+                .with_scale(vec3(0.02, aim::SIGN_TALL, span));
 
             match self.signs.get(n).copied() {
                 Some(sign) => {
@@ -547,8 +549,9 @@ impl Game for Arcade {
             // thin along the way the cabinet looks, and landscape across it, so
             // the screenshot is the shape it was taken at
             let wide = room::CABINET.z * room::SCREEN;
-            let placed =
-                Transform::at(screen).with_scale(vec3(0.05, wide * room::SCREEN_SHAPE, wide));
+            let placed = Transform::at(screen)
+                .with_rotation(room::turned_to(stood.facing))
+                .with_scale(vec3(0.05, wide * room::SCREEN_SHAPE, wide));
 
             match self.art.get(n).copied().flatten() {
                 Some(art) => scene.push_textured(screen_mesh, art, &placed, look.screen, 32.0),
