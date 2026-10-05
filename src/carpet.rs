@@ -1,4 +1,5 @@
-//! The carpet, woven here rather than loaded. Spec 0005.
+//! What the room's surfaces are made of, woven here rather than loaded.
+//! Spec 0005.
 //!
 //! The room was thirteen flat boxes in a flat corridor, and no amount of
 //! colouring them fixed that: a box is a box at any hue. Every surface was one
@@ -128,6 +129,45 @@ pub fn woven() -> TextureData {
     TextureData::from_pixels(WOVEN, WOVEN, pixels)
 }
 
+/// A surface with something on it rather than nothing: a base colour with a
+/// fine speck through it.
+///
+/// Not a pattern, a texture. The walls and the cabinets are big flat faces and
+/// what they need is for the eye to find something when it lands, not another
+/// thing to look at. Deliberately quiet: the carpet is the loud one and the
+/// marquees are the bright one.
+///
+/// Non directional on purpose. `MeshData::cube` carries its uvs whichever way
+/// round each face pleases, which is why the screens are their own quad, so a
+/// speck is safe on a cube where a stripe would come out sideways on half of
+/// it.
+pub fn mottled(seed: u32, base: [u8; 3], depth: i32) -> TextureData {
+    let mut pixels = Vec::with_capacity((MOTTLE * MOTTLE * 4) as usize);
+
+    for n in 0..MOTTLE * MOTTLE {
+        let roll = from(n ^ seed.wrapping_mul(0x27D4_EB2D));
+        // two rolls at different scales, so it is grain rather than static
+        let fine = (roll % 256) as i32 - 128;
+        let broad = (from(n / MOTTLE * 31 + n % MOTTLE / 7) % 256) as i32 - 128;
+        let shift = (fine * depth / 400) + (broad * depth / 260);
+
+        for channel in base {
+            pixels.push((channel as i32 + shift).clamp(0, 255) as u8);
+        }
+        pixels.push(255);
+    }
+
+    TextureData::from_pixels(MOTTLE, MOTTLE, pixels)
+}
+
+/// How many texels across a mottled tile is, and how many times it repeats.
+pub const MOTTLE: u32 = 128;
+
+/// The seeds the room's two mottled surfaces are made with, so neither is the
+/// other's pattern at a different colour.
+pub const WALL_SEED: u32 = 0x5EED_0001;
+pub const CABINET_SEED: u32 = 0x5EED_0002;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +230,52 @@ mod tests {
     #[test]
     fn it_is_woven_the_same_every_time() {
         assert_eq!(woven().levels[0], woven().levels[0]);
+    }
+
+    /// Spec 0005: a mottled surface has grain in it and stays near its base.
+    ///
+    /// The point is for the eye to find something when it lands on a wall, not
+    /// for the wall to become a thing to look at.
+    #[test]
+    fn a_mottle_is_quiet_but_not_nothing() {
+        let base = [60u8, 40, 30];
+        let wall = mottled(WALL_SEED, base, 40);
+        let level = &wall.levels[0];
+
+        let mut lowest = 255i32;
+        let mut highest = 0i32;
+        let mut flat = true;
+        for texel in level.pixels.chunks_exact(4) {
+            lowest = lowest.min(texel[0] as i32);
+            highest = highest.max(texel[0] as i32);
+            if texel[0] != base[0] {
+                flat = false;
+            }
+        }
+
+        assert!(!flat, "every texel is the base, which is a flat colour");
+        assert!(
+            highest - lowest > 8,
+            "it only varies by {}, which nothing will see",
+            highest - lowest
+        );
+        assert!(
+            highest - lowest < 120,
+            "it varies by {}, which is a pattern rather than a grain",
+            highest - lowest
+        );
+    }
+
+    /// Spec 0005: and the two mottled surfaces are not the same grain.
+    #[test]
+    fn the_wall_and_the_cabinet_differ() {
+        let base = [60u8, 40, 30];
+
+        assert_ne!(
+            mottled(WALL_SEED, base, 40).levels[0],
+            mottled(CABINET_SEED, base, 40).levels[0],
+            "the cabinets wear the wall's own grain"
+        );
     }
 
     /// Spec 0005: and it is the shape the texture wants.

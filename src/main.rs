@@ -59,6 +59,9 @@ struct Arcade {
     floor: Option<MeshId>,
     /// The carpet, and the ceiling that stops the room opening onto nothing.
     carpet: Option<TextureId>,
+    /// The grain on the walls and on the cabinets, so neither is a flat face.
+    wall_grain: Option<TextureId>,
+    cabinet_grain: Option<TextureId>,
     ceiling_mesh: Option<MeshId>,
     screen: Option<MeshId>,
     /// The engine's own shapes, turning at the end of the room. Spec 0002.
@@ -101,6 +104,8 @@ impl Arcade {
             cube: None,
             floor: None,
             carpet: None,
+            wall_grain: None,
+            cabinet_grain: None,
             ceiling_mesh: None,
             screen: None,
             shown: Vec::new(),
@@ -231,6 +236,10 @@ impl Game for Arcade {
         self.floor = Some(renderer.add_mesh(&room::tiled_floor(carpet::TILES)));
         self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
         self.carpet = Some(renderer.add_texture(&carpet::woven()));
+        self.wall_grain =
+            Some(renderer.add_texture(&carpet::mottled(carpet::WALL_SEED, [220, 220, 220], 34)));
+        self.cabinet_grain =
+            Some(renderer.add_texture(&carpet::mottled(carpet::CABINET_SEED, [228, 228, 228], 22)));
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
         self.shown = display::meshes()
             .iter()
@@ -469,11 +478,12 @@ impl Game for Arcade {
         }
 
         for wall in self.room.walls.iter() {
-            scene.push_colored(
-                cube,
-                &Transform::at(wall.center()).with_scale(wall.size()),
-                aim::WALL,
-            );
+            let stood = Transform::at(wall.center()).with_scale(wall.size());
+
+            match self.wall_grain {
+                Some(grain) => scene.push_textured(cube, grain, &stood, aim::WALL, aim::MATTE),
+                None => scene.push_colored(cube, &stood, aim::WALL),
+            }
         }
 
         // the engine's own shapes, turning at the end of the room
@@ -540,12 +550,13 @@ impl Game for Arcade {
         for (n, stood) in self.room.stood.iter().enumerate() {
             let look = aim::look_of(stood.cabinet.is_built(), at == Some(n));
 
-            scene.push_colored(
-                cube,
-                &Transform::at(stood.at + Vec3::Y * room::CABINET.y * 0.5)
-                    .with_scale(room::CABINET),
-                look.body,
-            );
+            let box_ =
+                Transform::at(stood.at + Vec3::Y * room::CABINET.y * 0.5).with_scale(room::CABINET);
+
+            match self.cabinet_grain {
+                Some(grain) => scene.push_textured(cube, grain, &box_, look.body, aim::MATTE),
+                None => scene.push_colored(cube, &box_, look.body),
+            }
 
             // the marquee: the game's name lit across the top of its front, in
             // its own game's colour. The one thing in here that is lit from
