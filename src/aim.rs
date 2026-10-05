@@ -170,6 +170,14 @@ pub const FLYWHEEL: Vec4 = vec4(0.72, 0.60, 0.30, 1.0);
 pub const STUD: Vec4 = vec4(1.7, 0.9, 0.5, 1.0);
 pub const GIMBAL: Vec4 = vec4(0.78, 0.79, 0.84, 1.0);
 
+/// The globe: its stand and the meridian ring round it. Spec 0006.
+///
+/// Brass, because that is what they are made of, and because the nook is
+/// otherwise steel and dark wood and the globe is the one thing in it that is
+/// meant to be looked at rather than worked.
+pub const GLOBE_STAND: Vec4 = vec4(0.62, 0.48, 0.22, 1.0);
+pub const GLOBE_RING: Vec4 = vec4(0.78, 0.62, 0.30, 1.0);
+
 /// The ball and chain: the gantry it hangs from, the chain, the ball, the brick
 /// and the tray it all stands in. Spec 0006.
 ///

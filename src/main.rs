@@ -5,6 +5,7 @@ mod cabinet;
 mod carpet;
 mod cradle;
 mod display;
+mod globe;
 mod gyro;
 mod metronome;
 mod room;
@@ -99,6 +100,10 @@ struct Arcade {
     wrecker: wrecker::Wrecker,
     gyro: gyro::Gyro,
     wheel_mesh: Option<MeshId>,
+    globe: globe::Globe,
+    /// A sphere fine enough to be a globe, and the world drawn on it.
+    globe_mesh: Option<MeshId>,
+    world: Option<TextureId>,
     since: f32,
 
     /// What the sight is on, per spec 0003. Worked out once in `update` and
@@ -157,6 +162,9 @@ impl Arcade {
             wrecker: wrecker::Wrecker::new(),
             gyro: gyro::Gyro::new(),
             wheel_mesh: None,
+            globe: globe::Globe::new(),
+            globe_mesh: None,
+            world: None,
             since: 0.0,
             seen: None,
             window: (800.0, 600.0),
@@ -198,6 +206,8 @@ impl Arcade {
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
                 metronome::NAME => self.metronome.press(),
                 gyro::NAME => self.gyro.press(),
+                // a hand on the ball, which is the other thing you do to one
+                globe::NAME => self.globe.spin = 0.0,
                 wrecker::NAME => self.wrecker.rebuild_wall(),
                 _ => cradle::set_going(&mut self.cradle, 0),
             },
@@ -233,6 +243,16 @@ impl Arcade {
                     // up the needle is slower, which is the thing the toy is for
                     let by = if input.key == KeyboardKey::Up { 1 } else { -1 };
                     self.metronome.slide(by);
+                }
+            }
+            globe::NAME if arrow => {
+                if !input.repeat {
+                    let way = if input.key == KeyboardKey::Left {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+                    self.globe.flick(way);
                 }
             }
             gyro::NAME if arrow => {
@@ -299,6 +319,13 @@ impl Arcade {
                     metronome::beats(self.metronome.notch)
                 ),
             },
+            globe::NAME => {
+                if self.globe.going() {
+                    String::from("Spinning. Arrows spin it faster, enter stops it.")
+                } else {
+                    String::from("Left and right arrows spin it.")
+                }
+            }
             gyro::NAME => {
                 let dial = format!("Spin {} of {}", self.gyro.notch + 1, gyro::SPINS);
                 if !self.gyro.going {
@@ -443,6 +470,10 @@ impl Game for Arcade {
         self.screen = Some(renderer.add_mesh(&room::screen_mesh()));
         self.ball_mesh = Some(renderer.add_mesh(&MeshData::sphere(18, 12)));
         self.wheel_mesh = Some(renderer.add_mesh(&gyro::wheel_mesh(28)));
+        // finer than the room's other sphere, because this one is read rather
+        // than glanced at: a coastline on a twelve ring ball is a staircase
+        self.globe_mesh = Some(renderer.add_mesh(&MeshData::sphere(72, 36)));
+        self.world = Some(renderer.add_texture(&globe::drawn()));
 
         self.shown = display::meshes()
             .iter()
@@ -531,6 +562,7 @@ impl Game for Arcade {
             Vec3::ZERO
         };
         self.gyro.advance(dt);
+        self.globe.advance(dt);
 
         let mut wish = Vec3::ZERO;
         let right = self.forward().cross(Vec3::Y);
@@ -1025,6 +1057,64 @@ impl Game for Arcade {
                         aim::GIMBAL,
                     );
                 }
+            }
+        }
+
+        // the globe on its bench. Spec 0006.
+        if let (Some(globe_mesh), Some(world), Some(bench)) = (
+            self.globe_mesh,
+            self.world,
+            self.room
+                .benches
+                .iter()
+                .find(|bench| bench.name == globe::NAME),
+        ) {
+            let top = bench.at + Vec3::Y * bench.size.y;
+            let middle = top + Vec3::Y * globe::HIGH;
+
+            // the lean, which is the Earth's own and is the whole reason a globe
+            // is not upright. The ball turns about its own axis inside it.
+            let leant = glam::Quat::from_rotation_z(globe::TILT.to_radians());
+            scene.push_textured(
+                globe_mesh,
+                world,
+                &Transform::at(middle)
+                    .with_rotation(leant * glam::Quat::from_rotation_y(self.globe.turned))
+                    .with_scale(Vec3::splat(globe::RADIUS * 2.0)),
+                vec4(1.0, 1.0, 1.0, 1.0),
+                aim::MATTE,
+            );
+
+            // the meridian ring: a circle in a plane holding the axis, so it
+            // passes over both poles, and leaning with it
+            let round = std::f32::consts::TAU / globe::RING_PIECES as f32;
+            let out = globe::RADIUS + globe::RING_OUT;
+            let chord = 2.0 * out * (round * 0.5).sin() * 1.1;
+            for piece in 0..globe::RING_PIECES {
+                let turn = piece as f32 * round;
+                let (sin, cos) = turn.sin_cos();
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(middle + leant * (vec3(0.0, cos, sin) * out))
+                        .with_rotation(leant * glam::Quat::from_rotation_x(turn))
+                        .with_scale(vec3(globe::RING * 1.6, globe::RING, chord)),
+                    aim::GLOBE_RING,
+                );
+            }
+
+            // and the stand under it, up to where the ring comes down
+            let under = globe::HIGH - out;
+            for (up, tall, wide) in [
+                (under * 0.5, under, globe::STAND),
+                (0.014, 0.028, globe::STAND * 3.4),
+                (0.005, 0.01, globe::STAND * 5.2),
+            ] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + Vec3::Y * up).with_scale(vec3(wide, tall, wide)),
+                    aim::GLOBE_STAND,
+                );
             }
         }
 

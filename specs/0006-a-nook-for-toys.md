@@ -51,8 +51,8 @@ the room and it was in front of the far wall from every angle, which is the one
 place nothing should stand. A bench is solid, like a cabinet, so you cannot walk
 through one.
 
-Four of them, in the order you meet them coming through the way in: the ball and
-chain, the gyroscope, the Newton's cradle, the metronome.
+Five of them, in the order you meet them coming through the way in: the ball and
+chain, the gyroscope, the Newton's cradle, the metronome, the globe.
 
 ### The arcade runs physics
 
@@ -312,6 +312,42 @@ into whatever lever the block has. Used that way the walk came out seventeen
 times too slow, and the error was invisible, because any torque across the axis
 sends a gyroscope sideways and sideways was what we were looking for.
 
+### The globe
+
+The kind that stands in an office: a tilted sphere in a brass meridian ring, on
+a stand, that you spin with a finger and watch run down.
+
+**It is the one thing on a bench with no solver in it**, and that is not
+laziness. A sphere resists turning the same way about every axis, so there is
+nothing for a solver to find out: the whole of its motion is one angle and one
+rate, and the engine's own `turn` short circuits a sphere for exactly that
+reason. What this one is for is the other two things the engine does, which are
+wrapping a picture on a surface and lighting it.
+
+It leans 23.44 degrees, which is the Earth's own lean and is why every office
+globe in the world leans. The same number draws the two tropics, at 23.44 out
+from the middle, and the two polar circles, at 23.44 short of the poles.
+
+**The map is the only thing in this project that came from somewhere else.**
+Natural Earth's 1:110 million land, which its makers put in the public domain,
+cut down from their GeoJSON to 127 rings of longitude and latitude in
+`data/land.txt`. Five thousand numbers nobody here can justify one at a time:
+they are where the land is. Everything else about the picture is drawn here, the
+sea, the fill, the coast, the grid and the named circles, into an equirectangular
+texture 2048 by 1024, which is the layout the engine's own sphere is already
+wrapped for.
+
+Rings and not coastlines. Coastlines were taken first and drawn as lines, and a
+coastline set gives a blue ball with faint scratches on it. Rings can be filled.
+
+There is one test on it worth naming. **The world has to be where it says it
+is**: the test names the Congo, the Amazon, Mongolia, the middle of Australia,
+Colorado and Antarctica and asks the map what is drawn there, and then does the
+same for five stretches of open sea. Twice this project has laid a picture on a
+surface the wrong way round and found out by reading a word off it. A globe has
+no word on it, and a mirrored Earth, or one a quarter turn out, looks like an
+Earth.
+
 ### The metronome
 
 An arm pivoted near its foot, with a heavy bob just below the pivot and a lighter
@@ -424,6 +460,11 @@ nothing, because a pull is a press and not forty a second.
 - The outer frame stays on its pedestal. — `gyro::tests::the_frame_stays_on_its_pedestal`
 - The rotor turns slowly enough to be read as turning. — `gyro::tests::the_rotor_can_be_seen_turning`
 - The drawn rotor is a closed disc, wound to be seen. — `gyro::tests::the_rotor_is_a_closed_disc`
+- The world is where it says it is. — `globe::tests::the_world_is_where_it_says_it_is`
+- The map is the shape a wrapped sphere wants. — `globe::tests::the_map_is_two_to_one`
+- The circles with names are the lean and nothing else. — `globe::tests::the_named_circles_are_the_lean`
+- The land is all there, and every ring closes. — `globe::tests::the_land_is_all_there`
+- Flicked, it spins and runs down. — `globe::tests::it_runs_down`
 
 ### Verified by hand
 
@@ -432,6 +473,7 @@ nothing, because a pull is a press and not forty a second.
 - The metronome's lit notch is where the weight is, read from across the nook.
 - Four pulls on the ball and most of the wall is down.
 - Leaning on the gyroscope and watching the axis go the other way.
+- Finding where you live on the globe.
 - And stopping it and leaning on it again, which sends it tumbling.
 - The chain reads as a chain. The beads are half a bead apart, so the links
   between them are drawn as well, or it is a dotted line.
