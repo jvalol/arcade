@@ -4,6 +4,7 @@
 //! you are at are arithmetic, so all of it can be checked without a window.
 
 use crate::cabinet::Cabinet;
+use crate::cellar;
 use blitzkit::collision::Aabb;
 use blitzkit::mesh::{MeshData, Vertex};
 use glam::{vec3, Vec3};
@@ -300,7 +301,7 @@ pub fn benches(far: f32) -> Vec<Benched> {
     let (door, shut) = (far + NOOK_DOOR, far + NOOK_SPAN);
     let mut z = (door + shut) * 0.5 - row * 0.5;
 
-    ON_THEM
+    let mut out: Vec<Benched> = ON_THEM
         .iter()
         .map(|(name, long)| {
             let at = vec3(wall - BENCH_WIDE * 0.5, 0.0, z + long * 0.5);
@@ -314,7 +315,13 @@ pub fn benches(far: f32) -> Vec<Benched> {
                 worked_from: -Vec3::X,
             }
         })
-        .collect()
+        .collect();
+
+    // and the pool table down in the cellar, which is a bench in every way that
+    // matters: a thing you walk up to, point at, and press a key at. Spec 0007.
+    out.push(cellar::table(-far));
+
+    out
 }
 
 impl Benched {
@@ -460,6 +467,8 @@ pub enum Seen {
     Cabinet(usize),
     Display(usize),
     Bench(usize),
+    /// The one case that is a door. Spec 0007.
+    Case,
 }
 
 pub struct Room {
@@ -469,8 +478,22 @@ pub struct Room {
     pub displays: Vec<crate::display::Display>,
     /// The benches in front of that wall, per spec 0006.
     pub benches: Vec<Benched>,
-    /// The bookcases round them, which hold nothing up and do nothing.
+    /// The bookcases round them, which hold nothing up and do nothing. One of
+    /// them does one thing. Spec 0007.
     pub bookcases: Vec<Shelved>,
+    /// Whether the case over the way down is swung open.
+    ///
+    /// The first thing in this room that is ever one way or the other. Spec
+    /// 0001 made `solid` a list worked out from the cabinets and never changed
+    /// again, which is what let every test about getting about read it as a
+    /// fact. It is a fact about a state now, and the tests that flood the floor
+    /// have to say which state they mean.
+    pub open: bool,
+    /// How far it actually is, nought shut and one open, which follows `open`
+    /// rather than being it. The box follows this too: a door drawn halfway
+    /// open that stops you where it was shut is a worse thing than one that
+    /// snaps.
+    pub swing: f32,
     pub walls: Vec<Aabb>,
     /// How far the room reaches from its middle, worked out from how many
     /// cabinets there are.
@@ -478,6 +501,14 @@ pub struct Room {
 }
 
 impl Room {
+    /// How long a leaf takes to swing, in seconds.
+    ///
+    /// Slow. It is a bookcase on a hinge with four hundred books in it, and the
+    /// whole of what makes a secret door worth having is the moment between
+    /// pulling the book and seeing what is behind it. Snapped from shut to open
+    /// in a frame, there is no moment.
+    pub const SWINGS_IN: f32 = 1.3;
+
     /// Lays the cabinets down two facing rows, like a real one, and puts a wall
     /// behind each row and across each end.
     pub fn of(cabinets: Vec<Cabinet>) -> Self {
@@ -503,6 +534,8 @@ impl Room {
 
         let thick = THICK;
         let side = WALL + CABINET.x;
+        // where the way down is, which is where one of the bookcases stands
+        let hole = cellar::opening(reaches);
         // where the way in ends, and the nook's other end
         let door = -reaches + NOOK_DOOR;
         let shut = -reaches + NOOK_SPAN;
@@ -520,10 +553,34 @@ impl Room {
                 vec3(-side, TALL * 0.5, (reaches + door) * 0.5),
                 vec3(thick, TALL, reaches - door),
             ),
-            // the nook: its back, and the end that is not the way in
+            // the nook's back, in three pieces round the way down. Spec 0007:
+            // one of the bookcases along it swings, and behind it the wall is
+            // not there. A wall with a bookcase sized hole in it is still a
+            // wall from the room, because a bookcase is standing in the hole.
             Aabb::from_center_size(
-                vec3(-side - NOOK_DEEP, TALL * 0.5, -reaches + NOOK_SPAN * 0.5),
-                vec3(thick, TALL, NOOK_SPAN),
+                vec3(
+                    -side - NOOK_DEEP,
+                    TALL * 0.5,
+                    (-reaches + hole - cellar::WIDE * 0.5) * 0.5,
+                ),
+                vec3(thick, TALL, hole - cellar::WIDE * 0.5 + reaches),
+            ),
+            Aabb::from_center_size(
+                vec3(
+                    -side - NOOK_DEEP,
+                    TALL * 0.5,
+                    (hole + cellar::WIDE * 0.5 - reaches + NOOK_SPAN) * 0.5,
+                ),
+                vec3(
+                    thick,
+                    TALL,
+                    -reaches + NOOK_SPAN - hole - cellar::WIDE * 0.5,
+                ),
+            ),
+            // and the lintel over it
+            Aabb::from_center_size(
+                vec3(-side - NOOK_DEEP, (cellar::HIGH + TALL) * 0.5, hole),
+                vec3(thick, TALL - cellar::HIGH, cellar::WIDE),
             ),
             Aabb::from_center_size(
                 vec3(-side - NOOK_DEEP * 0.5, TALL * 0.5, shut),
@@ -551,7 +608,29 @@ impl Room {
             bookcases,
             walls,
             reaches,
+            open: false,
+            swing: 0.0,
         }
+    }
+
+    /// The floor, which until spec 0007 was not a thing at all.
+    ///
+    /// It did not need to be. Nothing pulled you down, so the floor was the
+    /// plane your feet were assumed to be on and the room was boxes standing on
+    /// an idea. A stair is the first thing in the building at a height, and the
+    /// moment there is a down there has to be something stopping you at the
+    /// bottom of it.
+    ///
+    /// Its top is at nought, which is where everything else in the room already
+    /// sits.
+    pub fn floor(&self) -> Aabb {
+        let side = WALL + CABINET.x;
+        let across = side * 2.0 + NOOK_DEEP;
+
+        Aabb::from_center_size(
+            vec3(-NOOK_DEEP * 0.5, -THICK * 0.5, 0.0),
+            vec3(across, THICK, self.reaches * 2.0),
+        )
     }
 
     /// The box a bench fills, which is what you cannot walk through and what
@@ -567,6 +646,88 @@ impl Room {
         let (at, size) = crate::display::plinth_under(one);
 
         Aabb::from_center_size(at, size)
+    }
+
+    /// The two leaves as they stand right now, each as its middle, its turn and
+    /// its half extents. The only things in the building that move.
+    ///
+    /// Turned rather than as the box they fill, because which way is out of a
+    /// shelf is a question in the shelf's own frame. On the room's axes a leaf
+    /// at forty five degrees fills a box half as big again as it is.
+    pub fn leaves(&self) -> Vec<(Vec3, glam::Quat, Vec3)> {
+        let case = crate::study::CASE;
+
+        self.bookcases
+            .iter()
+            .enumerate()
+            .filter(|(n, _)| cellar::swings(*n))
+            .map(|(n, shelved)| {
+                let (at, turn) = Self::swung(shelved, self.swings_out(n), self.swing);
+
+                (
+                    at + Vec3::Y * case.z * 0.5,
+                    turn,
+                    vec3(case.y * 0.5, case.z * 0.5, case.x * 0.5),
+                )
+            })
+            .collect()
+    }
+
+    /// Lets the door catch up with itself.
+    pub fn ease(&mut self, dt: f32) {
+        let to = if self.open { 1.0 } else { 0.0 };
+        let by = dt / Self::SWINGS_IN;
+
+        self.swing += (to - self.swing).clamp(-by, by);
+    }
+
+    /// Where a leaf stands and how it is turned, part way through its swing.
+    ///
+    /// Hinged on its own outer end, so the two of them open away from each
+    /// other and the way down is between them rather than behind one of them.
+    pub fn swung(shelved: &Shelved, out: f32, swing: f32) -> (Vec3, glam::Quat) {
+        let case = crate::study::CASE;
+        let turn = glam::Quat::from_rotation_y(-out * swing * std::f32::consts::FRAC_PI_2);
+        let hinge = vec3(
+            shelved.at.x,
+            shelved.at.y,
+            shelved.at.z + out * case.x * 0.5,
+        );
+
+        (hinge + turn * (shelved.at - hinge), turn)
+    }
+
+    /// The box a leaf fills part way through its swing, which at nought is the
+    /// box it fills standing still.
+    pub fn swung_box(shelved: &Shelved, out: f32, swing: f32) -> Aabb {
+        let case = crate::study::CASE;
+        let (at, turn) = Self::swung(shelved, out, swing);
+        let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+
+        for across in [-1.0f32, 1.0] {
+            for along in [-1.0f32, 1.0] {
+                let corner = at + turn * vec3(across * case.y * 0.5, 0.0, along * case.x * 0.5);
+                lo = lo.min(corner);
+                hi = hi.max(corner);
+            }
+        }
+
+        Aabb::from_center_size(
+            vec3((lo.x + hi.x) * 0.5, case.z * 0.5, (lo.z + hi.z) * 0.5),
+            vec3(hi.x - lo.x, case.z, hi.z - lo.z),
+        )
+    }
+
+    /// Which way a leaf swings: away from the middle of the opening, so the two
+    /// of them open outwards and leave the way down between them.
+    pub fn swings_out(&self, n: usize) -> f32 {
+        let middle = cellar::CASE as f32 + (cellar::CASES as f32 - 1.0) * 0.5;
+
+        if (n as f32) < middle {
+            -1.0
+        } else {
+            1.0
+        }
     }
 
     /// The box a bookcase fills, turned to face the way it does.
@@ -589,6 +750,8 @@ impl Room {
     /// which is a thing the room says you may pick up and turn.
     pub fn solid(&self) -> Vec<Aabb> {
         let mut out = self.walls.clone();
+        out.push(self.floor());
+        out.extend(crate::cellar::solid(self.reaches));
         out.extend(
             self.stood
                 .iter()
@@ -596,7 +759,13 @@ impl Room {
         );
         out.extend(self.benches.iter().map(Self::bench_box));
         out.extend(self.displays.iter().map(Self::plinth_box));
-        out.extend(self.bookcases.iter().map(Self::bookcase_box));
+        out.extend(self.bookcases.iter().enumerate().map(|(n, case)| {
+            if cellar::swings(n) {
+                Self::swung_box(case, self.swings_out(n), self.swing)
+            } else {
+                Self::bookcase_box(case)
+            }
+        }));
 
         out
     }
@@ -634,9 +803,26 @@ impl Room {
             slab(from, way, &Self::bench_box(one)).map(|far| (Seen::Bench(n), far))
         });
 
+        // and the one book that is not a book, which is a case sized thing
+        // because the book is the handle and the case is the door. Pointing at
+        // a single spine on a shelf of four hundred is a thing nobody would
+        // ever find; pointing at the case it is in is a thing you can.
+        let case = self
+            .bookcases
+            .iter()
+            .enumerate()
+            .filter(|(n, _)| cellar::swings(*n))
+            .filter_map(|(n, shelved)| {
+                let box_ = Self::swung_box(shelved, self.swings_out(n), self.swing);
+
+                slab(from, way, &box_).map(|far| (Seen::Case, far))
+            })
+            .min_by(|one, other| one.1.total_cmp(&other.1));
+
         cabinets
             .chain(shapes)
             .chain(benches)
+            .chain(case)
             .filter(|(_, far)| *far <= REACH)
             .min_by(|one, other| one.1.total_cmp(&other.1))
             .map(|(what, _)| what)
@@ -898,9 +1084,17 @@ mod tests {
 
         let room = Room::of(some(12));
         let solid = room.solid();
+        // the walls, the floor, the way down, the cabinets, the benches, the
+        // plinths and the bookcases
         assert_eq!(
             solid.len(),
-            room.walls.len() + 12 + room.benches.len() + room.displays.len() + room.bookcases.len()
+            room.walls.len()
+                + 1
+                + cellar::solid(room.reaches).len()
+                + 12
+                + room.benches.len()
+                + room.displays.len()
+                + room.bookcases.len()
         );
 
         // straight at the first cabinet from the middle of the room
@@ -951,7 +1145,10 @@ mod tests {
         let wide = ((WALL + CABINET.x) * 2.0 + NOOK_DEEP) / GRID;
         let long = room.reaches * 2.0 / GRID;
         let (wide, long) = (wide as usize + 1, long as usize + 1);
-        let cell = |x: usize, z: usize| low + vec3(x as f32 * GRID, radius, z as f32 * GRID);
+        // a hair over the floor rather than exactly on it. The floor is solid
+        // now, and a sphere whose middle is exactly a radius above it is
+        // touching it, which `clear_of` reads as standing inside something.
+        let cell = |x: usize, z: usize| low + vec3(x as f32 * GRID, radius + 0.01, z as f32 * GRID);
 
         let start = room.doorway();
         let from = (
@@ -998,7 +1195,11 @@ mod tests {
         let room = Room::of(some(13));
         let reaches = walkable(&room);
 
-        for bench in &room.benches {
+        // the nook's own row. The flood is a grid at one height and the cellar
+        // is at another, so the one down there is not a thing this can answer.
+        // Getting to that one is `the_case_is_a_door` and
+        // `you_can_get_back_up_the_stair`, which walk it rather than flooding.
+        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
             // the floor in front of it, on the side you stand to work it
             let at = bench.at + bench.worked_from * (bench.size.x * 0.5 + crate::RADIUS + 0.1);
 
@@ -1078,7 +1279,8 @@ mod tests {
         let room = Room::of(some(13));
         let door = -room.reaches + NOOK_DOOR;
 
-        for bench in &room.benches {
+        // the nook's own row. The one in the cellar is under all of this.
+        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
             assert!(
                 Room::bench_box(bench).min.z > door,
                 "the {} is in the way in: it starts at {} and the way in ends at {}",
@@ -1094,7 +1296,7 @@ mod tests {
     fn a_bench_knows_which_way_your_right_hand_is() {
         let room = Room::of(some(13));
 
-        for bench in &room.benches {
+        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
             // you stand on the side the rest of the room is, which is the side
             // the books are, so away from you is into the wall behind the bench
             assert!(
@@ -1148,6 +1350,245 @@ mod tests {
         );
     }
 
+    /// Spec 0007: nothing down the way down is inside the room above it.
+    ///
+    /// Two surfaces in the same place fight for the same pixels and come out as
+    /// a rectangle of the wrong colour with stippled edges. The stair's own
+    /// soffit started at the back wall's inner face, which is a third of a unit
+    /// inside the wall, and hung a grey patch over the books.
+    #[test]
+    fn the_way_down_keeps_out_of_the_room() {
+        let room = Room::of(some(13));
+
+        for (n, box_) in cellar::solid(room.reaches).iter().enumerate() {
+            for wall in &room.walls {
+                assert!(
+                    !overlapping(box_, wall),
+                    "box {} of the way down is inside a wall: {:?} in {:?}",
+                    n,
+                    box_,
+                    wall
+                );
+            }
+
+            for case in &room.bookcases {
+                assert!(
+                    !overlapping(box_, &Room::bookcase_box(case)),
+                    "box {} of the way down is inside the bookcase at {}",
+                    n,
+                    case.at.z
+                );
+            }
+        }
+    }
+
+    /// Spec 0007: shut, the way down is not there; open, it is.
+    ///
+    /// Walked rather than flooded. The flood is a grid at one height and this
+    /// is the first thing in the building at two, so the only honest question
+    /// is whether somebody walking at it gets down.
+    #[test]
+    fn the_case_is_a_door() {
+        let mut room = Room::of(some(13));
+        let from = vec3(
+            cellar::back() + crate::RADIUS + 0.4,
+            0.0,
+            cellar::opening(room.reaches),
+        );
+
+        let walked = |room: &Room, frames: usize, off: f32| {
+            let solid = room.solid();
+            let (mut at, mut falling) = (from + Vec3::Z * off, 0.0);
+
+            for _ in 0..frames {
+                let (next, fell) = crate::walk::walk(
+                    at,
+                    Vec3::NEG_X * 4.2,
+                    falling,
+                    crate::RADIUS,
+                    1.0 / 60.0,
+                    &solid,
+                );
+                at = next;
+                falling = fell;
+            }
+
+            at
+        };
+
+        // shut, there is a bookcase in the way and the floor stays flat
+        let stopped = walked(&room, 120, 0.0);
+        assert!(
+            stopped.y.abs() < 1e-3,
+            "the way down is open with the case shut: you got to {}",
+            stopped.y
+        );
+        assert!(
+            stopped.x > cellar::back() - 0.1,
+            "you walked through the bookcase to {}",
+            stopped.x
+        );
+
+        // and open, it goes down. Off the middle as well as along it, which is
+        // the part that was worth testing and was not tested: the way down was
+        // one case wide, 1.1 against a body 0.9 across, and held at that for the
+        // nine units it takes to get to the bottom. Walked exactly down the
+        // centre line it fits, so this passed, and nobody walks exactly down the
+        // centre line of anything.
+        room.open = true;
+
+        // and it takes its time about it, which is most of the point of a
+        // secret door: the moment between pulling the book and seeing what is
+        // behind it
+        let mut frames = 0;
+        while room.swing < 1.0 && frames < 600 {
+            room.ease(1.0 / 60.0);
+            frames += 1;
+        }
+        assert!(
+            (frames as f32 / 60.0 - Room::SWINGS_IN).abs() < 0.05,
+            "it took {} seconds to open and should take {}",
+            frames as f32 / 60.0,
+            Room::SWINGS_IN
+        );
+
+        // out to where the passage itself runs out, which is what it is for
+        let edge = cellar::PASSAGE * 0.5 - crate::RADIUS - 0.05;
+        assert!(edge > 0.3, "a passage with {} of room is not one", edge);
+
+        for off in [0.0, 0.3, -0.3, edge, -edge] {
+            let down = walked(&room, 420, off);
+
+            assert!(
+                (down.y + cellar::DOWN).abs() < 0.05,
+                "{} off the middle you got to {}, not {}",
+                off,
+                down.y,
+                -cellar::DOWN
+            );
+        }
+    }
+
+    /// Spec 0007: and you can get back up it, facing either way.
+    ///
+    /// Up and down are the same code and there is nothing in it that knows
+    /// which way you are going, so this ought to be free. It is written down
+    /// because "I can't walk backwards up them" is not a thing arithmetic says.
+    #[test]
+    fn you_can_get_back_up_the_stair() {
+        let mut room = Room::of(some(13));
+        room.open = true;
+        room.swing = 1.0;
+
+        let solid = room.solid();
+        let walked = |from: Vec3, way: Vec3, frames: usize| {
+            let (mut at, mut falling) = (from, 0.0);
+
+            for _ in 0..frames {
+                let (next, fell) =
+                    crate::walk::walk(at, way, falling, crate::RADIUS, 1.0 / 60.0, &solid);
+                at = next;
+                falling = fell;
+            }
+
+            at
+        };
+
+        // down first, to somewhere on the stair
+        let from = vec3(
+            cellar::back() + crate::RADIUS + 0.4,
+            0.0,
+            cellar::opening(room.reaches),
+        );
+        let down = walked(from, Vec3::NEG_X * 4.2, 420);
+        assert!(
+            (down.y + cellar::DOWN).abs() < 0.05,
+            "you did not get down, you got to {}",
+            down.y
+        );
+
+        // and back up, which is the same walk with the sign turned round
+        let up = walked(down, Vec3::X * 4.2, 600);
+        assert!(
+            up.y.abs() < 0.05,
+            "you got back up as far as {} and the nook is at nought",
+            up.y
+        );
+    }
+
+    /// Spec 0007: the door does not open through you.
+    ///
+    /// You stand in front of the case to pull the book, and the case sweeps the
+    /// floor you are standing on. Everything else about getting about is you
+    /// moving and the room holding still, so nothing pushed back and the
+    /// shelves swung through the viewer, which from the inside is books passing
+    /// through your eye.
+    #[test]
+    fn the_door_does_not_open_through_you() {
+        let mut room = Room::of(some(13));
+        let case = &room.bookcases[cellar::CASE];
+        let shut = Room::bookcase_box(case);
+
+        // right in front of it, where somebody pulling the book would be
+        let mut at = vec3(shut.max.x + crate::RADIUS - 0.05, 0.0, case.at.z);
+        room.open = true;
+
+        for _ in 0..120 {
+            room.ease(1.0 / 60.0);
+            at = crate::walk::shoved(at, crate::RADIUS, &room.leaves());
+
+            let middle = at + Vec3::Y * crate::RADIUS;
+            for (at_leaf, turn, half) in room.leaves() {
+                let local = turn.inverse() * (middle - at_leaf);
+                let near = vec3(
+                    local.x.clamp(-half.x, half.x),
+                    0.0,
+                    local.z.clamp(-half.z, half.z),
+                );
+                let flat = vec3(local.x - near.x, 0.0, local.z - near.z);
+
+                assert!(
+                    flat.length() > crate::RADIUS - 0.02,
+                    "a leaf is {} into you, at swing {}",
+                    crate::RADIUS - flat.length(),
+                    room.swing
+                );
+            }
+        }
+
+        assert!(room.swing >= 1.0, "it never finished opening");
+
+        // and shutting it again, which is the half that was still going through
+        // people. Opening pushes you out into an empty room; shutting sweeps
+        // back towards the wall, and on the room's own axes the way out of a
+        // leaf at forty five degrees is not the way out of the shelf.
+        room.open = false;
+        for _ in 0..120 {
+            room.ease(1.0 / 60.0);
+            at = crate::walk::shoved(at, crate::RADIUS, &room.leaves());
+
+            let middle = at + Vec3::Y * crate::RADIUS;
+            for (at_leaf, turn, half) in room.leaves() {
+                let local = turn.inverse() * (middle - at_leaf);
+                let near = vec3(
+                    local.x.clamp(-half.x, half.x),
+                    0.0,
+                    local.z.clamp(-half.z, half.z),
+                );
+                let flat = vec3(local.x - near.x, 0.0, local.z - near.z);
+
+                assert!(
+                    flat.length() > crate::RADIUS - 0.02,
+                    "a leaf is {} into you shutting, at swing {}",
+                    crate::RADIUS - flat.length(),
+                    room.swing
+                );
+            }
+        }
+
+        assert!(room.swing <= 0.0, "it never finished shutting");
+    }
+
     /// Spec 0006: every sconce is on a wall.
     ///
     /// One was not. The two long walls shared a single run the length of the
@@ -1183,7 +1624,7 @@ mod tests {
     fn the_nook_is_off_the_aisle_and_not_in_it() {
         let room = Room::of(some(12));
 
-        for bench in &room.benches {
+        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
             assert!(
                 bench.at.x < -(WALL + CABINET.x),
                 "a bench stood in the aisle at {}",
@@ -1290,7 +1731,13 @@ mod tests {
 
         assert_eq!(
             solid.len(),
-            room.walls.len() + 13 + room.benches.len() + room.displays.len() + room.bookcases.len()
+            room.walls.len()
+                + 1
+                + cellar::solid(room.reaches).len()
+                + 13
+                + room.benches.len()
+                + room.displays.len()
+                + room.bookcases.len()
         );
     }
 

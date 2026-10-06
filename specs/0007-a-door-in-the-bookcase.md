@@ -1,6 +1,6 @@
 # 0007 A door in the bookcase
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-05
 
 ## Goal
@@ -23,94 +23,137 @@ table, and the thing you want is to walk up to the table. cascada showed the
 shape of this. A bench that opens a window is a toy too big for a bench, and a
 pool table that opens a window is a game too big for a cabinet.
 
-## What has to be found out first
+## What it took
 
-This is the first spec in the arcade that needs something the arcade has never
-done, and the size of it is not in the bookcase or the cellar. It is in the
-stair.
+The risk was never the bookcase or the cellar. It was the stair, because the
+arcade had no up or down: you were a sphere pushed horizontally against boxes
+running floor to ceiling on a plane at y nought, nothing pulled you down,
+nothing held you up, and `Room::solid()` had no floor in it at all.
 
-**You have no up or down.** You are a sphere of radius 0.45 pushed horizontally
-by `move_and_slide` against boxes that run from the floor to the ceiling, on a
-plane at y nought. Nothing pulls you down, nothing holds you up, and
-`Room::solid()` has no floor in it at all. Your height never changes because
-nothing in the room has ever been at a different height.
+**The engine was wrong, in a way that got righter the taller the step.**
+`sweep_sphere` has a shortcut for "already in contact", which is what resting on
+a floor is, and it took the way out from the nearest face of the box grown by
+the radius. That agrees with the real contact against a face and disagrees
+against every edge. Beside a step 0.05 high a walking sphere sits a quarter of a
+unit inside the grown side and a twentieth under the grown top, so the nearest
+grown face is the top: it answered "you are standing on this", sideways counted
+as along the surface, and the sphere walked through the step. The lower the step
+the more certain it was, so the one riser too small to be in anybody's way was
+the one riser nothing could get over. It takes the direction from the box's own
+closest point now. That is the engine's fix and the engine's spec 0014 carries
+it, with the test that walks a sphere at a step and asks that it never end up
+inside one.
 
-**The engine is not the problem.** `sweep_sphere` already answers a step
-correctly. Walked at a riser of 0.10 it reports the top edge rather than the
-face, at a point of (2.0, 0.10, 0), with a normal of (-0.63, 0.78, 0). That
-normal leans up. The engine knows the shape of a step.
+**A step is climbed by being stepped over.** The slide turns the part of your
+movement that is into a surface into movement along it, and at a walking pace
+that is almost nothing: 0.07 of ground a frame against a rounded edge comes out
+as hundredths of a unit of height. Measured over three seconds walking straight
+at a step with gravity off, a 0.10 riser gained nothing and a 0.30 riser gained
+0.01. It does not climb, it grinds.
 
-**The slide is.** `move_and_slide` turns the part of your movement that is into
-a surface into movement along it, and at a walking pace that is almost nothing
-per frame. You cover 0.07 of ground in a frame, and 0.07 pushed against a
-rounded edge comes out as a few hundredths of a unit of height. Measured over
-three seconds of walking straight at a step, with gravity turned off so nothing
-could undo it:
+Two things about that pass were wrong before it worked. It took any climb that
+beat going at it flat, which against a wall too tall to climb means grazing the
+top edge and landing in open air a few hundredths up: free height every frame,
+and gravity cannot give it back, because falling starts at nothing each time you
+land and its first frame is worth six thousandths against a lift of five
+hundredths. Thirty frames of that and you are on top of anything in the
+building. So it asks the floor: one more hair of a drop, and if you move there
+was nothing under you. And it looked one frame ahead, which is 0.07 against the
+quarter of a unit it takes to get your middle over a step's face, so with
+landing enforced a real step stopped being climbable.
 
-```text
-riser   reached
-0.10     0.00
-0.20     0.00
-0.30     0.01
-0.45     0.00
-```
+**Going down needed its own half.** You leave each tread at the top and fall to
+the next, and a quarter unit riser takes nine frames to fall while a tread takes
+four to cross, so you never land on the next tread: you sail out over the whole
+flight. Sticking to the ground within a step fixes it, and the ground has to be
+found with a ray rather than a sphere, because a sphere leaving a tread hangs on
+its lip and a sphere on a lip cannot go down.
 
-It does not climb. It grinds. A character gets up a step because something
-lifts it over, not because it slides up the corner, and that pass is what the
-arcade has to grow. The engine gives the right normal to build it on.
+That snap then undid every step up, because you climb onto the next tread before
+you are over it, so what is under your feet is still the one you left. One of
+the two has to win and it is the step.
 
-So this spec is in three parts and the first is the whole of the risk.
+**A point for up and down, a radius for sideways.** The radius draws nothing, so
+it looks like it could go. It cannot: the eye sits at your position and the near
+plane is a tenth, so as a point you could walk your eye into a wall, and every
+clearance in the building was measured for somebody 0.9 across. But every one of
+the faults above was a sphere answering a question about the floor. The tread
+had to be 0.7, deeper than the body is from its middle to its toe, until the
+step up stopped being asked as a question about the body. It is 0.3 now, which
+is what a stair looks like.
+
+**The stairs were not janky, the view was.** At a walk you cross a tread in four
+frames, so your feet drop a quarter of a unit about fourteen times a second, and
+the eye was nailed to them. The feet stay exact, because the room is measured
+against them. The eye lags by 0.09 seconds, which turns fourteen drops a second
+into going down a slope.
 
 ## Behavior
 
-**You stand on things and you fall.** The floor becomes something solid rather
-than an assumption, the stair is a run of boxes, and a downward pull settles you
-onto whichever of them is under you. Walking off the top of the stair takes you
-down it rather than out into the air.
+**Behind the wall rather than through the floor.** A secret stair is a hole in a
+wall, not a hole in a carpet, and it costs less: the nook's floor is one quad and
+a quad has no hole in it, so a stairwell inside the room would have meant laying
+the boards in pieces round an opening. Beyond the wall there is nothing to cut.
 
-**A step is climbed by being stepped on.** Blocked by something no taller than a
-riser, the move is tried again from a little higher and then settled back down.
-The riser follows from that number and not the other way about: a stair of
-twenty is a different length from a stair of eight, and the length decides
-whether the stairwell fits under the nook at all.
+**The door is two bookcases**, each hinged at its own outer end so they open away
+from each other and the way down is between them. One was 1.1 against a body 0.9
+across, which is a tenth of a unit of daylight either side held for the nine
+units it takes to get down. Walked exactly down the middle it fits, which is
+what the test did and why the test was worth nothing.
 
-**The nook's floor gets a hole in it.** It is one quad today, and a quad has no
-hole in it, so the boards become pieces laid round the opening.
+**It takes its time.** A bookcase on a hinge with four hundred books in it, and
+the whole of what makes a secret door worth having is the moment between pulling
+the book and seeing what is behind it. The box follows the swing rather than
+snapping at either end, so there is no point where it looks open and stops you.
 
-**One book is a handle.** It stands in the stocked shelves like the rest, and
-the sight lands on it the way it lands on a cabinet, a shape or a bench, which
-is a fourth thing for the sight to name. Pulling it swings its case off the
-wall.
+**And it does not open through you.** You stand in front of the case to pull the
+book and the case sweeps that floor. Everything else about getting about is you
+moving and the room holding still, which is what `move_and_slide` is for, so
+nothing pushed back and the shelves swung through the viewer. You are pushed out
+sideways, in the leaf's own frame: on the room's axes a leaf at forty five
+degrees fills a box half as big again as it is, so which way is out of that box
+is not which way is out of the shelf, and a closing leaf shoved you along itself
+and then swept past.
 
-**The case that swings is solid both ways.** Shut, it is a bookcase and the way
-down is not there. Open, it is a bookcase standing at an angle and the way down
-is. `Room::solid()` has been a fixed list since spec 0001 and now has a state in
-it, which every walkability test reads.
+**Nothing down there is inside the room above it.** `back` is the wall's inner
+face, the side the nook is on, so a box starting there reaches a third of a unit
+into the wall. The stair's soffit did, and fought the lintel over the opening for
+the same pixels: a grey rectangle with stippled edges hanging over the books. So
+did both shaft walls.
 
-**The cellar is its own room**, with its own floor, its own walls and its own
-light. The engine carries eight lamps and the nook's sconces take six of them
-while you are in it, so down there is a third room wanting a share.
+**The pool table opens poolhall**, the way cascada's bench opens cascada. It is a
+bench as far as the room is concerned, because a bench is a thing you walk up to,
+point at and press a key at. The three tests that assumed every bench stands in
+the nook say so now, and the flood fill skips it, because a grid at one height
+cannot answer a question about a cellar. Getting down there is tested by walking
+it.
 
-**The pool table opens poolhall**, the way cascada's bench opens cascada. The
-test that keeps a repo from going missing asks that every folder under `games`
-is a cabinet in the hall or a bench in the nook; it gains a third place to be.
+**A lamp over the table**, which is both what a pool room is lit by and what the
+cellar wanted: with no light of its own it came out as flat grey surfaces with no
+shape to any of them. It goes in the same list as the nook's sconces and the
+sign's pendant and is chosen off the same distance.
 
 ## Acceptance criteria
 
-To be written with the code. The ones that are already clear:
-
-- You can walk up a step of the stair's own riser.
-- You come to rest on the floor rather than passing through it or floating.
-- Walking off the top of the stair puts you at the bottom of it, not in the air.
-- Every sconce and every lamp in the cellar is on something.
-- With the case shut there is no route from the nook to the cellar, and with it
-  open there is.
-- Every repo under `games` is a cabinet, a bench or a table.
+- You can walk up a step, and the shallowest is not the hardest. — `walk::tests::it_climbs_a_step`
+- And one taller than a step is a wall. — `walk::tests::it_does_not_climb_a_wall`
+- You come to rest on the floor rather than sinking or hovering. — `walk::tests::it_puts_you_on_the_floor`
+- Walking off a step takes you down it. — `walk::tests::it_walks_you_back_down`
+- And a wall still stops you, which is what the room is built of. — `walk::tests::a_wall_is_still_a_wall`
+- A tread is well inside what you can climb. — `cellar::tests::a_tread_is_lower_than_a_step`
+- And the run fits the shaft that holds it. — `cellar::tests::the_stair_fits_the_shaft`
+- You can walk down the stair and back up it. — `cellar::tests::you_can_walk_down_it_and_back_up`
+- Shut, the way down is not there; open, it is, off the middle as well as along it. — `room::tests::the_case_is_a_door`
+- And you can get back up it through the room's own geometry. — `room::tests::you_can_get_back_up_the_stair`
+- The door does not open or close through you. — `room::tests::the_door_does_not_open_through_you`
+- Nothing down the way down is inside the room above it. — `room::tests::the_way_down_keeps_out_of_the_room`
+- Every repo is a cabinet in the hall, a bench in the nook, or a table in the cellar. — `tests::it_knows_every_game_the_project_does`
 
 ### Verified by hand
 
-- The case swings rather than vanishing. — run the arcade and pull the book.
-- The stair reads as a stair going down and not as a ramp. — walk down it.
+- The leaves swing rather than snapping, and read as open. — run the arcade and pull the book.
+- The stair reads as a stair going down. — walk down it.
+- The table reads as a pool table. — walk up to it.
 
 ## Out of scope
 

@@ -4,6 +4,7 @@ mod aim;
 mod cabinet;
 mod carpet;
 mod cascada;
+mod cellar;
 mod cradle;
 mod display;
 mod globe;
@@ -12,6 +13,7 @@ mod metronome;
 mod room;
 mod sign;
 mod study;
+mod walk;
 mod wrecker;
 
 use blitzkit::camera::Camera;
@@ -33,6 +35,13 @@ use room::Room;
 /// Where you stand, how fast, and how far you see.
 const RADIUS: f32 = 0.45;
 const EYE: f32 = 1.55;
+
+/// How long the eye takes to catch the feet up, in seconds.
+///
+/// Short enough that it is not a thing you notice on the level, where there is
+/// nothing to catch up with anyway, and long enough to turn fourteen quarter
+/// unit drops a second into going down a slope.
+const EYE_LAGS: f32 = 0.09;
 const SPEED: f32 = 4.2;
 const LOOK: f32 = 0.0022;
 const PITCH_LIMIT: f32 = 1.3;
@@ -69,6 +78,9 @@ struct Arcade {
     /// cascada's binary. It has no cabinet, and a bench is not one, but what
     /// starts it is the same thing that starts a game.
     cascada: Cabinet,
+    /// And poolhall's, which stands on a table in the cellar for the same
+    /// reason. Spec 0007.
+    poolhall: Cabinet,
     /// One per cabinet, in the room's own order. A game with no screenshot gets
     /// none and its screen stays blank.
     art: Vec<Option<TextureId>>,
@@ -131,6 +143,17 @@ struct Arcade {
     spin: display::Spin,
 
     at: Vec3,
+    /// How fast you are going down, which until spec 0007 was never.
+    falling: f32,
+    /// How high your eye is, which is not quite how high your feet are.
+    ///
+    /// Your feet are exact, because that is what the room is measured against.
+    /// Your eye follows them. Going down a stair at a walk you cross a tread in
+    /// four frames, so your feet drop a quarter of a unit about fourteen times
+    /// a second, and an eye nailed to them drops with them: the stair was not
+    /// janky, the view was. Lagged, the feet still land on every tread and the
+    /// head goes down the slope.
+    eye: f32,
     yaw: f32,
     pitch: f32,
     walking: [bool; 4],
@@ -153,10 +176,13 @@ impl Arcade {
 
         Self {
             at: if staged() { POSED_AT } else { room.doorway() },
+            falling: 0.0,
+            eye: 0.0,
             room,
             spin,
             playing: Playing::new(),
             cascada: Cabinet::found(cascada::NAME, &beside()),
+            poolhall: Cabinet::found(cellar::POOLHALL, &beside()),
             art: Vec::new(),
             glows: Vec::new(),
             signs: Vec::new(),
@@ -224,6 +250,8 @@ impl Arcade {
                 }
             }
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
+            // the book that is a handle. Spec 0007.
+            Some(room::Seen::Case) => self.room.open = !self.room.open,
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
                 metronome::NAME => self.metronome.press(),
@@ -233,6 +261,11 @@ impl Arcade {
                 cascada::NAME => {
                     if self.playing.start(&self.cascada.clone()) {
                         // it wants the mouse now, the way a game does
+                        self.wants_lock = false;
+                    }
+                }
+                cellar::POOLHALL => {
+                    if self.playing.start(&self.poolhall.clone()) {
                         self.wants_lock = false;
                     }
                 }
@@ -380,6 +413,10 @@ impl Arcade {
                 self.wrecker.standing(),
                 wrecker::bricks()
             ),
+            cellar::POOLHALL if !self.poolhall.is_built() => String::from(aim::NOT_BUILT),
+            cellar::POOLHALL => {
+                String::from("Pool, more or less. Click or press enter to play in its own window. [COPY - Jake]")
+            }
             cascada::NAME if !self.cascada.is_built() => String::from(aim::NOT_BUILT),
             cascada::NAME => String::from(
                 "Dominoes. Click or press enter to play in its own window.",
@@ -414,6 +451,11 @@ impl Arcade {
             (far + 0.15, 1.0, false, back, front),
             (far + room::NOOK_SPAN - 0.15, -1.0, false, back, front),
         ]
+    }
+
+    /// Where you are looking from, which is your eye and not your feet.
+    fn looking_from(&self) -> Vec3 {
+        vec3(self.at.x, self.eye + EYE, self.at.z)
     }
 
     fn facing(&self) -> Vec3 {
@@ -477,19 +519,25 @@ fn beside() -> std::path::PathBuf {
         .unwrap_or_default()
 }
 
-/// The ones that get a cabinet in the hall, which is every repo but one.
+/// The ones that get a cabinet in the hall, which is every repo but two.
 ///
-/// cascada is a toy. You stand dominoes up wherever you like and push one, and
+/// cascada is a toy: you stand dominoes up wherever you like and push one, and
 /// there is nothing to win, which is the whole of what separates the nook from
-/// the hall. It had a cabinet for the one reason everything else has one, which
-/// is that it is a folder under `games`, and being a folder under `games` is
-/// not an argument about anything.
+/// the hall. poolhall is a game and there is something to win, so by that rule
+/// it belongs out here, and a cabinet with pool on the screen is still the
+/// wrong object. Pool is a table. The thing you want is to walk up to the
+/// table.
+///
+/// Both had a cabinet for the one reason everything else has one, which is that
+/// they are folders under `games`, and being a folder under `games` is not an
+/// argument about anything.
 fn games() -> Vec<Cabinet> {
     let beside = beside();
+    let elsewhere = [cascada::NAME, cellar::POOLHALL];
 
     repos()
         .iter()
-        .filter(|name| *name != cascada::NAME)
+        .filter(|name| !elsewhere.contains(&name.as_str()))
         .map(|name| Cabinet::found(name, &beside))
         .collect()
 }
@@ -632,6 +680,11 @@ impl Game for Arcade {
             );
             self.owed -= cradle::STEP;
         }
+        // the door, and then you out of the door's way. It is the only thing in
+        // the building that moves, and it sweeps the floor you stand on to pull
+        // the book. Spec 0007.
+        self.room.ease(dt);
+        self.at = walk::shoved(self.at, RADIUS, &self.room.leaves());
         self.metronome.advance(dt);
         self.wrecker.advance(dt);
 
@@ -668,18 +721,34 @@ impl Game for Arcade {
             }
         }
 
-        if wish.length_squared() > 1e-6 {
-            let body = blitzkit::collision::Sphere::new(self.at + Vec3::Y * RADIUS, RADIUS);
-            self.at = blitzkit::collision::move_and_slide(
-                body,
-                wish.normalize() * SPEED,
-                dt,
-                &self.room.solid(),
-            ) - Vec3::Y * RADIUS;
+        // along the floor, over anything no taller than a step, and down.
+        // Spec 0007: the building has a height in it now, so getting about is
+        // no longer one call that pushes you sideways.
+        let (at, falling) = walk::walk(
+            self.at,
+            if wish.length_squared() > 1e-6 {
+                wish.normalize() * SPEED
+            } else {
+                Vec3::ZERO
+            },
+            self.falling,
+            RADIUS,
+            dt,
+            &self.room.solid(),
+        );
+        self.at = at;
+        self.falling = falling;
+
+        // the eye catching up with the feet. Nothing while you are on the
+        // level, because then they are the same number.
+        let behind = self.at.y - self.eye;
+        self.eye += behind * (dt / EYE_LAGS).min(1.0);
+        if behind.abs() < 1e-4 {
+            self.eye = self.at.y;
         }
 
         let playing = self.playing.now().map(|name| name.to_string());
-        self.seen = self.room.looking_at(self.at + Vec3::Y * EYE, self.facing());
+        self.seen = self.room.looking_at(self.looking_from(), self.facing());
 
         // walking away lets go. Looking away cannot happen: while you hold one
         // the mouse is turning it rather than the view.
@@ -722,6 +791,14 @@ impl Game for Arcade {
                 let name = self.room.benches[n].name;
                 (Some(name.to_string()), Some(self.about(name)))
             }
+            (None, Some(room::Seen::Case)) => (
+                Some(String::from("a shelf of books [COPY - Jake]")),
+                Some(String::from(if self.room.open {
+                    "Click to close it. [COPY - Jake]"
+                } else {
+                    "One of them is not a book. Click to pull it. [COPY - Jake]"
+                })),
+            ),
             (None, None) => (None, None),
         };
 
@@ -807,7 +884,7 @@ impl Game for Arcade {
             return;
         };
 
-        camera.position = self.at + Vec3::Y * EYE;
+        camera.position = self.looking_from();
         camera.target = camera.position + self.facing();
 
         // dim and overhead, like the room it is: bright enough to walk, dark
@@ -1239,6 +1316,20 @@ impl Game for Arcade {
             );
         }
 
+        // the way down, and the room at the bottom of it. Spec 0007. Boxes, so
+        // they are drawn as the boxes they are: a stair of slabs is what a
+        // stair looks like from the side anyway.
+        for (box_, made) in cellar::built(self.room.reaches) {
+            scene.push_colored(
+                cube,
+                &Transform::at(box_.center()).with_scale(box_.size()),
+                match made {
+                    cellar::Made::Tread => aim::BOARDS,
+                    cellar::Made::Stone => aim::CELLAR,
+                },
+            );
+        }
+
         // the nook's floor of boards, over the arcade's carpet and under the
         // rug. The arcade's is confetti on black and the nook is a study off it,
         // so the floor is the largest single thing in your view of either room
@@ -1263,12 +1354,28 @@ impl Game for Arcade {
         let bench_floor = 0.0;
         for (n, shelved) in self.room.bookcases.iter().enumerate() {
             let case = study::CASE;
-            let turn = glam::Quat::from_rotation_y(if shelved.facing.x.abs() > 0.5 {
+            let swung = cellar::swings(n);
+            // the one that is a door, standing where it stands when it is open.
+            // Spec 0007: hinged on one side of the opening, so it comes out
+            // into the nook and across the floor in front of itself. Drawn shut
+            // while being open, it is a wall you can walk through.
+            let along = glam::Quat::from_rotation_y(if shelved.facing.x.abs() > 0.5 {
                 std::f32::consts::FRAC_PI_2
             } else {
                 0.0
             });
-            let put = |at: Vec3| shelved.at + turn * at;
+            // the two leaves, wherever they have got to in their swing. Drawn
+            // where they shut while being part way open, a door is a wall you
+            // can walk through, and drawn open while shutting it is the other
+            // way about. Spec 0007.
+            let (stands, turn) = if swung {
+                let (at, swing) =
+                    room::Room::swung(shelved, self.room.swings_out(n), self.room.swing);
+                (at, swing * along)
+            } else {
+                (shelved.at, along)
+            };
+            let put = |at: Vec3| stands + turn * at;
 
             // the carcass: two sides, a back and a top
             for (at, size) in [
@@ -1595,6 +1702,103 @@ impl Game for Arcade {
             let lit = self.seen == Some(room::Seen::Bench(n));
             let look = if lit { aim::BENCH_ON } else { aim::BENCH };
 
+            // the one in the cellar is a pool table, which is a bench in every
+            // way that matters and in no way that shows. Spec 0007: cloth, and
+            // rails round it with pockets cut into the corners.
+            if bench.name == cellar::POOLHALL {
+                let top = bench.size.y;
+                let rail = aim::RAIL;
+                let frame = if lit { aim::BENCH_ON } else { aim::TRIM };
+
+                // the cloth, inside the rails, with its face at the top
+                scene.push_colored(
+                    cube,
+                    &Transform::at(bench.at + Vec3::Y * (top - rail * 0.5)).with_scale(vec3(
+                        bench.size.x - rail * 2.0,
+                        rail,
+                        bench.size.z - rail * 2.0,
+                    )),
+                    aim::CLOTH,
+                );
+
+                // the four rails round it. Each sits out at its own axis's half
+                // width, which is the thing this got wrong: taken from the
+                // other axis they stand at twice the table's width, out in the
+                // room, and lie across the cloth on the way.
+                let high = rail * 1.8;
+                for (way, out, span) in [
+                    (Vec3::X, bench.size.x, vec3(rail, high, bench.size.z)),
+                    (Vec3::Z, bench.size.z, vec3(bench.size.x, high, rail)),
+                ] {
+                    for side in [-1.0f32, 1.0] {
+                        let at = bench.at
+                            + way * side * (out - rail) * 0.5
+                            + Vec3::Y * (top - high * 0.5);
+
+                        scene.push_colored(cube, &Transform::at(at).with_scale(span), frame);
+                    }
+                }
+
+                // an apron under the bed, and legs under that. A table is a top
+                // on legs; a top on a box to the floor is a crate with cloth on
+                // it, which is what this was.
+                let apron = 0.14;
+                let under = top - high;
+                scene.push_colored(
+                    cube,
+                    &Transform::at(bench.at + Vec3::Y * (under - apron * 0.5)).with_scale(vec3(
+                        bench.size.x - rail,
+                        apron,
+                        bench.size.z - rail,
+                    )),
+                    frame,
+                );
+
+                let leg = 0.11;
+                let stands = under - apron;
+                for along in [-1.0f32, 1.0] {
+                    for across in [-1.0f32, 1.0] {
+                        let at = bench.at
+                            + vec3(
+                                across * (bench.size.x * 0.5 - leg),
+                                stands * 0.5,
+                                along * (bench.size.z * 0.5 - leg),
+                            );
+
+                        scene.push_colored(
+                            cube,
+                            &Transform::at(at).with_scale(vec3(leg, stands, leg)),
+                            frame,
+                        );
+                    }
+                }
+
+                // and the lamp over it, which is what a pool room is lit by
+                let shade = bench.at + Vec3::Y * (top + cellar::LAMP_UP);
+                scene.push_colored(
+                    cube,
+                    &Transform::at(shade).with_scale(cellar::SHADE),
+                    aim::SHADE,
+                );
+                let lid = -cellar::DOWN + cellar::TALL;
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(
+                        shade.x,
+                        (shade.y + cellar::SHADE.y * 0.5 + lid) * 0.5,
+                        shade.z,
+                    ))
+                    .with_scale(vec3(
+                        0.018,
+                        lid - shade.y - cellar::SHADE.y * 0.5,
+                        0.018,
+                    )),
+                    aim::SIGN_CHAIN,
+                );
+
+                continue;
+            }
+
             let top = Transform::at(bench.at + Vec3::Y * (bench.size.y - aim::BENCH_TOP * 0.5))
                 .with_scale(vec3(bench.size.x, aim::BENCH_TOP, bench.size.z));
             match self.cabinet_grain {
@@ -1698,6 +1902,19 @@ impl Game for Arcade {
             sign::LAMP_COLOUR,
             sign::LAMP_LIT,
             sign::LAMP_RANGE,
+        ));
+
+        // and the one over the pool table, in the same list as everything else.
+        // The cellar had no light of its own at all, which is why it came out
+        // as flat grey surfaces with no shape to any of them.
+        let table = cellar::table(self.room.reaches);
+        let over = table.at + Vec3::Y * (table.size.y + cellar::LAMP_UP - cellar::SHADE.y);
+        shades.push((
+            eye.distance_squared(over),
+            over,
+            cellar::LAMP_COLOUR,
+            cellar::LAMP_LIT,
+            cellar::LAMP_RANGE,
         ));
         // nearest first, because what the engine drops when a building outgrows
         // it should be the lamp in the furthest room and not whichever was
@@ -1904,9 +2121,12 @@ mod tests {
 
         assert!(!theirs.is_empty(), "list-repos named no games at all");
         assert_eq!(ours, theirs, "the arcade and list-repos disagree");
-        assert!(
-            room.benches.iter().any(|bench| bench.name == cascada::NAME),
-            "cascada has no cabinet and no bench either"
-        );
+        for name in [cascada::NAME, cellar::POOLHALL] {
+            assert!(
+                room.benches.iter().any(|bench| bench.name == name),
+                "{} has no cabinet and nowhere else to be either",
+                name
+            );
+        }
     }
 }

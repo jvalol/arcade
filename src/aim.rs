@@ -203,6 +203,23 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// a sconce ended up hanging in a doorway.
 pub const NOT_BUILT: &str = "Not built. Run ./check-all";
 
+/// The pool table in the cellar: the cloth, and how thick a rail is. Spec 0007.
+///
+/// Green, because a pool table is green, and it is the one saturated thing in a
+/// room of stone. The hall is neon and the nook is wood and books, so a cellar
+/// with one green rectangle in it is a room with a pool table in it and not a
+/// room with furniture.
+pub const CLOTH: Vec4 = vec4(0.10, 0.42, 0.22, 1.0);
+pub const RAIL: f32 = 0.07;
+
+/// The way down and the room at the bottom of it. Spec 0007.
+///
+/// Stone, because a cellar is the one room in the building that is not finished.
+/// The nook is panelled and carpeted and lit by its own sconces and the hall is
+/// neon; this is under both of them and looks it. The treads are the nook's own
+/// boards carried down the stair, because that is where the stair starts.
+pub const CELLAR: Vec4 = vec4(0.30, 0.29, 0.27, 1.0);
+
 /// The dominoes on cascada's bench. Spec 0006.
 ///
 /// Pale, because they are the one thing on a bench in that room meant to be
