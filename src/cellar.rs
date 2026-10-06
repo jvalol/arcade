@@ -120,6 +120,16 @@ pub fn back() -> f32 {
     -(WALL + CABINET.x) - NOOK_DEEP + THICK * 0.5
 }
 
+/// The foot of the stair, which is where the cellar's floor starts and the one
+/// number everything down there is measured from.
+///
+/// Written out nine times before this existed, and about to be written out a
+/// tenth by the room behind it. Nine copies of one number is nine chances for
+/// eight of them to be right.
+pub fn stair_foot() -> f32 {
+    back() - LANDING - STEPS as f32 * TREAD
+}
+
 /// Where the opening is along the wall, taken from the bookcase that swings.
 pub fn opening(reaches: f32) -> f32 {
     let cases = room::bookcases(-reaches);
@@ -165,7 +175,7 @@ pub const LAMP_COLOUR: Vec3 = glam::vec3(1.0, 0.93, 0.78);
 /// Where it stands: the middle of the cellar floor, turned so you come down the
 /// stair at its end rather than its side.
 pub fn table(reaches: f32) -> crate::room::Benched {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
 
     crate::room::Benched {
         name: POOLHALL,
@@ -175,6 +185,162 @@ pub fn table(reaches: f32) -> crate::room::Benched {
         // is the side the stair is
         worked_from: Vec3::X,
     }
+}
+
+/// The table's rails and the pockets between them. Spec 0007.
+///
+/// It had four rails running the whole way round and nothing else, which is a
+/// bench with a green top. What makes a pool table read as one is that the
+/// rails are broken: six segments with a mouth at every break, four at the
+/// corners and one halfway down each long side.
+pub const RAIL: f32 = 0.115;
+pub const RAIL_UP: f32 = 0.085;
+pub const CUSHION: f32 = 0.042;
+pub const POCKET: f32 = 0.085;
+
+/// The rail's profile: the cap board over it, how far that oversails, and the
+/// bead under it.
+///
+/// One box is a two by four, which is what Jake called this. A rail reads as
+/// carved because of the lines down it: a cap that oversails throws a shadow,
+/// and a bead under that throws another. Three boards and the same timber, and
+/// it stops looking sawn.
+pub const CAP: f32 = 0.024;
+pub const CAP_OUT: f32 = 0.016;
+pub const BEAD: f32 = 0.014;
+
+/// The sights along the rails, which is the one marking every pool table in the
+/// world carries and the quickest thing that says what this table is.
+pub const SIGHT: f32 = 0.019;
+
+/// The net under each pocket: how far it hangs.
+///
+/// Pockets drawn as discs read as something lying on the cloth however dark
+/// they are, because nothing about a disc says there is anywhere to go. A bag
+/// hanging under the mouth is what says a ball sinks.
+pub const BAG: f32 = 0.2;
+
+/// How far short of a pocket a cushion stops, past the mouth itself.
+///
+/// The jaws. Without them the rails meet the mouth square on and a ball has to
+/// find a hole the width of itself in a flat wall; with them the opening is
+/// funnelled, which is what every pocket on every table looks like.
+pub const JAW: f32 = 0.05;
+
+/// The playing surface, inside the rails.
+pub fn baize(table: &crate::room::Benched) -> glam::Vec2 {
+    glam::vec2(table.size.x - RAIL * 2.0, table.size.z - RAIL * 2.0)
+}
+
+/// Where the six pockets are, as points on the cloth: four corners and one
+/// halfway down each long side.
+pub fn pockets(table: &crate::room::Benched) -> Vec<Vec3> {
+    let play = baize(table);
+    let top = table.at + Vec3::Y * table.size.y;
+    let mut out = Vec::new();
+
+    // out in the gap between the rail ends rather than on the cloth's own edge.
+    // On the edge the mouth is half under the cushion and half on the baize,
+    // which is a hole in the wrong place.
+    let out_by = RAIL * 0.45;
+
+    for across in [-1.0f32, 1.0] {
+        for along in [-1.0f32, 0.0, 1.0] {
+            out.push(
+                top + vec3(
+                    across * (play.x * 0.5 + out_by),
+                    0.0,
+                    along * (play.y * 0.5 + out_by),
+                ),
+            );
+        }
+    }
+
+    out
+}
+
+/// Where the sights go: three down each half of a long rail and three across
+/// each short one, on the cap, which is where every table carries them.
+pub fn sights(table: &crate::room::Benched) -> Vec<Vec3> {
+    let play = baize(table);
+    let top = table.at + Vec3::Y * (table.size.y + RAIL_UP + CAP * 0.5);
+    let mut out = Vec::new();
+
+    for across in [-1.0f32, 1.0] {
+        for n in 1..=3 {
+            let along = n as f32 / 4.0;
+
+            for half in [-1.0f32, 1.0] {
+                out.push(
+                    top + vec3(
+                        across * (play.x * 0.5 + RAIL * 0.5),
+                        0.0,
+                        half * along * play.y * 0.5,
+                    ),
+                );
+            }
+        }
+    }
+    for along in [-1.0f32, 1.0] {
+        for half in [-1.0f32, 1.0] {
+            out.push(
+                top + vec3(
+                    half * play.x * 0.25,
+                    0.0,
+                    along * (play.y * 0.5 + RAIL * 0.5),
+                ),
+            );
+        }
+    }
+
+    out
+}
+
+/// A pocket's net: a bag, full at its mouth, drawn in as it goes down and
+/// rounded shut at the bottom.
+pub fn bag_mesh() -> blitzkit::mesh::MeshData {
+    turned(20, 14, |v| {
+        let waist = (1.0 - v * 0.5) * (1.0 - v.powi(6));
+
+        (-v, waist)
+    })
+}
+
+/// The six rails: a middle, a size, and which way the cushion on it faces.
+pub fn rails(table: &crate::room::Benched) -> Vec<(Vec3, Vec3, Vec3)> {
+    let play = baize(table);
+    let top = table.at + Vec3::Y * table.size.y;
+    let stop = POCKET + JAW;
+    let mut out = Vec::new();
+
+    // the two ends, each running between its corner pockets
+    for along in [-1.0f32, 1.0] {
+        out.push((
+            top + vec3(0.0, RAIL_UP * 0.5, along * (play.y * 0.5 + RAIL * 0.5)),
+            vec3((play.x - stop * 2.0).max(RAIL), RAIL_UP, RAIL),
+            Vec3::Z * -along,
+        ));
+    }
+
+    // and the four sides, each between a corner pocket and the middle one
+    for across in [-1.0f32, 1.0] {
+        for half in [-1.0f32, 1.0] {
+            let from = stop;
+            let to = (play.y * 0.5 - stop).max(stop + RAIL);
+
+            out.push((
+                top + vec3(
+                    across * (play.x * 0.5 + RAIL * 0.5),
+                    RAIL_UP * 0.5,
+                    half * (from + to) * 0.5,
+                ),
+                vec3(RAIL, RAIL_UP, to - from),
+                Vec3::X * -across,
+            ));
+        }
+    }
+
+    out
 }
 
 /// A barrel, as a surface turned about its own axis.
@@ -239,7 +405,7 @@ pub fn peg_mesh() -> blitzkit::mesh::MeshData {
 ///
 /// The first and last tenth of the run go flat across each end, from the axis
 /// out to wherever the side starts, so the thing is closed.
-fn lidded(side: impl Fn(f32) -> (f32, f32)) -> impl Fn(f32) -> (f32, f32) {
+pub fn lidded(side: impl Fn(f32) -> (f32, f32)) -> impl Fn(f32) -> (f32, f32) {
     const LID: f32 = 0.1;
 
     move |v| {
@@ -327,7 +493,7 @@ pub const STAVES: u32 = 32;
 ///
 /// So: the way round that winds them towards you, and the normals worked out
 /// from that winding afterwards rather than from the parameters.
-fn turned(
+pub fn turned(
     round_steps: u32,
     steps: u32,
     profile: impl Fn(f32) -> (f32, f32),
@@ -375,7 +541,7 @@ pub const HOOP_THICK: f32 = 0.05;
 /// Not along the end the stair comes through, which is where you arrive and
 /// where you want to be able to see the room.
 pub fn racks(reaches: f32) -> Vec<(Vec3, f32)> {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
     let middle = foot - DEEP * 0.5;
     let run = SPAN - 1.6;
     let fits = (run / (RACK.z + 0.25)) as usize;
@@ -411,7 +577,7 @@ pub fn racks(reaches: f32) -> Vec<(Vec3, f32)> {
 /// cradle is three more boxes nobody will look at; a barrel on its end is what
 /// a cellar with no room left looks like anyway.
 pub fn barrels(reaches: f32) -> Vec<Vec3> {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
     let far = foot - DEEP + THICK * 0.5 + AGAINST + BARREL.x * 0.5;
     let along = opening(reaches);
     let mut out = Vec::new();
@@ -570,7 +736,7 @@ pub fn flicker(since: f32) -> f32 {
 
 /// Where the fire is: the middle of the far wall, at the floor.
 pub fn hearth(reaches: f32) -> Vec3 {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
 
     vec3(foot - DEEP + THICK * 0.5, -DOWN, opening(reaches))
 }
@@ -601,7 +767,7 @@ pub const PANEL_IN: f32 = 0.022;
 /// Where the panelling goes: each wall as its face, which way it stands out,
 /// and where it starts and ends along itself.
 pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool, f32)> {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
     let along = opening(reaches);
     let (near, far) = (
         along - SPAN * 0.5 + THICK * 0.5,
@@ -623,13 +789,32 @@ pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool, f32)> {
             false,
             0.0,
         ),
+        // the +z wall in three runs round the way through to the spa, for the
+        // same reason the far wall is in three round the fireplace: panelling
+        // over an opening is boards with a room behind them.
         (
             far,
             -1.0,
             foot - DEEP + THICK * 0.5,
+            crate::spa::doorway(reaches).x - crate::spa::DOOR * 0.5,
+            false,
+            0.0,
+        ),
+        (
+            far,
+            -1.0,
+            crate::spa::doorway(reaches).x + crate::spa::DOOR * 0.5,
             foot - THICK * 0.5,
             false,
             0.0,
+        ),
+        (
+            far,
+            -1.0,
+            crate::spa::doorway(reaches).x - crate::spa::DOOR * 0.5,
+            crate::spa::doorway(reaches).x + crate::spa::DOOR * 0.5,
+            false,
+            crate::spa::LINTEL,
         ),
         // the far end round the fireplace. In one piece the panelling ran
         // behind the fire, so through the opening you saw mahogany boards with
@@ -676,7 +861,7 @@ pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool, f32)> {
 /// are a single plank ten units long. A quad can be given a tile count.
 pub const PLANK: f32 = 1.6;
 pub fn floor(reaches: f32) -> (Vec3, Vec3) {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
 
     (
         vec3(foot - DEEP * 0.5, -DOWN, opening(reaches)),
@@ -704,7 +889,7 @@ pub type Timber = (Vec3, Vec3);
 /// The beams across the ceiling, as a middle and a size each, and the coffers
 /// between them.
 pub fn ceiling(reaches: f32) -> (Vec<Timber>, Vec<Timber>) {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
     let middle = vec3(foot - DEEP * 0.5, -DOWN + TALL, opening(reaches));
     let (deep, span) = (DEEP - THICK, SPAN - THICK);
     let (across, along) = (
@@ -786,7 +971,7 @@ pub fn rug(reaches: f32) -> (Vec3, Vec3) {
 /// lights on; what makes a room downstairs worth sitting in is one bright thing
 /// to stand round and everything else going dark at the edges.
 pub fn lamps(reaches: f32) -> Vec<Vec3> {
-    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
     let along = opening(reaches);
 
     vec![
@@ -955,7 +1140,7 @@ fn shell(reaches: f32) -> Vec<Aabb> {
     ));
 
     // the cellar's floor
-    let foot = face - LANDING - STEPS as f32 * TREAD;
+    let foot = stair_foot();
     out.push(Aabb::from_center_size(
         vec3(foot - DEEP * 0.5, -DOWN - THICK * 0.5, along),
         vec3(DEEP, THICK, SPAN),
@@ -1001,9 +1186,41 @@ fn shell(reaches: f32) -> Vec<Aabb> {
             vec3(foot - DEEP * 0.5, middle, along - SPAN * 0.5),
             vec3(DEEP, TALL, THICK),
         ),
+        // the +z side in three pieces round the way through to the spa, per
+        // spec 0008. The far wall would be the obvious place for another room
+        // and it is the fireplace: a door through a chimney breast is a door
+        // into a fire.
         (
-            vec3(foot - DEEP * 0.5, middle, along + SPAN * 0.5),
-            vec3(DEEP, TALL, THICK),
+            vec3(
+                (foot - DEEP + (crate::spa::doorway(reaches).x - crate::spa::DOOR * 0.5)) * 0.5,
+                middle,
+                along + SPAN * 0.5,
+            ),
+            vec3(
+                (crate::spa::doorway(reaches).x - crate::spa::DOOR * 0.5) - (foot - DEEP),
+                TALL,
+                THICK,
+            ),
+        ),
+        (
+            vec3(
+                ((crate::spa::doorway(reaches).x + crate::spa::DOOR * 0.5) + foot) * 0.5,
+                middle,
+                along + SPAN * 0.5,
+            ),
+            vec3(
+                foot - (crate::spa::doorway(reaches).x + crate::spa::DOOR * 0.5),
+                TALL,
+                THICK,
+            ),
+        ),
+        (
+            vec3(
+                crate::spa::doorway(reaches).x,
+                -DOWN + crate::spa::LINTEL + (TALL - crate::spa::LINTEL) * 0.5,
+                along + SPAN * 0.5,
+            ),
+            vec3(crate::spa::DOOR, TALL - crate::spa::LINTEL, THICK),
         ),
         // and a lid on it
         (
@@ -1020,6 +1237,109 @@ fn shell(reaches: f32) -> Vec<Aabb> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0007: the table has six pockets, at the corners and halfway down
+    /// each long side.
+    #[test]
+    fn the_table_has_six_pockets() {
+        let table = table(8.3);
+        let found = pockets(&table);
+        let play = baize(&table);
+        let top = table.at.y + table.size.y;
+
+        assert_eq!(found.len(), 6, "a pool table has six pockets");
+        for at in &found {
+            assert!(
+                (at.y - top).abs() < 1e-5,
+                "a pocket at {} off the bed",
+                at.y
+            );
+            // on the cushion line rather than out in the cloth: every one of
+            // them is at the cloth's edge across the table, and at its end or
+            // its middle along it
+            let across = (at.x - table.at.x).abs();
+            let along = (at.z - table.at.z).abs();
+
+            // in the gap between the rail ends: past the cloth's edge, and
+            // not past the outside of the rail
+            assert!(
+                across > play.x * 0.5 && across < play.x * 0.5 + RAIL,
+                "a pocket {} across a cloth {} wide with rails {} deep",
+                across,
+                play.x,
+                RAIL
+            );
+            assert!(
+                along < RAIL || (along > play.y * 0.5 && along < play.y * 0.5 + RAIL),
+                "a pocket {} along a cloth {} long",
+                along,
+                play.y
+            );
+        }
+
+        // four of them are corners and two are on the long sides
+        let middles = found
+            .iter()
+            .filter(|at| (at.z - table.at.z).abs() < 1e-5)
+            .count();
+        assert_eq!(middles, 2, "the side pockets are not halfway down");
+    }
+
+    /// Spec 0007: and six rails, with a mouth between every pair of them.
+    ///
+    /// Four rails running the whole way round is a bench with a green top. The
+    /// breaks are the whole point: a cushion has to stop short of a pocket or
+    /// the mouth is a hole in a flat wall.
+    #[test]
+    fn the_rails_stop_short_of_every_pocket() {
+        let table = table(8.3);
+        let rails = rails(&table);
+
+        assert_eq!(rails.len(), 6, "six rails and six breaks");
+
+        for at in pockets(&table) {
+            for (middle, size, _) in &rails {
+                let half = *size * 0.5;
+                let into = vec3(
+                    (half.x - (at.x - middle.x).abs()).max(0.0),
+                    0.0,
+                    (half.z - (at.z - middle.z).abs()).max(0.0),
+                );
+
+                // a rail may reach the mouth but never cover it
+                assert!(
+                    into.x < POCKET || into.z < POCKET,
+                    "a rail at {:?} covers the pocket at {:?}",
+                    middle,
+                    at
+                );
+            }
+        }
+    }
+
+    /// Spec 0007: every cushion faces in across the cloth.
+    ///
+    /// The old rails were placed from the wrong axis's half width and stood out
+    /// in the room with the cloth lying under them. Which way a cushion looks
+    /// is the thing that cannot be eyeballed from above.
+    #[test]
+    fn every_cushion_faces_the_cloth() {
+        let table = table(8.3);
+        let middle = table.at + Vec3::Y * table.size.y;
+
+        for (at, _, facing) in rails(&table) {
+            let inward = (middle - vec3(at.x, middle.y, at.z)).normalize_or_zero();
+
+            assert!(
+                facing.dot(inward) > 0.5,
+                "a cushion at {:?} faces {:?} and the cloth is {:?}",
+                at,
+                facing,
+                inward
+            );
+        }
+    }
+
     use crate::walk::walk;
     use glam::Vec3;
 

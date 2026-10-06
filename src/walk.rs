@@ -234,20 +234,72 @@ fn standing_at(at: Vec3, from: f32, to: f32, solid: &[Aabb]) -> Option<f32> {
 /// far your weight has to travel to be over it, and asked straight down,
 /// because what is there is a question about the floor and not about you.
 fn over_a_step(at: Vec3, flat: Vec3, wish: Vec3, radius: f32, dt: f32, solid: &[Aabb]) -> Vec3 {
-    let way = wish.normalize_or_zero();
-    let ahead = at + way * (radius + wish.length() * dt);
-    let Some(top) = standing_at(ahead, at.y + 1e-3, at.y + STEP, solid) else {
+    // the way you were stopped, which is not the way you were going. Walk at a
+    // step on the diagonal and `move_and_slide` takes you along it: what is
+    // left is the part it refused, and that part points straight at whatever
+    // stopped you. Probing along the way you were going instead puts the probe
+    // off to one side by however much of the movement was sideways, and the
+    // pool found that: stopped 0.38 from a tread, probing 0.36, and told there
+    // was no step there.
+    let refused = (at + wish * dt) - flat;
+    let way = vec3(refused.x, 0.0, refused.z);
+    let way = if way.length_squared() > 1e-8 {
+        way.normalize()
+    } else {
+        wish.normalize_or_zero()
+    };
+
+    // and more than one reach, lowest first. A sphere stopped by a riser rests
+    // on its top edge rather than its face, so its feet stop short by
+    // sqrt(2rh - h²), which at a full step is a whole radius and at a shallow
+    // one is much less. One reach either lands in front of the tread or sails
+    // over it onto the next one up, which is a step and a half and not a step.
+    // and more than one reach, nearest and lowest first. A sphere stopped by a
+    // riser rests on its top edge rather than its face, so its feet stop short
+    // by sqrt(2rh - h²), which at a full step is a whole radius and at a
+    // shallow one is much less. One reach either lands in front of the tread or
+    // sails over it onto the next one up, which is a step and a half.
+    let found = [0.7f32, 1.0, 1.4]
+        .iter()
+        .filter_map(|reach| {
+            let probe = flat + way * (radius * reach);
+
+            standing_at(probe, at.y + 1e-3, at.y + STEP, solid).map(|top| (top, *reach, probe))
+        })
+        .min_by(|one, other| one.0.total_cmp(&other.0).then(one.1.total_cmp(&other.1)));
+    let Some((top, _, probe)) = found else {
         return flat;
     };
 
     // and there has to be room to stand there, which is not the same question.
     // A step you can put a foot on with a wall just above it is a wall.
-    let lifted = vec3(at.x, top, at.z);
     let raised =
         move_and_slide(body(at, radius), Vec3::Y * (top - at.y), 1.0, solid) - Vec3::Y * radius;
     if raised.y < top - 1e-3 {
         return flat;
     }
+
+    // onto the step and not merely level with it.
+    //
+    // Lifted where it stood, the body is at the new height and still hanging
+    // over the drop, because what stopped it was the step's own edge: it cannot
+    // get closer by walking. The next frame finds nothing under it at that
+    // height, puts it back down on what it climbed off, and the whole thing
+    // repeats for ever. Out of the pool that was the fault exactly.
+    //
+    // A finger's width of clearance over the tread as well. Resting flush on a
+    // surface counts as touching it, and the sweep below then refuses the
+    // sideways movement and judges the step to have gained nothing.
+    // carried there rather than put there. Placing the body at the probe point
+    // walks it through whatever is between, and down the cellar stair it put it
+    // outside the world: it fell to minus twenty eight and kept going.
+    let up = vec3(at.x, top + 0.08, at.z);
+    let lifted = move_and_slide(
+        body(up, radius),
+        vec3(probe.x - at.x, 0.0, probe.z - at.z),
+        1.0,
+        solid,
+    ) - Vec3::Y * radius;
 
     let over = move_and_slide(body(lifted, radius), wish, dt, solid) - Vec3::Y * radius;
     if (over.xz() - at.xz()).length() <= (flat.xz() - at.xz()).length() {

@@ -13,6 +13,7 @@ mod metronome;
 mod neon;
 mod room;
 mod sign;
+mod spa;
 mod study;
 mod walk;
 mod wrecker;
@@ -97,9 +98,23 @@ struct Arcade {
     rug: Option<TextureId>,
     rug_mesh: Option<MeshId>,
     /// The grain on the walls and on the cabinets, so neither is a flat face.
+    /// The pool and the tub, per spec 0008 and the engine's spec 0043. Two
+    /// bodies of water rather than one, because they are at different heights
+    /// and a heightfield has one still level.
+    pool: blitzkit::water::Water,
+    tub: blitzkit::water::Water,
+    pool_mesh: Option<MeshId>,
+    tub_mesh: Option<MeshId>,
+    /// How long since the tub last blew, and since the pool was last stirred.
+    blew: f32,
+    stirred: f32,
+    /// How full of steam the sauna is, from nought to one. Spec 0008.
+    steamy: f32,
     says: Option<TextureId>,
     /// The room's own name, for the neon over the near end of the aisle.
     named: Option<TextureId>,
+    /// And the baths', for the tiled panel over their door. Spec 0008.
+    baths: Option<TextureId>,
     point_mesh: Option<MeshId>,
     hung: Option<MeshId>,
     boards: Option<TextureId>,
@@ -108,6 +123,12 @@ struct Arcade {
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
     peg: Option<MeshId>,
+    /// A pocket's net. Spec 0007.
+    bag: Option<MeshId>,
+    /// The turned pieces in the baths. Spec 0008.
+    urn: Option<MeshId>,
+    sconce: Option<MeshId>,
+    basin: Option<MeshId>,
     stave: Option<TextureId>,
     flame: Option<MeshId>,
     candlestick: Option<MeshId>,
@@ -191,7 +212,25 @@ impl Arcade {
         let spin = display::Spin::of(room.displays.len());
         let (cradle, ropes) = cradle::strung();
 
+        let (pool_at, pool_size, pool_deep) = spa::pool(room.reaches);
+        let (tub_at, tub_wide, tub_deep) = spa::tub(room.reaches);
+        let mut pool = blitzkit::water::Water::new(pool_at, pool_size, pool_deep, spa::CELLS);
+        pool.damping = spa::SETTLES;
+        pool.speed = spa::RUNS;
+
         Self {
+            pool,
+            tub: blitzkit::water::Water::new(
+                tub_at,
+                glam::vec2(tub_wide, tub_wide),
+                tub_deep,
+                spa::TUB_CELLS,
+            ),
+            pool_mesh: None,
+            tub_mesh: None,
+            blew: 0.0,
+            stirred: 0.0,
+            steamy: 0.0,
             at: if staged() { POSED_AT } else { room.doorway() },
             falling: 0.0,
             eye: 0.0,
@@ -210,6 +249,7 @@ impl Arcade {
             rug_mesh: None,
             says: None,
             named: None,
+            baths: None,
             point_mesh: None,
             hung: None,
             boards: None,
@@ -218,6 +258,10 @@ impl Arcade {
             hoop: None,
             bottle: None,
             peg: None,
+            bag: None,
+            urn: None,
+            sconce: None,
+            basin: None,
             stave: None,
             flame: None,
             candlestick: None,
@@ -284,6 +328,10 @@ impl Arcade {
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
             // the book that is a handle. Spec 0007.
             Some(room::Seen::Case) => self.room.open = !self.room.open,
+            // and the sauna's glass, which is a door and behaves like one.
+            // Spec 0008.
+            Some(room::Seen::Sauna) => self.room.sauna_open = !self.room.sauna_open,
+            Some(room::Seen::Baths) => self.room.baths_open = !self.room.baths_open,
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
                 metronome::NAME => self.metronome.press(),
@@ -392,6 +440,14 @@ impl Arcade {
         }
 
         true
+    }
+
+    /// Whether you are standing in the pool.
+    ///
+    /// Over it and under its surface. Over it alone is standing on the coping
+    /// looking down, which is not wading.
+    fn wading(&self) -> bool {
+        spa::wading(self.room.reaches, self.at)
     }
 
     /// What the line under the sight says about a toy.
@@ -604,6 +660,16 @@ impl Game for Arcade {
         if self.wants_lock != self.locked {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
+
+        // the water, written over rather than uploaded again. Spec 0042 of the
+        // engine is what this is for: without it a surface that moves is a new
+        // mesh every frame and a program that grows until it stops.
+        if let Some(mesh) = self.pool_mesh {
+            renderer.update_mesh(mesh, &self.pool.surface());
+        }
+        if let Some(mesh) = self.tub_mesh {
+            renderer.update_mesh(mesh, &self.tub.surface());
+        }
     }
 
     fn load(&mut self, renderer: &mut Renderer) {
@@ -634,6 +700,10 @@ impl Game for Arcade {
         self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
         self.peg = Some(renderer.add_mesh(&cellar::peg_mesh()));
+        self.bag = Some(renderer.add_mesh(&cellar::bag_mesh()));
+        self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
+        self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
+        self.basin = Some(renderer.add_mesh(&spa::basin_mesh()));
         self.flame = Some(renderer.add_mesh(&cellar::flame_mesh()));
         self.candlestick = Some(renderer.add_mesh(&cellar::candlestick_mesh()));
         self.decanter = Some(renderer.add_mesh(&cellar::decanter_mesh()));
@@ -661,6 +731,9 @@ impl Game for Arcade {
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
         self.named = Some(renderer.add_texture(&blitzkit::text::drawn(neon::SAYS, neon::TEXELS)));
+        self.baths = Some(renderer.add_texture(&blitzkit::text::drawn(spa::SAYS, spa::TEXELS)));
+        self.pool_mesh = Some(renderer.add_mesh(&self.pool.surface()));
+        self.tub_mesh = Some(renderer.add_mesh(&self.tub.surface()));
         self.point_mesh = Some(renderer.add_mesh(&sign::point_mesh()));
         self.hung = Some(renderer.add_mesh(&room::hung_mesh()));
         // counted off the nook rather than off the quad, so a plank is the same
@@ -792,13 +865,18 @@ impl Game for Arcade {
             }
         }
 
+        // in the water you are slower, which is most of what says you are in it
+        // rather than beside it. Spec 0008.
+        let wading = self.wading();
+        let pace = spa::pace(self.room.reaches, self.at, SPEED);
+
         // along the floor, over anything no taller than a step, and down.
         // Spec 0007: the building has a height in it now, so getting about is
         // no longer one call that pushes you sideways.
         let (at, falling) = walk::walk(
             self.at,
             if wish.length_squared() > 1e-6 {
-                wish.normalize() * SPEED
+                wish.normalize() * pace
             } else {
                 Vec3::ZERO
             },
@@ -807,8 +885,53 @@ impl Game for Arcade {
             dt,
             &self.room.solid(),
         );
+        let went = (at - self.at).length() / dt.max(1e-4);
         self.at = at;
         self.falling = falling;
+
+        // and the water knows you are in it. The ripples following you about
+        // are the thing this room was built for.
+        if wading && went > 0.05 {
+            self.pool.push(
+                vec3(self.at.x, self.pool.at.y, self.at.z),
+                RADIUS * 3.0,
+                went * spa::WAKE * dt,
+            );
+        }
+
+        // the tub bubbles, which is a push in the middle of it rather than
+        // anything simulated
+        self.blew += dt;
+        if self.blew >= spa::BLOWS {
+            self.blew -= spa::BLOWS;
+            self.tub.push(self.tub.at, spa::TUB * 0.35, spa::BLOWN);
+        }
+
+        // and the pool is stirred by nothing in particular, because perfectly
+        // flat water is a sheet of tinted glass
+        self.stirred += dt;
+        if self.stirred >= spa::STIRS {
+            self.stirred -= spa::STIRS;
+            let (middle, size, _) = spa::pool(self.room.reaches);
+            let at = spa::stirred(middle, size, self.since);
+
+            self.pool.push(at, spa::STIR_WIDE, spa::STIRRED);
+        }
+
+        // the sauna fills with steam while its door is shut and empties when
+        // it is opened, much faster: a door is a hole and steam is lighter than
+        // air. Spec 0008.
+        let to = if self.room.sauna_open { 0.0 } else { 1.0 };
+        let by = dt
+            / if self.room.sauna_open {
+                spa::CLEARS
+            } else {
+                spa::FILLS
+            };
+        self.steamy += (to - self.steamy).clamp(-by, by);
+
+        self.pool.step(dt);
+        self.tub.step(dt);
 
         // the eye catching up with the feet. Nothing while you are on the
         // level, because then they are the same number.
@@ -866,6 +989,22 @@ impl Game for Arcade {
             // what it is called. Open, the whole leaf is the thing, and calling
             // a bookcase a book is the sentence the secret was built on used
             // backwards.
+            (None, Some(room::Seen::Baths)) => (
+                Some(String::from("the door to the baths")),
+                Some(String::from(if self.room.baths_open {
+                    "Click or press enter to close it."
+                } else {
+                    "Click or press enter to open it."
+                })),
+            ),
+            (None, Some(room::Seen::Sauna)) => (
+                Some(String::from("the sauna door")),
+                Some(String::from(if self.room.sauna_open {
+                    "Click or press enter to close it."
+                } else {
+                    "Click or press enter to open it."
+                })),
+            ),
             (None, Some(room::Seen::Case)) => {
                 let (what, how) = if self.room.open {
                     ("the bookcase", "Click or press enter to push it back.")
@@ -1480,6 +1619,265 @@ impl Game for Arcade {
                 cellar::Made::Stone => {
                     scene.push_colored(cube, &laid, aim::CELLAR);
                 }
+            }
+        }
+
+        // the spa behind the cellar. Spec 0008.
+        for (box_, made) in spa::built(self.room.reaches)
+            .into_iter()
+            .chain(spa::fittings(self.room.reaches))
+        {
+            let laid = Transform::at(box_.center()).with_scale(box_.size());
+
+            scene.push_colored(
+                cube,
+                &laid,
+                match made {
+                    spa::Made::Tile => aim::SPA_TILE,
+                    spa::Made::Wall => aim::SPA_WALL,
+                    spa::Made::Basin => aim::SPA_BASIN,
+                    spa::Made::Step => aim::SPA_STEP,
+                    spa::Made::Tub => aim::SPA_TUB,
+                    spa::Made::Timber => aim::SAUNA_TIMBER,
+                    spa::Made::Bench => aim::SAUNA_BENCH,
+                    spa::Made::Stove => aim::SAUNA_STOVE,
+                    spa::Made::Dado => aim::SPA_DADO,
+                    spa::Made::Band => aim::SPA_BAND,
+                    spa::Made::Pier => aim::SPA_PIER,
+                    spa::Made::Inlay => aim::SPA_INLAY,
+                    spa::Made::Brass => aim::BRASS,
+                    spa::Made::Cut => aim::SPA_CUT,
+                },
+            );
+        }
+
+        // the turned pieces in the baths: the urns, the sconces' bowls and the
+        // fountain. Spec 0008.
+        if let (Some(urn), Some(sconce), Some(basin)) = (self.urn, self.sconce, self.basin) {
+            for at in spa::urns(self.room.reaches) {
+                scene.push_material(
+                    urn,
+                    &Transform::at(at).with_scale(vec3(spa::URN, spa::URN_TALL, spa::URN)),
+                    aim::SPA_URN,
+                    180.0,
+                );
+            }
+            for at in spa::sconces(self.room.reaches) {
+                scene.push_material(
+                    sconce,
+                    &Transform::at(at).with_scale(vec3(
+                        spa::SCONCE.x * 1.6,
+                        spa::SCONCE.y,
+                        spa::SCONCE.x * 1.6,
+                    )),
+                    aim::SPA_CUT,
+                    120.0,
+                );
+            }
+
+            let at = spa::fountain(self.room.reaches);
+            scene.push_material(
+                basin,
+                &Transform::at(at).with_scale(vec3(spa::BASIN.x, spa::BASIN.y * 1.6, spa::BASIN.x)),
+                aim::SPA_CUT,
+                140.0,
+            );
+        }
+
+        // the door to the baths, and the tiled sign over it on the cellar's
+        // side, which is where it is read. Spec 0008.
+        {
+            let (middle, turn, half) = spa::leaf(self.room.reaches, self.room.baths_swing);
+
+            // a glazed door and not a slab: two stiles up the sides, three
+            // rails across, and frosted glass in the two openings between
+            // them. The slab was what Jake called bland, and a slab is what it
+            // was: one box the size of the hole.
+            let put = |off: Vec3, size: Vec3, colour: glam::Vec4, scene: &mut Scene| {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(middle + turn * off)
+                        .with_rotation(turn)
+                        .with_scale(size),
+                    colour,
+                );
+            };
+
+            let tall = half.y * 2.0;
+            let wide = half.x * 2.0;
+            let mid = half.y - tall * spa::MID_AT;
+            let pane = wide - spa::STILE * 2.0;
+
+            for side in [-1.0f32, 1.0] {
+                put(
+                    Vec3::X * side * (half.x - spa::STILE * 0.5),
+                    vec3(spa::STILE, tall, half.z * 2.0),
+                    aim::BATHS_DOOR,
+                    scene,
+                );
+            }
+            for (up, deep) in [
+                (half.y - spa::DOOR_RAIL * 0.5, spa::DOOR_RAIL),
+                (-half.y + spa::DOOR_RAIL * 0.5, spa::DOOR_RAIL),
+                (mid, spa::MID_RAIL),
+            ] {
+                put(
+                    Vec3::Y * up,
+                    vec3(pane, deep, half.z * 2.0),
+                    aim::BATHS_DOOR,
+                    scene,
+                );
+            }
+
+            // the two lights, frosted. Set back from the frame's own faces so
+            // the stiles and rails stand proud of the glass, the way joinery
+            // does.
+            for (from, to) in [
+                (mid + spa::MID_RAIL * 0.5, half.y - spa::DOOR_RAIL),
+                (-half.y + spa::DOOR_RAIL, mid - spa::MID_RAIL * 0.5),
+            ] {
+                if to - from <= 0.0 {
+                    continue;
+                }
+
+                put(
+                    Vec3::Y * (from + to) * 0.5,
+                    vec3(pane, to - from, half.z * 1.2),
+                    aim::FROSTED,
+                    scene,
+                );
+            }
+
+            // the architrave and the reveal, so the opening is lined rather
+            // than showing the cellar's bare stone round it
+            for (middle, size) in spa::architrave(self.room.reaches) {
+                match self.grain.first() {
+                    Some(grain) => scene.push_textured(
+                        cube,
+                        *grain,
+                        &Transform::at(middle).with_scale(size),
+                        aim::TIMBER[0],
+                        aim::DULL,
+                    ),
+                    None => scene.push_colored(
+                        cube,
+                        &Transform::at(middle).with_scale(size),
+                        aim::TIMBER[0],
+                    ),
+                }
+            }
+
+            let at = spa::sign(self.room.reaches);
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(vec3(spa::SIGN.x, spa::SIGN.y, spa::SIGN_OUT)),
+                aim::BATHS_EDGE,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(at - Vec3::Z * spa::SIGN_OUT * 0.3).with_scale(vec3(
+                    spa::SIGN.x - spa::SIGN_EDGE * 2.0,
+                    spa::SIGN.y - spa::SIGN_EDGE * 2.0,
+                    spa::SIGN_OUT,
+                )),
+                aim::BATHS_TILE,
+            );
+
+            if let Some(hung) = self.hung {
+                let letters = Transform::at(at - Vec3::Z * spa::SIGN_OUT * 0.9)
+                    .with_rotation(glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2))
+                    .with_scale(vec3(0.02, spa::LETTERS, spa::SIGN.x - spa::SIGN_EDGE * 4.0));
+
+                match self.baths {
+                    Some(says) => {
+                        scene.push_textured(hung, says, &letters, aim::BATHS_LETTERS, 8.0)
+                    }
+                    None => scene.push_colored(hung, &letters, aim::BATHS_LETTERS),
+                }
+            }
+        }
+
+        // the sauna's glass door, in its frame, swung as far as it is open.
+        // Spec 0008.
+        {
+            let (middle, turn, half) = spa::sauna_leaf(self.room.reaches, self.room.sauna_swing);
+
+            // the frame first, which is what makes a pane read as a door
+            for (along, up) in [(1.0f32, 0.0f32), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+                let long = if along == 0.0 {
+                    vec3(spa::PANE * 1.4, spa::FRAME, half.z * 2.0)
+                } else {
+                    vec3(spa::PANE * 1.4, half.y * 2.0, spa::FRAME)
+                };
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(
+                        middle
+                            + turn
+                                * vec3(
+                                    0.0,
+                                    up * (half.y - spa::FRAME * 0.5),
+                                    along * (half.z - spa::FRAME * 0.5),
+                                ),
+                    )
+                    .with_rotation(turn)
+                    .with_scale(long),
+                    aim::SAUNA_FRAME,
+                );
+            }
+
+            scene.push_material(
+                cube,
+                &Transform::at(middle).with_rotation(turn).with_scale(vec3(
+                    half.x * 2.0,
+                    half.y * 2.0,
+                    half.z * 2.0,
+                )),
+                aim::SAUNA_GLASS,
+                260.0,
+            );
+        }
+
+        // steam, over the tub and over the stove. Translucent and soft edged,
+        // which is the whole of it: the engine has no particle system and this
+        // does not need one.
+        if let Some(ball) = self.ball_mesh {
+            let (tub_at, tub_wide, _) = spa::tub(self.room.reaches);
+            let stove = spa::stove_lamp(self.room.reaches);
+
+            // and the fug standing in the sauna, which is what the room fills
+            // with rather than what rises off the stove
+            for (at, size, thick) in
+                spa::fug(spa::sauna(self.room.reaches), self.since, self.steamy)
+            {
+                scene.push_colored(
+                    ball,
+                    &Transform::at(at).with_scale(size),
+                    aim::STEAM.truncate().extend(thick),
+                );
+            }
+
+            for (over, wide) in [(tub_at, tub_wide), (stove, spa::STOVE.x * 2.0)] {
+                for (at, size, thick) in spa::steam(over, wide, self.since) {
+                    scene.push_colored(
+                        ball,
+                        &Transform::at(at).with_scale(size),
+                        aim::STEAM.truncate().extend(thick),
+                    );
+                }
+            }
+        }
+
+        // and the water in it, last and see-through, so the basin under it
+        // shows. Its vertices are already in the world, so it is drawn where it
+        // is rather than placed.
+        for (mesh, colour) in [
+            (self.pool_mesh, aim::WATER),
+            (self.tub_mesh, aim::WATER_HOT),
+        ] {
+            if let Some(mesh) = mesh {
+                scene.push_material(mesh, &Transform::at(Vec3::ZERO), colour, 420.0);
             }
         }
 
@@ -2529,35 +2927,127 @@ impl Game for Arcade {
             // rails round it with pockets cut into the corners.
             if bench.name == cellar::POOLHALL {
                 let top = bench.size.y;
-                let rail = aim::RAIL;
+                let rail = cellar::RAIL;
+                let high = cellar::RAIL_UP;
                 let frame = if lit { aim::BENCH_ON } else { aim::TRIM };
+                let play = cellar::baize(bench);
 
-                // the cloth, inside the rails, with its face at the top
+                // the slate, and the cloth laid over it. The cloth runs to the
+                // rails and no further: it was inset by a rail's width all
+                // round, which left a lip of bare timber inside the cushions
+                // that nothing on a table has.
                 scene.push_colored(
                     cube,
-                    &Transform::at(bench.at + Vec3::Y * (top - rail * 0.5)).with_scale(vec3(
-                        bench.size.x - rail * 2.0,
-                        rail,
-                        bench.size.z - rail * 2.0,
-                    )),
+                    &Transform::at(bench.at + Vec3::Y * (top - rail * 0.5))
+                        .with_scale(vec3(play.x, rail, play.y)),
                     aim::CLOTH,
                 );
 
-                // the four rails round it. Each sits out at its own axis's half
-                // width, which is the thing this got wrong: taken from the
-                // other axis they stand at twice the table's width, out in the
-                // room, and lie across the cloth on the way.
-                let high = rail * 1.8;
-                for (way, out, span) in [
-                    (Vec3::X, bench.size.x, vec3(rail, high, bench.size.z)),
-                    (Vec3::Z, bench.size.z, vec3(bench.size.x, high, rail)),
-                ] {
-                    for side in [-1.0f32, 1.0] {
-                        let at = bench.at
-                            + way * side * (out - rail) * 0.5
-                            + Vec3::Y * (top - high * 0.5);
+                // the six rails. Each is three boards and not one: a body, a
+                // cap over it that oversails both ways, and a bead under that.
+                // One box is a two by four, which is what this was. The lines a
+                // cap and a bead throw are the whole of why a rail reads as
+                // carved rather than sawn.
+                let timber = self.grain.first();
+                let board = |middle: Vec3, size: Vec3, colour: glam::Vec4, scene: &mut Scene| {
+                    match timber {
+                        Some(grain) => scene.push_textured(
+                            cube,
+                            *grain,
+                            &Transform::at(middle).with_scale(size),
+                            colour,
+                            aim::DULL,
+                        ),
+                        None => scene.push_colored(
+                            cube,
+                            &Transform::at(middle).with_scale(size),
+                            colour,
+                        ),
+                    }
+                };
 
-                        scene.push_colored(cube, &Transform::at(at).with_scale(span), frame);
+                for (middle, size, facing) in cellar::rails(bench) {
+                    let wood = if lit { aim::BENCH_ON } else { aim::TIMBER[0] };
+                    let along = size * facing.abs();
+                    let thick = along.x + along.y + along.z;
+
+                    // the body, then the bead, then the cap
+                    board(
+                        middle - Vec3::Y * cellar::CAP * 0.5,
+                        vec3(size.x, size.y - cellar::CAP, size.z),
+                        wood,
+                        scene,
+                    );
+                    board(
+                        middle + Vec3::Y * (size.y * 0.5 - cellar::CAP - cellar::BEAD * 0.5),
+                        size - along
+                            + facing.abs() * (thick + cellar::CAP_OUT)
+                            + Vec3::Y * (cellar::BEAD - size.y),
+                        wood,
+                        scene,
+                    );
+                    board(
+                        middle + Vec3::Y * (size.y * 0.5 - cellar::CAP * 0.5),
+                        size - along
+                            + facing.abs() * (thick + cellar::CAP_OUT * 2.0)
+                            + Vec3::Y * (cellar::CAP - size.y),
+                        wood,
+                        scene,
+                    );
+
+                    // and the cushion on the face that looks in, cloth over
+                    // rubber, standing proud of the rail and lower than it
+                    let out = thick * 0.5 + cellar::CUSHION * 0.5;
+                    let face = size - along + facing.abs() * cellar::CUSHION;
+
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(
+                            middle + facing * out - Vec3::Y * (high * 0.26 + cellar::CAP * 0.5),
+                        )
+                        .with_scale(vec3(face.x, high * 0.48, face.z)),
+                        aim::CLOTH,
+                    );
+                }
+
+                // the sights, which is the marking every table in the world
+                // carries and the quickest thing that says what this is
+                for at in cellar::sights(bench) {
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(at + Vec3::Y * cellar::CAP * 0.5)
+                            .with_scale(Vec3::splat(cellar::SIGHT)),
+                        aim::DIAMOND,
+                    );
+                }
+
+                // and the six pockets: a mouth cut flush with the cloth, and a
+                // net hanging under it. A disc alone reads as something lying
+                // on the table however dark it is, because nothing about a disc
+                // says there is anywhere to go.
+                for at in cellar::pockets(bench) {
+                    if let Some(peg) = self.peg {
+                        scene.push_colored(
+                            peg,
+                            &Transform::at(at - Vec3::Y * 0.012).with_scale(vec3(
+                                cellar::POCKET * 2.0,
+                                0.02,
+                                cellar::POCKET * 2.0,
+                            )),
+                            aim::POCKET,
+                        );
+                    }
+                    if let Some(bag) = self.bag {
+                        scene.push_material(
+                            bag,
+                            &Transform::at(at - Vec3::Y * 0.02).with_scale(vec3(
+                                cellar::POCKET * 2.0,
+                                cellar::BAG,
+                                cellar::POCKET * 2.0,
+                            )),
+                            aim::NET,
+                            48.0,
+                        );
                     }
                 }
 
@@ -2736,6 +3226,26 @@ impl Game for Arcade {
             neon::COLOUR,
             neon::LIT,
             neon::RANGE,
+        ));
+
+        // the spa's own lamps, and the sauna's, which is a different warmth
+        // from the room it stands in. Spec 0008.
+        for lamp in spa::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::SPA_LAMP,
+                spa::LAMP_LIT,
+                spa::LAMP_RANGE,
+            ));
+        }
+        let stove = spa::stove_lamp(self.room.reaches);
+        shades.push((
+            eye.distance_squared(stove),
+            stove,
+            aim::SAUNA_LAMP,
+            spa::SAUNA_LIT,
+            spa::SAUNA_RANGE,
         ));
 
         // and the one over the pool table, in the same list as everything else.

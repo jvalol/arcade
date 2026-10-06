@@ -475,6 +475,10 @@ pub enum Seen {
     Bench(usize),
     /// The one case that is a door. Spec 0007.
     Case,
+    /// The sauna's glass door. Spec 0008.
+    Sauna,
+    /// The door between the cellar and the baths. Spec 0008.
+    Baths,
 }
 
 pub struct Room {
@@ -495,6 +499,13 @@ pub struct Room {
     /// fact. It is a fact about a state now, and the tests that flood the floor
     /// have to say which state they mean.
     pub open: bool,
+    /// And whether the sauna's glass door is, which eases the same way on its
+    /// own clock. Spec 0008.
+    pub sauna_open: bool,
+    pub sauna_swing: f32,
+    /// And the door to the baths, which is a third thing that swings.
+    pub baths_open: bool,
+    pub baths_swing: f32,
     /// How far it actually is, nought shut and one open, which follows `open`
     /// rather than being it. The box follows this too: a door drawn halfway
     /// open that stops you where it was shut is a worse thing than one that
@@ -615,6 +626,10 @@ impl Room {
             walls,
             reaches,
             open: false,
+            sauna_open: false,
+            sauna_swing: 0.0,
+            baths_open: false,
+            baths_swing: 0.0,
             swing: 0.0,
         }
     }
@@ -736,6 +751,20 @@ impl Room {
         let by = dt / Self::SWINGS_IN;
 
         self.swing += (to - self.swing).clamp(-by, by);
+
+        // the sauna's door is lighter than a bookcase with four hundred books
+        // in it, so it moves at its own pace
+        let to = if self.sauna_open { 1.0 } else { 0.0 };
+        let by = dt / crate::spa::SAUNA_SWINGS;
+
+        self.sauna_swing += (to - self.sauna_swing).clamp(-by, by);
+
+        // and the door to the baths, heavier than glass and lighter than a
+        // bookcase with four hundred books in it
+        let to = if self.baths_open { 1.0 } else { 0.0 };
+        let by = dt / crate::spa::SWINGS;
+
+        self.baths_swing += (to - self.baths_swing).clamp(-by, by);
     }
 
     /// Where a leaf stands and how it is turned, part way through its swing.
@@ -809,6 +838,9 @@ impl Room {
         let mut out = self.walls.clone();
         out.push(self.floor());
         out.extend(crate::cellar::solid(self.reaches));
+        out.extend(crate::spa::solid(self.reaches));
+        out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
+        out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
         out.extend(
             self.stood
                 .iter()
@@ -877,6 +909,17 @@ impl Room {
             .handle()
             .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
 
+        let glass = {
+            let leaf = crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing);
+
+            slab(from, way, &leaf).map(|far| (Seen::Sauna, far))
+        };
+        let baths = {
+            let leaf = crate::spa::leaf_box(self.reaches, self.baths_swing);
+
+            slab(from, way, &leaf).map(|far| (Seen::Baths, far))
+        };
+
         // and, once it is moving, the leaves themselves. Hunting for the one
         // book again to shut the wall is the same needle in the same haystack,
         // and there is nothing secret left to keep: the hole is standing open.
@@ -906,6 +949,8 @@ impl Room {
             .chain(shapes)
             .chain(benches)
             .chain(case)
+            .chain(glass)
+            .chain(baths)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
@@ -1173,13 +1218,17 @@ mod tests {
 
         let room = Room::of(some(12));
         let solid = room.solid();
-        // the walls, the floor, the way down, the cabinets, the benches, the
-        // plinths and the bookcases
+        // the walls, the floor, the way down, the spa, the cabinets, the
+        // benches, the plinths and the bookcases
         assert_eq!(
             solid.len(),
             room.walls.len()
                 + 1
                 + cellar::solid(room.reaches).len()
+                + crate::spa::solid(room.reaches).len()
+                // the sauna's glass door and the baths' own, both solid
+                // wherever they are
+                + 2
                 + 12
                 + room.benches.len()
                 + room.displays.len()
@@ -1980,6 +2029,10 @@ mod tests {
             room.walls.len()
                 + 1
                 + cellar::solid(room.reaches).len()
+                + crate::spa::solid(room.reaches).len()
+                // the sauna's glass door and the baths' own, both solid
+                // wherever they are
+                + 2
                 + 13
                 + room.benches.len()
                 + room.displays.len()

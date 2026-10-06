@@ -252,8 +252,15 @@ pub const BOOK_HANDLE: Vec4 = vec4(1.55, 1.30, 0.80, 1.0);
 /// room of stone. The hall is neon and the nook is wood and books, so a cellar
 /// with one green rectangle in it is a room with a pool table in it and not a
 /// room with furniture.
+/// And the mouth of a pocket, which is darker than anything else in the room,
+/// because what you are looking at is a hole.
+pub const POCKET: Vec4 = vec4(0.04, 0.035, 0.03, 1.0);
 pub const CLOTH: Vec4 = vec4(0.10, 0.42, 0.22, 1.0);
-pub const RAIL: f32 = 0.07;
+
+/// The sights down the rails, in bone, and the net under a pocket, which is
+/// leather and string and reads as neither if it is lit like timber.
+pub const DIAMOND: Vec4 = vec4(0.88, 0.85, 0.76, 1.0);
+pub const NET: Vec4 = vec4(0.17, 0.13, 0.10, 1.0);
 
 /// What stands on the mantel. Spec 0007.
 ///
@@ -359,6 +366,72 @@ pub fn arcade_tube() -> Vec4 {
 pub fn arcade_letters() -> Vec4 {
     (glam::vec3(1.0, 0.26, 0.62) * NEON).extend(1.0)
 }
+
+/// The spa, per spec 0008. Tile and plaster rather than the cellar's mahogany:
+/// panelling belongs in a library and would not last a week over a pool, which
+/// is the kind of reason a room should be able to give for what it is made of.
+pub const SPA_TILE: Vec4 = vec4(0.62, 0.59, 0.55, 1.0);
+pub const SPA_WALL: Vec4 = vec4(0.74, 0.71, 0.67, 1.0);
+
+/// The inside of the basin, which is what gives the water its colour: a
+/// heightfield is see-through and most of what you look at through it is this.
+pub const SPA_BASIN: Vec4 = vec4(0.30, 0.52, 0.56, 1.0);
+pub const SPA_STEP: Vec4 = vec4(0.38, 0.58, 0.60, 1.0);
+
+/// Cedar for the tub, pine for the sauna, iron for the stove.
+pub const SPA_TUB: Vec4 = vec4(0.43, 0.25, 0.16, 1.0);
+pub const SAUNA_TIMBER: Vec4 = vec4(0.64, 0.46, 0.27, 1.0);
+pub const SAUNA_BENCH: Vec4 = vec4(0.72, 0.54, 0.33, 1.0);
+pub const SAUNA_STOVE: Vec4 = vec4(0.15, 0.14, 0.14, 1.0);
+
+/// The water itself, and what it is lit by.
+///
+/// Alpha under one, so spec 0018 of the engine draws it see-through and the
+/// basin under it shows. A pool you cannot see into is a blue lid.
+pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.62);
+pub const WATER_HOT: Vec4 = vec4(0.32, 0.56, 0.60, 0.74);
+/// The sauna's glass, and the steam over hot water.
+///
+/// Both lean on spec 0018: alpha under one, drawn after everything solid. The
+/// glass is barely tinted, because a sauna door is clear and what makes it read
+/// as glass is the frame round it and the shine on it rather than its colour.
+pub const SAUNA_GLASS: Vec4 = vec4(0.80, 0.86, 0.84, 0.26);
+pub const SAUNA_FRAME: Vec4 = vec4(0.52, 0.37, 0.21, 1.0);
+pub const STEAM: Vec4 = vec4(0.94, 0.95, 0.96, 1.0);
+
+/// The sign over the door to the baths: glazed tile, a border round it, and the
+/// name cut into it dark. Not neon, which is the hall, and not a painted plank,
+/// which is the nook.
+pub const BATHS_TILE: Vec4 = vec4(0.86, 0.88, 0.86, 1.0);
+pub const BATHS_EDGE: Vec4 = vec4(0.33, 0.47, 0.50, 1.0);
+pub const BATHS_LETTERS: Vec4 = vec4(0.13, 0.26, 0.30, 1.0);
+
+/// And the door itself, which is a door between two rooms and made of what a
+/// door is made of.
+pub const BATHS_DOOR: Vec4 = vec4(0.36, 0.24, 0.15, 1.0);
+
+/// And its glass, which is frosted rather than clear: you can see there is a
+/// lit room through it and not what is in the room, which is the whole of what
+/// a bathroom door's glass is for. Thicker than the sauna's, since frosting is
+/// what stops you seeing through.
+pub const FROSTED: Vec4 = vec4(0.80, 0.86, 0.85, 0.62);
+
+/// The tiling and the fittings in the baths, per spec 0008.
+///
+/// Glazed tile is not plaster: it is darker, greener and it shines, which is
+/// the difference between a bath house and a corridor.
+pub const SPA_DADO: Vec4 = vec4(0.40, 0.56, 0.57, 1.0);
+pub const SPA_BAND: Vec4 = vec4(0.20, 0.38, 0.42, 1.0);
+pub const SPA_PIER: Vec4 = vec4(0.68, 0.66, 0.62, 1.0);
+pub const SPA_INLAY: Vec4 = vec4(0.30, 0.44, 0.47, 1.0);
+
+/// Cut stone for the plinths, the seat and the fountain's basin, terracotta for
+/// the urns, and brass for everything a hand would touch.
+pub const SPA_CUT: Vec4 = vec4(0.78, 0.75, 0.70, 1.0);
+pub const SPA_URN: Vec4 = vec4(0.56, 0.32, 0.22, 1.0);
+
+pub const SPA_LAMP: Vec3 = glam::vec3(0.86, 0.94, 1.0);
+pub const SAUNA_LAMP: Vec3 = glam::vec3(1.0, 0.68, 0.34);
 
 pub const SIGN_BOARD: Vec4 = vec4(0.20, 0.09, 0.07, 1.0);
 pub const SIGN_GILT: Vec4 = vec4(0.70, 0.55, 0.26, 1.0);
