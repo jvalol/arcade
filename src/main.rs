@@ -9,6 +9,7 @@ mod globe;
 mod gyro;
 mod metronome;
 mod room;
+mod sign;
 mod study;
 mod wrecker;
 
@@ -79,6 +80,9 @@ struct Arcade {
     rug: Option<TextureId>,
     rug_mesh: Option<MeshId>,
     /// The grain on the walls and on the cabinets, so neither is a flat face.
+    says: Option<TextureId>,
+    point_mesh: Option<MeshId>,
+    hung: Option<MeshId>,
     boards: Option<TextureId>,
     boards_mesh: Option<MeshId>,
     wall_grain: Option<TextureId>,
@@ -156,6 +160,9 @@ impl Arcade {
             carpet: None,
             rug: None,
             rug_mesh: None,
+            says: None,
+            point_mesh: None,
+            hung: None,
             boards: None,
             boards_mesh: None,
             wall_grain: None,
@@ -515,6 +522,9 @@ impl Game for Arcade {
         let (_, rug) = room::open_floor(self.room.reaches);
         self.rug = Some(renderer.add_texture(&carpet::rug(rug.z / rug.x)));
         self.boards = Some(renderer.add_texture(&carpet::boards(carpet::BOARD_SEED)));
+        self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
+        self.point_mesh = Some(renderer.add_mesh(&sign::point_mesh()));
+        self.hung = Some(renderer.add_mesh(&room::hung_mesh()));
         // counted off the nook rather than off the quad, so a plank is the same
         // width whichever way the room is longer
         let (_, nook) = room::nook_floor(self.room.reaches);
@@ -1123,6 +1133,93 @@ impl Game for Arcade {
             }
         }
 
+        // the sign hung over the aisle, which is the only thing in the hall
+        // that says the nook is there at all. Spec 0006.
+        if let (Some(hung), Some(point)) = (self.hung, self.point_mesh) {
+            let at = sign::at(self.room.reaches);
+            // the gilt rim is the whole plank and the painted face stands proud
+            // of it, so the gold shows round the edge rather than being four
+            // more things to place
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(vec3(sign::WIDE, sign::TALL, sign::THICK)),
+                aim::SIGN_GILT,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(vec3(
+                    sign::WIDE - sign::BORDER * 2.0,
+                    sign::TALL - sign::BORDER * 2.0,
+                    sign::THICK + sign::PROUD,
+                )),
+                aim::SIGN_BOARD,
+            );
+
+            // the end cut to a point, which is the direction. The wedge runs
+            // out along its own -x, so it needs no turning: the nook is that
+            // way from here.
+            scene.push_colored(
+                point,
+                &Transform::at(at - Vec3::X * sign::WIDE * 0.5).with_scale(vec3(
+                    sign::POINT,
+                    sign::TALL,
+                    sign::THICK,
+                )),
+                aim::SIGN_GILT,
+            );
+
+            // the lettering, on both faces and reading forwards from both
+            let letters = Transform::at(at + Vec3::Z * (sign::THICK * 0.5 + sign::PROUD * 2.0))
+                .with_rotation(glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2))
+                .with_scale(vec3(0.02, sign::LETTERS, sign::WIDE - sign::BORDER * 4.0));
+
+            match self.says {
+                Some(says) => scene.push_textured(hung, says, &letters, aim::SIGN_LETTERS, 8.0),
+                None => scene.push_colored(hung, &letters, aim::SIGN_LETTERS),
+            }
+
+            // two chains to the ceiling, each link turned across the one under
+            // it, which is what makes a stack of blocks read as a chain
+            let links = sign::links(room::TALL);
+            for side in [-1.0f32, 1.0] {
+                let foot = at + Vec3::X * side * sign::CHAIN_AT + Vec3::Y * sign::TALL * 0.5;
+
+                for n in 0..links {
+                    let turn = glam::Quat::from_rotation_y(if n % 2 == 0 {
+                        0.0
+                    } else {
+                        std::f32::consts::FRAC_PI_2
+                    });
+
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(foot + Vec3::Y * (n as f32 + 0.5) * sign::LINK)
+                            .with_rotation(turn)
+                            .with_scale(vec3(sign::RING, sign::LINK, sign::LINK * 0.62)),
+                        aim::SIGN_CHAIN,
+                    );
+                }
+            }
+
+            // and the pendant over it, which is why you can read it
+            let shade = at + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP);
+            scene.push_colored(
+                cube,
+                &Transform::at(shade).with_scale(sign::SHADE),
+                aim::SHADE,
+            );
+            let stem = (room::TALL + shade.y + sign::SHADE.y * 0.5) * 0.5;
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(shade.x, stem, shade.z)).with_scale(vec3(
+                    0.016,
+                    room::TALL - shade.y - sign::SHADE.y * 0.5,
+                    0.016,
+                )),
+                aim::SIGN_CHAIN,
+            );
+        }
+
         // the nook's floor of boards, over the arcade's carpet and under the
         // rug. The arcade's is confetti on black and the nook is a study off it,
         // so the floor is the largest single thing in your view of either room
@@ -1536,7 +1633,7 @@ impl Game for Arcade {
         // here; the cabinets out in the aisle are too far to be throwing
         // anything you could see from this room anyway.
         let walls = self.sconce_walls();
-        let mut shades: Vec<(f32, Vec3)> = walls
+        let mut shades: Vec<(f32, Vec3, Vec3, f32, f32)> = walls
             .iter()
             .copied()
             .flat_map(|(face, out)| {
@@ -1547,17 +1644,35 @@ impl Game for Arcade {
                 .into_iter()
                 .map(move |along| vec3(face + out * study::SCONCE_OUT, study::SCONCE_UP, along))
             })
-            .map(|at| (eye.distance_squared(at), at))
+            .map(|at| {
+                (
+                    eye.distance_squared(at),
+                    at,
+                    study::SCONCE_COLOUR,
+                    study::SCONCE_LIT,
+                    study::SCONCE_RANGE,
+                )
+            })
             .collect();
+
+        // the pendant over the sign goes in with them rather than beside them,
+        // so it takes a slot off the nearest sconce when you are out in the
+        // hall and loses to them the moment you are in the nook. A fitting of
+        // its own would have had to come out of the cabinets' two, and the
+        // cabinets are the hall.
+        let lamp = sign::at(self.room.reaches)
+            + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP - sign::SHADE.y);
+        shades.push((
+            eye.distance_squared(lamp),
+            lamp,
+            sign::LAMP_COLOUR,
+            sign::LAMP_LIT,
+            sign::LAMP_RANGE,
+        ));
         shades.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        for (_, at) in shades.into_iter().take(aim::SCONCE_LAMPS) {
-            scene.push_light(blitzkit::lighting::PointLight::new(
-                at,
-                study::SCONCE_COLOUR,
-                study::SCONCE_LIT,
-                study::SCONCE_RANGE,
-            ));
+        for (_, at, colour, lit, range) in shades.into_iter().take(aim::SCONCE_LAMPS) {
+            scene.push_light(blitzkit::lighting::PointLight::new(at, colour, lit, range));
         }
 
         for (_, n) in near.into_iter().take(aim::LAMPS - aim::SCONCE_LAMPS) {

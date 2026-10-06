@@ -202,6 +202,24 @@ pub fn screen_mesh() -> MeshData {
     MeshData::new(vertices, vec![0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6])
 }
 
+/// The same quad, with the back reading forwards instead of backwards.
+///
+/// [`screen_mesh`] is a lit sign seen through itself: both faces carry the same
+/// u, so from behind you read it the wrong way round, which is what a cabinet's
+/// marquee does and is right for one. A sign hung across a corridor is not that.
+/// People come at it from both ends and it has to read from both, so this one
+/// is two signs back to back, which is the thing that doc warns against and is
+/// exactly what is wanted here.
+pub fn hung_mesh() -> MeshData {
+    let mut mesh = screen_mesh();
+    let (_, back) = mesh.vertices.split_at_mut(4);
+    for vertex in back {
+        vertex.uv[0] = 1.0 - vertex.uv[0];
+    }
+
+    mesh
+}
+
 /// How far along a ray a box is first met, if it is. The slab test, which the
 /// engine has for an `Aabb` only through `Ray`, and this wants no `Ray`.
 fn slab(from: Vec3, way: Vec3, box_: &Aabb) -> Option<f32> {

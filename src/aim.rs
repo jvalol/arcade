@@ -202,6 +202,22 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// are too far away to be throwing anything you can see from here anyway.
 pub const SCONCE_LAMPS: usize = 6;
 
+/// The sign hung over the aisle. Spec 0006.
+///
+/// Painted wood and gilt rather than neon and a tube. The hall is a dim neon
+/// box and the nook is the one room in the building that is not, so the thing
+/// that sends you to it is made of what is down there and not of what is out
+/// here. The gilt is the rug's thread and the globe's brass, which are the two
+/// other warm things in the building.
+pub const SIGN_BOARD: Vec4 = vec4(0.20, 0.09, 0.07, 1.0);
+pub const SIGN_GILT: Vec4 = vec4(0.70, 0.55, 0.26, 1.0);
+pub const SIGN_CHAIN: Vec4 = vec4(0.22, 0.21, 0.23, 1.0);
+
+/// The lettering, which is a shade over one so it carries from the far end of
+/// the hall. Over one and no further: the cabinets' bands are at 3.2 and that
+/// is neon, which is the one thing this sign is not.
+pub const SIGN_LETTERS: Vec4 = vec4(1.35, 1.06, 0.50, 1.0);
+
 /// The nook's floor of boards, under the rug. Spec 0006.
 ///
 /// Darker than the panelling and warmer than the benches, so the room has a

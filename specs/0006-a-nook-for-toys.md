@@ -157,6 +157,49 @@ grain as the hall outside, which was the last surface still saying arcade.
 
 None of it does anything. That is what furniture is.
 
+### It says it is there
+
+Nothing in the hall said the nook existed. You found it by walking to the end of
+the aisle and happening to look left, which is finding it by accident, and
+everything else in that room announces itself: a cabinet has the game's name lit
+across the top and that is most of what makes anybody walk up to one.
+
+**A sign hung over the aisle**, level with the end of the cabinet rows. That is
+where the hall stops offering you anything and you have to decide whether to
+keep going. Hung at the nook's own doorway instead it would only ever be read by
+somebody already standing in it.
+
+Not neon. Neon is what the hall is, and the nook is the one room in the building
+that is not, so a neon arrow pointing at a panelled study is a sign for the wrong
+room. This one is a painted plank on two chains, gilt round the edge, with a
+pendant over it. The gilt is the rug's thread and the globe's brass, which are
+the only other warm things in the building.
+
+**The end of it is cut to a point**, and the point is the whole of the direction.
+An arrow drawn on the face would have to be mirrored on the back to go on
+pointing the same way in the world, and a mirrored face is mirrored lettering.
+A plank cut to a point is the same shape from both sides and from underneath,
+which is the thing a drawn arrow cannot do and is why every pointing sign ever
+nailed to a post is cut this way.
+
+The lettering reads forwards from both sides, which the cabinets' does not. A
+marquee is a lit sign seen through itself and from behind you read it the wrong
+way round, which is right for one. A sign hung across a corridor is not that:
+people come at it from both ends.
+
+**The pendant over it** is why you can read it. The lettering could carry a
+multiplier over one and read from the far end of the hall with nothing lighting
+it, which is the exact thing this room was told off for: a bright patch on a
+surface and no reason for it. It goes into the same list as the nook's sconces
+and is chosen off the same distance, so it takes a slot off the nearest sconce
+while you are out in the hall and loses to them the moment you are in the nook.
+A fitting of its own would have had to come out of the cabinets' two, and the
+cabinets are the hall.
+
+The typeface is still the arcade's. The engine carries one font and it is a
+pixel font, which is the right one for a marquee and the wrong one for a painted
+plank. That is a change to the engine rather than to this room.
+
 ### The arcade runs physics
 
 This is the first thing in the room with solvers in it. Each toy keeps its own
@@ -521,6 +564,10 @@ nothing, because a pull is a press and not forty a second.
 - The rug lies on the open floor, not under the benches or the books. — `room::tests::the_rug_lies_between_the_benches_and_the_books`
 - A long rug has an even border rather than one that stretches with it. — `carpet::tests::the_rug_keeps_its_border_even`
 - The boards are planks running one way, jointed out of line. — `carpet::tests::the_boards_are_planks_and_not_a_grid`
+- The sign hangs over your head and under the ceiling. — `sign::tests::it_hangs_over_your_head`
+- And in the aisle, not through a cabinet. — `sign::tests::it_hangs_clear_of_the_cabinets`
+- Its pointed end is a solid with every face wound to be seen. — `sign::tests::the_point_is_wound_to_be_seen`
+- And it points the way the nook is. — `sign::tests::the_point_points_at_the_nook`
 - A bench is something you bump into. — `room::tests::a_bench_is_something_you_bump_into`
 - The sight lands on a bench. — `room::tests::the_sight_lands_on_a_bench`
 - And not on one across the room. — `room::tests::a_bench_out_of_reach_is_not_seen`
