@@ -107,6 +107,9 @@ struct Arcade {
     peg: Option<MeshId>,
     stave: Option<TextureId>,
     flame: Option<MeshId>,
+    candlestick: Option<MeshId>,
+    decanter: Option<MeshId>,
+    wineglass: Option<MeshId>,
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
     stonework: Option<TextureId>,
@@ -213,6 +216,9 @@ impl Arcade {
             peg: None,
             stave: None,
             flame: None,
+            candlestick: None,
+            decanter: None,
+            wineglass: None,
             afghan: None,
             grain: Vec::new(),
             stonework: None,
@@ -616,6 +622,9 @@ impl Game for Arcade {
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
         self.peg = Some(renderer.add_mesh(&cellar::peg_mesh()));
         self.flame = Some(renderer.add_mesh(&cellar::flame_mesh()));
+        self.candlestick = Some(renderer.add_mesh(&cellar::candlestick_mesh()));
+        self.decanter = Some(renderer.add_mesh(&cellar::decanter_mesh()));
+        self.wineglass = Some(renderer.add_mesh(&cellar::glass_mesh()));
         let (_, mat) = cellar::rug(self.room.reaches);
         self.afghan = Some(renderer.add_texture(&carpet::afghan(mat.z / mat.x)));
         self.afghan_mesh = Some(renderer.add_mesh(&room::tiled_floor(1.0)));
@@ -1506,13 +1515,15 @@ impl Game for Arcade {
         // Panelling that stops at waist height and leaves plain wall above is
         // what a dining room has. A room panelled the whole way up is a room
         // somebody spent money on, which is the point of this one.
-        for (face, out, from, to, along_x) in cellar::panelled(self.room.reaches) {
+        for (face, out, from, to, along_x, from_up) in cellar::panelled(self.room.reaches) {
             let run = to - from;
             let step = cellar::BOARD + cellar::BOARD_GAP;
             let fits = (run / step).floor().max(1.0) as usize;
             let spare = run - fits as f32 * step;
-            let floor = -cellar::DOWN;
-            let high = cellar::TALL;
+            // a run can start partway up, which is how the chimney breast
+            // over the fireplace keeps its panelling
+            let floor = -cellar::DOWN + from_up;
+            let high = cellar::TALL - from_up;
             let field = high - cellar::SKIRTING - cellar::CORNICE;
 
             // a laid up board, turned so its grain runs the way the board does
@@ -1647,13 +1658,11 @@ impl Game for Arcade {
                     vec3(at.x + out * 0.5, at.y + high + round * 0.5, at.z),
                     vec3(out, round, wide + round * 2.0),
                 ),
-                // and a mantel over the lot
+                // and a mantel over the lot, placed from the same function
+                // that the things standing on it are, so the shelf and what is
+                // on it cannot disagree about where it is
                 (
-                    vec3(
-                        at.x + (out + cellar::MANTEL) * 0.5,
-                        at.y + high + round + cellar::MANTEL * 0.3,
-                        at.z,
-                    ),
+                    cellar::mantel_top(self.room.reaches) - Vec3::Y * cellar::MANTEL * 0.3,
                     vec3(
                         out + cellar::MANTEL,
                         cellar::MANTEL * 0.6,
@@ -1669,6 +1678,166 @@ impl Game for Arcade {
                 match self.stonework {
                     Some(stone) => scene.push_textured(cube, stone, &laid, aim::HEARTH, aim::DULL),
                     None => scene.push_colored(cube, &laid, aim::HEARTH),
+                }
+            }
+
+            let peg_or_cube = self.peg.unwrap_or(cube);
+
+            // what stands on the mantel. A shelf over a fire with nothing on
+            // it is a shelf, and a few things lined up over the fire is the one
+            // thing every room with one has. Spec 0007.
+            let shelf = cellar::mantel_top(self.room.reaches);
+            if let (Some(stick), Some(decanter), Some(wineglass)) =
+                (self.candlestick, self.decanter, self.wineglass)
+            {
+                // a candlestick at each end, with a candle in it and a flame on
+                // that. Candles are fine here in a way they were not in the
+                // nook, which is four hundred books deep.
+                for side in [-1.0f32, 1.0] {
+                    let on = vec3(shelf.x, shelf.y, shelf.z + side * wide * 0.44);
+                    let tall = cellar::CANDLESTICK.y;
+
+                    scene.push_colored(
+                        stick,
+                        &Transform::at(on + Vec3::Y * tall * 0.5).with_scale(cellar::CANDLESTICK),
+                        aim::BRASS,
+                    );
+                    scene.push_colored(
+                        peg_or_cube,
+                        &Transform::at(on + Vec3::Y * (tall + cellar::CANDLE * 0.5))
+                            .with_scale(vec3(0.046, cellar::CANDLE, 0.046)),
+                        aim::WAX,
+                    );
+                    if let Some(flame) = self.flame {
+                        let own = cellar::flicker(self.since * 2.3 + side * 3.0);
+
+                        scene.push_colored(
+                            flame,
+                            &Transform::at(
+                                on + Vec3::Y
+                                    * (tall + cellar::CANDLE + cellar::CANDLE_FLAME * 0.45 * own),
+                            )
+                            .with_scale(vec3(
+                                cellar::CANDLE_FAT * 0.62,
+                                cellar::CANDLE_FLAME * own,
+                                cellar::CANDLE_FAT * 0.62,
+                            )),
+                            aim::WICK * own,
+                        );
+                    }
+                }
+
+                // a clock in the middle. It reads as a clock because of the
+                // dial and nothing else, so the dial is most of the front of
+                // it: a small pale disc on a brown box reads as a brown box.
+                let case = cellar::CLOCK;
+                let front = shelf.x + case.x * 0.5;
+                let eye = shelf.y + case.y * 0.56;
+                let turned = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(shelf + Vec3::Y * case.y * 0.5).with_scale(case),
+                    aim::CLOCK_CASE,
+                );
+                // a pediment on top, which is what a mantel clock has instead
+                // of a flat lid
+                scene.push_colored(
+                    cube,
+                    &Transform::at(shelf + Vec3::Y * (case.y + 0.016)).with_scale(vec3(
+                        case.x * 1.14,
+                        0.032,
+                        case.z * 1.14,
+                    )),
+                    aim::CLOCK_CASE,
+                );
+
+                // the bezel, then the dial inside it
+                for (out, wide, colour) in [
+                    (cellar::DIAL_OUT * 0.5, cellar::BEZEL, aim::BRASS),
+                    (cellar::DIAL_OUT, 1.0, aim::CLOCK_FACE),
+                ] {
+                    scene.push_colored(
+                        peg_or_cube,
+                        &Transform::at(vec3(front + out, eye, shelf.z))
+                            .with_rotation(turned)
+                            .with_scale(vec3(
+                                case.y * cellar::DIAL * wide,
+                                0.012,
+                                case.y * cellar::DIAL * wide,
+                            )),
+                        colour,
+                    );
+                }
+
+                // four marks at the quarters, which is what the eye counts
+                let reach = case.y * cellar::DIAL * 0.4;
+                for quarter in 0..4 {
+                    let turn = quarter as f32 * std::f32::consts::FRAC_PI_2;
+                    let (sin, cos) = turn.sin_cos();
+
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(vec3(
+                            front + cellar::DIAL_OUT + 0.004,
+                            eye + cos * reach,
+                            shelf.z + sin * reach,
+                        ))
+                        .with_rotation(glam::Quat::from_rotation_x(turn))
+                        .with_scale(vec3(0.009, 0.026, 0.009)),
+                        aim::CLOCK_CASE,
+                    );
+                }
+
+                // and the hands, at ten past ten, which is where the hands sit
+                // in every photograph of a clock ever taken because it reads as
+                // a clock rather than as a number
+                for (turn, long, thick) in [(-1.05f32, 0.62f32, 0.011f32), (1.05, 0.44, 0.015)] {
+                    let arm = case.y * cellar::DIAL * 0.5 * long;
+                    let (sin, cos) = turn.sin_cos();
+
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(vec3(
+                            front + cellar::DIAL_OUT + 0.008,
+                            eye + cos * arm * 0.5,
+                            shelf.z + sin * arm * 0.5,
+                        ))
+                        .with_rotation(glam::Quat::from_rotation_x(turn))
+                        .with_scale(vec3(thick, arm, thick)),
+                        aim::CLOCK_CASE,
+                    );
+                }
+
+                // and a decanter with two glasses, off to one side, because a
+                // mantel arranged symmetrically is a mantel nobody uses
+                let by = vec3(shelf.x, shelf.y, shelf.z + wide * 0.2);
+                scene.push_colored(
+                    decanter,
+                    &Transform::at(by + Vec3::Y * cellar::DECANTER.y * 0.5)
+                        .with_scale(cellar::DECANTER),
+                    aim::CRYSTAL,
+                );
+                // what is in it, which is the only reason a decanter is worth
+                // drawing
+                scene.push_colored(
+                    decanter,
+                    &Transform::at(by + Vec3::Y * cellar::DECANTER.y * 0.42).with_scale(vec3(
+                        cellar::DECANTER.x * 0.84,
+                        cellar::DECANTER.y * 0.62,
+                        cellar::DECANTER.z * 0.84,
+                    )),
+                    aim::PORT,
+                );
+                for n in 0..2 {
+                    let at = by + vec3(0.0, 0.0, 0.14 + n as f32 * 0.11);
+
+                    scene.push_colored(
+                        wineglass,
+                        &Transform::at(at + Vec3::Y * cellar::GLASS.y * 0.5)
+                            .with_scale(cellar::GLASS),
+                        aim::CRYSTAL,
+                    );
                 }
             }
 

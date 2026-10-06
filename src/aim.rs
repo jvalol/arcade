@@ -255,6 +255,23 @@ pub const BOOK_HANDLE: Vec4 = vec4(1.55, 1.30, 0.80, 1.0);
 pub const CLOTH: Vec4 = vec4(0.10, 0.42, 0.22, 1.0);
 pub const RAIL: f32 = 0.07;
 
+/// What stands on the mantel. Spec 0007.
+///
+/// Brass, wax, a clock in a dark case with a pale face, and cut glass. A mantel
+/// with nothing on it is a shelf, and the one thing a room with a fire in it
+/// always has is a few things lined up over the fire.
+pub const BRASS: Vec4 = vec4(0.60, 0.44, 0.17, 1.0);
+pub const WAX: Vec4 = vec4(0.86, 0.80, 0.66, 1.0);
+pub const WICK: Vec4 = vec4(2.8, 1.5, 0.5, 1.0);
+pub const CLOCK_CASE: Vec4 = vec4(0.22, 0.10, 0.07, 1.0);
+/// A shade over one in every channel, so the dial carries its own light the way
+/// the book that opens the wall does. It faces into the room and the fire is in
+/// the wall behind it, so lit only by what reaches it a clock face sits in its
+/// own shadow, which is the one part of a clock that has to be readable.
+pub const CLOCK_FACE: Vec4 = vec4(1.22, 1.14, 0.94, 1.0);
+pub const CRYSTAL: Vec4 = vec4(0.54, 0.46, 0.40, 1.0);
+pub const PORT: Vec4 = vec4(0.30, 0.05, 0.07, 1.0);
+
 /// The way down and the room at the bottom of it. Spec 0007.
 ///
 /// Stone, because a cellar is the one room in the building that is not finished.

@@ -218,9 +218,16 @@ pub fn flame_mesh() -> blitzkit::mesh::MeshData {
     })
 }
 
-/// A plain closed cylinder, for the lid sunk inside a barrel's rim.
+/// A plain closed cylinder: a barrel's lid, a clock's dial, a candle, a coal.
+///
+/// Six steps along it and not one. [`lidded`] spends the first and last tenth
+/// of the run closing the ends, so at one step the only two samples it ever
+/// takes are both on a lid, both at no radius at all, and the whole mesh is two
+/// points. It drew nothing, and everything made of it drew nothing: the dial
+/// off the front of the clock, the candles under their own flames, and the bed
+/// of coals under the fire.
 pub fn peg_mesh() -> blitzkit::mesh::MeshData {
-    turned(STAVES, 1, lidded(|t| (t - 0.5, 1.0)))
+    turned(STAVES, 6, lidded(|t| (t - 0.5, 1.0)))
 }
 
 /// A profile with a lid on each end of it.
@@ -430,6 +437,116 @@ pub const FIRE_DEEP: f32 = 0.55;
 pub const FIRE_ROUND: f32 = 0.28;
 pub const MANTEL: f32 = 0.16;
 
+/// The top of the mantel, which is what anything standing on it stands on.
+///
+/// Worked out here rather than in the drawing, so the shelf and the things on
+/// it cannot disagree about where it is. Two lists of where a surface is has
+/// already hung a sconce in a doorway and put a grey patch over four hundred
+/// books in this building.
+pub fn mantel_top(reaches: f32) -> Vec3 {
+    let at = hearth(reaches);
+
+    vec3(
+        at.x + (THICK + MANTEL) * 0.5,
+        at.y + FIRE_HIGH + FIRE_ROUND + MANTEL * 0.6,
+        at.z,
+    )
+}
+
+/// A candlestick: a foot, a stem with a knop in it, and a cup at the top.
+pub fn candlestick_mesh() -> blitzkit::mesh::MeshData {
+    turned(
+        14,
+        26,
+        lidded(|t| {
+            let waist = if t < 0.06 {
+                1.0
+            } else if t < 0.1 {
+                0.9 - (t - 0.06) / 0.04 * 0.6
+            } else if t < 0.46 {
+                0.3
+            } else if t < 0.56 {
+                // the knop, which is the swelling halfway up a stem and the one
+                // thing that says turned rather than cut
+                0.3 + ((t - 0.46) / 0.1 * std::f32::consts::PI).sin() * 0.26
+            } else if t < 0.88 {
+                0.28
+            } else {
+                0.3 + (t - 0.88) / 0.12 * 0.5
+            };
+
+            (t - 0.5, waist)
+        }),
+    )
+}
+
+/// A decanter: a broad body, a shoulder, a narrow neck and a flared lip.
+pub fn decanter_mesh() -> blitzkit::mesh::MeshData {
+    turned(
+        16,
+        24,
+        lidded(|t| {
+            let waist = if t < 0.42 {
+                (0.55 + t * 1.1).min(1.0)
+            } else if t < 0.62 {
+                let eased = (t - 0.42) / 0.2;
+
+                1.0 - eased * eased * 0.72
+            } else if t < 0.9 {
+                0.28
+            } else {
+                0.28 + (t - 0.9) / 0.1 * 0.22
+            };
+
+            (t - 0.5, waist)
+        }),
+    )
+}
+
+/// A glass: a foot, a stem and a bowl.
+pub fn glass_mesh() -> blitzkit::mesh::MeshData {
+    turned(
+        12,
+        20,
+        lidded(|t| {
+            let waist = if t < 0.07 {
+                1.0
+            } else if t < 0.12 {
+                0.95 - (t - 0.07) / 0.05 * 0.78
+            } else if t < 0.42 {
+                0.17
+            } else {
+                0.17 + ((t - 0.42) / 0.58).powf(0.6) * 0.78
+            };
+
+            (t - 0.5, waist)
+        }),
+    )
+}
+
+/// How big the things on the mantel are, and where along it they stand.
+pub const CANDLESTICK: Vec3 = glam::vec3(0.12, 0.34, 0.12);
+/// The candle in it, and the flame on that.
+///
+/// Short and fat enough to see. A taper the width of a pencil is a line a few
+/// pixels wide at the far side of a room, so the flame looked like it was
+/// floating a hand's width over an empty stick.
+pub const CANDLE: f32 = 0.15;
+pub const CANDLE_FAT: f32 = 0.052;
+pub const CANDLE_FLAME: f32 = 0.075;
+pub const CLOCK: Vec3 = glam::vec3(0.13, 0.34, 0.27);
+
+/// The dial on the front of it: how much of the case it takes, how proud it
+/// stands, and how thick the bezel round it is.
+///
+/// Big. A clock reads as a clock because of the dial and nothing else, and a
+/// small pale disc on a brown box reads as a brown box.
+pub const DIAL: f32 = 0.78;
+pub const DIAL_OUT: f32 = 0.012;
+pub const BEZEL: f32 = 1.16;
+pub const DECANTER: Vec3 = glam::vec3(0.17, 0.27, 0.17);
+pub const GLASS: Vec3 = glam::vec3(0.09, 0.14, 0.09);
+
 /// What the fire throws: its colour, how bright, and how far.
 ///
 /// The main light in the room now, with the table's lamp over the cloth and the
@@ -483,7 +600,7 @@ pub const PANEL_IN: f32 = 0.022;
 
 /// Where the panelling goes: each wall as its face, which way it stands out,
 /// and where it starts and ends along itself.
-pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool)> {
+pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool, f32)> {
     let foot = back() - LANDING - STEPS as f32 * TREAD;
     let along = opening(reaches);
     let (near, far) = (
@@ -504,6 +621,7 @@ pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool)> {
             foot - DEEP + THICK * 0.5,
             foot - THICK * 0.5,
             false,
+            0.0,
         ),
         (
             far,
@@ -511,12 +629,43 @@ pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool)> {
             foot - DEEP + THICK * 0.5,
             foot - THICK * 0.5,
             false,
+            0.0,
         ),
-        // the far end, which runs along x
-        (foot - DEEP + THICK * 0.5, 1.0, near, far, true),
+        // the far end round the fireplace. In one piece the panelling ran
+        // behind the fire, so through the opening you saw mahogany boards with
+        // flames in front of them. In two pieces it left the chimney breast
+        // bare, which is worse: the wall over a fireplace is the one piece of
+        // wall in a room that everybody looks at.
+        //
+        // So: either side of the hearth the whole way up, and over it from the
+        // mantel to the ceiling.
+        (
+            foot - DEEP + THICK * 0.5,
+            1.0,
+            near,
+            along - FIRE_WIDE * 0.5 - FIRE_ROUND,
+            true,
+            0.0,
+        ),
+        (
+            foot - DEEP + THICK * 0.5,
+            1.0,
+            along + FIRE_WIDE * 0.5 + FIRE_ROUND,
+            far,
+            true,
+            0.0,
+        ),
+        (
+            foot - DEEP + THICK * 0.5,
+            1.0,
+            along - FIRE_WIDE * 0.5 - FIRE_ROUND,
+            along + FIRE_WIDE * 0.5 + FIRE_ROUND,
+            true,
+            FIRE_HIGH + FIRE_ROUND + MANTEL,
+        ),
         // and the near one, round the stair
-        (foot - THICK * 0.5, -1.0, near, along - gap, true),
-        (foot - THICK * 0.5, -1.0, along + gap, far, true),
+        (foot - THICK * 0.5, -1.0, near, along - gap, true, 0.0),
+        (foot - THICK * 0.5, -1.0, along + gap, far, true, 0.0),
     ]
 }
 
@@ -768,6 +917,44 @@ mod tests {
     use super::*;
     use crate::walk::walk;
     use glam::Vec3;
+
+    /// Spec 0007: everything turned down here has a surface on it.
+    ///
+    /// A profile with lids spends the ends of its run closing them, so a mesh
+    /// given too few steps samples nothing but lids and comes out as a handful
+    /// of points with no skin between. That is not a thin shape or a wrong
+    /// shape, it is nothing at all, and it is invisible in the one way that
+    /// matters: the thing simply is not there and the room looks like somebody
+    /// forgot to add it.
+    #[test]
+    fn everything_turned_has_a_surface() {
+        for (what, mesh) in [
+            ("barrel", barrel_mesh()),
+            ("hoop", hoop_mesh()),
+            ("peg", peg_mesh()),
+            ("bottle", bottle_mesh()),
+            ("candlestick", candlestick_mesh()),
+            ("decanter", decanter_mesh()),
+            ("glass", glass_mesh()),
+            ("flame", flame_mesh()),
+        ] {
+            let widest = mesh
+                .vertices
+                .iter()
+                .map(|v| vec3(v.position[0], 0.0, v.position[2]).length())
+                .fold(0.0f32, f32::max);
+            let tall = mesh.bounds().size().y;
+
+            assert!(
+                mesh.triangle_count() > 16,
+                "the {} is {} triangles",
+                what,
+                mesh.triangle_count()
+            );
+            assert!(widest > 0.1, "the {} is {} across", what, widest);
+            assert!(tall > 0.5, "the {} is {} tall", what, tall);
+        }
+    }
 
     /// Spec 0007: a barrel is skinned the right way out.
     ///
