@@ -673,6 +673,57 @@ impl Room {
             .collect()
     }
 
+    /// Where a bookcase stands and how it is turned, swung or not.
+    pub fn shelf_frame(&self, n: usize) -> (Vec3, glam::Quat) {
+        let Some(shelved) = self.bookcases.get(n) else {
+            return (Vec3::ZERO, glam::Quat::IDENTITY);
+        };
+        let along = glam::Quat::from_rotation_y(if shelved.facing.x.abs() > 0.5 {
+            std::f32::consts::FRAC_PI_2
+        } else {
+            0.0
+        });
+
+        if cellar::swings(n) {
+            let (at, swing) = Self::swung(shelved, self.swings_out(n), self.swing);
+
+            (at, swing * along)
+        } else {
+            (shelved.at, along)
+        }
+    }
+
+    /// The one book that opens the wall, as the box it fills right now.
+    ///
+    /// It moves with the case it stands in, so it is still the handle when the
+    /// door is open and still the handle halfway through the swing.
+    pub fn handle(&self) -> Option<Aabb> {
+        let case = crate::study::CASE;
+        let books = crate::study::stock(cellar::CASE as u32, cellar::BOOK_SHELF);
+        let book = books.get(cellar::BOOK)?;
+
+        let along = crate::study::along(&books, cellar::BOOK) - case.x * 0.5;
+        let up = crate::study::shelf_at(cellar::BOOK_SHELF);
+        // the same frame the book is drawn in, from the same function, so
+        // pointing at it and seeing it cannot come apart. Written out twice
+        // they would be two lists of where a bookcase stands, which in this
+        // room has already hung a sconce in a doorway.
+        let (at, turn) = self.shelf_frame(cellar::CASE);
+        let middle = at
+            + turn
+                * vec3(
+                    along,
+                    up + book.tall * 0.5,
+                    -case.y * 0.5 + crate::study::BOOK_BACK + book.tall * 0.22,
+                );
+        let reach = (book.thick * 0.9).max(book.tall * 0.44) * 0.5;
+
+        Some(Aabb::from_center_size(
+            middle,
+            vec3(reach * 2.0, book.tall, reach * 2.0),
+        ))
+    }
+
     /// Lets the door catch up with itself.
     pub fn ease(&mut self, dt: f32) {
         let to = if self.open { 1.0 } else { 0.0 };
@@ -808,16 +859,8 @@ impl Room {
         // a single spine on a shelf of four hundred is a thing nobody would
         // ever find; pointing at the case it is in is a thing you can.
         let case = self
-            .bookcases
-            .iter()
-            .enumerate()
-            .filter(|(n, _)| cellar::swings(*n))
-            .filter_map(|(n, shelved)| {
-                let box_ = Self::swung_box(shelved, self.swings_out(n), self.swing);
-
-                slab(from, way, &box_).map(|far| (Seen::Case, far))
-            })
-            .min_by(|one, other| one.1.total_cmp(&other.1));
+            .handle()
+            .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
 
         cabinets
             .chain(shapes)
@@ -1347,6 +1390,60 @@ mod tests {
             "a rug {} by {} is a runner",
             size.x,
             size.z
+        );
+    }
+
+    /// Spec 0007: the handle is one book, not a wall of them.
+    ///
+    /// The room said one of them is not a book and then let you pull any of
+    /// them: the sight landed on the whole case, so clicking anywhere on either
+    /// leaf worked. That makes the sentence a lie and the door a pair of very
+    /// large buttons.
+    #[test]
+    fn one_book_opens_the_wall() {
+        let room = Room::of(some(13));
+        let book = room.handle().expect("a book to pull");
+        let eye = Vec3::Y * 1.55;
+
+        // it is a book sized thing and not a bookcase sized one
+        let case = crate::study::CASE;
+        assert!(
+            book.size().x < case.x * 0.2 && book.size().y < case.z * 0.3,
+            "the handle is {:?} and a case is {:?}",
+            book.size(),
+            case
+        );
+
+        // pointing at it finds it
+        let at = book.center();
+        let from = vec3(at.x + 1.2, eye.y, at.z);
+        assert_eq!(
+            room.looking_at(from, at - from),
+            Some(Seen::Case),
+            "the book is not pickable"
+        );
+
+        // and pointing at the rest of the same shelf finds nothing
+        for off in [-0.45f32, -0.3, 0.3, 0.45] {
+            let elsewhere = vec3(at.x, at.y, at.z + off);
+            let stood = vec3(elsewhere.x + 1.2, eye.y, elsewhere.z);
+
+            assert_ne!(
+                room.looking_at(stood, elsewhere - stood),
+                Some(Seen::Case),
+                "{} along the shelf is also a handle",
+                off
+            );
+        }
+
+        // and so does the other leaf, which has no book in it
+        let other = &room.bookcases[cellar::CASE + 1];
+        let face = Room::bookcase_box(other);
+        let stood = vec3(face.max.x + 1.2, eye.y, other.at.z);
+        assert_ne!(
+            room.looking_at(stood, vec3(face.max.x, eye.y, other.at.z) - stood),
+            Some(Seen::Case),
+            "the whole of the other leaf is a handle"
         );
     }
 

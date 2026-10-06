@@ -83,6 +83,19 @@ pub const TALL: f32 = 2.5;
 /// a secret door must not be is the obvious candidate.
 pub const CASE: usize = 2;
 
+/// The one book that is not a book: which leaf it stands in, which shelf, and
+/// which along that shelf.
+///
+/// The copy said one of them is not a book and the room let you pull any of
+/// them: clicking anywhere on either case worked, which makes the sentence a
+/// lie and the door a pair of very large buttons. A handle you can find by
+/// waving at a wall is not a handle.
+///
+/// Low enough to reach for and not the end of the row. Four hundred books and
+/// one of them opens the wall, and nothing marks it, which is the whole idea.
+pub const BOOK_SHELF: usize = 2;
+pub const BOOK: usize = 6;
+
 /// Whether a bookcase is one of the leaves.
 pub fn swings(n: usize) -> bool {
     (CASE..CASE + CASES).contains(&n)

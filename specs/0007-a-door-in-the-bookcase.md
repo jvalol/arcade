@@ -101,6 +101,25 @@ across, which is a tenth of a unit of daylight either side held for the nine
 units it takes to get down. Walked exactly down the middle it fits, which is
 what the test did and why the test was worth nothing.
 
+**One book is the handle, and only that one.** The sight landed on the whole
+case, so clicking anywhere on either leaf worked. That makes the door a pair of
+very large buttons and makes the room's own sentence about it a lie: one of them
+is not a book, and any of them would do.
+
+It is the seventh along the third shelf of the left leaf, and finding where it
+sits means working out the frame that shelf stands in, which the drawing already
+does. Written out a second time those would be two lists of where a bookcase is,
+and two lists of the same wall is what hung a sconce in a doorway in spec 0006.
+They read one.
+
+**It glows a little.** A shade over one in every channel, so it carries light
+with nothing lighting it, the way a cabinet's band does, and nothing like as
+much: a band is at 3.2 and that is neon. A book catching a light which is not
+there is the most a secret door can give away and still be one. Its own colour
+and not its spine brightened, because the spines come off a seed and some of
+them are nearly black, so a multiplier would have made the handle a slightly
+less dark book on a shelf of dark books.
+
 **It takes its time.** A bookcase on a hinge with four hundred books in it, and
 the whole of what makes a secret door worth having is the moment between pulling
 the book and seeing what is behind it. The box follows the swing rather than
@@ -145,6 +164,7 @@ sign's pendant and is chosen off the same distance.
 - You can walk down the stair and back up it. — `cellar::tests::you_can_walk_down_it_and_back_up`
 - Shut, the way down is not there; open, it is, off the middle as well as along it. — `room::tests::the_case_is_a_door`
 - And you can get back up it through the room's own geometry. — `room::tests::you_can_get_back_up_the_stair`
+- One book opens the wall, and the rest of the shelf does not. — `room::tests::one_book_opens_the_wall`
 - The door does not open or close through you. — `room::tests::the_door_does_not_open_through_you`
 - Nothing down the way down is inside the room above it. — `room::tests::the_way_down_keeps_out_of_the_room`
 - Every repo is a cabinet in the hall, a bench in the nook, or a table in the cellar. — `tests::it_knows_every_game_the_project_does`
@@ -154,6 +174,7 @@ sign's pendant and is chosen off the same distance.
 - The leaves swing rather than snapping, and read as open. — run the arcade and pull the book.
 - The stair reads as a stair going down. — walk down it.
 - The table reads as a pool table. — walk up to it.
+- The book is findable without being marked. — look along the shelves in the nook.
 
 ## Out of scope
 

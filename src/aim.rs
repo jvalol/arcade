@@ -203,6 +203,19 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// a sconce ended up hanging in a doorway.
 pub const NOT_BUILT: &str = "Not built. Run ./check-all";
 
+/// The one book that opens the wall. Spec 0007.
+///
+/// Over one in every channel, so it carries a little light of its own with
+/// nothing lighting it, the way a cabinet's band does. Nothing like as much:
+/// a band is at 3.2 and that is neon. This is a book that catches a light which
+/// is not there, which is the most a secret door can give away and still be one.
+///
+/// Its own colour rather than its spine brightened. The spines come off a seed
+/// and some of them are nearly black, so a multiplier would have made the
+/// handle a slightly less dark book on a shelf of dark books, which is no tell
+/// at all.
+pub const BOOK_HANDLE: Vec4 = vec4(1.55, 1.30, 0.80, 1.0);
+
 /// The pool table in the cellar: the cloth, and how thick a rail is. Spec 0007.
 ///
 /// Green, because a pool table is green, and it is the one saturated thing in a

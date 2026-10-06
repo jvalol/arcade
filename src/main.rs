@@ -415,7 +415,7 @@ impl Arcade {
             ),
             cellar::POOLHALL if !self.poolhall.is_built() => String::from(aim::NOT_BUILT),
             cellar::POOLHALL => {
-                String::from("Pool, more or less. Click or press enter to play in its own window. [COPY - Jake]")
+                String::from("Pool, more or less. Click or press enter to play in its own window.")
             }
             cascada::NAME if !self.cascada.is_built() => String::from(aim::NOT_BUILT),
             cascada::NAME => String::from(
@@ -792,11 +792,11 @@ impl Game for Arcade {
                 (Some(name.to_string()), Some(self.about(name)))
             }
             (None, Some(room::Seen::Case)) => (
-                Some(String::from("a shelf of books [COPY - Jake]")),
+                Some(String::from("a book")),
                 Some(String::from(if self.room.open {
-                    "Click to close it. [COPY - Jake]"
+                    "Push it back."
                 } else {
-                    "One of them is not a book. Click to pull it. [COPY - Jake]"
+                    "This one is not a book. Pull it."
                 })),
             ),
             (None, None) => (None, None),
@@ -1352,29 +1352,17 @@ impl Game for Arcade {
         // the bookcases, stocked. None of it does anything, which is what
         // furniture is. Spec 0006.
         let bench_floor = 0.0;
-        for (n, shelved) in self.room.bookcases.iter().enumerate() {
+        for n in 0..self.room.bookcases.len() {
             let case = study::CASE;
-            let swung = cellar::swings(n);
             // the one that is a door, standing where it stands when it is open.
             // Spec 0007: hinged on one side of the opening, so it comes out
             // into the nook and across the floor in front of itself. Drawn shut
             // while being open, it is a wall you can walk through.
-            let along = glam::Quat::from_rotation_y(if shelved.facing.x.abs() > 0.5 {
-                std::f32::consts::FRAC_PI_2
-            } else {
-                0.0
-            });
             // the two leaves, wherever they have got to in their swing. Drawn
             // where they shut while being part way open, a door is a wall you
             // can walk through, and drawn open while shutting it is the other
             // way about. Spec 0007.
-            let (stands, turn) = if swung {
-                let (at, swing) =
-                    room::Room::swung(shelved, self.room.swings_out(n), self.room.swing);
-                (at, swing * along)
-            } else {
-                (shelved.at, along)
-            };
+            let (stands, turn) = self.room.shelf_frame(n);
             let put = |at: Vec3| stands + turn * at;
 
             // the carcass: two sides, a back and a top
@@ -1429,7 +1417,15 @@ impl Game for Arcade {
                             book.tall,
                             book.tall * 0.44,
                         )),
-                        vec4(book.spine[0], book.spine[1], book.spine[2], 1.0),
+                        if cellar::swings(n)
+                            && n == cellar::CASE
+                            && shelf == cellar::BOOK_SHELF
+                            && which == cellar::BOOK
+                        {
+                            aim::BOOK_HANDLE
+                        } else {
+                            vec4(book.spine[0], book.spine[1], book.spine[2], 1.0)
+                        },
                     );
                 }
             }
