@@ -99,6 +99,12 @@ pub const WALL: f32 = 2.0;
 pub const TALL: f32 = 3.2;
 pub const THICK: f32 = 0.3;
 
+/// How far inside the near wall you wake up.
+///
+/// A named number because what is in front of you when you open your eyes is
+/// measured from here, and the room's own sign is hung to be in it.
+pub const INSIDE: f32 = 1.0;
+
 /// How far the sight carries. Spec 0003.
 ///
 /// Spec 0001 replaced "the nearest one in front of you, within reach and
@@ -871,6 +877,21 @@ impl Room {
             .handle()
             .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
 
+        // and, once it is moving, the leaves themselves. Hunting for the one
+        // book again to shut the wall is the same needle in the same haystack,
+        // and there is nothing secret left to keep: the hole is standing open.
+        // Only while it is off its stop, so a shut wall is still the one book.
+        let swung = self
+            .bookcases
+            .iter()
+            .enumerate()
+            .filter(|(n, _)| self.swing > 0.0 && cellar::swings(*n))
+            .filter_map(|(n, shelved)| {
+                let leaf = Self::swung_box(shelved, self.swings_out(n), self.swing);
+
+                slab(from, way, &leaf).map(|far| (Seen::Case, far))
+            });
+
         // and what is in the way, because until now nothing was. The sight took
         // the nearest thing the ray met among the things you can use and a wall
         // was never one of them, so from the nook you could point through the
@@ -885,6 +906,7 @@ impl Room {
             .chain(shapes)
             .chain(benches)
             .chain(case)
+            .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
             .map(|(what, _)| what)
@@ -892,7 +914,7 @@ impl Room {
 
     /// Where you start: the middle of the room, looking down it.
     pub fn doorway(&self) -> Vec3 {
-        vec3(0.0, 0.0, self.reaches - 1.0)
+        vec3(0.0, 0.0, self.reaches - INSIDE)
     }
 }
 
@@ -1530,6 +1552,47 @@ mod tests {
             room.looking_at(stood, vec3(face.max.x, eye.y, other.at.z) - stood),
             Some(Seen::Case),
             "the whole of the other leaf is a handle"
+        );
+    }
+
+    /// Spec 0007: and once it is open, the whole of either leaf shuts it.
+    ///
+    /// The one book is what makes the door a secret, and a secret is only worth
+    /// keeping until it is out. With the wall standing open, finding that same
+    /// spine again to shut it is the same hunt with none of the point, so from
+    /// the moment a leaf leaves its stop the leaf itself is what you click.
+    #[test]
+    fn an_open_wall_shuts_from_anywhere_on_a_leaf() {
+        let mut room = Room::of(some(13));
+        let eye = Vec3::Y * 1.55;
+
+        // the leaf with no book in it, which shut is not a handle anywhere on
+        // it: `one_book_opens_the_wall` is the other half of this
+        let other = cellar::CASE + 1;
+        room.open = true;
+        room.swing = 1.0;
+
+        let leaf = Room::swung_box(&room.bookcases[other], room.swings_out(other), room.swing);
+        let at = vec3(leaf.center().x, eye.y, leaf.center().z);
+        let from = at + Vec3::X * (leaf.size().x * 0.5 + 1.2);
+
+        assert_eq!(
+            room.looking_at(from, at - from),
+            Some(Seen::Case),
+            "an open leaf is not pickable"
+        );
+
+        // and with the wall shut again it is back to being a wall of books
+        room.open = false;
+        room.swing = 0.0;
+        let shut = Room::bookcase_box(&room.bookcases[other]);
+        let at = vec3(shut.max.x, eye.y, room.bookcases[other].at.z);
+        let from = vec3(at.x + 1.2, eye.y, at.z);
+
+        assert_ne!(
+            room.looking_at(from, at - from),
+            Some(Seen::Case),
+            "a shut leaf is a handle all over"
         );
     }
 

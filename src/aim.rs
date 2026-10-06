@@ -338,6 +338,28 @@ pub const DOMINO: Vec4 = vec4(0.84, 0.82, 0.76, 1.0);
 /// that sends you to it is made of what is down there and not of what is out
 /// here. The gilt is the rug's thread and the globe's brass, which are the two
 /// other warm things in the building.
+/// The room's own neon sign, per `neon`.
+///
+/// The can is nearly black. It is the one surface in the room that wants to be
+/// a hole with light in front of it, since a lit tube against a lit box is a
+/// box.
+///
+/// Two colours and not one. A single tube reads as a lit bar, which is what the
+/// cabinets were called before they had names on them, and every neon sign ever
+/// bent has the outline in one colour and the word in another.
+pub const ARCADE_CAN: Vec4 = vec4(0.05, 0.045, 0.06, 1.0);
+pub const ARCADE_STEM: Vec4 = vec4(0.26, 0.26, 0.29, 1.0);
+
+/// The tube and the lettering, both burnt at the multiplier the cabinets' bands
+/// use, so one number says how hot the neon in this room runs.
+pub fn arcade_tube() -> Vec4 {
+    (glam::vec3(0.22, 0.95, 1.0) * NEON).extend(1.0)
+}
+
+pub fn arcade_letters() -> Vec4 {
+    (glam::vec3(1.0, 0.26, 0.62) * NEON).extend(1.0)
+}
+
 pub const SIGN_BOARD: Vec4 = vec4(0.20, 0.09, 0.07, 1.0);
 pub const SIGN_GILT: Vec4 = vec4(0.70, 0.55, 0.26, 1.0);
 pub const SIGN_CHAIN: Vec4 = vec4(0.22, 0.21, 0.23, 1.0);

@@ -10,6 +10,7 @@ mod display;
 mod globe;
 mod gyro;
 mod metronome;
+mod neon;
 mod room;
 mod sign;
 mod study;
@@ -97,6 +98,8 @@ struct Arcade {
     rug_mesh: Option<MeshId>,
     /// The grain on the walls and on the cabinets, so neither is a flat face.
     says: Option<TextureId>,
+    /// The room's own name, for the neon over the near end of the aisle.
+    named: Option<TextureId>,
     point_mesh: Option<MeshId>,
     hung: Option<MeshId>,
     boards: Option<TextureId>,
@@ -206,6 +209,7 @@ impl Arcade {
             rug: None,
             rug_mesh: None,
             says: None,
+            named: None,
             point_mesh: None,
             hung: None,
             boards: None,
@@ -656,6 +660,7 @@ impl Game for Arcade {
         self.stave =
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
+        self.named = Some(renderer.add_texture(&blitzkit::text::drawn(neon::SAYS, neon::TEXELS)));
         self.point_mesh = Some(renderer.add_mesh(&sign::point_mesh()));
         self.hung = Some(renderer.add_mesh(&room::hung_mesh()));
         // counted off the nook rather than off the quad, so a plank is the same
@@ -857,14 +862,22 @@ impl Game for Arcade {
                 let name = self.room.benches[n].name;
                 (Some(name.to_string()), Some(self.about(name)))
             }
-            (None, Some(room::Seen::Case)) => (
-                Some(String::from("a book")),
-                Some(String::from(if self.room.open {
-                    "Click or press enter to push it back."
+            // shut, the only thing you can point at is the one book, so that is
+            // what it is called. Open, the whole leaf is the thing, and calling
+            // a bookcase a book is the sentence the secret was built on used
+            // backwards.
+            (None, Some(room::Seen::Case)) => {
+                let (what, how) = if self.room.open {
+                    ("the bookcase", "Click or press enter to push it back.")
                 } else {
-                    "This one is not a book. Click or press enter to pull it."
-                })),
-            ),
+                    (
+                        "a book",
+                        "This one is not a book. Click or press enter to pull it.",
+                    )
+                };
+
+                (Some(String::from(what)), Some(String::from(how)))
+            }
             (None, None) => (None, None),
         };
 
@@ -1382,6 +1395,56 @@ impl Game for Arcade {
                 )),
                 aim::SIGN_CHAIN,
             );
+        }
+
+        // the room's own sign, hung over the near end of the aisle, which is
+        // what you wake up to. Spec 0001.
+        if let Some(hung) = self.hung {
+            let at = neon::at(self.room.reaches);
+
+            // the can first, then the tube run standing out of both its faces.
+            // The can is nearly black on purpose: a lit tube on a lit box is a
+            // box.
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(vec3(neon::WIDE, neon::TALL, neon::THICK)),
+                aim::ARCADE_CAN,
+            );
+            for (middle, size) in neon::tubes() {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(at + middle).with_scale(size),
+                    aim::arcade_tube(),
+                );
+            }
+
+            // the name, on both faces and reading forwards from both, the way
+            // the nook's plank does
+            let letters = Transform::at(at + Vec3::Z * (neon::THICK * 0.5 + neon::PROUD))
+                .with_rotation(glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2))
+                .with_scale(vec3(0.02, neon::LETTERS, neon::span()));
+
+            match self.named {
+                Some(named) => {
+                    scene.push_textured(hung, named, &letters, aim::arcade_letters(), 8.0)
+                }
+                None => scene.push_colored(hung, &letters, aim::arcade_letters()),
+            }
+
+            // two stems to the ceiling. Rigid, where the nook's sign is on
+            // chains: there is a transformer in a box this size.
+            let long = neon::stem(room::TALL);
+            for side in [-1.0f32, 1.0] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(
+                        at + Vec3::X * side * neon::STEM_AT
+                            + Vec3::Y * (neon::TALL * 0.5 + long * 0.5),
+                    )
+                    .with_scale(vec3(neon::STEM, long, neon::STEM)),
+                    aim::ARCADE_STEM,
+                );
+            }
         }
 
         // the way down, and the room at the bottom of it. Spec 0007. Boxes, so
@@ -2661,6 +2724,18 @@ impl Game for Arcade {
             sign::LAMP_COLOUR,
             sign::LAMP_LIT,
             sign::LAMP_RANGE,
+        ));
+
+        // and the neon over the way in, which throws its own colour on the
+        // ceiling and the floor under it. A sign burning past one with no light
+        // of its own is a bright patch and no reason for it.
+        let burning = neon::at(self.room.reaches);
+        shades.push((
+            eye.distance_squared(burning),
+            burning,
+            neon::COLOUR,
+            neon::LIT,
+            neon::RANGE,
         ));
 
         // and the one over the pool table, in the same list as everything else.
