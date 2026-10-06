@@ -79,6 +79,8 @@ struct Arcade {
     rug: Option<TextureId>,
     rug_mesh: Option<MeshId>,
     /// The grain on the walls and on the cabinets, so neither is a flat face.
+    boards: Option<TextureId>,
+    boards_mesh: Option<MeshId>,
     wall_grain: Option<TextureId>,
     cabinet_grain: Option<TextureId>,
     ceiling_mesh: Option<MeshId>,
@@ -154,6 +156,8 @@ impl Arcade {
             carpet: None,
             rug: None,
             rug_mesh: None,
+            boards: None,
+            boards_mesh: None,
             wall_grain: None,
             cabinet_grain: None,
             ceiling_mesh: None,
@@ -288,14 +292,14 @@ impl Arcade {
                         self.wrecker.wind(by);
                     } else {
                         // all four haul the ball about the tray, so a swing can
-                        // be aimed rather than only pumped. Laid out as the nook
-                        // sees them: you come in off the aisle looking along -x,
-                        // so your right hand is -z and away from you is -x.
+                        // be aimed rather than only pumped. Laid out off the
+                        // bench, which knows which side of it you stand on.
+                        let bench = &self.room.benches[n];
                         let way = match input.key {
-                            KeyboardKey::Left => Vec3::Z,
-                            KeyboardKey::Right => Vec3::NEG_Z,
-                            KeyboardKey::Up => Vec3::NEG_X,
-                            _ => Vec3::X,
+                            KeyboardKey::Left => -bench.right(),
+                            KeyboardKey::Right => bench.right(),
+                            KeyboardKey::Up => bench.away(),
+                            _ => -bench.away(),
                         };
                         self.wrecker.haul(way);
                     }
@@ -508,7 +512,16 @@ impl Game for Arcade {
         self.floor = Some(renderer.add_mesh(&room::tiled_floor(carpet::TILES)));
         self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
         self.carpet = Some(renderer.add_texture(&carpet::woven()));
-        self.rug = Some(renderer.add_texture(&carpet::rug()));
+        let (_, rug) = room::open_floor(self.room.reaches);
+        self.rug = Some(renderer.add_texture(&carpet::rug(rug.z / rug.x)));
+        self.boards = Some(renderer.add_texture(&carpet::boards(carpet::BOARD_SEED)));
+        // counted off the nook rather than off the quad, so a plank is the same
+        // width whichever way the room is longer
+        let (_, nook) = room::nook_floor(self.room.reaches);
+        self.boards_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
+            nook.x / carpet::BOARD_TILE,
+            nook.z / carpet::BOARD_TILE,
+        ))));
         self.rug_mesh = Some(renderer.add_mesh(&room::tiled_floor(carpet::RUG_TILES)));
         self.wall_grain =
             Some(renderer.add_texture(&carpet::mottled(carpet::WALL_SEED, [220, 220, 220], 34)));
@@ -593,11 +606,14 @@ impl Game for Arcade {
         self.metronome.advance(dt);
         self.wrecker.advance(dt);
 
-        // what the held arrows are leaning on the gyroscope with, as the nook
-        // sees them: you come in off the aisle looking along -x, so your right
-        // hand is -z
-        let lean = [Vec3::Y, Vec3::NEG_Y, Vec3::Z, Vec3::NEG_Z];
-        self.gyro.leaning = if matches!(self.seen, Some(room::Seen::Bench(_))) {
+        // what the held arrows are leaning on the gyroscope with, taken off the
+        // bench rather than written down as the nook's axes. Up and down are up
+        // and down whichever side of it you are on; left and right are not, and
+        // moving the benches to the other wall turned them round.
+        self.gyro.leaning = if let Some(room::Seen::Bench(n)) = self.seen {
+            let bench = &self.room.benches[n];
+            let lean = [Vec3::Y, Vec3::NEG_Y, -bench.right(), bench.right()];
+
             self.leaning
                 .iter()
                 .zip(lean)
@@ -1107,17 +1123,21 @@ impl Game for Arcade {
             }
         }
 
-        // the rug, laid over the nook's own floor. The arcade's carpet is
-        // confetti on black and the nook is a study off it, so its floor is the
-        // largest single thing saying which of the two you are standing in.
+        // the nook's floor of boards, over the arcade's carpet and under the
+        // rug. The arcade's is confetti on black and the nook is a study off it,
+        // so the floor is the largest single thing in your view of either room
+        // saying which of the two you are standing in.
+        if let (Some(boards), Some(boards_mesh)) = (self.boards, self.boards_mesh) {
+            let (at, size) = room::nook_floor(self.room.reaches);
+            let laid = Transform::at(at + Vec3::Y * 0.002).with_scale(vec3(size.x, 1.0, size.z));
+
+            scene.push_textured(boards_mesh, boards, &laid, aim::BOARDS, aim::MATTE);
+        }
+
+        // and the rug on top of them
         if let (Some(rug), Some(rug_mesh)) = (self.rug, self.rug_mesh) {
-            let side = room::WALL + room::CABINET.x;
-            let laid = Transform::at(vec3(
-                -side - room::NOOK_DEEP * 0.5,
-                0.004,
-                -self.room.reaches + room::NOOK_SPAN * 0.5,
-            ))
-            .with_scale(vec3(room::NOOK_DEEP - 0.12, 1.0, room::NOOK_SPAN - 0.12));
+            let (at, size) = room::open_floor(self.room.reaches);
+            let laid = Transform::at(at + Vec3::Y * 0.004).with_scale(vec3(size.x, 1.0, size.z));
 
             scene.push_textured(rug_mesh, rug, &laid, aim::FLOOR, aim::MATTE);
         }

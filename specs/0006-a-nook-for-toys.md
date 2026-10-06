@@ -42,9 +42,19 @@ across. It is 2.8 now, flooded rather than worked out, and the way opens between
 2.35 and 2.4.
 
 The reaching is flooded too. A grid of the floor is filled from where you come
-in, and every bench has to be somewhere that fill got to. Arithmetic about one
-wall at a time cannot see a pinch between two things that were never thought
-about together, and this one was invisible until somebody walked at it.
+in, and every bench, and the floor in front of every bookcase, has to be
+somewhere that fill got to. Arithmetic about one wall at a time cannot see a
+pinch between two things that were never thought about together, and this one
+was invisible until somebody walked at it.
+
+Reachable and not merely free. That distinction is worth a whole layout, and it
+went unnoticed for three goes at the room. The benches ran the length of the back
+wall with 0.3 between them and stood off it far enough to walk behind, so the
+test asked whether there was standing room behind each one and there was, along
+every inch of it. The strip was sealed at both ends by the first and last bench
+and the only way into it was between two benches. Nobody is 0.3 across. Widening
+it from 1.1 to 1.5 to 1.9 to 2.4 made the part of the room nobody could reach
+bigger each time, and the test went green for all four.
 
 Not in the aisle. The first attempt before that stood a bench down the middle of
 the room and it was in front of the far wall from every angle, which is the one
@@ -62,19 +72,35 @@ and the same confetti carpet as the hall outside. The room out there is a dim
 neon box and that is right for it. This one is the one place in the building
 that is not selling you a game, so it is furnished rather than lit up.
 
-It is 5.4 deep rather than 3.0, and the benches stand 2.4 off the back wall
-rather than 1.1, so there is floor to walk on both sides of them. Walk on, and
-not squeeze along: at 1.9 the aisle behind came out 0.98 wide for someone 0.9
-across, which is a gap you scrape through, and the books it leads to are the
-whole reason the nook has a back wall.
+It is 6.4 by 13.0 rather than 3.0 by 8.0, which is 83 square units of floor
+against the first 24.
 
-**A wall of bookcases** runs the length of the back wall behind the benches,
-with floor enough between the two to walk along and read the spines. One wall
-and no more: the open side is the wall the nook has not got, the far end is the
-way in and a bookcase in a doorway is a door, and the closed end is where the
-last bench stands. The books are generated and stocked from a seed, so a shelf
-holds the same books every time it is drawn. A bookcase restocked every frame is
-a bookcase that boils.
+**The benches are set against the open side**, and the bookcases against the
+back wall opposite them, so the floor between the two is one piece 4.9 across
+and every part of it is somewhere you can be. Out in the floor is where the
+benches were, and the aim of that was floor on both sides of them rather than a
+corridor with a counter down it. It got floor on both sides and the far side was
+no use to anybody, for the reason above. Against one wall with the books against
+the other is the same amount of walking and all of it connected, and the toys
+face the books across it, which is also what the room is for.
+
+The row starts past the way in rather than centred in the span. The open side is
+the wall the way in is a gap in, and a bench centred down that is a bench in the
+doorway.
+
+Which side of a bench you stand on is the bench's own business, and so is which
+way your right hand is from there. Both were written down instead, in two files,
+as "you come in off the aisle looking along -x, so your right hand is -z". That
+was a true sentence about where the benches used to be, and a compiler has
+nothing to say about a true sentence concerning the wrong room: moving them left
+both of them reading and left left meaning right.
+
+**A wall of bookcases** runs the length of the back wall, across the floor from
+the benches. One wall and no more: the open side is the benches now, the far end
+is the way in and a bookcase in a doorway is a door, and the closed end is where
+the last bench stands. The books are generated and stocked from a seed, so a
+shelf holds the same books every time it is drawn. A bookcase restocked every
+frame is a bookcase that boils.
 
 **Sconces** down both long walls are what the room is lit by. There were candles
 on the shelves first and they were the wrong thing twice over. There is no
@@ -94,12 +120,32 @@ than beside them, which is how a library lights a wall of shelves. Six of the
 engine's eight go to the nearest of them while you are in here; the cabinets out
 in the aisle are too far to be throwing anything you could see from this room.
 
-**A rug**, which is one rug and not a tiled floor. Laid three times over it came
-out as three stretched lozenges in a row, because a tile count stretches with the
-quad and the nook is nearly twice as long as it is deep. One tile, a band round
-the outside, and a medallion in the middle. The floor is the largest single thing
-in anybody's view of a room, so it is the largest single thing saying which of
-the two rooms you are standing in.
+**A floor of boards**, which is what the nook stands on instead of the arcade's
+carpet. The floor is the largest single thing in anybody's view of a room, so it
+is the largest single thing saying which of the two rooms you are standing in,
+and the carpet out there is confetti on black and reached under here. Planks
+down the long way with a dark line between them and a butt joint across each one
+at a place of its own, because boards jointed in a line is a grid and a grid is
+the one thing the eye reads as a texture rather than as a thing. The plank count
+is taken off the nook and not off the quad, so a plank is the same width
+whichever way the room is longer.
+
+**A rug** on top of them, laid on the open floor between the benches and the
+books with bare boards showing round it. Wall to wall is what it was, which is
+not a rug, it is a floor, and it ran under four hundred books where nobody would
+ever see it. It was also hiding the confetti rather than fixing it: shrink it to
+something a room would actually have and the neon comes back out at the
+skirting, which is worse than before.
+
+Twice as long as it is wide and no longer, because the nook is nearly three times
+as long as the open floor is wide and a rug that shape is a runner. The band
+round the outside is inset the same number of pixels from every edge rather than
+the same fraction of one, which is the whole reason the drawing takes a shape: a
+square rug stretched over a quad twice as long as it is wide has a border twice
+as thick across the ends as down the sides, and nothing else in the picture says
+which way it was stretched, so it reads as a badly made rug rather than as a bug.
+The medallion stretches where the border does not. A long rug has a long
+medallion; a long border is just a mistake.
 
 **Panelled walls**, with a skirting, a dado rail, panels between the two and a
 cornice at the top. Panelled below the rail and plain above it, which is what a
@@ -468,8 +514,13 @@ nothing, because a pull is a press and not forty a second.
 - The nook has a way in, wide enough to walk through. — `room::tests::the_nook_has_a_way_in`
 - And every cabinet still has a wall behind it. — `room::tests::every_cabinet_has_a_wall_behind_it`
 - The benches fit down the nook, inside it and clear of each other. — `room::tests::the_benches_fit_down_the_nook`
-- And you can walk behind them to the books. — `room::tests::you_can_walk_behind_the_benches`
+- And no bench stands in the way in. — `room::tests::no_bench_stands_in_the_way_in`
 - And you can walk from where you come in to every one of them. — `room::tests::you_can_walk_to_every_bench`
+- And from there to the books, which is reachable and not merely free. — `room::tests::you_can_walk_to_the_books`
+- A bench knows which side of it you stand on, and which way your right hand is. — `room::tests::a_bench_knows_which_way_your_right_hand_is`
+- The rug lies on the open floor, not under the benches or the books. — `room::tests::the_rug_lies_between_the_benches_and_the_books`
+- A long rug has an even border rather than one that stretches with it. — `carpet::tests::the_rug_keeps_its_border_even`
+- The boards are planks running one way, jointed out of line. — `carpet::tests::the_boards_are_planks_and_not_a_grid`
 - A bench is something you bump into. — `room::tests::a_bench_is_something_you_bump_into`
 - The sight lands on a bench. — `room::tests::the_sight_lands_on_a_bench`
 - And not on one across the room. — `room::tests::a_bench_out_of_reach_is_not_seen`

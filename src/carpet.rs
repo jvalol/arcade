@@ -68,69 +68,139 @@ pub fn ground() -> glam::Vec3 {
 /// and lino. Laid three times over it came out as three stretched lozenges in a
 /// row, because a tile count stretches with the quad and the nook is twice as
 /// long as it is deep.
+/// A boarded floor for the nook: how big the picture is, how much floor one
+/// tile of it covers, and how many planks lie across that tile.
+///
+/// The nook had the arcade's carpet under it, which is confetti on black, and a
+/// rug wall to wall was hiding that rather than fixing it. Shrink the rug to
+/// something a room would actually have and the confetti comes back out round
+/// the edges of it, which is worse than before: a study with a neon floor
+/// showing at the skirting.
+pub const BOARDS: u32 = 192;
+pub const BOARD_TILE: f32 = 2.4;
+pub const PLANKS: u32 = 6;
+pub const BOARD_SEED: u32 = 0x5EED_0003;
+const BOARD_PALE: i32 = 206;
+const BOARD_JOINT: i32 = 96;
+
+/// A floor of boards: planks down the long way, a dark line between them, and a
+/// butt joint across each one at a place of its own.
+///
+/// The joints are staggered rather than in a line. Boards laid end to end in a
+/// row is not a floor, it is a grid, and a grid is the one thing the eye reads
+/// as a texture rather than as a thing.
+pub fn boards(seed: u32) -> TextureData {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    // one tone and one joint per plank, decided before any pixel is laid, so a
+    // plank is one colour the whole way down rather than noise in a strip
+    let planks: Vec<(i32, u32)> = (0..PLANKS)
+        .map(|_| (BOARD_PALE + (next() % 29) as i32 - 14, next() % BOARDS))
+        .collect();
+
+    let wide = BOARDS / PLANKS;
+    let mut pixels = Vec::with_capacity((BOARDS * BOARDS * 4) as usize);
+    for y in 0..BOARDS {
+        for x in 0..BOARDS {
+            let (tone, joint) = planks[(x / wide) as usize % planks.len()];
+            // the grain, which runs down the plank and not across it
+            let grain = ((next() % 11) as i32 - 5) / 2;
+            let edge = x % wide == 0 || x % wide == wide - 1;
+            let butt = y == joint || y == (joint + 1) % BOARDS;
+            let shade = if edge || butt {
+                BOARD_JOINT
+            } else {
+                (tone + grain).clamp(0, 255)
+            } as u8;
+
+            pixels.extend_from_slice(&[shade, shade, shade, 255]);
+        }
+    }
+
+    TextureData::from_pixels(BOARDS, BOARDS, pixels)
+}
+
 pub const RUG: u32 = 512;
 pub const RUG_TILES: f32 = 1.0;
 const RUG_GROUND: [u8; 3] = [52, 20, 24];
 const RUG_FIGURE: [u8; 3] = [122, 48, 44];
 const RUG_THREAD: [u8; 3] = [168, 132, 72];
 
-pub fn rug() -> TextureData {
-    let mut pixels = Vec::with_capacity((RUG * RUG * 4) as usize);
-    for _ in 0..RUG * RUG {
+pub fn rug(long: f32) -> TextureData {
+    let (wide, tall) = (RUG, (RUG as f32 * long).round() as u32);
+    let mut pixels = Vec::with_capacity((wide * tall * 4) as usize);
+    for _ in 0..wide * tall {
         pixels.extend_from_slice(&[RUG_GROUND[0], RUG_GROUND[1], RUG_GROUND[2], 255]);
     }
 
+    // row major, which for a square rug it did not have to be: the old one
+    // indexed x before y, which on a square is a transpose nobody can see in a
+    // design symmetric about both axes. On a rug twice as long as it is wide it
+    // is the picture sideways.
     let mut ink = |x: i32, y: i32, colour: [u8; 3]| {
-        let n = ((x.rem_euclid(RUG as i32) as u32 * RUG + y.rem_euclid(RUG as i32) as u32) * 4)
-            as usize;
+        if x < 0 || y < 0 || x >= wide as i32 || y >= tall as i32 {
+            return;
+        }
+        let n = ((y as u32 * wide + x as u32) * 4) as usize;
         pixels[n] = colour[0];
         pixels[n + 1] = colour[1];
         pixels[n + 2] = colour[2];
     };
 
-    let edge = RUG as i32 - 1;
-    for along in 0..RUG as i32 {
-        // a band round the outside, and a pair of threads inside it
-        for inset in [
-            10,
-            11,
-            12,
-            20,
-            24,
-            edge - 24,
-            edge - 20,
-            edge - 12,
-            edge - 11,
-            edge - 10,
-        ] {
-            ink(along, inset, RUG_THREAD);
-            ink(inset, along, RUG_THREAD);
+    // a band round the outside, and a pair of threads inside it. Inset the same
+    // number of pixels from every edge rather than the same fraction, which is
+    // the whole reason this takes a shape: a square rug stretched over a room
+    // twice as long as it is wide has a border twice as thick across the ends as
+    // it is down the sides, and nothing else in the picture gives it away.
+    const BANDS: [i32; 5] = [10, 11, 12, 20, 24];
+    for &inset in &BANDS {
+        for x in 0..wide as i32 {
+            ink(x, inset, RUG_THREAD);
+            ink(x, tall as i32 - 1 - inset, RUG_THREAD);
+        }
+        for y in 0..tall as i32 {
+            ink(inset, y, RUG_THREAD);
+            ink(wide as i32 - 1 - inset, y, RUG_THREAD);
         }
     }
-    for along in 13..RUG as i32 - 13 {
-        for inset in 13..20 {
-            ink(along.clamp(13, edge - 13), inset, RUG_FIGURE);
-            ink(along.clamp(13, edge - 13), edge - inset, RUG_FIGURE);
-            ink(inset, along.clamp(13, edge - 13), RUG_FIGURE);
-            ink(edge - inset, along.clamp(13, edge - 13), RUG_FIGURE);
+    for inset in 13..20 {
+        for x in 13..wide as i32 - 13 {
+            ink(x, inset, RUG_FIGURE);
+            ink(x, tall as i32 - 1 - inset, RUG_FIGURE);
+        }
+        for y in 13..tall as i32 - 13 {
+            ink(inset, y, RUG_FIGURE);
+            ink(wide as i32 - 1 - inset, y, RUG_FIGURE);
         }
     }
 
     // and one lozenge in the middle of it, which is what a rug has: a medallion
-    // drawn twice, once in thread and once a little inside it in the figure
-    let middle = RUG as i32 / 2;
+    // drawn three times over, each a little inside the last. It stretches with
+    // the rug where the border does not, because a long rug has a long medallion
+    // and a long border is just a mistake.
+    let (mx, my) = (wide as i32 / 2, tall as i32 / 2);
     for (reach, colour) in [
-        (RUG as i32 * 7 / 20, RUG_THREAD),
-        (RUG as i32 * 6 / 20, RUG_FIGURE),
-        (RUG as i32 / 8, RUG_THREAD),
+        (wide as i32 * 7 / 20, RUG_THREAD),
+        (wide as i32 * 6 / 20, RUG_FIGURE),
+        (wide as i32 / 8, RUG_THREAD),
     ] {
-        for step in 0..=reach {
-            let out = reach - step;
+        let (rx, ry) = (reach, (reach as f32 * long).round() as i32);
+        let steps = rx.max(ry).max(1);
+        for step in 0..=steps {
+            let part = step as f32 / steps as f32;
+            let (dx, dy) = ((rx as f32 * part) as i32, (ry as f32 * (1.0 - part)) as i32);
+
             for (x, y) in [
-                (middle + step, middle + out),
-                (middle + step, middle - out),
-                (middle - step, middle + out),
-                (middle - step, middle - out),
+                (mx + dx, my + dy),
+                (mx + dx, my - dy),
+                (mx - dx, my + dy),
+                (mx - dx, my - dy),
             ] {
                 for thick in 0..3 {
                     ink(x, y + thick, colour);
@@ -140,7 +210,7 @@ pub fn rug() -> TextureData {
         }
     }
 
-    TextureData::from_pixels(RUG, RUG, pixels)
+    TextureData::from_pixels(wide, tall, pixels)
 }
 
 /// A number from a number, so the same tile is woven every time.
@@ -257,6 +327,86 @@ pub const CABINET_SEED: u32 = 0x5EED_0002;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0006: the boards run one way and are the same width all the way.
+    #[test]
+    fn the_boards_are_planks_and_not_a_grid() {
+        let floor = boards(BOARD_SEED);
+        let woven = &floor.levels[0].pixels;
+        let at = |x: u32, y: u32| woven[((y * BOARDS + x) * 4) as usize];
+
+        assert_eq!((floor.width(), floor.height()), (BOARDS, BOARDS));
+
+        // a plank is a column, so the edge between two of them is a line of
+        // constant x and shows up on every row
+        let wide = BOARDS / PLANKS;
+        for y in 0..BOARDS {
+            for plank in 0..PLANKS {
+                assert_eq!(
+                    at(plank * wide, y) as i32,
+                    BOARD_JOINT,
+                    "the edge of plank {} breaks at row {}",
+                    plank,
+                    y
+                );
+            }
+        }
+
+        // and the butt joints are staggered, not laid in a row across the floor
+        let joints: Vec<u32> = (0..PLANKS)
+            .map(|plank| {
+                let x = plank * wide + wide / 2;
+                (0..BOARDS)
+                    .find(|&y| at(x, y) as i32 == BOARD_JOINT)
+                    .expect("a joint in every plank")
+            })
+            .collect();
+        let same = joints.iter().filter(|&&y| y == joints[0]).count();
+
+        assert!(
+            same < joints.len(),
+            "every plank joints at {}, which is a grid",
+            joints[0]
+        );
+    }
+
+    /// Spec 0006: a long rug has an even border, not a border that stretches.
+    ///
+    /// Drawn square and scaled onto a quad twice as long as it is wide, the band
+    /// round the outside came out twice as thick across the ends as down the
+    /// sides. Nothing else in the picture says which way it was stretched, so it
+    /// reads as a badly made rug rather than as a bug.
+    #[test]
+    fn the_rug_keeps_its_border_even() {
+        let long = 2.0;
+        let rug = rug(long);
+        let (wide, tall) = (RUG, (RUG as f32 * long) as u32);
+
+        assert_eq!((rug.width(), rug.height()), (wide, tall));
+
+        let woven = &rug.levels[0].pixels;
+        let at = |x: u32, y: u32| {
+            let n = ((y * wide + x) * 4) as usize;
+            [woven[n], woven[n + 1], woven[n + 2]]
+        };
+        // in from each edge along the middle of that edge, to the first thread
+        let from_left = (0..wide).find(|&x| at(x, tall / 2) == RUG_THREAD);
+        let from_top = (0..tall).find(|&y| at(wide / 2, y) == RUG_THREAD);
+
+        assert_eq!(from_left, Some(10), "the border down the side");
+        assert_eq!(from_top, Some(10), "the border across the end");
+        assert_eq!(from_left, from_top, "the border stretches with the rug");
+
+        // and the far edges the same way in
+        assert_eq!(
+            (0..wide).find(|&x| at(wide - 1 - x, tall / 2) == RUG_THREAD),
+            Some(10)
+        );
+        assert_eq!(
+            (0..tall).find(|&y| at(wide / 2, tall - 1 - y) == RUG_THREAD),
+            Some(10)
+        );
+    }
 
     /// How much of a tile is not the ground it is woven on.
     fn thread(carpet: &TextureData) -> f32 {

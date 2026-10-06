@@ -38,19 +38,22 @@ pub const APART: f32 = 2.2;
 pub const BENCH_TALL: f32 = 0.95;
 pub const BENCH_WIDE: f32 = 0.9;
 
-/// How far from the nook's back wall a bench stands, and how much floor is
+/// How far a bench stands off the wall it is set against, and how much floor is
 /// left between two of them.
 ///
-/// Off the wall rather than against it, so there is floor behind the benches as
-/// well as in front and the room reads as a room rather than as a corridor with
-/// a counter down it.
+/// Set against the open side, opposite the books, rather than stood out in the
+/// floor. Out in the floor is what it was, and the aim of that was floor behind
+/// the benches as well as in front. It got one and it was no use: a run of
+/// benches the length of the wall with 0.3 between them seals the strip behind
+/// it at both ends, so the only way in was between two benches and nobody is
+/// 0.3 across. Three goes at widening that strip, 1.1 to 1.5 to 1.9 to 2.4, made
+/// the unreachable part of the room bigger each time.
 ///
-/// Far enough off to walk behind them and get at the books, which is a stronger
-/// thing than it sounds: you are 0.9 across, and at 1.9 the gap came out 0.98,
-/// which is a gap you scrape through rather than one you walk down. It is 1.55
-/// now.
-pub const BENCH_OFF: f32 = 2.4;
-pub const BENCH_GAP: f32 = 0.3;
+/// Against one long wall and the books against the other, the floor between them
+/// is one piece and every part of it is somewhere you can be. The toys face the
+/// books across it, which is also what the room is for.
+pub const BENCH_OFF: f32 = 0.02;
+pub const BENCH_GAP: f32 = 0.9;
 
 /// The nook the toys live in: how far it cuts in behind the left wall and how
 /// much of that wall it runs along.
@@ -58,8 +61,14 @@ pub const BENCH_GAP: f32 = 0.3;
 /// A room off the room, not a table in it. Standing the benches in the aisle
 /// put them in front of the plinths from every angle, which is the one place
 /// nothing should stand.
-pub const NOOK_DEEP: f32 = 5.4;
-pub const NOOK_SPAN: f32 = 8.0;
+///
+/// Twice over. It was 3.0 by 8.0 with the benches end to end down one wall,
+/// which is 24 square units of floor holding five benches and a wall of books,
+/// and it read as a corridor because it was one. 5.4 by 8.0 furnished it and
+/// still had you turning sideways. It is 6.4 by 13.0, which is 83 against the
+/// first 24, and the open floor between the benches and the books is 4.9 across.
+pub const NOOK_DEEP: f32 = 6.4;
+pub const NOOK_SPAN: f32 = 13.0;
 
 /// How much room the far end of the room carries past the last cabinet.
 ///
@@ -84,9 +93,10 @@ pub const END: f32 = 2.8;
 /// behind that wall and you get to it round the end of it.
 pub const NOOK_DOOR: f32 = END - CABINET.z * 0.5;
 
-/// How far the room's walls are from its middle, and how high.
+/// How far the room's walls are from its middle, how high, and how thick.
 pub const WALL: f32 = 2.0;
 pub const TALL: f32 = 3.2;
+pub const THICK: f32 = 0.3;
 
 /// How far the sight carries. Spec 0003.
 ///
@@ -107,11 +117,22 @@ pub const REACH: f32 = 4.0;
 /// `MeshData::plane` runs its corners 0 to 1, which is one carpet tile thirty
 /// units wide. The engine's sampler repeats, so the count belongs here.
 pub fn tiled_floor(tiles: f32) -> MeshData {
+    tiled_plane(glam::vec2(tiles, tiles))
+}
+
+/// The same, counted separately along each axis.
+///
+/// One count does for a carpet, whose weave has no direction to get wrong. It
+/// will not do for a floor of boards in a room nearly twice as long as it is
+/// wide: one count stretches the planks with the room, so the boards come out
+/// as wide as a tabletop down one axis and as narrow as a pencil down the other.
+pub fn tiled_plane(tiles: glam::Vec2) -> MeshData {
     let normal = [0.0, 1.0, 0.0];
+    let (u, v) = (tiles.x, tiles.y);
     let corners = [
-        ([-0.5, 0.0, 0.5], [0.0, tiles]),
-        ([0.5, 0.0, 0.5], [tiles, tiles]),
-        ([0.5, 0.0, -0.5], [tiles, 0.0]),
+        ([-0.5, 0.0, 0.5], [0.0, v]),
+        ([0.5, 0.0, 0.5], [u, v]),
+        ([0.5, 0.0, -0.5], [u, 0.0]),
         ([-0.5, 0.0, -0.5], [0.0, 0.0]),
     ];
 
@@ -223,15 +244,25 @@ pub struct Benched {
     pub at: Vec3,
     /// How big this one is, which the toy on it decides.
     pub size: Vec3,
+    /// Which way off it you stand to work it, flat on the floor.
+    ///
+    /// Not something to work out from where it is. A bench against a wall has
+    /// one side you can be on and it is the side the rest of the room is, and
+    /// the room is the thing that knows which that is.
+    pub worked_from: Vec3,
 }
 
-/// Where the benches stand: a row along the nook's back wall, centred in it,
-/// in the order you meet them coming through the way in.
+/// Where the benches stand: a row against the nook's open side, facing the
+/// books, in the order you meet them coming through the way in.
 ///
 /// The ball and chain first. It is the reason there is a nook: it is worked
 /// rather than watched, so it is not one of the shapes, and there is nothing to
 /// win, so it is not one of the games. The room had nowhere to put it and that
 /// is what this is.
+///
+/// The row starts past the way in rather than centred in the whole span. The
+/// open side is the wall the way in is a gap in, so a bench centred down it is a
+/// bench in the doorway.
 pub fn benches(far: f32) -> Vec<Benched> {
     /// What is on them, and how much of the nook's length each one takes.
     const ON_THEM: [(&str, f32); 5] = [
@@ -242,24 +273,46 @@ pub fn benches(far: f32) -> Vec<Benched> {
         ("globe", 0.9),
     ];
 
-    let back = -(WALL + CABINET.x) - NOOK_DEEP + BENCH_OFF;
+    let wall = -(WALL + CABINET.x) - THICK * 0.5 - BENCH_OFF;
     let row: f32 =
         ON_THEM.iter().map(|(_, long)| long).sum::<f32>() + (ON_THEM.len() - 1) as f32 * BENCH_GAP;
-    let mut z = far + NOOK_SPAN * 0.5 - row * 0.5;
+    let (door, shut) = (far + NOOK_DOOR, far + NOOK_SPAN);
+    let mut z = (door + shut) * 0.5 - row * 0.5;
 
     ON_THEM
         .iter()
         .map(|(name, long)| {
-            let at = vec3(back, 0.0, z + long * 0.5);
+            let at = vec3(wall - BENCH_WIDE * 0.5, 0.0, z + long * 0.5);
             z += long + BENCH_GAP;
 
             Benched {
                 name,
                 at,
                 size: vec3(BENCH_WIDE, BENCH_TALL, *long),
+                // into the room, which from this wall is away from the aisle
+                worked_from: -Vec3::X,
             }
         })
         .collect()
+}
+
+impl Benched {
+    /// Which way is away from you, and which way is your right hand, stood at
+    /// this bench to work it.
+    ///
+    /// Worked out from the side you stand on rather than written down. It was
+    /// written down, in two files, as "you come in off the aisle looking along
+    /// -x, so your right hand is -z". That was a true sentence about where the
+    /// benches used to be, and a compiler has nothing to say about a true
+    /// sentence concerning the wrong room: moving them to the other wall left
+    /// both of them reading, and left left meaning right.
+    pub fn away(&self) -> Vec3 {
+        -self.worked_from
+    }
+
+    pub fn right(&self) -> Vec3 {
+        self.away().cross(Vec3::Y)
+    }
 }
 
 /// A bookcase, where it stands and which way its face looks.
@@ -271,8 +324,9 @@ pub struct Shelved {
 
 /// Where the bookcases stand: a run of them the length of the nook's back wall.
 ///
-/// Behind the benches rather than among them, with floor enough between the two
-/// to walk along and read the spines. That gap is what `BENCH_OFF` is for.
+/// Across the floor from the benches rather than behind them. Behind them is
+/// where they were, and the aisle that left was sealed at both ends by the row
+/// itself, so the books were a wall you could see and not reach.
 ///
 /// One wall and no more. The open side is the one wall the nook has not got,
 /// the far end is the way in and a bookcase in a doorway is a door, and the
@@ -300,6 +354,48 @@ pub fn bookcases(far: f32) -> Vec<Shelved> {
     }
 
     out
+}
+
+/// The nook's own floor: the whole of it, wall to wall.
+///
+/// Boards under a rug rather than the arcade's carpet under a rug. The arcade's
+/// is confetti on black and it reached under here, which the old rug hid by
+/// being the size of the room. A rug the size of the room is a floor.
+pub fn nook_floor(reaches: f32) -> (Vec3, Vec3) {
+    let side = WALL + CABINET.x;
+
+    (
+        vec3(-side - NOOK_DEEP * 0.5, 0.0, -reaches + NOOK_SPAN * 0.5),
+        vec3(NOOK_DEEP, 0.0, NOOK_SPAN),
+    )
+}
+
+/// The open floor of the nook: where it is and how big, as the middle and the
+/// size of a quad lying on it.
+///
+/// Between the benches on one long wall and the bookcases on the other, and
+/// inset from both so there is bare floor showing round it. What a rug goes on.
+/// Wall to wall is what it was, which is not a rug, it is a floor, and it ran
+/// under four hundred books where nobody would ever see it.
+///
+/// Twice as long as it is wide and no longer. The nook is nearly three times as
+/// long as the open floor is wide, and a rug that shape is a runner.
+pub fn open_floor(reaches: f32) -> (Vec3, Vec3) {
+    const INSET: f32 = 0.35;
+
+    let side = WALL + CABINET.x;
+    let benches = -side - THICK * 0.5 - BENCH_OFF - BENCH_WIDE - INSET;
+    let books = -side - NOOK_DEEP + THICK * 0.5 + crate::study::CASE.y + INSET;
+    let across = benches - books;
+
+    (
+        vec3((benches + books) * 0.5, 0.0, -reaches + NOOK_SPAN * 0.5),
+        vec3(
+            across,
+            0.0,
+            (NOOK_SPAN - THICK - INSET * 2.0).min(across * 2.0),
+        ),
+    )
 }
 
 /// What the middle of the screen is on.
@@ -349,7 +445,7 @@ impl Room {
             })
             .collect::<Vec<_>>();
 
-        let thick = 0.3;
+        let thick = THICK;
         let side = WALL + CABINET.x;
         // where the way in ends, and the nook's other end
         let door = -reaches + NOOK_DOOR;
@@ -776,18 +872,21 @@ mod tests {
         (box_.min - at).max(at - box_.max).max(Vec3::ZERO).length()
     }
 
-    /// Spec 0006: you can walk from where you come in to every bench.
+    /// Where you can get to on foot from the doorway, flooded cell by cell.
     ///
     /// Flooded rather than reasoned about. Making the plinths solid closed the
     /// only way into the nook and nothing said so: the route runs between the
     /// last cabinet and the nearest plinth, and that gap was 0.74 wide for
     /// someone 0.9 across. Arithmetic about one wall at a time cannot see a
     /// pinch between two things that were never thought about together.
-    #[test]
-    fn you_can_walk_to_every_bench() {
+    ///
+    /// Free and reachable are not the same thing, and the difference is a whole
+    /// layout. The aisle behind a wall length row of benches was free along all
+    /// of it and sealed at both ends, so a test that asked whether you could
+    /// stand there passed while you could not get there.
+    fn walkable(room: &Room) -> impl Fn(Vec3) -> bool {
         const GRID: f32 = 0.12;
 
-        let room = Room::of(some(13));
         let solid = room.solid();
         let radius = crate::RADIUS;
         let free = |at: Vec3| solid.iter().all(|box_| clear_of(at, box_) > radius);
@@ -823,47 +922,56 @@ mod tests {
             }
         }
 
-        for bench in &room.benches {
-            // the floor in front of it, on the side you stand to work it
-            let at = bench.at + Vec3::X * (bench.size.x * 0.5 + radius + 0.1);
+        move |at: Vec3| {
             let (x, z) = (
-                ((at.x - low.x) / GRID).round() as usize,
-                ((at.z - low.z) / GRID).round() as usize,
+                ((at.x - low.x) / GRID).round() as i32,
+                ((at.z - low.z) / GRID).round() as i32,
             );
 
+            x >= 0
+                && z >= 0
+                && (x as usize) < wide
+                && (z as usize) < long
+                && reached[x as usize * long + z as usize]
+        }
+    }
+
+    /// Spec 0006: you can walk from where you come in to every bench.
+    #[test]
+    fn you_can_walk_to_every_bench() {
+        let room = Room::of(some(13));
+        let reaches = walkable(&room);
+
+        for bench in &room.benches {
+            // the floor in front of it, on the side you stand to work it
+            let at = bench.at + bench.worked_from * (bench.size.x * 0.5 + crate::RADIUS + 0.1);
+
             assert!(
-                free(cell(x, z)),
-                "there is no standing at the {}",
-                bench.name
-            );
-            assert!(
-                reached[x * long + z],
+                reaches(at),
                 "you cannot walk from the door to the {}",
                 bench.name
             );
         }
     }
 
-    /// Spec 0006: and you can get behind the benches to the books.
+    /// Spec 0006: and you can get to the books.
     ///
-    /// The aisle behind them was 0.98 wide for someone 0.9 across, which is a
-    /// gap you scrape through rather than one you walk down, and the books it
-    /// leads to are the whole reason the nook has a back wall.
+    /// Not merely stand in front of them. The benches ran the length of the back
+    /// wall with 0.3 between them, so the aisle they left behind was wide enough
+    /// to stand in along all of it and shut at both ends by the first and last
+    /// bench. This test asked whether that strip was free and it was, which is
+    /// how a room nobody could walk round passed it.
     #[test]
-    fn you_can_walk_behind_the_benches() {
+    fn you_can_walk_to_the_books() {
         let room = Room::of(some(13));
-        let solid = room.solid();
-        let radius = crate::RADIUS;
+        let reaches = walkable(&room);
 
         for case in &room.bookcases {
-            // the floor in front of a bookcase, which is the aisle behind the
-            // benches
-            let face = Room::bookcase_box(case).max.x + radius + 0.08;
-            let at = vec3(face, radius, case.at.z);
+            let face = Room::bookcase_box(case).max.x + crate::RADIUS + 0.08;
 
             assert!(
-                solid.iter().all(|box_| clear_of(at, box_) > radius),
-                "there is no standing in front of the bookcase at {}",
+                reaches(vec3(face, crate::RADIUS, case.at.z)),
+                "you cannot walk from the door to the bookcase at {}",
                 case.at.z
             );
         }
@@ -901,6 +1009,87 @@ mod tests {
                 plinth.max.z
             );
         }
+    }
+
+    /// Spec 0006: and the row against the open side starts past the way in.
+    ///
+    /// The row used to be centred in the whole span, which was harmless while it
+    /// stood out in the floor. Against the open side, the span it is centred in
+    /// is the wall the way in is a gap in, and a bench centred down that is a
+    /// bench in the doorway.
+    #[test]
+    fn no_bench_stands_in_the_way_in() {
+        let room = Room::of(some(13));
+        let door = -room.reaches + NOOK_DOOR;
+
+        for bench in &room.benches {
+            assert!(
+                Room::bench_box(bench).min.z > door,
+                "the {} is in the way in: it starts at {} and the way in ends at {}",
+                bench.name,
+                Room::bench_box(bench).min.z,
+                door
+            );
+        }
+    }
+
+    /// Spec 0006: and your right hand is worked out from the side you stand on.
+    #[test]
+    fn a_bench_knows_which_way_your_right_hand_is() {
+        let room = Room::of(some(13));
+
+        for bench in &room.benches {
+            // you stand on the side the rest of the room is, which is the side
+            // the books are, so away from you is into the wall behind the bench
+            assert!(
+                bench.worked_from.dot(-Vec3::X) > 0.99,
+                "the {} is worked from {:?}",
+                bench.name,
+                bench.worked_from
+            );
+            assert!(
+                bench.at.x + bench.away().x * bench.size.x > bench.at.x,
+                "away from the {} is back across the room",
+                bench.name
+            );
+            // and your right hand is across that, not along it
+            assert!(bench.right().dot(bench.away()).abs() < 1e-5);
+            assert!((bench.right().length() - 1.0).abs() < 1e-5);
+        }
+    }
+
+    /// Spec 0006: the rug lies on the open floor and not under the furniture.
+    #[test]
+    fn the_rug_lies_between_the_benches_and_the_books() {
+        let room = Room::of(some(13));
+        let (at, size) = open_floor(room.reaches);
+        let rug = Aabb::from_center_size(at + Vec3::Y * 0.5, vec3(size.x, 1.0, size.z));
+
+        for bench in &room.benches {
+            assert!(
+                !overlapping(&rug, &Room::bench_box(bench)),
+                "the rug runs under the {}",
+                bench.name
+            );
+        }
+        for case in &room.bookcases {
+            assert!(
+                !overlapping(&rug, &Room::bookcase_box(case)),
+                "the rug runs under the bookcase at {}",
+                case.at.z
+            );
+        }
+        for wall in &room.walls {
+            assert!(!overlapping(&rug, wall), "the rug runs into a wall");
+        }
+
+        // and it is a rug rather than a runner
+        assert!(
+            size.z <= size.x * 2.0 + 1e-4,
+            "a rug {} by {} is a runner",
+            size.x,
+            size.z
+        );
     }
 
     #[test]

@@ -202,6 +202,13 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// are too far away to be throwing anything you can see from here anyway.
 pub const SCONCE_LAMPS: usize = 6;
 
+/// The nook's floor of boards, under the rug. Spec 0006.
+///
+/// Darker than the panelling and warmer than the benches, so the room has a
+/// floor, a dado and a worktop and they read as three different woods rather
+/// than as one wood lit three ways.
+pub const BOARDS: Vec4 = vec4(0.30, 0.19, 0.12, 1.0);
+
 /// The globe: its stand and the meridian ring round it. Spec 0006.
 ///
 /// Brass, because that is what they are made of, and because the nook is
