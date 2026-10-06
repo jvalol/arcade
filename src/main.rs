@@ -3,6 +3,7 @@
 mod aim;
 mod cabinet;
 mod carpet;
+mod cascada;
 mod cradle;
 mod display;
 mod globe;
@@ -65,6 +66,9 @@ const POSED_PITCH: f32 = -0.1;
 struct Arcade {
     room: Room,
     playing: Playing,
+    /// cascada's binary. It has no cabinet, and a bench is not one, but what
+    /// starts it is the same thing that starts a game.
+    cascada: Cabinet,
     /// One per cabinet, in the room's own order. A game with no screenshot gets
     /// none and its screen stays blank.
     art: Vec<Option<TextureId>>,
@@ -152,6 +156,7 @@ impl Arcade {
             room,
             spin,
             playing: Playing::new(),
+            cascada: Cabinet::found(cascada::NAME, &beside()),
             art: Vec::new(),
             glows: Vec::new(),
             signs: Vec::new(),
@@ -225,6 +230,12 @@ impl Arcade {
                 gyro::NAME => self.gyro.press(),
                 // a hand on the ball, which is the other thing you do to one
                 globe::NAME => self.globe.spin = 0.0,
+                cascada::NAME => {
+                    if self.playing.start(&self.cascada.clone()) {
+                        // it wants the mouse now, the way a game does
+                        self.wants_lock = false;
+                    }
+                }
                 wrecker::NAME => self.wrecker.rebuild_wall(),
                 _ => cradle::set_going(&mut self.cradle, 0),
             },
@@ -369,6 +380,10 @@ impl Arcade {
                 self.wrecker.standing(),
                 wrecker::bricks()
             ),
+            cascada::NAME if !self.cascada.is_built() => String::from(aim::NOT_BUILT),
+            cascada::NAME => String::from(
+                "Dominoes. Click or press enter to play in its own window.",
+            ),
             _ if cradle::stirring(&self.cradle) > 0.05 => {
                 String::from("Press enter to set it going again")
             }
@@ -399,20 +414,6 @@ impl Arcade {
             (far + 0.15, 1.0, false, back, front),
             (far + room::NOOK_SPAN - 0.15, -1.0, false, back, front),
         ]
-    }
-
-    /// The two long walls of the nook that carry sconces, as the face of the
-    /// wall and which way a bracket reaches off it.
-    ///
-    /// Both of them, because one was not enough: lit from the open side alone
-    /// the light fell on the wall it came out of and the four hundred books
-    /// across the room sat in the dark, which is the wrong way round. The ones
-    /// on the back wall hang above the cases rather than beside them, which is
-    /// how a library lights a wall of shelves.
-    fn sconce_walls(&self) -> [(f32, f32); 2] {
-        let side = room::WALL + room::CABINET.x;
-
-        [(-side - 0.15, -1.0), (-side - room::NOOK_DEEP + 0.15, 1.0)]
     }
 
     fn facing(&self) -> Vec3 {
@@ -447,12 +448,8 @@ fn arrow_at(key: KeyboardKey) -> Option<usize> {
 /// The names are the folders under `games`, read at build time rather than
 /// kept in a list here: a list is a thing that goes out of date, and the
 /// project already refuses to let a game exist without a folder.
-fn games() -> Vec<Cabinet> {
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|at| at.to_path_buf()))
-        .unwrap_or_default();
-
+/// Every repo under `games`, named.
+fn repos() -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -470,7 +467,29 @@ fn games() -> Vec<Cabinet> {
     names.sort();
 
     names
+}
+
+/// Where a game's built binary sits, which is beside this one.
+fn beside() -> std::path::PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|at| at.to_path_buf()))
+        .unwrap_or_default()
+}
+
+/// The ones that get a cabinet in the hall, which is every repo but one.
+///
+/// cascada is a toy. You stand dominoes up wherever you like and push one, and
+/// there is nothing to win, which is the whole of what separates the nook from
+/// the hall. It had a cabinet for the one reason everything else has one, which
+/// is that it is a folder under `games`, and being a folder under `games` is
+/// not an argument about anything.
+fn games() -> Vec<Cabinet> {
+    let beside = beside();
+
+    repos()
         .iter()
+        .filter(|name| *name != cascada::NAME)
         .map(|name| Cabinet::found(name, &beside))
         .collect()
 }
@@ -685,7 +704,7 @@ impl Game for Arcade {
                     Some(String::from(if stood.cabinet.is_built() {
                         "Press enter to play"
                     } else {
-                        "Not built. Run ./check-all"
+                        aim::NOT_BUILT
                     })),
                 )
             }
@@ -1359,11 +1378,8 @@ impl Game for Arcade {
 
         // the sconces down both long walls, which is where the light in here
         // comes from and is why there is any. Spec 0006.
-        for (face, out) in self.sconce_walls() {
-            for along in study::sconces(
-                -self.room.reaches + 0.2,
-                -self.room.reaches + room::NOOK_SPAN - 0.2,
-            ) {
+        for (face, out, from, to) in room::sconce_runs(self.room.reaches) {
+            for along in study::sconces(from, to) {
                 let at = vec3(face, bench_floor + study::SCONCE_UP, along);
 
                 // a back plate on the wall, a bracket off it, and a shade on the
@@ -1385,6 +1401,31 @@ impl Game for Arcade {
                     cube,
                     &Transform::at(at + Vec3::X * out * study::SCONCE_OUT).with_scale(study::SHADE),
                     aim::SHADE,
+                );
+            }
+        }
+
+        // the dominoes on cascada's bench, which do nothing. They are a picture
+        // of the toy the way a cabinet's screen is a picture of the game, and
+        // the first of them is over because that is the only part of a domino
+        // run anybody needs explaining. Spec 0006.
+        if let Some(bench) = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == cascada::NAME)
+        {
+            let top = bench.at + Vec3::Y * bench.size.y;
+
+            for (at, turn, lean) in cascada::laid() {
+                let (_, drop) = cascada::tops_at(at, turn, lean);
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(top + at - Vec3::Y * drop)
+                        .with_rotation(cascada::stood(turn, lean))
+                        .with_scale(cascada::DOMINO),
+                    aim::DOMINO,
                 );
             }
         }
@@ -1632,17 +1673,14 @@ impl Game for Arcade {
         // so they take the larger share of the engine's eight while you are in
         // here; the cabinets out in the aisle are too far to be throwing
         // anything you could see from this room anyway.
-        let walls = self.sconce_walls();
+        let walls = room::sconce_runs(self.room.reaches);
         let mut shades: Vec<(f32, Vec3, Vec3, f32, f32)> = walls
             .iter()
             .copied()
-            .flat_map(|(face, out)| {
-                study::sconces(
-                    -self.room.reaches + 0.2,
-                    -self.room.reaches + room::NOOK_SPAN - 0.2,
-                )
-                .into_iter()
-                .map(move |along| vec3(face + out * study::SCONCE_OUT, study::SCONCE_UP, along))
+            .flat_map(|(face, out, from, to)| {
+                study::sconces(from, to)
+                    .into_iter()
+                    .map(move |along| vec3(face + out * study::SCONCE_OUT, study::SCONCE_UP, along))
             })
             .map(|at| {
                 (
@@ -1847,10 +1885,30 @@ mod tests {
             .collect();
         theirs.sort();
 
-        let mut ours: Vec<String> = games().into_iter().map(|cabinet| cabinet.name).collect();
+        // a cabinet in the hall or a bench in the nook, and every repo is one
+        // of the two. It was the cabinets alone, which was the same thing while
+        // every repo had one. Moving cascada to a bench would have taken it out
+        // of the room altogether and left this test green, because what it
+        // checked was that two lists of cabinets matched.
+        let room = Room::of(games());
+        let mut ours: Vec<String> = room
+            .stood
+            .iter()
+            .map(|stood| stood.cabinet.name.clone())
+            .chain(
+                room.benches
+                    .iter()
+                    .map(|bench| bench.name.to_string())
+                    .filter(|name| theirs.contains(name)),
+            )
+            .collect();
         ours.sort();
 
         assert!(!theirs.is_empty(), "list-repos named no games at all");
         assert_eq!(ours, theirs, "the arcade and list-repos disagree");
+        assert!(
+            room.benches.iter().any(|bench| bench.name == cascada::NAME),
+            "cascada has no cabinet and no bench either"
+        );
     }
 }

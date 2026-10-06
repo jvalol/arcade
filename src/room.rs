@@ -53,7 +53,7 @@ pub const BENCH_WIDE: f32 = 0.9;
 /// is one piece and every part of it is somewhere you can be. The toys face the
 /// books across it, which is also what the room is for.
 pub const BENCH_OFF: f32 = 0.02;
-pub const BENCH_GAP: f32 = 0.9;
+pub const BENCH_GAP: f32 = 0.7;
 
 /// The nook the toys live in: how far it cuts in behind the left wall and how
 /// much of that wall it runs along.
@@ -68,7 +68,7 @@ pub const BENCH_GAP: f32 = 0.9;
 /// still had you turning sideways. It is 6.4 by 13.0, which is 83 against the
 /// first 24, and the open floor between the benches and the books is 4.9 across.
 pub const NOOK_DEEP: f32 = 6.4;
-pub const NOOK_SPAN: f32 = 13.0;
+pub const NOOK_SPAN: f32 = 14.0;
 
 /// How much room the far end of the room carries past the last cabinet.
 ///
@@ -283,12 +283,15 @@ pub struct Benched {
 /// bench in the doorway.
 pub fn benches(far: f32) -> Vec<Benched> {
     /// What is on them, and how much of the nook's length each one takes.
-    const ON_THEM: [(&str, f32); 5] = [
+    const ON_THEM: [(&str, f32); 6] = [
         ("ball and chain", 1.4),
         ("gyroscope", 0.9),
         ("newton's cradle", 2.1),
         ("metronome", 0.9),
         ("globe", 0.9),
+        // last, at the shut end. It is the one that opens a window, so it comes
+        // after the five you work where they stand rather than before them.
+        (crate::cascada::NAME, crate::cascada::LONG),
     ];
 
     let wall = -(WALL + CABINET.x) - THICK * 0.5 - BENCH_OFF;
@@ -372,6 +375,41 @@ pub fn bookcases(far: f32) -> Vec<Shelved> {
     }
 
     out
+}
+
+/// The nook's walls that carry sconces: the face of each, which way a bracket
+/// reaches off it, and where that wall starts and ends.
+///
+/// Both long walls, because one was not enough: lit from the open side alone
+/// the light fell on the wall it came out of and the four hundred books across
+/// the room sat in the dark.
+///
+/// Each wall's own run, which is the part that was wrong. They shared one, the
+/// whole length of the nook, and the open side is not that long: the way in is
+/// a gap in it. So the far end of that run put sconces out in the doorway with
+/// no wall behind them, hanging in the air over the aisle, lit, throwing light
+/// on nothing. The panelling had been told this and the lighting had not, which
+/// is what two lists of the same wall gets you.
+pub fn sconce_runs(reaches: f32) -> [(f32, f32, f32, f32); 2] {
+    let side = WALL + CABINET.x;
+    let (far, inset) = (-reaches, 0.2);
+
+    [
+        // the open side, which starts past the way in
+        (
+            -side - THICK * 0.5,
+            -1.0,
+            far + NOOK_DOOR + inset,
+            far + NOOK_SPAN - inset,
+        ),
+        // and the back wall, which runs the whole of it
+        (
+            -side - NOOK_DEEP + THICK * 0.5,
+            1.0,
+            far + inset,
+            far + NOOK_SPAN - inset,
+        ),
+    ]
 }
 
 /// The nook's own floor: the whole of it, wall to wall.
@@ -1108,6 +1146,37 @@ mod tests {
             size.x,
             size.z
         );
+    }
+
+    /// Spec 0006: every sconce is on a wall.
+    ///
+    /// One was not. The two long walls shared a single run the length of the
+    /// nook, and the open side is not that long, because the way in is a gap in
+    /// it. So the far end of that run hung a lit sconce in the air over the
+    /// aisle with nothing behind it, throwing light on nothing. The panelling
+    /// knew where that wall starts and the lighting did not, which is what two
+    /// lists of the same wall gets you.
+    #[test]
+    fn every_sconce_is_on_a_wall() {
+        let room = Room::of(some(13));
+        let mut counted = 0;
+
+        for (face, out, from, to) in sconce_runs(room.reaches) {
+            for along in crate::study::sconces(from, to) {
+                // just inside the wall, behind the back plate
+                let into = vec3(face - out * 0.02, crate::study::SCONCE_UP, along);
+                counted += 1;
+
+                assert!(
+                    room.walls.iter().any(|wall| wall.contains_point(into)),
+                    "a sconce at {} on the wall at {} has nothing behind it",
+                    along,
+                    face
+                );
+            }
+        }
+
+        assert!(counted >= 8, "only {} sconces in the whole room", counted);
     }
 
     #[test]

@@ -202,6 +202,20 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// are too far away to be throwing anything you can see from here anyway.
 pub const SCONCE_LAMPS: usize = 6;
 
+/// What the room says about something nobody has compiled.
+///
+/// One sentence and not two. A cabinet in the hall and cascada's bench in the
+/// nook are the same condition, which is a fresh checkout where only the arcade
+/// has been built, and they had a line each. Two lists of the same thing is how
+/// a sconce ended up hanging in a doorway.
+pub const NOT_BUILT: &str = "Not built. Run ./check-all";
+
+/// The dominoes on cascada's bench. Spec 0006.
+///
+/// Pale, because they are the one thing on a bench in that room meant to be
+/// read as a picture rather than worked, and the benches under them are dark.
+pub const DOMINO: Vec4 = vec4(0.84, 0.82, 0.76, 1.0);
+
 /// The sign hung over the aisle. Spec 0006.
 ///
 /// Painted wood and gilt rather than neon and a tube. The hall is a dim neon

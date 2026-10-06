@@ -61,8 +61,44 @@ the room and it was in front of the far wall from every angle, which is the one
 place nothing should stand. A bench is solid, like a cabinet, so you cannot walk
 through one.
 
-Five of them, in the order you meet them coming through the way in: the ball and
-chain, the gyroscope, the Newton's cradle, the metronome, the globe.
+Six of them, in the order you meet them coming through the way in: the ball and
+chain, the gyroscope, the Newton's cradle, the metronome, the globe, cascada.
+
+**cascada is a toy and had a cabinet.** You stand dominoes up on a floor
+wherever you like, push the first one, and the number at the end is how many
+fell. There is nothing to win and nothing to lose, which is the whole of what
+separates this room from the hall. It had a cabinet out there for the one reason
+everything else has one, which is that it is a folder under `games`, and being a
+folder under `games` is not an argument about anything.
+
+It is the one toy in here that opens a window. The other five are worked where
+they stand because a bench is enough room for them, and this one is not: a domino
+run wants a floor, and it wants you to put every domino exactly where you want
+it. Four arrow keys at a bench cannot do that, and a version that could would be
+a line of dominoes you push, which is a demonstration of the engine's waking rule
+rather than the toy. So the bench is what it is and the window is where you do
+it, which is also the honest reading of something that already has a repo, a
+spec folder and a readme of its own.
+
+The dominoes on its bench do nothing. They are a picture of the toy the way a
+cabinet's screen is a picture of the game, and the first of them is leaning into
+the second because that is the only part of a domino run anybody needs
+explaining.
+
+Two things about that picture were wrong in ways that looked right. A domino was
+thin across the run rather than along it, so every one of them stood with its
+face to you and would have gone over sideways into nothing: from beside the
+bench it read as a curve of dominoes anyway, because from beside a real run you
+see edges and not faces. And each one was turned along the tangent of the curve
+it stands on rather than at the one in front of it, which are a few degrees apart
+on any curve. What a domino has to fall onto is the next one.
+
+The arcade reads `games` off the disk and gives every folder in it a cabinet,
+less this one. The test that keeps a repo from going missing used to compare two
+lists of cabinets, which was the same thing as the real question only while every
+repo had a cabinet. Moving cascada would have passed it and taken the toy out of
+the building. It now asks that every repo is a cabinet in the hall or a bench in
+the nook.
 
 ### It is furnished
 
@@ -112,6 +148,13 @@ They also answer something the nook never did, which is where the light comes
 from. It had two bare lamps in the ceiling with nothing to hang them on, so what
 you saw was a bright patch on a surface and no reason for it. A sconce is a thing
 you can look at.
+
+Each wall over its own run. They shared one, the length of the nook, and the
+open side is not that long, because the way in is a gap in it. The far end of
+that shared run hung a lit sconce in mid air out over the aisle, with nothing
+behind it, throwing light on nothing. The panelling had been told where that
+wall starts and the lighting had not, which is what two lists of the same wall
+gets you.
 
 Both walls and not one. Lit from the open side alone the light fell on the wall
 it came out of and the four hundred books across the room sat in the dark, which
@@ -564,6 +607,13 @@ nothing, because a pull is a press and not forty a second.
 - The rug lies on the open floor, not under the benches or the books. — `room::tests::the_rug_lies_between_the_benches_and_the_books`
 - A long rug has an even border rather than one that stretches with it. — `carpet::tests::the_rug_keeps_its_border_even`
 - The boards are planks running one way, jointed out of line. — `carpet::tests::the_boards_are_planks_and_not_a_grid`
+- Every sconce is on a wall. — `room::tests::every_sconce_is_on_a_wall`
+- Every repo is a cabinet in the hall or a bench in the nook. — `tests::it_knows_every_game_the_project_does`
+- cascada's dominoes stand on its bench and none hangs off it. — `cascada::tests::they_all_stand_on_the_bench`
+- And they are spaced the way cascada says to space them. — `cascada::tests::they_are_close_enough_to_knock_each_other_over`
+- And each one falls onto the next rather than past it. — `cascada::tests::each_one_falls_onto_the_next`
+- The first one is over, towards the next and not away from it. — `cascada::tests::the_leaning_one_leans_the_right_way`
+- And only the first. — `cascada::tests::the_first_one_is_leaning`
 - The sign hangs over your head and under the ceiling. — `sign::tests::it_hangs_over_your_head`
 - And in the aisle, not through a cabinet. — `sign::tests::it_hangs_clear_of_the_cabinets`
 - Its pointed end is a solid with every face wound to be seen. — `sign::tests::the_point_is_wound_to_be_seen`
