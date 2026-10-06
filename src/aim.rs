@@ -195,13 +195,6 @@ pub const TRIM: Vec4 = vec4(0.34, 0.21, 0.12, 1.0);
 pub const SCONCE: Vec4 = vec4(0.46, 0.34, 0.14, 1.0);
 pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 
-/// How many lights the sconces may take.
-///
-/// The engine carries eight. These are what lights the nook, so they get the
-/// larger share of them while you are in it, and the cabinets out in the aisle
-/// are too far away to be throwing anything you can see from here anyway.
-pub const SCONCE_LAMPS: usize = 6;
-
 /// What the room says about something nobody has compiled.
 ///
 /// One sentence and not two. A cabinet in the hall and cascada's bench in the
@@ -300,22 +293,6 @@ pub const LAMP_RANGE: f32 = 3.0;
 pub const LAMP_INTENSITY: f32 = 0.5;
 pub const LAMP_LIT: f32 = 2.2;
 
-/// How many cabinets can be lighting the room at once.
-///
-/// The engine carries eight point lights and drops the rest with a warning, and
-/// the room has a cabinet per game, which is well past eight. The nearest eight
-/// are the ones that can be seen to be lighting anything.
-pub const LAMPS: usize = 8;
-
-/// How much of the engine's eight the nook's sconces take.
-///
-/// It had two bare lamps in the ceiling with nothing to hang them on, so what
-/// you saw was a bright patch on a surface and no reason for it. The sconces are
-/// the light in here now, they are a thing you can look at, and they take most
-/// of the eight while you are in the room. The cabinets out in the aisle are too
-/// far to be throwing anything you could see from here, which is why they get
-/// what is left.
-///
 /// The neon on a cabinet: how bright the band burns, how thick it is, and
 /// where up the front it sits.
 ///

@@ -1655,8 +1655,7 @@ impl Game for Arcade {
         };
 
         // every band lights the room around it, because a glowing rectangle
-        // that throws nothing is a coloured rectangle. The engine carries
-        // eight, so the nearest eight get one.
+        // that throws nothing is a coloured rectangle.
         let eye = camera.position;
         let mut near: Vec<(f32, usize)> = self
             .room
@@ -1668,11 +1667,8 @@ impl Game for Arcade {
             .collect();
         near.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        // the sconces nearest you, because a light with no fitting is a bright
-        // patch on a wall and no reason for it. These are what lights the nook,
-        // so they take the larger share of the engine's eight while you are in
-        // here; the cabinets out in the aisle are too far to be throwing
-        // anything you could see from this room anyway.
+        // the sconces, because a light with no fitting is a bright patch on a
+        // wall and no reason for it.
         let walls = room::sconce_runs(self.room.reaches);
         let mut shades: Vec<(f32, Vec3, Vec3, f32, f32)> = walls
             .iter()
@@ -1693,11 +1689,7 @@ impl Game for Arcade {
             })
             .collect();
 
-        // the pendant over the sign goes in with them rather than beside them,
-        // so it takes a slot off the nearest sconce when you are out in the
-        // hall and loses to them the moment you are in the nook. A fitting of
-        // its own would have had to come out of the cabinets' two, and the
-        // cabinets are the hall.
+        // and the pendant over the sign, which is a fitting like any other.
         let lamp = sign::at(self.room.reaches)
             + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP - sign::SHADE.y);
         shades.push((
@@ -1707,13 +1699,19 @@ impl Game for Arcade {
             sign::LAMP_LIT,
             sign::LAMP_RANGE,
         ));
+        // nearest first, because what the engine drops when a building outgrows
+        // it should be the lamp in the furthest room and not whichever was
+        // pushed last. Not a ration any more: every fitting in the building is
+        // pushed and the engine carries sixty four of them, where it carried
+        // eight and the nook's walls took six of those whether or not you were
+        // standing in the nook. Spec 0020 of the engine.
         shades.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        for (_, at, colour, lit, range) in shades.into_iter().take(aim::SCONCE_LAMPS) {
+        for (_, at, colour, lit, range) in shades {
             scene.push_light(blitzkit::lighting::PointLight::new(at, colour, lit, range));
         }
 
-        for (_, n) in near.into_iter().take(aim::LAMPS - aim::SCONCE_LAMPS) {
+        for (_, n) in near {
             let stood = &self.room.stood[n];
             let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
             let strength = if at == Some(n) {
