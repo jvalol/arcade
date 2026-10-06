@@ -48,6 +48,14 @@ const SPEED: f32 = 4.2;
 const LOOK: f32 = 0.0022;
 const PITCH_LIMIT: f32 = 1.3;
 
+/// How fast the arrows turn and tilt you, in radians a second.
+///
+/// The mouse is per pixel and the keyboard is per second, so these are not the
+/// same number in different clothes. Turning is quicker than tilting because
+/// there is a whole room around you and only so much ceiling.
+const TURNS: f32 = 2.4;
+const TILTS: f32 = 1.6;
+
 /// What the toy on the bench falls under.
 const GRAVITY: Vec3 = vec3(0.0, -9.81, 0.0);
 
@@ -207,6 +215,8 @@ struct Arcade {
     /// Which arrows are being held on a toy that is leaned on rather than
     /// pressed, in the same order as `walking`.
     leaning: [bool; 4],
+    /// And which are turning you about, in the same order again.
+    looking: [bool; 4],
     wants_lock: bool,
     locked: bool,
     quitting: bool,
@@ -309,6 +319,7 @@ impl Arcade {
             walking: [false; 4],
             shifted: false,
             leaning: [false; 4],
+            looking: [false; 4],
             wants_lock: true,
             locked: false,
             quitting: false,
@@ -376,19 +387,25 @@ impl Arcade {
             return false;
         };
 
-        let arrow = arrow_at(input.key);
-        if let Some(which) = arrow {
-            // whatever the toy does with it, the arrow is not walking you, and
-            // letting go always says so: an arrow held on the way to a bench
-            // would otherwise leave you walking into it
-            self.walking[which] = false;
-            self.leaning[which] = false;
+        let Some(which) = arrow_at(input.key) else {
+            return false;
+        };
+        let name = self.room.benches[n].name;
+        if !wanted_by(name, input.key, self.shifted) {
+            return false;
         }
-        let arrow = arrow.is_some();
-        if arrow && !held {
+
+        // the toy has this one, so it is not turning you, and letting go always
+        // says so: an arrow held on the way to a bench would otherwise leave
+        // you turning on the spot with nothing to let go of
+        self.looking[which] = false;
+        self.leaning[which] = false;
+        if !held {
             return true;
         }
-        match self.room.benches[n].name {
+
+        let arrow = true;
+        match name {
             metronome::NAME if arrow => {
                 if !input.repeat {
                     // up the needle is slower, which is the thing the toy is for
@@ -582,6 +599,29 @@ impl Arcade {
 ///
 /// The same order the walking itself uses, so a key the toy takes can be let go
 /// of in the one place rather than in every arm that handles one.
+/// Which arrows a toy takes, so the rest are still yours to look with.
+///
+/// It used to take all four whatever it was, which was fine while the arrows
+/// walked you: you have WASD for that. Now they turn you, and a toy swallowing
+/// the two it has no use for means standing at the globe with no way to look up
+/// or down. The globe spins about one axis and the metronome's weight slides
+/// along one, so each of them wants one pair and not the other.
+fn wanted_by(toy: &str, key: KeyboardKey, shifted: bool) -> bool {
+    let up_down = matches!(key, KeyboardKey::Up | KeyboardKey::Down);
+
+    match toy {
+        // the weight slides up and down the needle
+        metronome::NAME => up_down,
+        // and the ball spins about its own axis, which is left and right
+        globe::NAME => !up_down,
+        // the dial is up and down; leaning on the spindle is any way at all
+        gyro::NAME => !shifted || up_down,
+        // winding is up and down; hauling the ball is any way at all
+        wrecker::NAME => !shifted || up_down,
+        _ => false,
+    }
+}
+
 fn arrow_at(key: KeyboardKey) -> Option<usize> {
     match key {
         KeyboardKey::Up => Some(0),
@@ -897,6 +937,15 @@ impl Game for Arcade {
         let wading = self.wading();
         let pace = spa::pace(self.room.reaches, self.at, SPEED);
 
+        // the arrows turn and tilt you. Yaw nought faces -z and grows toward
+        // +x, which is your right, so the right arrow adds.
+        let turn = f32::from(self.looking[3]) - f32::from(self.looking[2]);
+        let tilt = f32::from(self.looking[0]) - f32::from(self.looking[1]);
+        if turn != 0.0 || tilt != 0.0 {
+            self.yaw += turn * TURNS * dt;
+            self.pitch = (self.pitch + tilt * TILTS * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        }
+
         // along the floor, over anything no taller than a step, and down.
         // Spec 0007: the building has a height in it now, so getting about is
         // no longer one call that pushes you sideways.
@@ -1054,7 +1103,7 @@ impl Game for Arcade {
         text.push_render_text(RenderText {
             position: vec2(20.0, 20.0),
             text: String::from(
-                "WASD and the mouse to get about. Arrow keys work the toy you are looking at. Escape quits.",
+                "WASD and the mouse to get about. Arrow keys look around, and work the toy you are looking at. Escape quits.",
             ),
             size: 14.0,
             ..Default::default()
@@ -3480,11 +3529,19 @@ impl Game for Arcade {
             return;
         }
 
+        if let Some(which) = arrow_at(input.key) {
+            // the arrows turn and tilt you, which is the keyboard's half of
+            // looking about. They used to be a second copy of WASD, which is
+            // four keys doing what four keys already did.
+            self.looking[which] = held;
+            return;
+        }
+
         match input.key {
-            KeyboardKey::W | KeyboardKey::Up => self.walking[0] = held,
-            KeyboardKey::S | KeyboardKey::Down => self.walking[1] = held,
-            KeyboardKey::A | KeyboardKey::Left => self.walking[2] = held,
-            KeyboardKey::D | KeyboardKey::Right => self.walking[3] = held,
+            KeyboardKey::W => self.walking[0] = held,
+            KeyboardKey::S => self.walking[1] = held,
+            KeyboardKey::A => self.walking[2] = held,
+            KeyboardKey::D => self.walking[3] = held,
             KeyboardKey::Return if held => {
                 self.use_what_i_see();
             }
@@ -3578,6 +3635,50 @@ mod tests {
             "a knocked down wall did not offer a rebuild: {}",
             down
         );
+    }
+
+    /// Spec 0006: a toy takes only the arrows it has a use for.
+    ///
+    /// The arrows turn you now, so an arrow a toy swallows is one you cannot
+    /// look with. Taking all four whatever the toy was left you standing at the
+    /// globe, which spins about one axis, with no way to look up or down.
+    #[test]
+    fn a_toy_takes_only_the_arrows_it_uses() {
+        use KeyboardKey::{Down, Left, Right, Up};
+
+        // the weight slides up and down the needle, so left and right are yours
+        assert!(wanted_by(metronome::NAME, Up, false));
+        assert!(wanted_by(metronome::NAME, Down, false));
+        assert!(!wanted_by(metronome::NAME, Left, false));
+        assert!(!wanted_by(metronome::NAME, Right, false));
+
+        // and the ball spins about its own axis, so up and down are yours
+        assert!(wanted_by(globe::NAME, Left, false));
+        assert!(!wanted_by(globe::NAME, Up, false));
+
+        // leaning on the gyroscope and hauling the ball go any way at all, so
+        // those two take the lot
+        for key in [Up, Down, Left, Right] {
+            assert!(
+                wanted_by(gyro::NAME, key, false),
+                "the gyroscope dropped {:?}",
+                key
+            );
+            assert!(
+                wanted_by(wrecker::NAME, key, false),
+                "the chain dropped {:?}",
+                key
+            );
+        }
+
+        // but shifted they are a dial and a winder, which are up and down
+        assert!(wanted_by(gyro::NAME, Up, true));
+        assert!(!wanted_by(gyro::NAME, Left, true));
+        assert!(wanted_by(wrecker::NAME, Down, true));
+        assert!(!wanted_by(wrecker::NAME, Right, true));
+
+        // and a bench with nothing on it takes nothing
+        assert!(!wanted_by(cascada::NAME, Up, false));
     }
 
     /// Spec 0001: every game the project has gets a cabinet, and nobody has to
