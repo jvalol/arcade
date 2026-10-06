@@ -684,6 +684,69 @@ pub fn floor(reaches: f32) -> (Vec3, Vec3) {
     )
 }
 
+/// The ceiling: how big a coffer is meant to be, how wide the beams between
+/// them are, how far they hang below, and the moulding round each panel.
+///
+/// Coffered, because a flat ceiling is the one surface in a room nobody spent
+/// anything on and this room is meant to read as one somebody did. A grid of
+/// beams with a sunk panel in every square is what the ceiling of a library
+/// looks like and has looked like for four hundred years.
+pub const COFFER: f32 = 2.1;
+pub const BEAM: f32 = 0.2;
+pub const BEAM_DOWN: f32 = 0.17;
+pub const MOULD: f32 = 0.055;
+pub const SUNK: f32 = 0.05;
+pub const BOSS: f32 = 0.11;
+
+/// A thing on the ceiling: where it is and how big.
+pub type Timber = (Vec3, Vec3);
+
+/// The beams across the ceiling, as a middle and a size each, and the coffers
+/// between them.
+pub fn ceiling(reaches: f32) -> (Vec<Timber>, Vec<Timber>) {
+    let foot = back() - LANDING - STEPS as f32 * TREAD;
+    let middle = vec3(foot - DEEP * 0.5, -DOWN + TALL, opening(reaches));
+    let (deep, span) = (DEEP - THICK, SPAN - THICK);
+    let (across, along) = (
+        (deep / COFFER).round().max(1.0),
+        (span / COFFER).round().max(1.0),
+    );
+    let (step_x, step_z) = (deep / across, span / along);
+    let up = middle.y - BEAM_DOWN * 0.5;
+
+    let mut beams = Vec::new();
+    // the beams one way, then the other, so the grid is a grid and not a set of
+    // stripes
+    for n in 0..=(across as usize) {
+        beams.push((
+            vec3(middle.x - deep * 0.5 + n as f32 * step_x, up, middle.z),
+            vec3(BEAM, BEAM_DOWN, span),
+        ));
+    }
+    for n in 0..=(along as usize) {
+        beams.push((
+            vec3(middle.x, up, middle.z - span * 0.5 + n as f32 * step_z),
+            vec3(deep, BEAM_DOWN, BEAM),
+        ));
+    }
+
+    let mut coffers = Vec::new();
+    for row in 0..(across as usize) {
+        for col in 0..(along as usize) {
+            coffers.push((
+                vec3(
+                    middle.x - deep * 0.5 + (row as f32 + 0.5) * step_x,
+                    middle.y,
+                    middle.z - span * 0.5 + (col as f32 + 0.5) * step_z,
+                ),
+                vec3(step_x - BEAM, 0.0, step_z - BEAM),
+            ));
+        }
+    }
+
+    (beams, coffers)
+}
+
 /// Where the rug lies: in front of the fire, which is where a rug goes.
 pub fn rug(reaches: f32) -> (Vec3, Vec3) {
     let at = hearth(reaches);

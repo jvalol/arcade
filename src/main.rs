@@ -1508,6 +1508,65 @@ impl Game for Arcade {
             );
         }
 
+        // the ceiling, coffered. A flat ceiling is the one surface in a room
+        // nobody spent anything on, and this room is meant to read as one
+        // somebody did. Spec 0007.
+        {
+            let (beams, coffers) = cellar::ceiling(self.room.reaches);
+
+            // the sunk panel in each square, and a moulding round it
+            for (n, (at, size)) in coffers.iter().enumerate() {
+                let panel = *at - Vec3::Y * cellar::SUNK;
+                let laid = Transform::at(panel).with_scale(vec3(size.x, 0.04, size.z));
+
+                match self.grain.get(n % self.grain.len().max(1)) {
+                    Some(grain) => scene.push_textured(cube, *grain, &laid, aim::COFFER, aim::DULL),
+                    None => scene.push_colored(cube, &laid, aim::COFFER),
+                }
+
+                for (way, out, span) in [
+                    (Vec3::X, size.x, vec3(cellar::MOULD, cellar::MOULD, size.z)),
+                    (Vec3::Z, size.z, vec3(size.x, cellar::MOULD, cellar::MOULD)),
+                ] {
+                    for side in [-1.0f32, 1.0] {
+                        scene.push_colored(
+                            cube,
+                            &Transform::at(
+                                panel + way * side * (out - cellar::MOULD) * 0.5
+                                    - Vec3::Y * cellar::MOULD * 0.4,
+                            )
+                            .with_scale(span),
+                            aim::RAFTER,
+                        );
+                    }
+                }
+            }
+
+            // the beams over them
+            for (at, size) in &beams {
+                scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::RAFTER);
+            }
+
+            // and a carved boss where four of them meet, which is the one place
+            // on a ceiling anybody puts any carving
+            if let Some(peg) = self.peg {
+                for (at, _) in &beams {
+                    for (other, _) in &beams {
+                        if (at.x - other.x).abs() < 1e-3 || (at.z - other.z).abs() < 1e-3 {
+                            continue;
+                        }
+
+                        scene.push_colored(
+                            peg,
+                            &Transform::at(vec3(at.x, at.y - cellar::BEAM_DOWN * 0.5, other.z))
+                                .with_scale(vec3(cellar::BOSS, cellar::BOSS * 0.5, cellar::BOSS)),
+                            aim::BOSS,
+                        );
+                    }
+                }
+            }
+        }
+
         // the panelling down there: floor to ceiling, each bay a raised panel
         // in its own timber inside a frame of stiles and rails, with a skirting
         // under the lot and a cornice over it. Spec 0007.

@@ -302,6 +302,15 @@ pub const TIMBER: [Vec4; 4] = [
 /// they hold. A frame the same colour as its panel is not a frame.
 pub const TIMBER_TRIM: Vec4 = vec4(0.26, 0.11, 0.08, 1.0);
 
+/// The ceiling: its beams, the panel sunk in each coffer, and the carved boss
+/// where four beams meet.
+///
+/// Darker than the walls, because a ceiling is further from every light in a
+/// room and a ceiling the same value as the walls reads as no ceiling at all.
+pub const RAFTER: Vec4 = vec4(0.30, 0.13, 0.09, 1.0);
+pub const COFFER: Vec4 = vec4(0.38, 0.17, 0.12, 1.0);
+pub const BOSS: Vec4 = vec4(0.52, 0.38, 0.17, 1.0);
+
 /// The fireplace: its stone, the dark of the opening, the logs, and the fire.
 ///
 /// The fire is far over one, because fire is the thing in a room that is
