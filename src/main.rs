@@ -101,6 +101,14 @@ struct Arcade {
     hung: Option<MeshId>,
     boards: Option<TextureId>,
     boards_mesh: Option<MeshId>,
+    barrel: Option<MeshId>,
+    hoop: Option<MeshId>,
+    bottle: Option<MeshId>,
+    peg: Option<MeshId>,
+    stave: Option<TextureId>,
+    flame: Option<MeshId>,
+    afghan: Option<TextureId>,
+    afghan_mesh: Option<MeshId>,
     wall_grain: Option<TextureId>,
     cabinet_grain: Option<TextureId>,
     ceiling_mesh: Option<MeshId>,
@@ -196,6 +204,14 @@ impl Arcade {
             hung: None,
             boards: None,
             boards_mesh: None,
+            barrel: None,
+            hoop: None,
+            bottle: None,
+            peg: None,
+            stave: None,
+            flame: None,
+            afghan: None,
+            afghan_mesh: None,
             wall_grain: None,
             cabinet_grain: None,
             ceiling_mesh: None,
@@ -589,6 +605,16 @@ impl Game for Arcade {
         let (_, rug) = room::open_floor(self.room.reaches);
         self.rug = Some(renderer.add_texture(&carpet::rug(rug.z / rug.x)));
         self.boards = Some(renderer.add_texture(&carpet::boards(carpet::BOARD_SEED)));
+        self.barrel = Some(renderer.add_mesh(&cellar::barrel_mesh()));
+        self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
+        self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
+        self.peg = Some(renderer.add_mesh(&cellar::peg_mesh()));
+        self.flame = Some(renderer.add_mesh(&cellar::flame_mesh()));
+        let (_, mat) = cellar::rug(self.room.reaches);
+        self.afghan = Some(renderer.add_texture(&carpet::afghan(mat.z / mat.x)));
+        self.afghan_mesh = Some(renderer.add_mesh(&room::tiled_floor(1.0)));
+        self.stave =
+            Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
         self.point_mesh = Some(renderer.add_mesh(&sign::point_mesh()));
         self.hung = Some(renderer.add_mesh(&room::hung_mesh()));
@@ -1325,9 +1351,398 @@ impl Game for Arcade {
                 &Transform::at(box_.center()).with_scale(box_.size()),
                 match made {
                     cellar::Made::Tread => aim::BOARDS,
+                    // the floor warmer and a shade apart from the walls, so a
+                    // room is a floor and walls rather than one grey box
+                    cellar::Made::Stone if box_.max.y <= -cellar::DOWN + 1e-3 => aim::CELLAR_FLOOR,
                     cellar::Made::Stone => aim::CELLAR,
                 },
             );
+        }
+
+        // what the cellar is furnished with. Spec 0007.
+        for (which_rack, (at, side)) in cellar::racks(self.room.reaches).into_iter().enumerate() {
+            let rack = cellar::RACK;
+            let (across, up) = cellar::BOTTLES;
+            let back = at.z + side * (rack.x * 0.5 - 0.02);
+
+            // a back against the wall, a side at each end, and a shelf for
+            // every row of bottles
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(at.x, at.y + rack.y * 0.5, back))
+                    .with_scale(vec3(rack.z, rack.y, 0.04)),
+                aim::RACK,
+            );
+            for end in [-1.0f32, 1.0] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(
+                        at.x + end * (rack.z - 0.05) * 0.5,
+                        at.y + rack.y * 0.5,
+                        at.z,
+                    ))
+                    .with_scale(vec3(0.05, rack.y, rack.x)),
+                    aim::RACK,
+                );
+            }
+            for row in 0..=up {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(at.x, at.y + row as f32 / up as f32 * rack.y, at.z))
+                        .with_scale(vec3(rack.z, 0.035, rack.x)),
+                    aim::RACK,
+                );
+            }
+
+            // and the bottles, ends out, standing a little proud of the front
+            // so they read as bottles in a rack rather than a panel of dots
+            let nose = at.z - side * (rack.x * 0.5 - cellar::BOTTLE * 0.7);
+            for row in 0..up {
+                for n in 0..across {
+                    // resting on the shelf under it, not floating in the
+                    // middle of the gap above it. Put at the middle of its own
+                    // cell a bottle hangs in the air with daylight under it,
+                    // and a rack of them hovers.
+                    let shelf = at.y + row as f32 / up as f32 * rack.y;
+                    let middle = vec3(
+                        at.x + ((n as f32 + 0.5) / across as f32 - 0.5) * (rack.z - 0.14),
+                        shelf + 0.018 + cellar::BOTTLE * 0.5,
+                        nose,
+                    );
+
+                    // a whole bottle, lying down with its neck out, because
+                    // the neck is the only part of one you can see in a rack
+                    // and it is the part that says wine. Drawn as a disc it was
+                    // a cork; drawn as a cube it was a pegboard.
+                    let laid = glam::Quat::from_rotation_x(-side * std::f32::consts::FRAC_PI_2);
+                    let deep = vec3(
+                        middle.x,
+                        middle.y,
+                        middle.z + side * cellar::BOTTLE_LONG * 0.5,
+                    );
+
+                    let which = cellar::glass(which_rack, row, n);
+                    let glass = aim::BOTTLES[which % aim::BOTTLES.len()];
+
+                    match self.bottle {
+                        Some(bottle) => {
+                            scene.push_colored(
+                                bottle,
+                                &Transform::at(deep).with_rotation(laid).with_scale(vec3(
+                                    cellar::BOTTLE,
+                                    cellar::BOTTLE_LONG,
+                                    cellar::BOTTLE,
+                                )),
+                                glass,
+                            );
+
+                            // and the cork in the end of it, which is the one
+                            // pale thing on a bottle and most of what says it
+                            // is a full one
+                            if let Some(peg) = self.peg {
+                                let tip =
+                                    vec3(middle.x, middle.y, middle.z - side * cellar::CORK * 0.4);
+
+                                scene.push_colored(
+                                    peg,
+                                    &Transform::at(tip).with_rotation(laid).with_scale(vec3(
+                                        cellar::BOTTLE * cellar::NECK * 0.92,
+                                        cellar::BOTTLE_LONG * cellar::CORK,
+                                        cellar::BOTTLE * cellar::NECK * 0.92,
+                                    )),
+                                    aim::CORK,
+                                );
+                            }
+                        }
+                        None => scene.push_colored(
+                            cube,
+                            &Transform::at(middle).with_scale(Vec3::splat(cellar::BOTTLE)),
+                            glass,
+                        ),
+                    }
+                }
+            }
+        }
+
+        // the panelling down there, in four timbers with no two beside each
+        // other alike. Boards and not a picture of boards: a wall is one box,
+        // and a cube's corners run nought to one however big it is, so a timber
+        // texture on one is a single plank the size of the wall. Spec 0007.
+        for (face, out, from, to, along_x) in cellar::panelled(self.room.reaches) {
+            let run = to - from;
+            let step = cellar::BOARD + cellar::BOARD_GAP;
+            let fits = (run / step).floor().max(1.0) as usize;
+            let spare = run - fits as f32 * step;
+            let floor = -cellar::DOWN;
+
+            for n in 0..fits {
+                let at = from + spare * 0.5 + (n as f32 + 0.5) * step;
+                let timber = aim::TIMBER[(n * 7 + if along_x { 3 } else { 0 }) % aim::TIMBER.len()];
+                let middle = if along_x {
+                    vec3(
+                        face + out * cellar::BOARD_OUT * 0.5,
+                        floor + cellar::DADO * 0.5,
+                        at,
+                    )
+                } else {
+                    vec3(
+                        at,
+                        floor + cellar::DADO * 0.5,
+                        face + out * cellar::BOARD_OUT * 0.5,
+                    )
+                };
+                let size = if along_x {
+                    vec3(cellar::BOARD_OUT, cellar::DADO, cellar::BOARD)
+                } else {
+                    vec3(cellar::BOARD, cellar::DADO, cellar::BOARD_OUT)
+                };
+
+                scene.push_colored(cube, &Transform::at(middle).with_scale(size), timber);
+            }
+
+            // a skirting under them and a rail over, which is what turns a row
+            // of boards into panelling
+            for (up, thick) in [
+                (cellar::SKIRTING * 0.5, cellar::SKIRTING),
+                (cellar::DADO + cellar::RAIL * 0.5, cellar::RAIL),
+            ] {
+                let middle = if along_x {
+                    vec3(
+                        face + out * cellar::BOARD_OUT,
+                        floor + up,
+                        (from + to) * 0.5,
+                    )
+                } else {
+                    vec3(
+                        (from + to) * 0.5,
+                        floor + up,
+                        face + out * cellar::BOARD_OUT,
+                    )
+                };
+                let size = if along_x {
+                    vec3(cellar::BOARD_OUT * 2.4, thick, run)
+                } else {
+                    vec3(run, thick, cellar::BOARD_OUT * 2.4)
+                };
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(middle).with_scale(size),
+                    aim::TIMBER_TRIM,
+                );
+            }
+        }
+
+        // the rug in front of the fire, which is where a rug goes
+        if let (Some(afghan), Some(mesh)) = (self.afghan, self.afghan_mesh) {
+            let (at, size) = cellar::rug(self.room.reaches);
+
+            scene.push_textured(
+                mesh,
+                afghan,
+                &Transform::at(at + Vec3::Y * 0.004).with_scale(vec3(size.x, 1.0, size.z)),
+                aim::FLOOR,
+                aim::DULL,
+            );
+        }
+
+        // the fire in the far wall, which is what the room is lit by. Spec
+        // 0007. A surround standing proud of the wall, a hole cut into it, logs
+        // in the hole and a fire over them.
+        {
+            let at = cellar::hearth(self.room.reaches);
+            let wide = cellar::FIRE_WIDE;
+            let high = cellar::FIRE_HIGH;
+            let round = cellar::FIRE_ROUND;
+            let out = room::THICK;
+
+            // the surround: two jambs and a lintel, standing out of the wall
+            for (middle, size) in [
+                (
+                    vec3(
+                        at.x + out * 0.5,
+                        at.y + high * 0.5,
+                        at.z - (wide + round) * 0.5,
+                    ),
+                    vec3(out, high + round, round),
+                ),
+                (
+                    vec3(
+                        at.x + out * 0.5,
+                        at.y + high * 0.5,
+                        at.z + (wide + round) * 0.5,
+                    ),
+                    vec3(out, high + round, round),
+                ),
+                (
+                    vec3(at.x + out * 0.5, at.y + high + round * 0.5, at.z),
+                    vec3(out, round, wide + round * 2.0),
+                ),
+                // and a mantel over the lot
+                (
+                    vec3(
+                        at.x + (out + cellar::MANTEL) * 0.5,
+                        at.y + high + round + cellar::MANTEL * 0.3,
+                        at.z,
+                    ),
+                    vec3(
+                        out + cellar::MANTEL,
+                        cellar::MANTEL * 0.6,
+                        wide + round * 3.0,
+                    ),
+                ),
+            ] {
+                scene.push_colored(cube, &Transform::at(middle).with_scale(size), aim::HEARTH);
+            }
+
+            // the back of the recess, which is a panel and not a block. As a
+            // solid box it enclosed the fire: a black slab standing out of the
+            // wall with the flames sealed inside it, which is a fireplace with
+            // the fire behind the bricks.
+            let back = at.x + 0.02;
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(back, at.y + high * 0.5, at.z))
+                    .with_scale(vec3(0.04, high, wide)),
+                aim::FIREBOX,
+            );
+
+            // logs across it, and a bed of embers under them
+            let in_it = back + 0.13;
+
+            // a bed of coals rather than one bright slab. A slab is a hot plate
+            // and it was the brightest thing in the room by a mile; coals are
+            // small, uneven and mostly dark, and the few that are not are what
+            // the eye calls a fire.
+            if let Some(peg) = self.peg {
+                for n in 0..13 {
+                    let roll = cellar::glass(n * 31, n, n * 7) as f32 / u32::MAX as f32;
+                    let across = ((n as f32 / 12.0) - 0.5) * wide * 0.74;
+                    let hot = cellar::flicker(self.since * (0.7 + roll) + n as f32);
+
+                    scene.push_colored(
+                        peg,
+                        &Transform::at(vec3(
+                            in_it + (roll - 0.5) * 0.14,
+                            at.y + 0.03,
+                            at.z + across,
+                        ))
+                        .with_scale(vec3(
+                            0.09 + roll * 0.05,
+                            0.05,
+                            0.09 + roll * 0.05,
+                        )),
+                        if roll > 0.45 {
+                            aim::EMBER * hot
+                        } else {
+                            aim::COAL
+                        },
+                    );
+                }
+            }
+            if let Some(barrel) = self.barrel {
+                // copied, because this crate is on the 2018 edition and
+                // `into_iter` on an array hands out references there
+                for (n, (across, roll)) in [(-1.0f32, 0.16f32), (0.25, -0.1), (1.0, 0.06)]
+                    .iter()
+                    .copied()
+                    .enumerate()
+                {
+                    scene.push_colored(
+                        barrel,
+                        &Transform::at(vec3(
+                            in_it,
+                            at.y + 0.17 + n as f32 * 0.03,
+                            at.z + across * 0.16,
+                        ))
+                        .with_rotation(
+                            glam::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
+                                * glam::Quat::from_rotation_y(roll),
+                        )
+                        .with_scale(vec3(0.13, wide * 0.72, 0.13)),
+                        aim::LOG,
+                    );
+                }
+            }
+
+            // and the flames, which are the one surface in the building that
+            // is a light as well as a thing. Shaped, because a fire made of
+            // slabs is a pile of hot bricks.
+            let lit = cellar::flicker(self.since);
+            if let Some(flame) = self.flame {
+                for (across, tall, wide_at, colour, beat) in [
+                    (0.0f32, 0.46f32, 0.26f32, aim::FIRE, 1.0f32),
+                    (-0.26, 0.33, 0.2, aim::EMBER, 1.7),
+                    (0.27, 0.29, 0.18, aim::EMBER, 2.3),
+                ] {
+                    // each one on its own beat, so they do not breathe together
+                    let own = cellar::flicker(self.since * beat + across * 7.0);
+                    let high = tall * own;
+
+                    scene.push_colored(
+                        flame,
+                        &Transform::at(vec3(in_it, at.y + 0.11 + high * 0.5, at.z + across))
+                            .with_scale(vec3(wide_at, high, wide_at)),
+                        colour * lit,
+                    );
+                }
+            }
+        }
+
+        if let Some(barrel) = self.barrel {
+            for at in cellar::barrels(self.room.reaches) {
+                let size = cellar::BARREL;
+
+                let stood = Transform::at(at + Vec3::Y * size.y * 0.5).with_scale(size);
+                match self.stave {
+                    Some(stave) => {
+                        scene.push_textured(barrel, stave, &stood, aim::BARREL, aim::DULL)
+                    }
+                    None => scene.push_colored(barrel, &stood, aim::BARREL),
+                }
+
+                // two hoops, which is what says barrel rather than drum. Round
+                // ones: a cube round a round barrel meets it at the middle of
+                // each face and stands out at all four corners, so two of them
+                // make a box of it.
+                // a lid sunk inside the rim at each end, which is what you see
+                // of a barrel standing up and is most of what says cask
+                if let Some(peg) = self.peg {
+                    for end in [0.0f32, 1.0] {
+                        let down = if end > 0.5 {
+                            -cellar::LID_DOWN
+                        } else {
+                            cellar::LID_DOWN
+                        };
+
+                        scene.push_colored(
+                            peg,
+                            &Transform::at(at + Vec3::Y * (size.y * end + down)).with_scale(vec3(
+                                size.x * (1.0 - cellar::BULGE) * cellar::LID,
+                                0.03,
+                                size.z * (1.0 - cellar::BULGE) * cellar::LID,
+                            )),
+                            aim::LID,
+                        );
+                    }
+                }
+
+                if let Some(hoop) = self.hoop {
+                    for height in cellar::HOOPS {
+                        let round = cellar::waist_at(height) * cellar::HOOP_OUT;
+
+                        scene.push_colored(
+                            hoop,
+                            &Transform::at(at + Vec3::Y * size.y * height).with_scale(vec3(
+                                size.x * round,
+                                cellar::HOOP_THICK,
+                                size.z * round,
+                            )),
+                            aim::HOOP,
+                        );
+                    }
+                }
+            }
         }
 
         // the nook's floor of boards, over the arcade's carpet and under the
@@ -1912,6 +2327,31 @@ impl Game for Arcade {
             cellar::LAMP_LIT,
             cellar::LAMP_RANGE,
         ));
+
+        // the fire, which is what the room is lit by, and wanders as a fire
+        // does
+        let hearth =
+            cellar::hearth(self.room.reaches) + Vec3::Y * 0.35 + Vec3::X * cellar::FIRE_DEEP * 0.5;
+        shades.push((
+            eye.distance_squared(hearth),
+            hearth,
+            cellar::FIRE_COLOUR,
+            cellar::FIRE_LIT * cellar::flicker(self.since),
+            cellar::FIRE_RANGE,
+        ));
+
+        // and the cellar's own, which are red and faint. One bright thing to
+        // stand round and everything else going dark at the edges is what makes
+        // a room downstairs worth sitting in.
+        for at in cellar::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                cellar::GLOW,
+                cellar::GLOW_LIT,
+                cellar::GLOW_RANGE,
+            ));
+        }
         // nearest first, because what the engine drops when a building outgrows
         // it should be the lamp in the furthest room and not whichever was
         // pushed last. Not a ration any more: every fitting in the building is

@@ -126,6 +126,185 @@ pub fn boards(seed: u32) -> TextureData {
     TextureData::from_pixels(BOARDS, BOARDS, pixels)
 }
 
+/// A barrel's skin: staves down it, a seam between each pair, and the grain
+/// running the way the wood does.
+///
+/// A barrel the colour of wood is not a barrel made of wood. What a cask
+/// actually looks like is a ring of separate boards, each one a slightly
+/// different timber, with a dark line where two meet, and that is all this is.
+pub const STAVE_WIDE: u32 = 256;
+pub const STAVE_TALL: u32 = 96;
+pub const STAVE_SEED: u32 = 0x5EED_0004;
+const STAVE_PALE: i32 = 214;
+const STAVE_SEAM: i32 = 92;
+
+pub fn staves(seed: u32, count: u32) -> TextureData {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    // one tone per stave, settled before any pixel is laid, so a board is a
+    // board all the way down rather than noise in a strip
+    let wide = STAVE_WIDE / count.max(1);
+    let tones: Vec<i32> = (0..count.max(1))
+        .map(|_| STAVE_PALE + (next() % 37) as i32 - 18)
+        .collect();
+
+    // the grain, which is long streaks down the board and not speckle. Settled
+    // per column so a streak runs the whole height of a stave, because that is
+    // what the grain in a sawn board does and a per pixel wobble is sand.
+    //
+    // It was a wobble, of plus or minus two parts in 255, which against a stave
+    // tone that varies by eighteen is nothing at all. What the eye reads as
+    // wood is a handful of dark lines down the length of each board.
+    let streaks: Vec<i32> = (0..STAVE_WIDE)
+        .map(|_| {
+            let roll = next() % 100;
+
+            if roll < 14 {
+                -(26 + (next() % 16) as i32)
+            } else if roll < 26 {
+                -(9 + (next() % 8) as i32)
+            } else {
+                (next() % 7) as i32 - 3
+            }
+        })
+        .collect();
+
+    let mut pixels = Vec::with_capacity((STAVE_WIDE * STAVE_TALL * 4) as usize);
+    for y in 0..STAVE_TALL {
+        for x in 0..STAVE_WIDE {
+            let stave = (x / wide.max(1)) as usize % tones.len();
+            let into = x % wide.max(1);
+            // the grain wanders a little down the board rather than ruling a
+            // straight line, so it reads as timber and not as a pinstripe
+            let drift = ((y as f32 / STAVE_TALL as f32 * 9.0 + stave as f32).sin() * 2.0) as i32;
+            let grain = streaks[((x as i32 + drift).rem_euclid(STAVE_WIDE as i32)) as usize];
+            // and the barrel's own shading round its belly, so a stave reads as
+            // round before a light touches it
+            let round = (x as f32 / STAVE_WIDE as f32 * std::f32::consts::TAU).cos();
+            let lit = (round * 16.0) as i32;
+            let seam = into == 0 || into == wide.max(1) - 1;
+
+            let shade = if seam {
+                STAVE_SEAM
+            } else {
+                (tones[stave] + grain + lit).clamp(0, 255)
+            } as u8;
+
+            pixels.extend_from_slice(&[shade, shade, shade, 255]);
+        }
+    }
+
+    TextureData::from_pixels(STAVE_WIDE, STAVE_TALL, pixels)
+}
+
+/// The rug in the cellar, which is a different animal from the nook's.
+///
+/// The nook's is a plain band and a medallion, which is what a reading room has
+/// on its floor. This one is an afghan: a dark madder ground, a row of guls
+/// down the middle, and four borders rather than one. What makes a rug from
+/// that part of the world read at a glance is that the pattern repeats across
+/// it in a grid rather than resolving into one shape in the middle.
+pub const AFGHAN: u32 = 512;
+const AFGHAN_GROUND: [u8; 3] = [86, 24, 22];
+const AFGHAN_DARK: [u8; 3] = [38, 14, 16];
+const AFGHAN_GUL: [u8; 3] = [150, 74, 40];
+const AFGHAN_IVORY: [u8; 3] = [196, 170, 128];
+
+pub fn afghan(long: f32) -> TextureData {
+    let (wide, tall) = (AFGHAN, (AFGHAN as f32 * long).round() as u32);
+    let mut pixels = Vec::with_capacity((wide * tall * 4) as usize);
+    for _ in 0..wide * tall {
+        pixels.extend_from_slice(&[AFGHAN_GROUND[0], AFGHAN_GROUND[1], AFGHAN_GROUND[2], 255]);
+    }
+
+    let mut ink = |x: i32, y: i32, colour: [u8; 3]| {
+        if x < 0 || y < 0 || x >= wide as i32 || y >= tall as i32 {
+            return;
+        }
+        let n = ((y as u32 * wide + x as u32) * 4) as usize;
+        pixels[n] = colour[0];
+        pixels[n + 1] = colour[1];
+        pixels[n + 2] = colour[2];
+    };
+
+    // four borders, inset the same number of pixels from every edge so they do
+    // not stretch with the rug
+    for (inset, thick, colour) in [
+        (8i32, 3i32, AFGHAN_DARK),
+        (16, 10, AFGHAN_IVORY),
+        (30, 4, AFGHAN_DARK),
+        (38, 16, AFGHAN_GUL),
+        (58, 3, AFGHAN_DARK),
+    ] {
+        for step in 0..thick {
+            let at = inset + step;
+            for x in 0..wide as i32 {
+                ink(x, at, colour);
+                ink(x, tall as i32 - 1 - at, colour);
+            }
+            for y in 0..tall as i32 {
+                ink(at, y, colour);
+                ink(wide as i32 - 1 - at, y, colour);
+            }
+        }
+    }
+
+    // and the guls: an octagon with a cross in it, repeated down the field
+    let field = (70, tall as i32 - 70);
+    let across = 2;
+    let down = ((field.1 - field.0) as f32 / (wide as f32 - 140.0) * across as f32).round() as i32;
+    let step_x = (wide as i32 - 140) / across;
+    let step_y = (field.1 - field.0) / down.max(1);
+
+    for row in 0..down.max(1) {
+        for col in 0..across {
+            let middle = (
+                70 + step_x * col + step_x / 2,
+                field.0 + step_y * row + step_y / 2,
+            );
+            let reach = step_x.min(step_y) / 2 - 8;
+
+            for ring in [reach, reach - 7] {
+                let colour = if ring == reach {
+                    AFGHAN_DARK
+                } else {
+                    AFGHAN_IVORY
+                };
+
+                // an octagon, drawn as a diamond with its points cut off
+                for step in -ring..=ring {
+                    let cut = (ring as f32 * 0.42) as i32;
+                    let side = ring - step.abs();
+                    let side = side.min(ring - cut);
+
+                    for thick in 0..3 {
+                        ink(middle.0 + step, middle.1 + side + thick, colour);
+                        ink(middle.0 + step, middle.1 - side - thick, colour);
+                        ink(middle.0 + side + thick, middle.1 + step, colour);
+                        ink(middle.0 - side - thick, middle.1 + step, colour);
+                    }
+                }
+            }
+
+            // a cross in the middle of each one
+            for step in -(reach / 3)..=(reach / 3) {
+                for thick in 0..3 {
+                    ink(middle.0 + step, middle.1 + thick, AFGHAN_GUL);
+                    ink(middle.0 + thick, middle.1 + step, AFGHAN_GUL);
+                }
+            }
+        }
+    }
+
+    TextureData::from_pixels(wide, tall, pixels)
+}
+
 pub const RUG: u32 = 512;
 pub const RUG_TILES: f32 = 1.0;
 const RUG_GROUND: [u8; 3] = [52, 20, 24];

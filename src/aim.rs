@@ -203,6 +203,36 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// a sconce ended up hanging in a doorway.
 pub const NOT_BUILT: &str = "Not built. Run ./check-all";
 
+/// What the cellar is furnished with: the racks, the bottles in them, the
+/// barrels, and the hoops round the barrels. Spec 0007.
+///
+/// Dark. The one bright thing down there is the table and everything else is
+/// what you can make out round it, which is what a room downstairs is for.
+/// Glass is nearly black and takes its shape from the light that catches it.
+pub const RACK: Vec4 = vec4(0.26, 0.17, 0.11, 1.0);
+/// What a bottle of wine is made of, which is nearly black glass.
+///
+/// Four of them and not one. Bottles come in dead leaf green for reds, a
+/// browner glass for some of them, and a pale one for whites, and a rack of
+/// four hundred identical bright green ones is a crate of lager. These are all
+/// darker than they look written down: glass holding red wine passes almost no
+/// light, and what you see of a bottle in a cellar is the highlight on it
+/// rather than the colour of it.
+pub const BOTTLES: [Vec4; 4] = [
+    vec4(0.035, 0.070, 0.040, 1.0),
+    vec4(0.055, 0.045, 0.028, 1.0),
+    vec4(0.030, 0.052, 0.055, 1.0),
+    vec4(0.105, 0.115, 0.075, 1.0),
+];
+
+/// And the cork in the end of it, which is the one pale thing on a bottle and
+/// most of what says the bottle is full.
+pub const CORK: Vec4 = vec4(0.52, 0.40, 0.25, 1.0);
+
+pub const BARREL: Vec4 = vec4(0.33, 0.21, 0.13, 1.0);
+pub const HOOP: Vec4 = vec4(0.20, 0.19, 0.18, 1.0);
+pub const LID: Vec4 = vec4(0.25, 0.16, 0.10, 1.0);
+
 /// The one book that opens the wall. Spec 0007.
 ///
 /// Over one in every channel, so it carries a little light of its own with
@@ -231,7 +261,38 @@ pub const RAIL: f32 = 0.07;
 /// The nook is panelled and carpeted and lit by its own sconces and the hall is
 /// neon; this is under both of them and looks it. The treads are the nook's own
 /// boards carried down the stair, because that is where the stair starts.
-pub const CELLAR: Vec4 = vec4(0.30, 0.29, 0.27, 1.0);
+/// Warm. It was a neutral grey, which is what a basement is: the point of this
+/// room is that it is the warmest in the building, warmer than the nook, and a
+/// grey room with a fire in it is a grey room.
+pub const CELLAR: Vec4 = vec4(0.42, 0.28, 0.21, 1.0);
+pub const CELLAR_FLOOR: Vec4 = vec4(0.36, 0.27, 0.22, 1.0);
+
+/// The panelling down there, in four timbers.
+///
+/// Oak, elm, a darker oak and something closer to walnut. One brown repeated
+/// down a wall is hardboard; what makes a panelled room read as wood is that no
+/// two boards beside each other are quite the same.
+pub const TIMBER: [Vec4; 4] = [
+    vec4(0.52, 0.34, 0.19, 1.0),
+    vec4(0.44, 0.30, 0.20, 1.0),
+    vec4(0.38, 0.24, 0.15, 1.0),
+    vec4(0.48, 0.33, 0.24, 1.0),
+];
+pub const TIMBER_TRIM: Vec4 = vec4(0.33, 0.21, 0.13, 1.0);
+
+/// The fireplace: its stone, the dark of the opening, the logs, and the fire.
+///
+/// The fire is far over one, because fire is the thing in a room that is
+/// brighter than the room. Colour here is an unclamped multiplier, so this is
+/// the one surface in the building that is a light as well as a thing.
+pub const HEARTH: Vec4 = vec4(0.58, 0.40, 0.31, 1.0);
+pub const FIREBOX: Vec4 = vec4(0.05, 0.03, 0.02, 1.0);
+pub const LOG: Vec4 = vec4(0.17, 0.10, 0.06, 1.0);
+pub const FIRE: Vec4 = vec4(5.2, 2.1, 0.5, 1.0);
+pub const EMBER: Vec4 = vec4(3.4, 0.9, 0.2, 1.0);
+
+/// A coal that is not currently alight, which is most of them.
+pub const COAL: Vec4 = vec4(0.16, 0.08, 0.06, 1.0);
 
 /// The dominoes on cascada's bench. Spec 0006.
 ///
@@ -308,6 +369,13 @@ pub const CEILING: Vec4 = vec4(0.09, 0.08, 0.10, 1.0);
 /// highlight spread over everything. The carpet went down at 4.0 and its dark
 /// ground came back pale grey, because every texel of it was catching the sun.
 pub const MATTE: f32 = 64.0;
+
+/// For things that do not shine at all.
+///
+/// Shininess is a power, so a bigger number is a smaller highlight, and 64 is
+/// small and bright: a hot spot. On a cask that is varnish. Oak does not do
+/// that, and neither does stone.
+pub const DULL: f32 = 900.0;
 
 /// The lamp a cabinet's band throws into the room: how far it reaches, how
 /// bright it burns, and how much brighter the one you are standing at is.
