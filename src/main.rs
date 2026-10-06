@@ -402,7 +402,7 @@ impl Arcade {
                 // do are a few percent apart. Once it is going this says what it
                 // counted instead.
                 None => format!(
-                    "Press enter to start. The weight is on notch {} of {}, about {:.0} beats a minute.",
+                    "Click or press enter to start. The weight is on notch {} of {}, about {:.0} beats a minute.",
                     self.metronome.notch + 1,
                     metronome::NOTCHES,
                     metronome::beats(self.metronome.notch)
@@ -410,7 +410,7 @@ impl Arcade {
             },
             globe::NAME => {
                 if self.globe.going() {
-                    String::from("Spinning. Arrows spin it faster, enter stops it.")
+                    String::from("Spinning. Arrows spin it faster, click or enter stops it.")
                 } else {
                     String::from("Left and right arrows spin it.")
                 }
@@ -419,7 +419,7 @@ impl Arcade {
                 let dial = format!("Spin {} of {}", self.gyro.notch + 1, gyro::SPINS);
                 if !self.gyro.going {
                     format!(
-                        "Press enter to spin it up. {}, shift with up or down changes it.",
+                        "Click or press enter to spin it up. {}, shift with up or down changes it.",
                         dial
                     )
                 } else if self.gyro.moving_at() > 0.02 {
@@ -436,10 +436,19 @@ impl Arcade {
                     )
                 }
             }
+            // the rebuild is only offered when there is something to rebuild.
+            // rebuild_wall returns early on a whole wall, so a standing wall read
+            // as a toy that ignores you: the prompt was promising a click that
+            // could not do anything.
             wrecker::NAME => format!(
-                "{} of {} standing. Swing the ball with arrow keys. Use shift with up and down keys to wind the chain up or down. Press enter to rebuild the wall.",
+                "{} of {} standing. Swing the ball with arrow keys. Use shift with up and down keys to wind the chain up or down.{}",
                 self.wrecker.standing(),
-                wrecker::bricks()
+                wrecker::bricks(),
+                if self.wrecker.whole() {
+                    ""
+                } else {
+                    " Click or press enter to rebuild the wall."
+                }
             ),
             cellar::POOLHALL if !self.poolhall.is_built() => String::from(aim::NOT_BUILT),
             cellar::POOLHALL => {
@@ -450,9 +459,9 @@ impl Arcade {
                 "Dominoes. Click or press enter to play in its own window.",
             ),
             _ if cradle::stirring(&self.cradle) > 0.05 => {
-                String::from("Press enter to set it going again")
+                String::from("Click or press enter to set it going again")
             }
-            _ => String::from("Press enter to set it going"),
+            _ => String::from("Click or press enter to set it going"),
         }
     }
 
@@ -828,7 +837,7 @@ impl Game for Arcade {
                 (
                     Some(stood.cabinet.name.clone()),
                     Some(String::from(if stood.cabinet.is_built() {
-                        "Press enter to play"
+                        "Click or press enter to play"
                     } else {
                         aim::NOT_BUILT
                     })),
@@ -839,9 +848,9 @@ impl Game for Arcade {
             (None, Some(room::Seen::Display(n))) => (
                 Some(self.room.displays[n].name.to_string()),
                 Some(String::from(if self.spin.holding() == Some(n) {
-                    "Click to let go"
+                    "Click or press enter to let go"
                 } else {
-                    "Click to turn it"
+                    "Click or press enter to turn it"
                 })),
             ),
             (None, Some(room::Seen::Bench(n))) => {
@@ -851,9 +860,9 @@ impl Game for Arcade {
             (None, Some(room::Seen::Case)) => (
                 Some(String::from("a book")),
                 Some(String::from(if self.room.open {
-                    "Push it back."
+                    "Click or press enter to push it back."
                 } else {
-                    "This one is not a book. Pull it."
+                    "This one is not a book. Click or press enter to pull it."
                 })),
             ),
             (None, None) => (None, None),
@@ -1068,6 +1077,13 @@ impl Game for Arcade {
             let arm = self.metronome.bodies[metronome::ARM];
             let pivot = top + metronome::pivot();
 
+            // the plate stands behind the needle from where the bench is worked,
+            // so the notches read against it. Which way that is comes from the
+            // bench and not from an axis: the benches moved to the far wall and
+            // the plate stayed on +x, which turned every one of them around.
+            let back = bench.away();
+            let across = bench.right();
+
             scene.push_colored(
                 cube,
                 &Transform::at(top + Vec3::Y * (metronome::FOOT.y * 0.5))
@@ -1077,11 +1093,8 @@ impl Game for Arcade {
             scene.push_colored(
                 cube,
                 &Transform::at(
-                    top + vec3(
-                        -metronome::PLATE_BACK,
-                        metronome::FOOT.y + metronome::PLATE_TALL * 0.5,
-                        0.0,
-                    ),
+                    top + back * metronome::PLATE_BACK
+                        + Vec3::Y * (metronome::FOOT.y + metronome::PLATE_TALL * 0.5),
                 )
                 .with_scale(vec3(
                     metronome::PLATE_THICK,
@@ -1109,11 +1122,9 @@ impl Game for Arcade {
                 scene.push_colored(
                     cube,
                     &Transform::at(
-                        top + vec3(
-                            -metronome::PLATE_BACK + metronome::PLATE_THICK,
-                            up,
-                            metronome::NOTCH_AT,
-                        ),
+                        top + back * (metronome::PLATE_BACK - metronome::PLATE_THICK)
+                            + across * metronome::NOTCH_AT
+                            + Vec3::Y * up,
                     )
                     .with_scale(mark),
                     if set { aim::NOTCH_ON } else { aim::NOTCH },
@@ -1377,17 +1388,49 @@ impl Game for Arcade {
         // they are drawn as the boxes they are: a stair of slabs is what a
         // stair looks like from the side anyway.
         for (box_, made) in cellar::built(self.room.reaches) {
-            scene.push_colored(
-                cube,
-                &Transform::at(box_.center()).with_scale(box_.size()),
-                match made {
-                    cellar::Made::Tread => aim::BOARDS,
-                    // the floor warmer and a shade apart from the walls, so a
-                    // room is a floor and walls rather than one grey box
-                    cellar::Made::Stone if box_.max.y <= -cellar::DOWN + 1e-3 => aim::CELLAR_FLOOR,
-                    cellar::Made::Stone => aim::CELLAR,
+            // the stair's ceiling is drawn as one raked slab rather than as the
+            // dozen steps it is built of, so skip those here
+            if made == cellar::Made::Soffit {
+                continue;
+            }
+
+            let laid = Transform::at(box_.center()).with_scale(box_.size());
+            match made {
+                cellar::Made::Tread => {
+                    scene.push_colored(cube, &laid, aim::BOARDS);
+                }
+                // the shaft is panelled like the room it leads to. Left as the
+                // stone it started as, the way down is a grey chute into a
+                // mahogany library.
+                cellar::Made::Shaft => match self.grain.first() {
+                    Some(grain) => {
+                        scene.push_textured(cube, *grain, &laid, aim::TIMBER[0], aim::DULL)
+                    }
+                    None => scene.push_colored(cube, &laid, aim::TIMBER[0]),
                 },
-            );
+                cellar::Made::Soffit => {}
+                // the floor warmer and a shade apart from the walls, so a room
+                // is a floor and walls rather than one box
+                cellar::Made::Stone if box_.max.y <= -cellar::DOWN + 1e-3 => {
+                    scene.push_colored(cube, &laid, aim::CELLAR_FLOOR);
+                }
+                cellar::Made::Stone => {
+                    scene.push_colored(cube, &laid, aim::CELLAR);
+                }
+            }
+        }
+
+        // and that ceiling, raked
+        {
+            let (at, size, turn) = cellar::soffit(self.room.reaches);
+            let laid = Transform::at(at)
+                .with_rotation(glam::Quat::from_rotation_z(turn))
+                .with_scale(size);
+
+            match self.grain.get(1) {
+                Some(grain) => scene.push_textured(cube, *grain, &laid, aim::RAFTER, aim::DULL),
+                None => scene.push_colored(cube, &laid, aim::RAFTER),
+            }
         }
 
         // what the cellar is furnished with. Spec 0007.
@@ -2817,6 +2860,40 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0006: the wall offers a rebuild only when there is one to rebuild.
+    ///
+    /// `rebuild_wall` returns early on a whole wall, and the line under the
+    /// sight offered the click anyway, so a wall nobody had knocked down read
+    /// as a toy that ignores you. The prompt and what the click does are two
+    /// statements of one fact, and they came apart.
+    #[test]
+    fn a_whole_wall_does_not_offer_a_rebuild() {
+        let mut one = Arcade::new();
+        assert!(one.wrecker.whole(), "the wall did not start whole");
+
+        let whole = one.about(wrecker::NAME);
+        assert!(
+            !whole.contains("rebuild"),
+            "a whole wall offered a rebuild: {}",
+            whole
+        );
+
+        // standing is measured off each brick's resting place, so shoving one
+        // off its own is enough to knock the wall down without any physics
+        one.wrecker.bodies[wrecker::WALL_FROM].position += Vec3::Z * 0.4;
+        assert!(
+            one.wrecker.standing() < wrecker::bricks(),
+            "the wall is still whole with a brick moved"
+        );
+
+        let down = one.about(wrecker::NAME);
+        assert!(
+            down.contains("Click or press enter to rebuild the wall"),
+            "a knocked down wall did not offer a rebuild: {}",
+            down
+        );
+    }
 
     /// Spec 0001: every game the project has gets a cabinet, and nobody has to
     /// remember to add it.

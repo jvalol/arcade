@@ -821,6 +821,15 @@ impl Room {
         out
     }
 
+    /// What the sight cannot see through.
+    ///
+    /// The walls, and only the walls. Not the benches, the cabinets or the
+    /// bookcases: those are the things being looked at, and a bookcase that
+    /// blocks the sight blocks the one book in it that is a handle.
+    pub fn opaque(&self) -> &[Aabb] {
+        &self.walls
+    }
+
     /// What you are looking at: the nearest thing the line of sight meets, said
     /// as a cabinet or as one of the shapes on the far wall, so the room reads
     /// one way throughout.
@@ -862,11 +871,21 @@ impl Room {
             .handle()
             .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
 
+        // and what is in the way, because until now nothing was. The sight took
+        // the nearest thing the ray met among the things you can use and a wall
+        // was never one of them, so from the nook you could point through the
+        // back of a cabinet in the hall and the room offered to play it.
+        let through = self
+            .opaque()
+            .iter()
+            .filter_map(|box_| slab(from, way, box_))
+            .fold(f32::INFINITY, f32::min);
+
         cabinets
             .chain(shapes)
             .chain(benches)
             .chain(case)
-            .filter(|(_, far)| *far <= REACH)
+            .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
             .map(|(what, _)| what)
     }
@@ -975,16 +994,21 @@ mod tests {
         let along = vec3(0.0, 0.0, first.z + 4.0) + eye;
         assert_eq!(cabinet_at(&room, along, first + eye - along), Some(0));
 
-        // the near one wins when two are in line
+        // the near one wins when two are in line. From the middle of the aisle
+        // rather than from behind the first one: a wall stops the sight now, so
+        // standing outside the room and looking in through it finds nothing,
+        // which is the whole of the fix and was how this test used to stand.
         let behind = room
             .stood
             .iter()
             .position(|s| s.at.x < 0.0)
             .expect("a far side");
-        let through = room.stood[behind].at + eye - (first + eye);
-        assert_eq!(
-            cabinet_at(&room, first + eye - through.normalize() * 3.0, through),
-            Some(0)
+        let in_line = vec3(0.0, eye.y, first.z);
+        assert_eq!(cabinet_at(&room, in_line, Vec3::X), Some(0));
+        assert!(
+            cabinet_at(&room, in_line, Vec3::NEG_X).is_some_and(|n| room.stood[n].at.x < 0.0),
+            "the far side is not where {} is",
+            behind
         );
     }
 
@@ -1390,6 +1414,68 @@ mod tests {
             "a rug {} by {} is a runner",
             size.x,
             size.z
+        );
+    }
+
+    /// Spec 0006: the sight lands on every bench from where you work it.
+    ///
+    /// One at a time this was only ever checked for the first one, so a bench
+    /// you cannot point at is a toy that does not answer, and the only way to
+    /// find out was to walk up to it.
+    #[test]
+    fn every_bench_can_be_pointed_at() {
+        let room = Room::of(some(13));
+
+        for (n, bench) in room.benches.iter().enumerate() {
+            let eye = bench.at.y + 1.55;
+            let from = bench.at + bench.worked_from * 1.2 + Vec3::Y * 1.55;
+            let at = bench.at + Vec3::Y * bench.size.y;
+
+            assert_eq!(
+                room.looking_at(from, at - from),
+                Some(Seen::Bench(n)),
+                "the sight does not land on the {} from {:?} at eye {}",
+                bench.name,
+                from,
+                eye
+            );
+        }
+    }
+
+    /// Spec 0003: you cannot point at a thing through a wall.
+    ///
+    /// The sight took the nearest thing the ray met among the things you can
+    /// use, and a wall was never one of them. Standing at the ball and chain in
+    /// the nook, with the hall on the other side of that wall, the room named a
+    /// cabinet through the back of it and offered to play the game.
+    #[test]
+    fn the_sight_does_not_see_through_walls() {
+        let room = Room::of(some(13));
+        let eye = 1.55;
+
+        // a cabinet on the row that backs onto the nook, and a spot in the nook
+        // level with it. Aimed at a bench instead this passes either way, for
+        // the dull reason that no cabinet happens to stand at that bench's end
+        // of the hall.
+        let hall = room
+            .stood
+            .iter()
+            .find(|stood| stood.at.x < 0.0)
+            .expect("a cabinet on the near row");
+        let inside = vec3(-(WALL + CABINET.x) - 1.2, eye, hall.at.z);
+
+        assert_eq!(
+            room.looking_at(inside, Vec3::X),
+            None,
+            "the nook can see through its own wall into the hall"
+        );
+
+        // and from the aisle it is right there, so this is not passing because
+        // there is nothing to find
+        let aisle = vec3(0.0, eye, hall.at.z);
+        assert!(
+            matches!(room.looking_at(aisle, Vec3::NEG_X), Some(Seen::Cabinet(_))),
+            "there is no cabinet on that line at all"
         );
     }
 
@@ -1852,8 +1938,10 @@ mod tests {
         let room = Room::of(some(12));
         let bench = room.benches.first().expect("a bench");
 
-        // stood in the nook, looking at it
-        let from = bench.at + Vec3::X * 1.4 + Vec3::Y * 1.5;
+        // stood in the nook on the side you work it from, which is the side
+        // the rest of the room is. From the other side the nook's own wall is
+        // between you and it, and a wall stops the sight now.
+        let from = bench.at + bench.worked_from * 1.4 + Vec3::Y * 1.5;
         let way = (bench.at + Vec3::Y * bench.size.y - from).normalize();
 
         assert_eq!(room.looking_at(from, way), Some(Seen::Bench(0)));

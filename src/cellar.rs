@@ -747,6 +747,28 @@ pub fn ceiling(reaches: f32) -> (Vec<Timber>, Vec<Timber>) {
     (beams, coffers)
 }
 
+/// The raked ceiling over the flight, as a middle, a size and a turn about z.
+///
+/// One slab following the slope rather than the dozen steps the collision is
+/// built of.
+pub fn soffit(reaches: f32) -> (Vec3, Vec3, f32) {
+    let face = back();
+    let along = opening(reaches);
+    let top = vec3(face - LANDING, HEADROOM, along);
+    let foot = vec3(
+        face - LANDING - STEPS as f32 * TREAD,
+        HEADROOM - DOWN,
+        along,
+    );
+    let run = foot - top;
+
+    (
+        (top + foot) * 0.5 + Vec3::Y * THICK * 0.5,
+        vec3(run.length(), THICK, PASSAGE + THICK * 2.0),
+        run.y.atan2(run.x),
+    )
+}
+
 /// Where the rug lies: in front of the fire, which is where a rug goes.
 pub fn rug(reaches: f32) -> (Vec3, Vec3) {
     let at = hearth(reaches);
@@ -815,6 +837,14 @@ pub const GLOW: Vec3 = glam::vec3(1.0, 0.33, 0.26);
 pub enum Made {
     Tread,
     Stone,
+    /// The ceiling over the stair, which is built one box per tread so that it
+    /// steps down with it, and must not be drawn that way: the ceiling of a
+    /// staircase that is itself a staircase is the thing you look at instead of
+    /// the stair.
+    Soffit,
+    /// The sides of the shaft, panelled like the room they lead to rather than
+    /// left as the bare stone they started as.
+    Shaft,
 }
 
 /// Every box the way down is built of, and what each one is.
@@ -829,8 +859,20 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
         .into_iter()
         .enumerate()
         .map(|(n, box_)| {
-            // the treads come first, then the landing, which is boards too
-            let made = if n <= STEPS { Made::Tread } else { Made::Stone };
+            // the order `shell` builds them in: a tread each, then a soffit
+            // over each, then the landing's soffit, the landing, the cellar's
+            // floor, the shaft's two sides, and the room
+            let made = if n < STEPS {
+                Made::Tread
+            } else if n <= STEPS * 2 {
+                Made::Soffit
+            } else if n == STEPS * 2 + 1 {
+                Made::Tread
+            } else if n == STEPS * 2 + 3 || n == STEPS * 2 + 4 {
+                Made::Shaft
+            } else {
+                Made::Stone
+            };
 
             (box_, made)
         })
