@@ -112,7 +112,7 @@ pub const BLOWN: f32 = 0.5;
 pub const SAUNA: Vec3 = vec3(3.4, 2.3, 3.0);
 /// In the corner, where a timber box belongs. Stood out in the floor it was an
 /// object in a room; in the corner it is part of the building.
-pub const SAUNA_AT: Vec2 = vec2(15.9, 1.72);
+pub const SAUNA_AT: Vec2 = vec2(15.9, 1.82);
 /// Wide enough to walk through. It was 0.85 for somebody 0.9 across, which is
 /// a door you can see and not use, and is the fault the nook's own way in had
 /// before anybody measured it.
@@ -135,6 +135,13 @@ pub const STONE: f32 = 0.09;
 pub const DADO: f32 = 1.5;
 pub const BAND: f32 = 0.13;
 pub const CORNICE: f32 = 0.17;
+/// How thick this room's own face on the cellar's wall is.
+///
+/// Named because the tiling has to start outside it. Taken from the wall behind
+/// instead, the dado and the skin fill the same slab and fight for every pixel:
+/// a dissolving chequerboard down one side of the room.
+pub const SKIN: f32 = 0.05;
+
 pub const PIER: f32 = 0.36;
 pub const PIER_OUT: f32 = 0.1;
 pub const PIERS: usize = 5;
@@ -414,7 +421,6 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     // way through. A wall between two rooms is finished on both sides: left as
     // the cellar's, the baths had a mahogany wall down one side, which is the
     // cellar's vibe in the wrong room.
-    let skin = 0.05;
     let door = doorway(reaches);
     for across in [-1.0f32, 1.0] {
         let middle = if across < 0.0 {
@@ -431,8 +437,8 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
         if long > 1e-4 {
             out.push((
                 Aabb::from_center_size(
-                    vec3(middle, floor + TALL * 0.5, side + skin * 0.5),
-                    vec3(long, TALL, skin),
+                    vec3(middle, floor + TALL * 0.5, side + SKIN * 0.5),
+                    vec3(long, TALL, SKIN),
                 ),
                 Made::Wall,
             ));
@@ -443,9 +449,9 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
             vec3(
                 door.x,
                 floor + LINTEL + (TALL - LINTEL) * 0.5,
-                side + skin * 0.5,
+                side + SKIN * 0.5,
             ),
-            vec3(DOOR, TALL - LINTEL, skin),
+            vec3(DOOR, TALL - LINTEL, SKIN),
         ),
         Made::Wall,
     ));
@@ -674,34 +680,75 @@ fn timber(reaches: f32) -> Vec<(Aabb, Made)> {
     out
 }
 
-/// How many lamps the room gets, how far up they hang, and what they throw.
+/// How many sconces run down each long wall, what they throw, and how far.
 ///
-/// Cooler than the cellar and brighter. The cellar is firelight on mahogany;
-/// this is a tiled room with water in it, and water under a warm lamp reads as
-/// soup.
-pub const LAMPS: usize = 4;
-pub const LAMP_UP: f32 = 0.35;
-pub const LAMP_LIT: f32 = 0.78;
-pub const LAMP_RANGE: f32 = 7.5;
+/// Every lamp in this room sits in one. A light with no fitting is a bright
+/// patch on a wall and no reason for it, which the cellar was told off for, and
+/// this room had it worse: the lamps hung along the ceiling and the sconces
+/// stood on a wall, so the ceiling glowed at nothing and the sconces were dark.
+pub const SCONCES: usize = 4;
+pub const LAMP_LIT: f32 = 0.62;
+pub const LAMP_RANGE: f32 = 7.0;
 
 /// And the sauna's own, which is the opposite: close, low and orange, so that
 /// stepping into it is stepping into a different warmth.
 pub const SAUNA_LIT: f32 = 0.55;
 pub const SAUNA_RANGE: f32 = 3.2;
 
-/// Where every lamp in the room hangs.
-pub fn lamps(reaches: f32) -> Vec<Vec3> {
+/// Where the sconces hang: down both long walls, clear of the way through.
+pub fn sconces(reaches: f32) -> Vec<Vec3> {
     let foot = cellar::stair_foot();
-    let middle = at(reaches);
-    let up = -cellar::DOWN + TALL - LAMP_UP;
+    let side = near(reaches);
+    let far_side = side + SPAN;
+    let floor = -cellar::DOWN;
+    let door = doorway(reaches);
+    let mut out = Vec::new();
 
-    (0..LAMPS)
-        .map(|n| {
-            let along = (n as f32 + 0.5) / LAMPS as f32;
+    for (face, into) in [(side + SKIN, 1.0f32), (far_side, -1.0)] {
+        for n in 0..SCONCES {
+            let along = foot - DEEP * (n as f32 + 0.5) / SCONCES as f32;
 
-            vec3(foot - DEEP * along, up, middle.z)
-        })
+            // never in the doorway, which is the one piece of wall that has to
+            // stay empty
+            if into > 0.0 && (along - door.x).abs() < DOOR * 0.5 + SCONCE.x {
+                continue;
+            }
+
+            out.push(vec3(
+                along,
+                floor + SCONCE_UP,
+                face + into * (SCONCE.z * 0.5 + PIER_OUT),
+            ));
+        }
+    }
+
+    out
+}
+
+/// Where every lamp in the room hangs, which is in a sconce and nowhere else.
+///
+/// Derived rather than listed. Two lists of where the light comes from is two
+/// lists that drift, and these two did: the lamps were along the ceiling and
+/// the fittings were on the walls.
+pub fn lamps(reaches: f32) -> Vec<Vec3> {
+    sconces(reaches)
+        .into_iter()
+        .map(|at| at + Vec3::Y * SCONCE.y * 0.55)
         .collect()
+}
+
+/// Where the fountain's stream leaves the spout, and how far it falls.
+///
+/// A fountain that does not run is a stone shelf. The water is drawn and not
+/// simulated: a spout's stream is a thread of water a centimetre across, and
+/// the engine's heightfield carries nothing of the kind.
+pub const STREAM: f32 = 0.045;
+
+pub fn stream(reaches: f32) -> (Vec3, f32) {
+    let at = fountain(reaches);
+    let from = vec3(at.x, at.y + 0.5, at.z - SPOUT * 1.6);
+
+    (from, 0.5 - BASIN.y * 0.3)
 }
 
 /// Where the sauna's own lamp sits: over the stove, which is where the light in
@@ -1097,13 +1144,68 @@ pub fn pace(reaches: f32, at: Vec3, walking: f32) -> f32 {
     }
 }
 
+/// How big a tile in the basin is, which is the whole of where the depth comes
+/// from.
+///
+/// Not the water. What tells your eye how far down the bottom is, is seeing
+/// something of a known size through it and watching that something get
+/// smaller. A flat colour on the bottom of a pool is a flat colour at any
+/// depth, which is why this one read as a blanket however well the surface
+/// moved.
+pub const TILE: f32 = 0.25;
+
+/// The basin's inner faces, each as a middle, how far it reaches across and
+/// down, and which way it looks.
+///
+/// Laid as quads and not as the boxes behind them: a cube's texture runs nought
+/// to one on every face however big the face is, so a tiled texture on the
+/// basin would be one tile four units across. A quad can be given its own
+/// count.
+pub fn lining(reaches: f32) -> Vec<(Vec3, Vec2, Vec3)> {
+    let (middle, size, deep) = pool(reaches);
+    let floor = middle.y + FREEBOARD;
+    let (half_x, half_z) = (size.x * 0.5, size.y * 0.5);
+    let down = deep + FREEBOARD;
+    let proud = 0.006;
+
+    vec![
+        // the bottom, looking up
+        (
+            vec3(middle.x, floor - down + proud, middle.z),
+            size,
+            Vec3::Y,
+        ),
+        // and the four sides, each looking in across the water
+        (
+            vec3(middle.x - half_x + proud, floor - down * 0.5, middle.z),
+            vec2(size.y, down),
+            Vec3::X,
+        ),
+        (
+            vec3(middle.x + half_x - proud, floor - down * 0.5, middle.z),
+            vec2(size.y, down),
+            Vec3::NEG_X,
+        ),
+        (
+            vec3(middle.x, floor - down * 0.5, middle.z - half_z + proud),
+            vec2(size.x, down),
+            Vec3::Z,
+        ),
+        (
+            vec3(middle.x, floor - down * 0.5, middle.z + half_z - proud),
+            vec2(size.x, down),
+            Vec3::NEG_Z,
+        ),
+    ]
+}
+
 /// Where the urns stand, where the sconces hang and where the fountain is.
 ///
 /// Apart from the boxes, because these are thrown on a wheel rather than sawn.
 /// Boxes are what the cellar's barrels and bottles were before anybody turned
 /// them, and Jake read them off as placeholders both times.
 pub fn urns(reaches: f32) -> Vec<Vec3> {
-    let foot = cellar::stair_foot();
+    let middle = at(reaches);
     let far_side = near(reaches) + SPAN;
     let floor = -cellar::DOWN;
 
@@ -1111,7 +1213,7 @@ pub fn urns(reaches: f32) -> Vec<Vec3> {
         .iter()
         .map(|across| {
             vec3(
-                (foot - DEEP + foot) * 0.5 + across * (DEEP * 0.5 - PLINTH * 1.3),
+                middle.x + across * (DEEP * 0.5 - PLINTH * 1.3),
                 floor + PLINTH + URN_TALL * 0.5,
                 far_side - PLINTH * 1.1,
             )
@@ -1119,27 +1221,9 @@ pub fn urns(reaches: f32) -> Vec<Vec3> {
         .collect()
 }
 
-pub fn sconces(reaches: f32) -> Vec<Vec3> {
-    let far_side = near(reaches) + SPAN;
-    let floor = -cellar::DOWN;
-
-    lamps(reaches)
-        .into_iter()
-        .map(|lamp| {
-            vec3(
-                lamp.x,
-                floor + SCONCE_UP,
-                far_side - SCONCE.z * 0.5 - PIER_OUT,
-            )
-        })
-        .collect()
-}
-
 pub fn fountain(reaches: f32) -> Vec3 {
-    let foot = cellar::stair_foot();
-
     vec3(
-        (foot - DEEP + foot) * 0.5,
+        at(reaches).x,
         -cellar::DOWN + BASIN_UP,
         near(reaches) + SPAN - PIER_OUT - BASIN.z * 0.5,
     )
@@ -1181,6 +1265,57 @@ pub fn sconce_mesh() -> blitzkit::mesh::MeshData {
     .two_sided()
 }
 
+/// The stream from the spout: a tube open at both ends, necking in as it goes.
+///
+/// Its own mesh because the nearest one to hand was the candles', and that is
+/// `lidded`: it spends the first and last tenth of itself closing to a point,
+/// so the fountain poured a pencil. Water falling necks in as it speeds up,
+/// which is what makes a thread of it read as falling rather than hanging.
+/// How fast the ripples run down it, how far apart they are, and how deep.
+///
+/// A thread of water wavering from side to side is a wobbly rod: nothing about
+/// it moves the way it is pointing. What says flowing is motion along the
+/// thread, so the ripples travel down it, and the mesh is rebuilt every frame
+/// to carry them. Spec 0042 of the engine is what makes that cost nothing.
+pub const RUNS_DOWN: f32 = 2.6;
+pub const BEADS: f32 = 13.0;
+pub const BEADED: f32 = 0.16;
+
+pub fn stream_mesh(since: f32) -> blitzkit::mesh::MeshData {
+    cellar::turned(12, 36, |v| {
+        // necking in as it speeds up, with the beads a falling thread breaks
+        // into running down it
+        let thin = 1.0 - v * 0.42;
+        let bead = ((v * BEADS - since * RUNS_DOWN) * std::f32::consts::TAU).sin();
+
+        (0.5 - v, thin * (1.0 + bead * BEADED * v))
+    })
+    .two_sided()
+}
+
+/// The splash where it lands: how wide the ring is and how it beats.
+pub const SPLASH: f32 = 0.19;
+pub const SPLASHES: f32 = 3.1;
+
+/// How wide the splash ring is now, which pulses rather than holding still.
+pub fn splash(since: f32) -> f32 {
+    let beat = (since * SPLASHES).fract();
+
+    SPLASH * (0.45 + beat * 0.9)
+}
+
+/// And how much of it there is, which fades as it spreads.
+pub fn splashed(since: f32) -> f32 {
+    let beat = (since * SPLASHES).fract();
+
+    (1.0 - beat) * 0.5
+}
+
+/// The water standing in the basin, which is round because the basin is.
+pub fn dish_mesh() -> blitzkit::mesh::MeshData {
+    cellar::turned(24, 3, |v| (0.0, v))
+}
+
 /// The fountain's basin, a half bowl against the wall.
 pub fn basin_mesh() -> blitzkit::mesh::MeshData {
     cellar::turned(24, 14, |v| {
@@ -1209,11 +1344,26 @@ pub fn fittings(reaches: f32) -> Vec<(Aabb, Made)> {
     // the four walls, each as its face, which way it looks, and the run along
     // it. The near one is in two pieces because the way through is in it.
     let walls: Vec<(Vec3, Vec3, f32, f32)> = vec![
-        (vec3(back, 0.0, 0.0), Vec3::X, side, far_side),
-        (vec3(foot, 0.0, 0.0), Vec3::NEG_X, side, far_side),
+        // the runs along z start at the near wall's own face and not at the
+        // wall behind it, so a dado stops in the corner rather than running
+        // into the skin it meets there
+        (vec3(back, 0.0, 0.0), Vec3::X, side + SKIN, far_side),
+        (vec3(foot, 0.0, 0.0), Vec3::NEG_X, side + SKIN, far_side),
         (vec3(0.0, 0.0, far_side), Vec3::NEG_Z, back, foot),
-        (vec3(0.0, 0.0, side), Vec3::Z, back, door.x - DOOR * 0.5),
-        (vec3(0.0, 0.0, side), Vec3::Z, door.x + DOOR * 0.5, foot),
+        // the near wall's face is this room's own skin over the cellar's
+        // stone, so the tiling starts outside that and not on the stone
+        (
+            vec3(0.0, 0.0, side + SKIN),
+            Vec3::Z,
+            back,
+            door.x - DOOR * 0.5,
+        ),
+        (
+            vec3(0.0, 0.0, side + SKIN),
+            Vec3::Z,
+            door.x + DOOR * 0.5,
+            foot,
+        ),
     ];
 
     for (face, looks, from, to) in walls {
@@ -1276,23 +1426,33 @@ pub fn fittings(reaches: f32) -> Vec<(Aabb, Made)> {
     }
 
     // the border laid into the floor, as four runs round the room
-    let (one, two) = (back + INLAY_IN, foot - INLAY_IN);
+    // laid on the floor and not half into it: centred on the floor's own top
+    // the border sinks half its thickness into the tiles, and the two fight
+    let laid = floor + 0.01;
+    // the border frames the open floor, so it starts past the sauna rather than
+    // running under it: laid to the room alone it crossed the timber and the
+    // two fought along three units of it
+    let box_ = sauna(reaches);
+    let (one, two) = (
+        (back + INLAY_IN).max(box_.max.x + INLAY_IN),
+        foot - INLAY_IN,
+    );
     let (three, four) = (side + INLAY_IN, far_side - INLAY_IN);
     for (at, size) in [
         (
-            vec3((one + two) * 0.5, floor, three),
+            vec3((one + two) * 0.5, laid, three),
             vec3(two - one, 0.02, INLAY),
         ),
         (
-            vec3((one + two) * 0.5, floor, four),
+            vec3((one + two) * 0.5, laid, four),
             vec3(two - one, 0.02, INLAY),
         ),
         (
-            vec3(one, floor, (three + four) * 0.5),
+            vec3(one, laid, (three + four) * 0.5),
             vec3(INLAY, 0.02, four - three),
         ),
         (
-            vec3(two, floor, (three + four) * 0.5),
+            vec3(two, laid, (three + four) * 0.5),
             vec3(INLAY, 0.02, four - three),
         ),
     ] {
@@ -1825,6 +1985,49 @@ mod tests {
         }
     }
 
+    /// Spec 0008: every lamp is in a sconce.
+    ///
+    /// Not merely "there are sconces and there are lamps". Those were two lists
+    /// of where the light in this room comes from, and they drifted the way two
+    /// lists always do: the lamps ran along the ceiling and the fittings stood
+    /// on a wall, so the ceiling glowed at nothing and every sconce was dark.
+    #[test]
+    fn every_lamp_is_in_a_sconce() {
+        let bowls = sconces(REACHES);
+        let lit = lamps(REACHES);
+
+        assert!(!bowls.is_empty(), "a room with no fittings in it");
+        assert_eq!(lit.len(), bowls.len(), "a lamp that is not in a sconce");
+
+        for lamp in &lit {
+            let bowl = bowls
+                .iter()
+                .min_by(|one, other| {
+                    one.distance_squared(*lamp)
+                        .total_cmp(&other.distance_squared(*lamp))
+                })
+                .expect("a sconce to sit in");
+
+            assert!(
+                lamp.distance(*bowl) < SCONCE.y,
+                "a lamp at {:?} is {} from the nearest sconce",
+                lamp,
+                lamp.distance(*bowl)
+            );
+            // and above it, which is where the light leaves a bowl
+            assert!(lamp.y > bowl.y, "a lamp under its own sconce");
+        }
+
+        // down both long walls, so the room is lit from both sides
+        let side = near(REACHES);
+        let far_side = side + SPAN;
+        assert!(
+            bowls.iter().any(|at| at.z < side + SPAN * 0.5)
+                && bowls.iter().any(|at| at.z > far_side - SPAN * 0.5),
+            "every sconce is on one wall"
+        );
+    }
+
     /// Spec 0008: every lamp is inside the room it lights.
     ///
     /// The nook hung a sconce in its own doorway once, from a list of walls
@@ -2279,6 +2482,7 @@ mod tests {
             ("urn", urn_mesh()),
             ("sconce", sconce_mesh()),
             ("basin", basin_mesh()),
+            ("stream", stream_mesh(0.0)),
         ] {
             assert!(
                 mesh.indices.len() > 48,
@@ -2300,6 +2504,23 @@ mod tests {
                 hi.x - lo.x,
                 hi.y - lo.y
             );
+
+            // and open where it is meant to be open. The candles' mesh is
+            // lidded, which spends the first and last tenth of itself closing
+            // to a point, and that is what made the fountain pour a pencil.
+            if what == "stream" {
+                let at_ends: Vec<f32> = mesh
+                    .vertices
+                    .iter()
+                    .filter(|v| v.position[1] > hi.y - 1e-3)
+                    .map(|v| (v.position[0] * v.position[0] + v.position[2] * v.position[2]).sqrt())
+                    .collect();
+
+                assert!(
+                    at_ends.iter().all(|wide| *wide > 0.2),
+                    "the stream closes to a point at its top"
+                );
+            }
         }
 
         // and the urn is an urn: a belly wider than its neck
@@ -2320,6 +2541,159 @@ mod tests {
             belly,
             neck
         );
+    }
+
+    /// Spec 0008: the basin is lined on every face, and the tiles are the same
+    /// size on all of them.
+    ///
+    /// The depth comes from the tiles and not from the water, so a face left
+    /// bare is a face with no depth, and a face whose tiles are a different
+    /// size is a face at a different distance. One mesh for all five would make
+    /// the tiles on the sides as tall as the sides are.
+    #[test]
+    fn the_basin_is_lined_all_over() {
+        let (middle, size, deep) = pool(REACHES);
+        let faces = lining(REACHES);
+
+        assert_eq!(faces.len(), 5, "a basin is a bottom and four sides");
+
+        // one looking up and four looking in across the water
+        let up = faces.iter().filter(|(_, _, looks)| looks.y > 0.5).count();
+        assert_eq!(up, 1, "{} of them are the bottom", up);
+
+        for (at, face, looks) in &faces {
+            assert!(
+                (looks.length() - 1.0).abs() < 1e-5,
+                "a face looks {:?}",
+                looks
+            );
+            assert!(
+                face.x > 0.0 && face.y > 0.0,
+                "a face {} by {}",
+                face.x,
+                face.y
+            );
+
+            // inside the hole it lines, give or take the hair it stands proud
+            assert!(
+                (at.x - middle.x).abs() <= size.x * 0.5 + 1e-3
+                    && (at.z - middle.z).abs() <= size.y * 0.5 + 1e-3,
+                "a face at {:?} is outside the pool",
+                at
+            );
+            assert!(
+                at.y <= middle.y + FREEBOARD + 1e-3 && at.y >= middle.y - deep - 1e-3,
+                "a face at {} is outside a basin from {} to {}",
+                at.y,
+                middle.y - deep,
+                middle.y + FREEBOARD
+            );
+
+            // and every one of them carries whole tiles of the same size
+            let counts = *face / TILE;
+            assert!(
+                counts.x > 1.0 && counts.y > 0.9,
+                "a face of {} by {} tiles",
+                counts.x,
+                counts.y
+            );
+        }
+
+        // the bottom is the pool's own size, so the tiles on it are the scale
+        // everything else is read against
+        let (_, bottom, _) = faces[0];
+        assert!(
+            (bottom - size).length() < 1e-4,
+            "the bottom is {:?} and the pool is {:?}",
+            bottom,
+            size
+        );
+    }
+
+    /// Spec 0008: the tiling on the near wall starts outside this room's own
+    /// face on it, not on the cellar's stone behind that.
+    ///
+    /// The wall between the two rooms is the cellar's, and this room lays a
+    /// skin of its own over it. Tiling taken from the wall instead of from the
+    /// skin fills the same slab, and the two then fight for every pixel: a
+    /// chequerboard dissolving down one side of the room, which is the fourth
+    /// time this building has drawn two surfaces in one place.
+    ///
+    /// Not a general rule about overlapping, which would be wrong: a pier is
+    /// deeper than the dado it breaks and buries part of it, and a face inside
+    /// another solid is hidden rather than fighting.
+    #[test]
+    fn the_tiling_starts_outside_the_skin() {
+        let side = near(REACHES);
+        let face = side + SKIN;
+        let mut found = 0;
+
+        for (box_, made) in fittings(REACHES) {
+            if !matches!(made, Made::Dado | Made::Band | Made::Pier) {
+                continue;
+            }
+            // only the pieces on the near wall, which are the ones that meet
+            // the skin at all
+            if box_.min.z > face + 1e-3 {
+                continue;
+            }
+
+            found += 1;
+            assert!(
+                box_.min.z >= face - 1e-4,
+                "a {:?} begins at {} and this room's face is at {}",
+                made,
+                box_.min.z,
+                face
+            );
+        }
+
+        assert!(found > 0, "no tiling on the near wall at all");
+    }
+
+    /// Spec 0008: the stream moves along itself, and the splash beats.
+    ///
+    /// A thread wavering from side to side is a wobbly rod: nothing about it
+    /// moves the way it is pointing, which is what Jake read off it straight
+    /// away. Flowing is the beads running down, so what has to be true is that
+    /// the shape at one moment is not the shape at the next, and that the
+    /// difference is along the thread rather than across it.
+    #[test]
+    fn the_stream_runs_rather_than_wiggles() {
+        let one = stream_mesh(0.0);
+        let other = stream_mesh(0.14);
+
+        assert_eq!(one.vertices.len(), other.vertices.len());
+
+        let mut moved = 0;
+        for (a, b) in one.vertices.iter().zip(other.vertices.iter()) {
+            // the thread keeps its length: a bead travels down it, the whole
+            // thing does not slide
+            assert!(
+                (a.position[1] - b.position[1]).abs() < 1e-5,
+                "the stream moved down bodily rather than beading"
+            );
+            if (a.position[0] - b.position[0]).abs() > 1e-4 {
+                moved += 1;
+            }
+        }
+
+        assert!(
+            moved > one.vertices.len() / 4,
+            "only {} of {} points moved, so it is the same thread",
+            moved,
+            one.vertices.len()
+        );
+
+        // and the splash spreads and fades together, so it reads as one ring
+        // rather than a flicker
+        let (early, late) = (splash(0.0), splash(0.2));
+        assert!(late > early, "the ring does not spread");
+        assert!(
+            splashed(0.2) < splashed(0.0),
+            "the ring spreads without fading"
+        );
+        assert!(splashed(0.0) > 0.0, "a splash nobody can see");
     }
 
     /// Spec 0008: water slows you.

@@ -129,6 +129,8 @@ struct Arcade {
     urn: Option<MeshId>,
     sconce: Option<MeshId>,
     basin: Option<MeshId>,
+    stream: Option<MeshId>,
+    dish: Option<MeshId>,
     stave: Option<TextureId>,
     flame: Option<MeshId>,
     candlestick: Option<MeshId>,
@@ -137,6 +139,10 @@ struct Arcade {
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
     stonework: Option<TextureId>,
+    /// The glazed tile the basin is lined with, and a quad per face with its
+    /// own count of tiles on it. Spec 0008.
+    tiled: Option<TextureId>,
+    lining: Vec<MeshId>,
     afghan_mesh: Option<MeshId>,
     cellar_floor: Option<MeshId>,
     wall_grain: Option<TextureId>,
@@ -262,6 +268,8 @@ impl Arcade {
             urn: None,
             sconce: None,
             basin: None,
+            stream: None,
+            dish: None,
             stave: None,
             flame: None,
             candlestick: None,
@@ -270,6 +278,8 @@ impl Arcade {
             afghan: None,
             grain: Vec::new(),
             stonework: None,
+            tiled: None,
+            lining: Vec::new(),
             afghan_mesh: None,
             cellar_floor: None,
             wall_grain: None,
@@ -670,6 +680,12 @@ impl Game for Arcade {
         if let Some(mesh) = self.tub_mesh {
             renderer.update_mesh(mesh, &self.tub.surface());
         }
+
+        // and the fountain's thread, whose beads run down it. Written over
+        // rather than uploaded again, per spec 0042.
+        if let Some(mesh) = self.stream {
+            renderer.update_mesh(mesh, &spa::stream_mesh(self.since));
+        }
     }
 
     fn load(&mut self, renderer: &mut Renderer) {
@@ -704,6 +720,8 @@ impl Game for Arcade {
         self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
         self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
         self.basin = Some(renderer.add_mesh(&spa::basin_mesh()));
+        self.stream = Some(renderer.add_mesh(&spa::stream_mesh(0.0)));
+        self.dish = Some(renderer.add_mesh(&spa::dish_mesh()));
         self.flame = Some(renderer.add_mesh(&cellar::flame_mesh()));
         self.candlestick = Some(renderer.add_mesh(&cellar::candlestick_mesh()));
         self.decanter = Some(renderer.add_mesh(&cellar::decanter_mesh()));
@@ -727,6 +745,15 @@ impl Game for Arcade {
             })
             .collect();
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
+        self.tiled = Some(renderer.add_texture(&carpet::tiled(carpet::TILE_SEED)));
+
+        // a quad per face of the basin, each with its own count of tiles, so a
+        // tile is the same size everywhere. One mesh for all of them makes the
+        // tiles on the sides as tall as the sides are.
+        self.lining = spa::lining(self.room.reaches)
+            .into_iter()
+            .map(|(_, size, _)| renderer.add_mesh(&room::tiled_plane(size / spa::TILE)))
+            .collect();
         self.stave =
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
@@ -1635,6 +1662,8 @@ impl Game for Arcade {
                 match made {
                     spa::Made::Tile => aim::SPA_TILE,
                     spa::Made::Wall => aim::SPA_WALL,
+                    // the basin is lined with tiled quads below, so its boxes
+                    // are structure and not surface
                     spa::Made::Basin => aim::SPA_BASIN,
                     spa::Made::Step => aim::SPA_STEP,
                     spa::Made::Tub => aim::SPA_TUB,
@@ -1649,6 +1678,34 @@ impl Game for Arcade {
                     spa::Made::Cut => aim::SPA_CUT,
                 },
             );
+        }
+
+        // the basin's lining, which is where the pool's depth comes from. Not
+        // the water: what tells your eye how far down the bottom is, is seeing
+        // something of a known size through it and watching that get smaller.
+        if let Some(tiled) = self.tiled {
+            for ((middle, size, looks), mesh) in
+                spa::lining(self.room.reaches).into_iter().zip(&self.lining)
+            {
+                let turn = if looks.y > 0.5 {
+                    glam::Quat::IDENTITY
+                } else if looks.x.abs() > 0.5 {
+                    glam::Quat::from_rotation_z(looks.x * std::f32::consts::FRAC_PI_2)
+                        * glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
+                } else {
+                    glam::Quat::from_rotation_x(-looks.z * std::f32::consts::FRAC_PI_2)
+                };
+
+                scene.push_textured(
+                    *mesh,
+                    tiled,
+                    &Transform::at(middle)
+                        .with_rotation(turn)
+                        .with_scale(vec3(size.x, 1.0, size.y)),
+                    aim::SPA_BASIN,
+                    90.0,
+                );
+            }
         }
 
         // the turned pieces in the baths: the urns, the sconces' bowls and the
@@ -1672,6 +1729,49 @@ impl Game for Arcade {
                     )),
                     aim::SPA_CUT,
                     120.0,
+                );
+            }
+
+            // the stream, and the water standing in the basin it falls into.
+            // A fountain that does not run is a stone shelf.
+            if let Some(pour) = self.stream {
+                let (from, falls) = spa::stream(self.room.reaches);
+
+                scene.push_material(
+                    pour,
+                    &Transform::at(vec3(from.x, from.y - falls * 0.5, from.z)).with_scale(vec3(
+                        spa::STREAM,
+                        falls,
+                        spa::STREAM,
+                    )),
+                    aim::WATER,
+                    360.0,
+                );
+            }
+            if let Some(dish) = self.dish {
+                let at = spa::fountain(self.room.reaches);
+
+                scene.push_material(
+                    dish,
+                    &Transform::at(vec3(at.x, at.y + spa::BASIN.y * 0.42, at.z)).with_scale(vec3(
+                        spa::BASIN.x * 0.74,
+                        1.0,
+                        spa::BASIN.x * 0.74,
+                    )),
+                    aim::WATER_HOT,
+                    320.0,
+                );
+
+                // and the ring where the thread lands, spreading and fading,
+                // which is the other half of saying it is falling
+                let (lands, _) = spa::stream(self.room.reaches);
+                let wide = spa::splash(self.since);
+
+                scene.push_colored(
+                    dish,
+                    &Transform::at(vec3(lands.x, at.y + spa::BASIN.y * 0.42 + 0.004, lands.z))
+                        .with_scale(vec3(wide, 1.0, wide)),
+                    aim::STEAM.truncate().extend(spa::splashed(self.since)),
                 );
             }
 

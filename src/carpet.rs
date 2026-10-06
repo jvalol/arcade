@@ -701,6 +701,64 @@ pub const MOTTLE: u32 = 128;
 pub const WALL_SEED: u32 = 0x5EED_0001;
 pub const CABINET_SEED: u32 = 0x5EED_0002;
 
+/// The glazed tile a pool is lined with: how big the sheet is, how many tiles
+/// across it, and the seed the variation comes from.
+///
+/// Small tiles and a lot of them. What gives a pool its depth is not the water:
+/// it is seeing something of a known size through the water and watching it get
+/// smaller. A flat colour on the bottom is a flat colour at any depth.
+pub const TILE: u32 = 256;
+pub const TILE_COUNT: u32 = 8;
+pub const TILE_SEED: u32 = 0x5EED_0008;
+const TILE_GROUT: i32 = 150;
+
+pub fn tiled(seed: u32) -> TextureData {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    // one tone per tile, settled before any pixel is laid, so a tile is one
+    // tile the whole way across rather than noise that happens to be square
+    let tones: Vec<i32> = (0..TILE_COUNT * TILE_COUNT)
+        .map(|_| (next() % 27) as i32 - 13)
+        .collect();
+    let across = TILE / TILE_COUNT;
+    let mut pixels = Vec::with_capacity((TILE * TILE * 4) as usize);
+
+    for y in 0..TILE {
+        for x in 0..TILE {
+            let (ax, ay) = (x % across, y % across);
+            let joint = ax < 2 || ay < 2;
+            let tile = (y / across * TILE_COUNT + x / across) as usize;
+            let tone = tones[tile.min(tones.len() - 1)];
+
+            // the glaze catches the light at the top of each tile and loses it
+            // at the bottom, which is what makes a tile read as glazed rather
+            // than as a painted square
+            let glaze = 14 - (ay as i32 * 28 / across as i32);
+            let shade = if joint {
+                TILE_GROUT
+            } else {
+                (190 + tone + glaze).clamp(0, 255)
+            } as u8;
+
+            // a touch green, which is what a bath house tile is
+            pixels.extend_from_slice(&[
+                (shade as f32 * 0.86) as u8,
+                shade,
+                (shade as f32 * 0.97) as u8,
+                255,
+            ]);
+        }
+    }
+
+    TextureData::from_pixels(TILE, TILE, pixels)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
