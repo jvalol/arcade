@@ -264,8 +264,8 @@ pub const RAIL: f32 = 0.07;
 /// Warm. It was a neutral grey, which is what a basement is: the point of this
 /// room is that it is the warmest in the building, warmer than the nook, and a
 /// grey room with a fire in it is a grey room.
-pub const CELLAR: Vec4 = vec4(0.42, 0.28, 0.21, 1.0);
-pub const CELLAR_FLOOR: Vec4 = vec4(0.36, 0.27, 0.22, 1.0);
+pub const CELLAR: Vec4 = vec4(0.40, 0.25, 0.20, 1.0);
+pub const CELLAR_FLOOR: Vec4 = vec4(0.42, 0.21, 0.14, 1.0);
 
 /// The panelling down there, in four timbers.
 ///
@@ -273,12 +273,17 @@ pub const CELLAR_FLOOR: Vec4 = vec4(0.36, 0.27, 0.22, 1.0);
 /// down a wall is hardboard; what makes a panelled room read as wood is that no
 /// two boards beside each other are quite the same.
 pub const TIMBER: [Vec4; 4] = [
-    vec4(0.52, 0.34, 0.19, 1.0),
-    vec4(0.44, 0.30, 0.20, 1.0),
-    vec4(0.38, 0.24, 0.15, 1.0),
-    vec4(0.48, 0.33, 0.24, 1.0),
+    // mahogany, and three things that sit beside it: rosewood, a redder
+    // mahogany, and walnut for the darkest bays
+    vec4(0.46, 0.17, 0.11, 1.0),
+    vec4(0.38, 0.14, 0.11, 1.0),
+    vec4(0.52, 0.21, 0.13, 1.0),
+    vec4(0.31, 0.15, 0.10, 1.0),
 ];
-pub const TIMBER_TRIM: Vec4 = vec4(0.33, 0.21, 0.13, 1.0);
+
+/// The stiles, rails, skirting and cornice, which are darker than the panels
+/// they hold. A frame the same colour as its panel is not a frame.
+pub const TIMBER_TRIM: Vec4 = vec4(0.26, 0.11, 0.08, 1.0);
 
 /// The fireplace: its stone, the dark of the opening, the logs, and the fire.
 ///

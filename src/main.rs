@@ -108,7 +108,10 @@ struct Arcade {
     stave: Option<TextureId>,
     flame: Option<MeshId>,
     afghan: Option<TextureId>,
+    grain: Vec<TextureId>,
+    stonework: Option<TextureId>,
     afghan_mesh: Option<MeshId>,
+    cellar_floor: Option<MeshId>,
     wall_grain: Option<TextureId>,
     cabinet_grain: Option<TextureId>,
     ceiling_mesh: Option<MeshId>,
@@ -211,7 +214,10 @@ impl Arcade {
             stave: None,
             flame: None,
             afghan: None,
+            grain: Vec::new(),
+            stonework: None,
             afghan_mesh: None,
+            cellar_floor: None,
             wall_grain: None,
             cabinet_grain: None,
             ceiling_mesh: None,
@@ -613,6 +619,22 @@ impl Game for Arcade {
         let (_, mat) = cellar::rug(self.room.reaches);
         self.afghan = Some(renderer.add_texture(&carpet::afghan(mat.z / mat.x)));
         self.afghan_mesh = Some(renderer.add_mesh(&room::tiled_floor(1.0)));
+        // counted off the room, so a plank is the same width whichever way the
+        // cellar is longer
+        let (_, boards) = cellar::floor(self.room.reaches);
+        self.cellar_floor = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
+            boards.x / cellar::PLANK,
+            boards.z / cellar::PLANK,
+        ))));
+        // a few boards rather than one. Every panel cut from the same picture
+        // is every panel cut from the same tree in the same place, which is the
+        // one thing a wall of wood never is.
+        self.grain = (0..carpet::GRAINS)
+            .map(|n| {
+                renderer.add_texture(&carpet::grained(carpet::GRAIN_SEED.wrapping_add(n * 7919)))
+            })
+            .collect();
+        self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.stave =
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
@@ -1464,72 +1486,119 @@ impl Game for Arcade {
             }
         }
 
-        // the panelling down there, in four timbers with no two beside each
-        // other alike. Boards and not a picture of boards: a wall is one box,
-        // and a cube's corners run nought to one however big it is, so a timber
-        // texture on one is a single plank the size of the wall. Spec 0007.
+        // the floor in hardwood, laid over the stone it sits on. Spec 0007.
+        if let (Some(mesh), Some(boards)) = (self.cellar_floor, self.boards) {
+            let (at, size) = cellar::floor(self.room.reaches);
+
+            scene.push_textured(
+                mesh,
+                boards,
+                &Transform::at(at + Vec3::Y * 0.002).with_scale(vec3(size.x, 1.0, size.z)),
+                aim::CELLAR_FLOOR,
+                aim::DULL,
+            );
+        }
+
+        // the panelling down there: floor to ceiling, each bay a raised panel
+        // in its own timber inside a frame of stiles and rails, with a skirting
+        // under the lot and a cornice over it. Spec 0007.
+        //
+        // Panelling that stops at waist height and leaves plain wall above is
+        // what a dining room has. A room panelled the whole way up is a room
+        // somebody spent money on, which is the point of this one.
         for (face, out, from, to, along_x) in cellar::panelled(self.room.reaches) {
             let run = to - from;
             let step = cellar::BOARD + cellar::BOARD_GAP;
             let fits = (run / step).floor().max(1.0) as usize;
             let spare = run - fits as f32 * step;
             let floor = -cellar::DOWN;
+            let high = cellar::TALL;
+            let field = high - cellar::SKIRTING - cellar::CORNICE;
+
+            // a laid up board, turned so its grain runs the way the board does
+            let laid = |middle: Vec3,
+                        size: Vec3,
+                        timber: glam::Vec4,
+                        board: usize,
+                        scene: &mut Scene| match self
+                .grain
+                .get(board % self.grain.len().max(1))
+            {
+                Some(grain) => scene.push_textured(
+                    cube,
+                    *grain,
+                    &Transform::at(middle).with_scale(size),
+                    timber,
+                    aim::DULL,
+                ),
+                None => scene.push_colored(cube, &Transform::at(middle).with_scale(size), timber),
+            };
+            let put = |across: f32, up: f32, wide: f32, tall: f32, deep: f32| {
+                if along_x {
+                    (
+                        vec3(face + out * deep * 0.5, floor + up, across),
+                        vec3(deep, tall, wide),
+                    )
+                } else {
+                    (
+                        vec3(across, floor + up, face + out * deep * 0.5),
+                        vec3(wide, tall, deep),
+                    )
+                }
+            };
 
             for n in 0..fits {
                 let at = from + spare * 0.5 + (n as f32 + 0.5) * step;
-                let timber = aim::TIMBER[(n * 7 + if along_x { 3 } else { 0 }) % aim::TIMBER.len()];
-                let middle = if along_x {
-                    vec3(
-                        face + out * cellar::BOARD_OUT * 0.5,
-                        floor + cellar::DADO * 0.5,
-                        at,
-                    )
-                } else {
-                    vec3(
-                        at,
-                        floor + cellar::DADO * 0.5,
-                        face + out * cellar::BOARD_OUT * 0.5,
-                    )
-                };
-                let size = if along_x {
-                    vec3(cellar::BOARD_OUT, cellar::DADO, cellar::BOARD)
-                } else {
-                    vec3(cellar::BOARD, cellar::DADO, cellar::BOARD_OUT)
-                };
+                let timber = aim::TIMBER[(n * 5 + if along_x { 2 } else { 0 }) % aim::TIMBER.len()];
 
-                scene.push_colored(cube, &Transform::at(middle).with_scale(size), timber);
+                // the panel itself, set back inside its frame
+                let (middle, size) = put(
+                    at,
+                    cellar::SKIRTING + field * 0.5,
+                    cellar::BOARD - cellar::STILE * 2.0,
+                    field - cellar::STILE * 2.0,
+                    cellar::BOARD_OUT - cellar::PANEL_IN,
+                );
+                laid(middle, size, timber, n, scene);
+
+                // the two stiles either side of it, standing proud
+                for side in [-1.0f32, 1.0] {
+                    let (middle, size) = put(
+                        at + side * (cellar::BOARD - cellar::STILE) * 0.5,
+                        cellar::SKIRTING + field * 0.5,
+                        cellar::STILE,
+                        field,
+                        cellar::BOARD_OUT,
+                    );
+                    laid(middle, size, aim::TIMBER_TRIM, n + 2, scene);
+                }
+
+                // and a rail at the head and foot of the panel
+                for up in [
+                    cellar::SKIRTING + cellar::STILE * 0.5,
+                    cellar::SKIRTING + field - cellar::STILE * 0.5,
+                ] {
+                    let (middle, size) =
+                        put(at, up, cellar::BOARD, cellar::STILE, cellar::BOARD_OUT);
+                    laid(middle, size, aim::TIMBER_TRIM, n + 2, scene);
+                }
             }
 
-            // a skirting under them and a rail over, which is what turns a row
-            // of boards into panelling
-            for (up, thick) in [
-                (cellar::SKIRTING * 0.5, cellar::SKIRTING),
-                (cellar::DADO + cellar::RAIL * 0.5, cellar::RAIL),
+            // a skirting under the lot, and a cornice over it
+            for (up, thick, deep) in [
+                (
+                    cellar::SKIRTING * 0.5,
+                    cellar::SKIRTING,
+                    cellar::BOARD_OUT * 1.8,
+                ),
+                (
+                    high - cellar::CORNICE * 0.5,
+                    cellar::CORNICE,
+                    cellar::BOARD_OUT * 2.2,
+                ),
             ] {
-                let middle = if along_x {
-                    vec3(
-                        face + out * cellar::BOARD_OUT,
-                        floor + up,
-                        (from + to) * 0.5,
-                    )
-                } else {
-                    vec3(
-                        (from + to) * 0.5,
-                        floor + up,
-                        face + out * cellar::BOARD_OUT,
-                    )
-                };
-                let size = if along_x {
-                    vec3(cellar::BOARD_OUT * 2.4, thick, run)
-                } else {
-                    vec3(run, thick, cellar::BOARD_OUT * 2.4)
-                };
-
-                scene.push_colored(
-                    cube,
-                    &Transform::at(middle).with_scale(size),
-                    aim::TIMBER_TRIM,
-                );
+                let (middle, size) = put((from + to) * 0.5, up, run, thick, deep);
+                laid(middle, size, aim::TIMBER_TRIM, 1, scene);
             }
         }
 
@@ -1592,7 +1661,15 @@ impl Game for Arcade {
                     ),
                 ),
             ] {
-                scene.push_colored(cube, &Transform::at(middle).with_scale(size), aim::HEARTH);
+                // built of blocks rather than coloured like stone. The
+                // joints are what says stone: courses that do not line up,
+                // blocks of different lengths in each one, and no two the same
+                // grey.
+                let laid = Transform::at(middle).with_scale(size);
+                match self.stonework {
+                    Some(stone) => scene.push_textured(cube, stone, &laid, aim::HEARTH, aim::DULL),
+                    None => scene.push_colored(cube, &laid, aim::HEARTH),
+                }
             }
 
             // the back of the recess, which is a panel and not a block. As a

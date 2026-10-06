@@ -210,6 +210,151 @@ pub fn staves(seed: u32, count: u32) -> TextureData {
 /// down the middle, and four borders rather than one. What makes a rug from
 /// that part of the world read at a glance is that the pattern repeats across
 /// it in a grid rather than resolving into one shape in the middle.
+/// A panel of grained timber: quartered so the figure runs out from the middle
+/// of each board, with a sapwood edge either side.
+///
+/// A board is not a brown rectangle. What makes a panelled room read as a
+/// panelled room rather than as painted hardboard is that each board has its
+/// own figure, the figure runs the length of it, and it is lighter at the edges
+/// where the sawn face catches the light.
+pub const GRAIN_WIDE: u32 = 128;
+pub const GRAIN_TALL: u32 = 384;
+pub const GRAIN_SEED: u32 = 0x5EED_0005;
+
+/// How many boards are cut, so a wall is not one tree in one place repeated.
+pub const GRAINS: u32 = 5;
+const GRAIN_PALE: i32 = 218;
+
+pub fn grained(seed: u32) -> TextureData {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    // Where the tree's heart was, relative to this board. Outside it across the
+    // width and somewhere along its length, which is what makes the rings come
+    // out as the long nested arches everybody calls cathedral figure.
+    //
+    // It was straight lines before, because the rings were worked out from the
+    // distance across the board alone. That is a real thing to be: it is what a
+    // quarter sawn board looks like, and a quarter sawn board is stripes. Wood
+    // that reads as wood is flat sawn.
+    let pith = (
+        -(GRAIN_WIDE as f32) * (0.35 + (next() % 500) as f32 / 1000.0),
+        GRAIN_TALL as f32 * ((next() % 1000) as f32 / 1000.0 - 0.25),
+    );
+
+    // a year's growth, and how much of each year is the dark band at the end of
+    // it. Years are not all the same width, so the spacing wanders.
+    let year = 7.0 + (next() % 1000) as f32 / 1000.0 * 5.0;
+    let late = 0.26 + (next() % 1000) as f32 / 1000.0 * 0.12;
+    let wobble: Vec<f32> = (0..64)
+        .map(|_| (next() % 1000) as f32 / 1000.0 - 0.5)
+        .collect();
+
+    let mut pixels = Vec::with_capacity((GRAIN_WIDE * GRAIN_TALL * 4) as usize);
+    for y in 0..GRAIN_TALL {
+        for x in 0..GRAIN_WIDE {
+            let (across, along) = (x as f32, y as f32);
+            // how far this point is from the heart, which is what decides which
+            // year's wood it is
+            let reach = ((across - pith.0).powi(2) + (along - pith.1).powi(2)).sqrt();
+
+            // the rings are not true circles: a tree grows unevenly and the saw
+            // is not exactly flat, so the distance wanders a little
+            let n = ((along / GRAIN_TALL as f32) * wobble.len() as f32) as usize;
+            let drift =
+                wobble[n.min(wobble.len() - 1)] * 3.2 + (along * 0.04 + across * 0.02).sin() * 2.1;
+            let into = ((reach + drift) / year).fract().abs();
+
+            // the dark band at the end of a year, which is the grain you see,
+            // and it is darkest at its outer edge rather than evenly dark
+            let mut shade = GRAIN_PALE as f32;
+            if into > 1.0 - late {
+                let depth = (into - (1.0 - late)) / late;
+
+                shade -= 16.0 + 46.0 * depth * depth;
+            } else {
+                // and the pale wood between bands, which is not flat either
+                shade -= into * 7.0;
+            }
+
+            // the figure crowds together towards the edges of a flat sawn
+            // board, where the saw is cutting across the rings rather than
+            // along them
+            let edge = (across / GRAIN_WIDE as f32 - 0.5).abs() * 2.0;
+            shade += edge * edge * 13.0;
+            shade += ((next() % 11) as f32 - 5.0) * 0.5;
+
+            let shade = shade.clamp(0.0, 255.0) as u8;
+            pixels.extend_from_slice(&[shade, shade, shade, 255]);
+        }
+    }
+
+    TextureData::from_pixels(GRAIN_WIDE, GRAIN_TALL, pixels)
+}
+
+pub const STONE: u32 = 256;
+pub const STONE_SEED: u32 = 0x5EED_0006;
+const STONE_PALE: i32 = 206;
+const STONE_JOINT: i32 = 128;
+
+pub fn stonework(seed: u32) -> TextureData {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    // where each course sits and where the joints in it fall, decided before
+    // any pixel is laid so a block is one block all the way across
+    let courses = 6u32;
+    let deep = STONE / courses;
+    let laid: Vec<(i32, Vec<u32>)> = (0..courses)
+        .map(|_| {
+            let shove = next() % deep;
+            let mut joints = Vec::new();
+            let mut at = shove;
+            while at < STONE {
+                joints.push(at);
+                at += deep + next() % (deep * 2);
+            }
+
+            (STONE_PALE + (next() % 23) as i32 - 11, joints)
+        })
+        .collect();
+
+    let mut pixels = Vec::with_capacity((STONE * STONE * 4) as usize);
+    for y in 0..STONE {
+        let course = (y / deep.max(1)) as usize % laid.len();
+        let (tone, joints) = &laid[course];
+        let bed = y % deep.max(1);
+
+        for x in 0..STONE {
+            let on_a_joint = joints.iter().any(|at| x.abs_diff(*at) < 2);
+            let on_a_bed = bed < 2;
+            // one block's own tone, so two side by side are not the same stone
+            let block = joints.iter().filter(|at| **at <= x).count() as i32;
+            let speckle = (next() % 23) as i32 - 11;
+
+            let shade = if on_a_joint || on_a_bed {
+                STONE_JOINT
+            } else {
+                (tone + (block * 37) % 19 - 9 + speckle).clamp(0, 255)
+            } as u8;
+
+            pixels.extend_from_slice(&[shade, shade, shade, 255]);
+        }
+    }
+
+    TextureData::from_pixels(STONE, STONE, pixels)
+}
+
 pub const AFGHAN: u32 = 512;
 const AFGHAN_GROUND: [u8; 3] = [86, 24, 22];
 const AFGHAN_DARK: [u8; 3] = [38, 14, 16];
@@ -233,14 +378,17 @@ pub fn afghan(long: f32) -> TextureData {
         pixels[n + 2] = colour[2];
     };
 
-    // four borders, inset the same number of pixels from every edge so they do
-    // not stretch with the rug
+    // the borders: a main one with a guard stripe either side of it, which is
+    // how every rug of this kind is put together and is most of what separates
+    // one from a printed mat. Inset in pixels, so they do not stretch.
     for (inset, thick, colour) in [
-        (8i32, 3i32, AFGHAN_DARK),
-        (16, 10, AFGHAN_IVORY),
-        (30, 4, AFGHAN_DARK),
-        (38, 16, AFGHAN_GUL),
+        (6i32, 4i32, AFGHAN_DARK),
+        (14, 5, AFGHAN_IVORY),
+        (21, 3, AFGHAN_DARK),
+        (26, 30, AFGHAN_GUL),
         (58, 3, AFGHAN_DARK),
+        (63, 5, AFGHAN_IVORY),
+        (70, 4, AFGHAN_DARK),
     ] {
         for step in 0..thick {
             let at = inset + step;
@@ -255,33 +403,54 @@ pub fn afghan(long: f32) -> TextureData {
         }
     }
 
-    // and the guls: an octagon with a cross in it, repeated down the field
-    let field = (70, tall as i32 - 70);
-    let across = 2;
-    let down = ((field.1 - field.0) as f32 / (wide as f32 - 140.0) * across as f32).round() as i32;
-    let step_x = (wide as i32 - 140) / across;
-    let step_y = (field.1 - field.0) / down.max(1);
+    // a running figure in the main border, which is the band that carries the
+    // work. A plain stripe reads as a frame; this reads as weaving.
+    let band = (26, 56);
+    let every = 34;
+    for step in 0..(wide as i32 / every + 2) {
+        for (along, across) in [(step * every, true), (step * every, false)] {
+            for n in 0i32..10 {
+                let bite: i32 = n - 5;
+                let deep = band.0 + 7 + (bite.abs()) * 2;
 
-    for row in 0..down.max(1) {
+                for thick in 0..3 {
+                    if across {
+                        ink(along + n * 3, deep + thick, AFGHAN_IVORY);
+                        ink(along + n * 3, tall as i32 - 1 - deep - thick, AFGHAN_IVORY);
+                    } else {
+                        ink(deep + thick, along + n * 3, AFGHAN_IVORY);
+                        ink(wide as i32 - 1 - deep - thick, along + n * 3, AFGHAN_IVORY);
+                    }
+                }
+            }
+        }
+    }
+
+    // and the field: guls in a grid, each an octagon inside an octagon with a
+    // hooked cross at its heart, and a small star between every four of them.
+    let edge = 84;
+    let field = (edge, wide as i32 - edge, edge, tall as i32 - edge);
+    let across = 2;
+    let step_x = (field.1 - field.0) / across;
+    let down = ((field.3 - field.2) / step_x).max(1);
+    let step_y = (field.3 - field.2) / down;
+
+    for row in 0..down {
         for col in 0..across {
             let middle = (
-                70 + step_x * col + step_x / 2,
-                field.0 + step_y * row + step_y / 2,
+                field.0 + step_x * col + step_x / 2,
+                field.2 + step_y * row + step_y / 2,
             );
-            let reach = step_x.min(step_y) / 2 - 8;
+            let reach = step_x.min(step_y) / 2 - 6;
 
-            for ring in [reach, reach - 7] {
-                let colour = if ring == reach {
-                    AFGHAN_DARK
-                } else {
-                    AFGHAN_IVORY
-                };
-
-                // an octagon, drawn as a diamond with its points cut off
+            for (ring, colour) in [
+                (reach, AFGHAN_DARK),
+                (reach - 6, AFGHAN_IVORY),
+                (reach - 11, AFGHAN_DARK),
+            ] {
+                let cut = (ring as f32 * 0.42) as i32;
                 for step in -ring..=ring {
-                    let cut = (ring as f32 * 0.42) as i32;
-                    let side = ring - step.abs();
-                    let side = side.min(ring - cut);
+                    let side = (ring - step.abs()).min(ring - cut);
 
                     for thick in 0..3 {
                         ink(middle.0 + step, middle.1 + side + thick, colour);
@@ -292,11 +461,40 @@ pub fn afghan(long: f32) -> TextureData {
                 }
             }
 
-            // a cross in the middle of each one
-            for step in -(reach / 3)..=(reach / 3) {
+            // the hooked cross in the middle of it
+            let arm = reach / 3;
+            for step in -arm..=arm {
                 for thick in 0..3 {
                     ink(middle.0 + step, middle.1 + thick, AFGHAN_GUL);
                     ink(middle.0 + thick, middle.1 + step, AFGHAN_GUL);
+                }
+            }
+            for side in [-1i32, 1] {
+                for hook in 0..(arm / 2) {
+                    for thick in 0..3 {
+                        ink(
+                            middle.0 + side * arm + thick,
+                            middle.1 + side * hook,
+                            AFGHAN_GUL,
+                        );
+                        ink(
+                            middle.0 + side * hook,
+                            middle.1 + side * arm + thick,
+                            AFGHAN_GUL,
+                        );
+                    }
+                }
+            }
+
+            // and a star in the corner between every four guls
+            if row + 1 < down {
+                let star = (middle.0, middle.1 + step_y / 2);
+                for step in -7i32..=7 {
+                    let side = 7 - step.abs();
+                    for thick in 0..2 {
+                        ink(star.0 + step, star.1 + side + thick, AFGHAN_IVORY);
+                        ink(star.0 + step, star.1 - side - thick, AFGHAN_IVORY);
+                    }
                 }
             }
         }

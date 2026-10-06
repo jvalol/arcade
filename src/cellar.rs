@@ -464,12 +464,22 @@ pub fn hearth(reaches: f32) -> Vec3 {
 /// Boards rather than a picture of boards. A wall is one box, and a cube's
 /// corners run nought to one however big it is, so a timber texture on one
 /// would be a single plank the size of the wall.
-pub const BOARD: f32 = 0.26;
-pub const BOARD_GAP: f32 = 0.018;
-pub const BOARD_OUT: f32 = 0.035;
-pub const DADO: f32 = 1.6;
-pub const RAIL: f32 = 0.07;
-pub const SKIRTING: f32 = 0.14;
+pub const BOARD: f32 = 0.42;
+pub const BOARD_GAP: f32 = 0.02;
+pub const BOARD_OUT: f32 = 0.05;
+
+/// Floor to ceiling, not to a dado rail.
+///
+/// Panelling that stops at waist height and leaves plain wall above it is what
+/// a dining room has. A room panelled the whole way is a room somebody spent
+/// money on, and that is the point of this one.
+pub const SKIRTING: f32 = 0.2;
+pub const CORNICE: f32 = 0.18;
+
+/// The stile either side of each panel and the rail above and below it, which
+/// is what turns a flat board into a raised panel.
+pub const STILE: f32 = 0.075;
+pub const PANEL_IN: f32 = 0.022;
 
 /// Where the panelling goes: each wall as its face, which way it stands out,
 /// and where it starts and ends along itself.
@@ -480,6 +490,11 @@ pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool)> {
         along - SPAN * 0.5 + THICK * 0.5,
         along + SPAN * 0.5 - THICK * 0.5,
     );
+
+    // and the near end in two pieces either side of the way in, which was
+    // missing: the wall you face coming down the stair, and so the one wall of
+    // the room anybody arriving actually looks at.
+    let gap = PASSAGE * 0.5 + THICK;
 
     vec![
         // the two long walls, which run along z
@@ -497,9 +512,27 @@ pub fn panelled(reaches: f32) -> Vec<(f32, f32, f32, f32, bool)> {
             foot - THICK * 0.5,
             false,
         ),
-        // and the far end, which runs along x
+        // the far end, which runs along x
         (foot - DEEP + THICK * 0.5, 1.0, near, far, true),
+        // and the near one, round the stair
+        (foot - THICK * 0.5, -1.0, near, along - gap, true),
+        (foot - THICK * 0.5, -1.0, along + gap, far, true),
     ]
+}
+
+/// The floor of the room, as the middle and size of a quad lying on it.
+///
+/// Its own quad rather than the top of the stone box it sits on, because a
+/// cube's corners run nought to one however big it is, so boards laid on one
+/// are a single plank ten units long. A quad can be given a tile count.
+pub const PLANK: f32 = 1.6;
+pub fn floor(reaches: f32) -> (Vec3, Vec3) {
+    let foot = back() - LANDING - STEPS as f32 * TREAD;
+
+    (
+        vec3(foot - DEEP * 0.5, -DOWN, opening(reaches)),
+        vec3(DEEP - THICK, 0.0, SPAN - THICK),
+    )
 }
 
 /// Where the rug lies: in front of the fire, which is where a rug goes.
