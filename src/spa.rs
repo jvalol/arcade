@@ -101,7 +101,30 @@ pub const TUB_CELLS: u32 = 24;
 /// The ripples following you about are the whole of why this room exists, so
 /// the number that makes them is not a detail.
 pub const WADE: f32 = 0.42;
-pub const WAKE: f32 = 2.6;
+
+/// How hard you push the water as you go through it, and how wide.
+///
+/// It was 2.6 over a radius of three bodies, every frame, which is eighty times
+/// what the idle stirring puts in and more than the damping can take out: two
+/// seconds of wading and the surface was half a unit off still, which is a wall
+/// of streaks from inside it. A wake is body sized and it is a push, not a
+/// shove.
+pub const WAKE: f32 = 0.3;
+pub const WAKE_WIDE: f32 = 0.6;
+
+/// The most of it there can be, per second rather than per frame.
+///
+/// Per frame it was, and per frame is a cap that is not a cap: twice the frame
+/// rate is twice the pushes and so twice the energy, and the pool on a machine
+/// drawing at a hundred and twenty was taking in double what it was tested
+/// with. It blew up on Jake's screen and not on mine, which is the whole
+/// signature of a number that should have been a rate.
+///
+/// There is a cap at all because stepping up carries you most of a stride in
+/// one frame, per `walk`, and `went` is a distance over a time: on that frame
+/// it reads as thirty units a second. Without this the first step out of the
+/// pool is also the biggest wave in it.
+pub const WAKE_MOST: f32 = 1.2;
 
 /// How often the tub blows, and how hard. Not simulated: a hot tub bubbles, and
 /// a push in the middle of it is what that looks like from outside.
@@ -2694,6 +2717,157 @@ mod tests {
             "the ring spreads without fading"
         );
         assert!(splashed(0.0) > 0.0, "a splash nobody can see");
+    }
+
+    /// Spec 0008: the pool does not run away with itself.
+    ///
+    /// Left open for a couple of hours the surface blew up into streaks the
+    /// height of the room. The stirring puts energy in every fifth of a second
+    /// for as long as the game is running, and damping is the only thing taking
+    /// it out: if the two do not balance, the pool is a slow bomb.
+    #[test]
+    fn the_pool_settles_rather_than_building_up() {
+        let (middle, size, deep) = pool(REACHES);
+        let mut water = blitzkit::water::Water::new(middle, size, deep, CELLS);
+        water.damping = SETTLES;
+        water.speed = RUNS;
+
+        let step = 1.0 / 60.0;
+        let mut since = 0.0f32;
+        let mut owed = 0.0f32;
+        let mut most = 0.0f32;
+
+        // ten minutes of standing there watching it
+        for _ in 0..36_000 {
+            since += step;
+            owed += step;
+            if owed >= STIRS {
+                owed -= STIRS;
+                water.push(stirred(middle, size, since), STIR_WIDE, STIRRED);
+            }
+            water.step(step);
+
+            let high = water
+                .surface()
+                .vertices
+                .iter()
+                .fold(0.0f32, |most, v| most.max((v.position[1] - middle.y).abs()));
+            most = most.max(high);
+
+            assert!(
+                high < 0.5,
+                "after {:.0} seconds the surface reached {} off still",
+                since,
+                high
+            );
+        }
+
+        assert!(most > 0.001, "the pool never moved at all");
+    }
+
+    /// Spec 0008: nor does it when somebody is wading about in it.
+    ///
+    /// The stirring is a tenth of what walking puts in. The first two of these
+    /// tests ran the pool for ten minutes with nobody in it, which is why they
+    /// both passed while the thing Jake was looking at was a wall of streaks:
+    /// he was standing in the water.
+    #[test]
+    fn the_pool_settles_with_somebody_in_it() {
+        let (middle, size, deep) = pool(REACHES);
+        let mut water = blitzkit::water::Water::new(middle, size, deep, CELLS);
+        water.damping = SETTLES;
+        water.speed = RUNS;
+
+        let pace = crate::SPEED * WADE;
+
+        // and at every frame rate anybody's screen runs at, because the wake
+        // goes in once a frame: a cap per frame is not a cap at all, and the
+        // pool blew up on a hundred and twenty where sixty was fine.
+        for rate in [30.0f32, 60.0, 120.0, 240.0] {
+            settles_at(rate, pace);
+        }
+    }
+
+    /// Walks somebody up and down the pool for five minutes at a given frame
+    /// rate, and says it stayed a pool.
+    fn settles_at(rate: f32, pace: f32) {
+        let (middle, size, deep) = pool(REACHES);
+        let mut water = blitzkit::water::Water::new(middle, size, deep, CELLS);
+        water.damping = SETTLES;
+        water.speed = RUNS;
+
+        let step = 1.0 / rate;
+        let mut since = 0.0f32;
+        let mut owed = 0.0f32;
+
+        for _ in 0..(300.0 * rate) as u32 {
+            since += step;
+            owed += step;
+            if owed >= STIRS {
+                owed -= STIRS;
+                water.push(stirred(middle, size, since), STIR_WIDE, STIRRED);
+            }
+
+            let at = vec3(
+                middle.x + (since * 0.7).sin() * size.x * 0.4,
+                middle.y,
+                middle.z + (since * 0.5).cos() * size.y * 0.4,
+            );
+            water.push(at, WAKE_WIDE, (pace * WAKE).min(WAKE_MOST) * step);
+            water.step(step);
+
+            let high = water
+                .surface()
+                .vertices
+                .iter()
+                .fold(0.0f32, |most, v| most.max((v.position[1] - middle.y).abs()));
+
+            assert!(
+                high < 0.5,
+                "at {} frames a second, after {:.0} seconds of wading the surface reached {} off still",
+                rate,
+                since,
+                high
+            );
+        }
+    }
+
+    /// Spec 0008: and neither does the tub.
+    ///
+    /// Smaller water and a bigger push: the blower goes every third of a second
+    /// into two units across, where the pool's stir is a tenth the size into
+    /// eight. Whichever of them ran away with itself, the way to find out is to
+    /// run them both for longer than anybody would stand there.
+    #[test]
+    fn the_tub_settles_rather_than_building_up() {
+        let (surface, wide, deep) = tub(REACHES);
+        let mut water =
+            blitzkit::water::Water::new(surface, glam::vec2(wide, wide), deep, TUB_CELLS);
+
+        let step = 1.0 / 60.0;
+        let mut owed = 0.0f32;
+        let mut since = 0.0f32;
+
+        for _ in 0..36_000 {
+            since += step;
+            owed += step;
+            if owed >= BLOWS {
+                owed -= BLOWS;
+                water.push(water.at, TUB * 0.35, BLOWN);
+            }
+            water.step(step);
+
+            let high = water.surface().vertices.iter().fold(0.0f32, |most, v| {
+                most.max((v.position[1] - surface.y).abs())
+            });
+
+            assert!(
+                high < 0.4,
+                "after {:.0} seconds the tub reached {} off still",
+                since,
+                high
+            );
+        }
     }
 
     /// Spec 0008: water slows you.

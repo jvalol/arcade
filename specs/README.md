@@ -16,6 +16,7 @@ not a priority, and it never changes once a spec exists.
 | [0006](0006-a-nook-for-toys.md) | A third kind of thing in the room: toys on benches, in a nook |
 | [0007](0007-a-door-in-the-bookcase.md) | A book that opens a stair down to a cellar, and what it takes to walk it |
 | [0008](0008-a-spa-off-the-cellar.md) | A pool you can walk into, a hot tub and a sauna, behind the cellar |
+| [0009](0009-a-building-you-can-hear.md) | Footsteps, splashes and the note each room has |
 
 ---
 

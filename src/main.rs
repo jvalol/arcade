@@ -11,6 +11,7 @@ mod globe;
 mod gyro;
 mod metronome;
 mod neon;
+mod noise;
 mod room;
 mod sign;
 mod spa;
@@ -27,7 +28,7 @@ use blitzkit::mouse::{MouseButton, MouseInput};
 use blitzkit::renderer::render_text::{RenderText, TextRenderer};
 use blitzkit::renderer::scene::{MeshId, Scene, TextureId};
 use blitzkit::renderer::Renderer;
-use blitzkit::sound::SoundSystem;
+use blitzkit::sound::{Samples, SoundSystem};
 use blitzkit::texture::TextureData;
 use blitzkit::{start, Game};
 use cabinet::{Cabinet, Playing};
@@ -147,6 +148,24 @@ struct Arcade {
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
     stonework: Option<TextureId>,
+    /// Everything the building makes a sound with, worked out once and played
+    /// as often as it likes. Spec 0009.
+    steps: Vec<(noise::Underfoot, Vec<Samples>)>,
+    /// Which of each floor's steps comes next, so the same one is never heard
+    /// twice running.
+    stepped: usize,
+    splashes: Vec<Samples>,
+    airs: Vec<(Vec3, Samples)>,
+    /// How far you have walked since the last footstep, and how long the note
+    /// playing now has left.
+    paced: f32,
+    aired: f32,
+    /// Whether you were in the water last frame, so going in can be heard.
+    was_wading: bool,
+    /// A knock for the chain hitting the wall, and how much of it was standing
+    /// last frame, so a brick coming off can be heard.
+    knock: Option<Samples>,
+    was_standing: usize,
     /// The glazed tile the basin is lined with, and a quad per face with its
     /// own count of tiles on it. Spec 0008.
     tiled: Option<TextureId>,
@@ -242,6 +261,15 @@ impl Arcade {
                 tub_deep,
                 spa::TUB_CELLS,
             ),
+            steps: Vec::new(),
+            stepped: 0,
+            splashes: Vec::new(),
+            airs: Vec::new(),
+            paced: 0.0,
+            aired: 0.0,
+            was_wading: false,
+            knock: None,
+            was_standing: 0,
             pool_mesh: None,
             tub_mesh: None,
             blew: 0.0,
@@ -577,6 +605,37 @@ impl Arcade {
         ]
     }
 
+    /// What you are standing on, which decides which footstep you hear.
+    ///
+    /// Taken from where you are rather than from a flag somebody sets on the
+    /// way through a door, because a flag is a second account of where you are
+    /// and this building has learned what two accounts of one thing do.
+    fn underfoot(&self) -> noise::Underfoot {
+        if spa::wading(self.room.reaches, self.at) {
+            return noise::Underfoot::Water;
+        }
+
+        let floor = -cellar::DOWN;
+        if self.at.y < floor + 0.5 {
+            // the baths and the cellar are both down here, and the baths are
+            // the far side of the cellar's own wall
+            if self.at.z > cellar::opening(self.room.reaches) + cellar::SPAN * 0.5 {
+                return noise::Underfoot::Tile;
+            }
+
+            return noise::Underfoot::Stone;
+        }
+        if self.at.y < -0.1 {
+            // on the stair, which is stone whatever is at the bottom of it
+            return noise::Underfoot::Stone;
+        }
+        if self.at.x < -(room::WALL + room::CABINET.x) {
+            return noise::Underfoot::Boards;
+        }
+
+        noise::Underfoot::Carpet
+    }
+
     /// Where you are looking from, which is your eye and not your feet.
     fn looking_from(&self) -> Vec3 {
         vec3(self.at.x, self.eye + EYE, self.at.z)
@@ -863,6 +922,50 @@ impl Game for Arcade {
         if staged() {
             self.gyro.set_going();
         }
+
+        // every sound the building makes, worked out once. Spec 0009: a
+        // footstep that made its own samples on every step would be a game that
+        // allocated on every step.
+        self.steps = [
+            noise::Underfoot::Carpet,
+            noise::Underfoot::Boards,
+            noise::Underfoot::Stone,
+            noise::Underfoot::Tile,
+            noise::Underfoot::Water,
+        ]
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(n, on)| {
+            // several of each, because hearing one sample every stride is what
+            // made the first of these sound like a machine
+            let steps = (0..noise::STEPS)
+                .map(|m| noise::step(on, 0x57E9 + (n * noise::STEPS + m) as u32 * 7919))
+                .collect();
+
+            (on, steps)
+        })
+        .collect();
+        self.splashes = (0..4)
+            .map(|n| noise::splash(2.0 + n as f32 * 1.2, 0x51A5 + n * 7919))
+            .collect();
+
+        // and the note each room has, each from where it is
+        let fire = cellar::hearth(self.room.reaches);
+        let (tub, _, _) = spa::tub(self.room.reaches);
+        let (spout, _) = spa::stream(self.room.reaches);
+        let sauna = spa::sauna(self.room.reaches).center();
+
+        self.airs = vec![
+            (fire, noise::fire(0xF12E)),
+            (spout, noise::trickle(0x7121)),
+            (tub, noise::bubble(0xB0B1)),
+            (sauna, noise::steam(0x57EA)),
+            (vec3(0.0, crate::EYE, 0.0), noise::hum(0x4040)),
+        ];
+        self.aired = 0.0;
+        self.knock = Some(noise::clack(0xC1AC));
+        self.was_standing = self.wrecker.standing();
     }
 
     fn resized(&mut self, window_size: (f32, f32)) {
@@ -874,7 +977,7 @@ impl Game for Arcade {
         dt: f32,
         _geometry: &mut Geometry,
         text: &mut TextRenderer,
-        _sound: &SoundSystem,
+        sound: &SoundSystem,
     ) {
         self.since += dt;
 
@@ -965,13 +1068,88 @@ impl Game for Arcade {
         self.at = at;
         self.falling = falling;
 
+        // the ears, which go where your eye is and point where you look, so
+        // everything that comes from somewhere swings as you turn. Spec 0019 of
+        // the engine.
+        sound.set_listener(self.looking_from(), self.facing(), Vec3::Y);
+
+        // a footstep every stride, paced by how far you have actually walked
+        // rather than by a clock, so slowing down slows them and standing still
+        // is silence. Spec 0009.
+        self.paced += went * dt;
+        if self.paced >= noise::STRIDE {
+            self.paced -= noise::STRIDE;
+
+            let on = self.underfoot();
+            self.stepped = self.stepped.wrapping_add(1);
+
+            if let Some((_, steps)) = self.steps.iter().find(|(floor, _)| *floor == on) {
+                if let Some(step) = steps.get(self.stepped % steps.len().max(1)) {
+                    sound.play(step);
+                }
+            }
+        }
+
+        // a knock for every brick the ball takes off the wall, from the bench
+        // it happens on. The one thing in this building that hits anything.
+        let standing = self.wrecker.standing();
+        if standing < self.was_standing {
+            if let (Some(knock), Some(bench)) = (
+                self.knock.as_ref(),
+                self.room
+                    .benches
+                    .iter()
+                    .find(|bench| bench.name == wrecker::NAME),
+            ) {
+                sound.play_at(knock, (bench.at + Vec3::Y * bench.size.y).to_array());
+            }
+        }
+        self.was_standing = standing;
+
+        // and a splash the moment you go in, as big as you went in
+        if wading && !self.was_wading {
+            let hard = (went * 0.5 + self.falling).clamp(0.0, 6.0);
+            let which = ((hard / 6.0) * (self.splashes.len() - 1) as f32) as usize;
+
+            if let Some(splash) = self.splashes.get(which) {
+                sound.play_at(splash, self.at.to_array());
+            }
+        }
+        self.was_wading = wading;
+
+        // and the note each room has, each from where it is, queued again as it
+        // runs out. Nothing here loops: a sound that goes on for ever is a
+        // sound a game queues again, per spec 0044.
+        // the note of the room you are in, one at a time. The engine plays what
+        // it is given one after another, per spec 0044, and that is not a
+        // mixer: four notes a second each a second long is a queue growing by
+        // three seconds every second, which after two hours was a gigabyte of
+        // audio waiting its turn and a machine too busy to draw.
+        self.aired -= dt;
+        if self.aired <= 0.0 {
+            let ear = self.looking_from();
+            let places: Vec<Vec3> = self.airs.iter().map(|(at, _)| *at).collect();
+
+            let heard = noise::nearest(ear, &places);
+            self.aired = match heard.and_then(|n| self.airs.get(n)) {
+                Some((at, air)) => {
+                    sound.play_at(air, at.to_array());
+
+                    air.seconds()
+                }
+                // nothing within earshot, so ask again shortly rather than
+                // every frame
+                None => noise::NOTE,
+            };
+        }
+
         // and the water knows you are in it. The ripples following you about
         // are the thing this room was built for.
         if wading && went > 0.05 {
             self.pool.push(
                 vec3(self.at.x, self.pool.at.y, self.at.z),
-                RADIUS * 3.0,
-                went * spa::WAKE * dt,
+                spa::WAKE_WIDE,
+                (went * spa::WAKE).min(spa::WAKE_MOST) * dt,
             );
         }
 
