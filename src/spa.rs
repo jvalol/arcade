@@ -102,15 +102,28 @@ pub const TUB_CELLS: u32 = 24;
 /// the number that makes them is not a detail.
 pub const WADE: f32 = 0.42;
 
-/// How hard you push the water as you go through it, and how wide.
+/// How hard you push the water as you go through it.
 ///
 /// It was 2.6 over a radius of three bodies, every frame, which is eighty times
 /// what the idle stirring puts in and more than the damping can take out: two
 /// seconds of wading and the surface was half a unit off still, which is a wall
 /// of streaks from inside it. A wake is body sized and it is a push, not a
 /// shove.
-pub const WAKE: f32 = 0.3;
-pub const WAKE_WIDE: f32 = 0.6;
+///
+/// It was then 0.3, which is a push you cannot see: two seconds of wading left
+/// the surface a hundredth off still in a pool a unit deep, where one ball
+/// dropped into `ripple` leaves a seventh of its depth. The room was built for
+/// the ripples following you about and they were below the threshold of being
+/// there at all. At 2.0 five minutes of walking up and down holds a seventh of
+/// the depth, which is the same share of the pool that a ball makes of its own,
+/// and a third of what reads as a wall of streaks.
+///
+/// How wide is not a number here. A wake is a ring round your own body, inner
+/// radius yours and outer radius the engine's `SPLASH` times it, because the
+/// water you are standing in is where you are: a disc centred on you holds down
+/// the one patch of surface you can never see move, and spends the wake doing
+/// it. The pool read as a sheet with a dent following it about.
+pub const WAKE: f32 = 2.0;
 
 /// The most of it there can be, per second rather than per frame.
 ///
@@ -124,10 +137,24 @@ pub const WAKE_WIDE: f32 = 0.6;
 /// one frame, per `walk`, and `went` is a distance over a time: on that frame
 /// it reads as thirty units a second. Without this the first step out of the
 /// pool is also the biggest wave in it.
-pub const WAKE_MOST: f32 = 1.2;
+///
+/// A multiple of the wading rate and not a number of its own, which is about
+/// two and a half times `SPEED · WADE · WAKE`. Set as an absolute it sat just
+/// above ordinary wading, so raising `WAKE` moved nothing but the spike: the
+/// cap was doing the steering and the number meant to do it was not.
+pub const WAKE_MOST: f32 = 8.8;
 
 /// How often the tub blows, and how hard. Not simulated: a hot tub bubbles, and
 /// a push in the middle of it is what that looks like from outside.
+///
+/// Upwards, which is to say a negative push. A jet of bubbles is air on its way
+/// out and it carries the water with it, so the middle of a hot tub stands
+/// above its own rim and spills. Pushed down instead, the tub dented on the
+/// beat like something heavy landing in it, every three and a third seconds,
+/// for ever.
+///
+/// A disc and not a ring, unlike the wake: there is nothing sitting in the
+/// middle of a plume.
 pub const BLOWS: f32 = 0.35;
 pub const BLOWN: f32 = 0.5;
 
@@ -1563,6 +1590,21 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 mod tests {
     use super::*;
 
+    /// How far off still a pool's own surface is.
+    ///
+    /// Its own surface and not its mesh. The mesh carries a skirt hanging from
+    /// the rim down to the basin floor, per spec 0043, so asking the whole of
+    /// it how far it is off still answers with the depth of the pool and every
+    /// one of these fails the moment it is still.
+    fn off_still(water: &blitzkit::water::Water) -> f32 {
+        let (across, along) = water.nodes();
+        let level = water.at.y;
+
+        water.surface().vertices[..across * along]
+            .iter()
+            .fold(0.0f32, |most, v| most.max((v.position[1] - level).abs()))
+    }
+
     /// A reaches the room is laid out for, which is what the arcade runs with.
     const REACHES: f32 = 8.3;
 
@@ -2747,11 +2789,7 @@ mod tests {
             }
             water.step(step);
 
-            let high = water
-                .surface()
-                .vertices
-                .iter()
-                .fold(0.0f32, |most, v| most.max((v.position[1] - middle.y).abs()));
+            let high = off_still(&water);
             most = most.max(high);
 
             assert!(
@@ -2813,14 +2851,15 @@ mod tests {
                 middle.y,
                 middle.z + (since * 0.5).cos() * size.y * 0.4,
             );
-            water.push(at, WAKE_WIDE, (pace * WAKE).min(WAKE_MOST) * step);
+            water.ring(
+                at,
+                crate::RADIUS,
+                crate::RADIUS * blitzkit::water::SPLASH,
+                (pace * WAKE).min(WAKE_MOST) * step,
+            );
             water.step(step);
 
-            let high = water
-                .surface()
-                .vertices
-                .iter()
-                .fold(0.0f32, |most, v| most.max((v.position[1] - middle.y).abs()));
+            let high = off_still(&water);
 
             assert!(
                 high < 0.5,
@@ -2853,13 +2892,11 @@ mod tests {
             owed += step;
             if owed >= BLOWS {
                 owed -= BLOWS;
-                water.push(water.at, TUB * 0.35, BLOWN);
+                water.push(water.at, TUB * 0.35, -BLOWN);
             }
             water.step(step);
 
-            let high = water.surface().vertices.iter().fold(0.0f32, |most, v| {
-                most.max((v.position[1] - surface.y).abs())
-            });
+            let high = off_still(&water);
 
             assert!(
                 high < 0.4,

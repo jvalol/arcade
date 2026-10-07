@@ -37,6 +37,13 @@ so walking in is walking down. In the water you are slowed, your eye drops with
 the floor under you, and you push the surface as you go: the ripples follow you
 about, which is the whole of what this room is for.
 
+The wake is a ring round your own body and not a disc under it, per spec 0043's
+`ring`. The water you are standing in is where you are, so a disc centred on you
+spends the wake holding down the one patch of surface you can never watch move.
+It is sized from your own radius rather than from a number of its own, and it is
+strong enough to see: the measure is the share of the pool's depth a ball makes
+in the engine's own example, which is about a seventh.
+
 Out of your depth is not swimming. The basin is shallow enough to stand in
 everywhere, because a spec that says swimming is a spec about a camera and a
 stroke and a surface you can be under, and this one is about water.
@@ -44,8 +51,13 @@ stroke and a surface you can be under, and this one is about water.
 **The hot tub** is square, cedar, raised above the floor rather than sunk into
 it, and its own smaller body of water. Square because a heightfield is a
 rectangle, and a round shell round one is a lie at four corners: either the
-water runs out through the staves or a rectangle of water floats inside the tub. It is bubbling, which is a push in the middle of
-it every so often rather than anything simulated, and it steams.
+water runs out through the staves or a rectangle of water floats inside the tub.
+It is bubbling, which is a push in the middle of it every so often rather than
+anything simulated, and it steams.
+
+The bubbling lifts. A jet is air on its way out and it carries water with it, so
+the middle of a hot tub stands above its own rim. A disc and not a ring, unlike
+the wake, because nothing sits in the middle of a plume.
 
 **The sauna** is timber: a box in the corner with a glass door, two tiers of
 bench inside, and a stove. The door is a real door, hinged on one edge of the

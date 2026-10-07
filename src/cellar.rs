@@ -452,11 +452,16 @@ pub fn bottle_mesh() -> blitzkit::mesh::MeshData {
 /// Seeded off where it stands, so a rack is mixed and stays mixed: a shelf
 /// restocked every frame is a shelf that boils, which the nook's books already
 /// taught this building once.
+///
+/// Every step of the mixing wraps. Two of them did not, and a multiply that
+/// overflows is a panic in a debug build and silence in a release one: the
+/// second bottle on any shelf took the whole cellar down, and nothing caught it
+/// because nothing asked this function for a second bottle.
 pub fn glass(rack: usize, row: usize, n: usize) -> usize {
     let mut roll = (rack as u32)
         .wrapping_mul(2_654_435_761)
-        .wrapping_add(row as u32 * 40_503)
-        .wrapping_add(n as u32 * 2_246_822_519)
+        .wrapping_add((row as u32).wrapping_mul(40_503))
+        .wrapping_add((n as u32).wrapping_mul(2_246_822_519))
         | 1;
     roll ^= roll << 13;
     roll ^= roll >> 17;
@@ -1237,6 +1242,37 @@ fn shell(reaches: f32) -> Vec<Aabb> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0007: every bottle a cellar holds can be asked which glass it is.
+    ///
+    /// The one test this function wanted. It mixes with a wrapping multiply and
+    /// two steps of it were not wrapping, so the second bottle on a shelf
+    /// panicked in debug and quietly gave a different cellar in release. No
+    /// test asked for a second bottle, so the gate stayed green and the room
+    /// died on sight.
+    #[test]
+    fn every_bottle_on_every_shelf_has_a_glass() {
+        let (rows, along) = BOTTLES;
+
+        for rack in 0..racks(8.3).len() {
+            for row in 0..rows {
+                for n in 0..along {
+                    let _ = glass(rack, row, n);
+                }
+            }
+        }
+
+        // and at the sizes the drawing asks for, which are not the loop's
+        for n in 0..along {
+            let _ = glass(n * 31, n, n * 7);
+        }
+
+        assert_ne!(
+            glass(0, 0, 0),
+            glass(0, 0, 1),
+            "two bottles side by side are the same glass"
+        );
+    }
 
     /// Spec 0007: the table has six pockets, at the corners and halfway down
     /// each long side.

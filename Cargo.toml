@@ -13,3 +13,19 @@ glam = "0.33"
 # The arcade only works inside the project checkout anyway, since it runs the
 # games' own binaries, so a path here is not the exception it would be in a game.
 blitzkit-shapes = { path = "../blitzkit/shapes" }
+
+# Everything the arcade depends on is optimised even in a debug build, and the
+# arcade itself is not.
+#
+# The room is a physics toy on top of an engine, and debug Rust is roughly
+# seventy times slower in a tight numeric loop. The cradle alone runs 240 steps
+# a second at 48 solver passes each, which came to 25 to 33 ms a frame: a debug
+# `cargo run` drew at 27 and stuttered in the picture and the sound, where the
+# release build drew at 120. Worse, it feeds on itself, because a frame that
+# takes longer owes more substeps than the frame before it.
+#
+# This leaves the arcade's own code unoptimised, so it still stops where you ask
+# it to and still panics on an overflow rather than wrapping quietly. The cellar
+# was caught that way the same afternoon.
+[profile.dev.package."*"]
+opt-level = 3

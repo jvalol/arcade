@@ -103,6 +103,31 @@ impl Playing {
             Err(_) => false,
         }
     }
+
+    /// Stops the one that is up, if there is one.
+    fn stop(&mut self) {
+        if let Some((_, mut child)) = self.running.take() {
+            let _ = child.kill();
+            // and reaped, so what is left is not a zombie
+            let _ = child.wait();
+        }
+    }
+}
+
+/// The hall shuts the game it opened.
+///
+/// A `Child` is not killed when it is dropped; the standard library says so and
+/// means it. So quitting the arcade left whatever you had started running with
+/// nothing on screen to say so, and a game drawing as fast as it can is a whole
+/// core gone. The next arcade stuttered in the picture and in the sound, and
+/// the cause was the last one.
+///
+/// The hall owns what it opened. Walk away from a cabinet and the game it ran
+/// goes with it, the same as switching a machine off.
+impl Drop for Playing {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 #[cfg(test)]
@@ -145,6 +170,37 @@ mod tests {
         // and a cabinet cannot start one either while that is up
         let anything = Cabinet::found("sh", Path::new("/bin"));
         assert!(!playing.start(&anything));
+    }
+
+    /// Spec 0001: and the hall shuts it on the way out.
+    ///
+    /// A child outliving its parent is the default and not an accident, so this
+    /// asks the system whether the process is still there rather than asking
+    /// the struct that just dropped it.
+    #[test]
+    fn quitting_the_hall_stops_the_game() {
+        let mut playing = Playing::new();
+        assert!(playing.run("long", a_long_one()), "it would not start one");
+
+        let pid = playing
+            .running
+            .as_ref()
+            .map(|(_, child)| child.id())
+            .expect("something to have been started");
+
+        drop(playing);
+
+        let still = std::process::Command::new("/bin/ps")
+            .arg("-p")
+            .arg(pid.to_string())
+            .output()
+            .expect("ps to run");
+
+        assert!(
+            !String::from_utf8_lossy(&still.stdout).contains(&pid.to_string()),
+            "the game outlived the hall: {} is still up",
+            pid
+        );
     }
 
     /// And when the one that was up quits, the room is free again.

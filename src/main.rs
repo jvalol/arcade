@@ -1146,9 +1146,10 @@ impl Game for Arcade {
         // and the water knows you are in it. The ripples following you about
         // are the thing this room was built for.
         if wading && went > 0.05 {
-            self.pool.push(
+            self.pool.ring(
                 vec3(self.at.x, self.pool.at.y, self.at.z),
-                spa::WAKE_WIDE,
+                RADIUS,
+                RADIUS * blitzkit::water::SPLASH,
                 (went * spa::WAKE).min(spa::WAKE_MOST) * dt,
             );
         }
@@ -1158,7 +1159,7 @@ impl Game for Arcade {
         self.blew += dt;
         if self.blew >= spa::BLOWS {
             self.blew -= spa::BLOWS;
-            self.tub.push(self.tub.at, spa::TUB * 0.35, spa::BLOWN);
+            self.tub.push(self.tub.at, spa::TUB * 0.35, -spa::BLOWN);
         }
 
         // and the pool is stirred by nothing in particular, because perfectly

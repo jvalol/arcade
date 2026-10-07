@@ -45,6 +45,13 @@ middle of the screen, so looking at a cabinet is pointing at it.
 not linked, and not built into this: each still runs on its own from its own
 folder exactly as before, and the arcade runs the same binary a person would.
 
+The hall owns what it opened, and shuts it on the way out. A spawned process
+outliving its parent is the default rather than an accident, so quitting the
+arcade left the game you had started running with nothing on screen to say so,
+taking a core to draw a window nobody was looking at. What that cost was the
+next arcade: it stuttered in the picture and in the sound, and the cause was the
+one before it.
+
 **One at a time.** While a game is running the arcade starts nothing else. The
 room keeps drawing behind it, so walking out of a game puts you back where you
 were standing.
@@ -66,6 +73,7 @@ guessing at paths or being told where the project is.
 - Walking into a cabinet or a wall stops you. — `room::tests::you_cannot_walk_through_anything`
 - A game that is not built is a cabinet that will not start. — `cabinet::tests::one_that_is_not_built_will_not_start`
 - Only one game runs at a time. — `cabinet::tests::only_one_runs_at_a_time`
+- Quitting the hall stops the game it started. — `cabinet::tests::quitting_the_hall_stops_the_game`
 - And the room is free again once that one quits. — `cabinet::tests::it_is_free_again_once_that_one_quits`
 
 ### Verified by hand
