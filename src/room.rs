@@ -5,6 +5,7 @@
 
 use crate::cabinet::Cabinet;
 use crate::cellar;
+use crate::garden;
 use blitzkit::collision::Aabb;
 use blitzkit::mesh::{MeshData, Vertex};
 use glam::{vec3, Vec3};
@@ -566,9 +567,17 @@ impl Room {
             // the left wall, which backs the cabinets and closes the nook's
             // long side both. It starts past the last cabinet, and the gap it
             // leaves there is the way in.
+            //
+            // In three pieces, because the garden is through it: spec 0010 cuts
+            // an opening in the bare stretch past the last cabinet, and
+            // `garden::way` is the only place that says where.
             Aabb::from_center_size(
-                vec3(-side, TALL * 0.5, (reaches + door) * 0.5),
-                vec3(thick, TALL, reaches - door),
+                vec3(-side, TALL * 0.5, (garden::way(reaches).0 + door) * 0.5),
+                vec3(thick, TALL, garden::way(reaches).0 - door),
+            ),
+            Aabb::from_center_size(
+                vec3(-side, TALL * 0.5, (reaches + garden::way(reaches).1) * 0.5),
+                vec3(thick, TALL, reaches - garden::way(reaches).1),
             ),
             // the nook's back, in three pieces round the way down. Spec 0007:
             // one of the bookcases along it swings, and behind it the wall is
@@ -644,14 +653,34 @@ impl Room {
     ///
     /// Its top is at nought, which is where everything else in the room already
     /// sits.
-    pub fn floor(&self) -> Aabb {
+    pub fn floors(&self) -> [Aabb; 2] {
         let side = WALL + CABINET.x;
-        let across = side * 2.0 + NOOK_DEEP;
+        // where the nook stops, which is where the floor under it stops too
+        let shut = -self.reaches + NOOK_SPAN + THICK * 0.5;
 
-        Aabb::from_center_size(
-            vec3(-NOOK_DEEP * 0.5, -THICK * 0.5, 0.0),
-            vec3(across, THICK, self.reaches * 2.0),
-        )
+        [
+            // the hall, end to end
+            Aabb::from_center_size(
+                vec3(0.0, -THICK * 0.5, 0.0),
+                vec3(side * 2.0, THICK, self.reaches * 2.0),
+            ),
+            // and the nook, which is shorter.
+            //
+            // One slab covering both used to be simpler and was wrong in a way
+            // nothing could see until something was built out here: the nook
+            // ends at `shut` and the hall runs on past it, so the slab left a
+            // tongue of floor sticking out beyond the nook's end wall, outside
+            // every room in the building. Spec 0010 put a garden on that
+            // ground and found its own floor buried under the tongue.
+            Aabb::from_center_size(
+                vec3(
+                    -side - NOOK_DEEP * 0.5,
+                    -THICK * 0.5,
+                    (shut - self.reaches) * 0.5,
+                ),
+                vec3(NOOK_DEEP, THICK, shut + self.reaches),
+            ),
+        ]
     }
 
     /// The box a bench fills, which is what you cannot walk through and what
@@ -836,9 +865,10 @@ impl Room {
     /// which is a thing the room says you may pick up and turn.
     pub fn solid(&self) -> Vec<Aabb> {
         let mut out = self.walls.clone();
-        out.push(self.floor());
+        out.extend(self.floors());
         out.extend(crate::cellar::solid(self.reaches));
         out.extend(crate::spa::solid(self.reaches));
+        out.extend(crate::garden::solid(self.reaches));
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
         out.extend(
@@ -1218,14 +1248,15 @@ mod tests {
 
         let room = Room::of(some(12));
         let solid = room.solid();
-        // the walls, the floor, the way down, the spa, the cabinets, the
-        // benches, the plinths and the bookcases
+        // the walls, the floor, the way down, the spa, the garden, the
+        // cabinets, the benches, the plinths and the bookcases
         assert_eq!(
             solid.len(),
             room.walls.len()
-                + 1
+                + 2
                 + cellar::solid(room.reaches).len()
                 + crate::spa::solid(room.reaches).len()
+                + crate::garden::solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
@@ -2027,9 +2058,10 @@ mod tests {
         assert_eq!(
             solid.len(),
             room.walls.len()
-                + 1
+                + 2
                 + cellar::solid(room.reaches).len()
                 + crate::spa::solid(room.reaches).len()
+                + crate::garden::solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2

@@ -7,6 +7,7 @@ mod cascada;
 mod cellar;
 mod cradle;
 mod display;
+mod garden;
 mod globe;
 mod gyro;
 mod metronome;
@@ -148,6 +149,18 @@ struct Arcade {
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
     stonework: Option<TextureId>,
+    /// The garden's sky and the dome it is painted on, per spec 0010.
+    storm: Option<TextureId>,
+    dome: Option<MeshId>,
+    /// The gravel the garden is floored with, and the quad it is laid on.
+    gravel: Option<TextureId>,
+    ground: Vec<MeshId>,
+    /// The garden's water, its trees and its lanterns, per spec 0010.
+    pool_in_the_garden: blitzkit::water::Water,
+    pond_mesh: Option<MeshId>,
+    trunk: Option<MeshId>,
+    crown: Option<MeshId>,
+    lantern: Option<MeshId>,
     splashes: Vec<Samples>,
     airs: Vec<(Vec3, Samples)>,
     /// How long the note playing now has left.
@@ -239,7 +252,8 @@ impl Arcade {
         let spin = display::Spin::of(room.displays.len());
         let (cradle, ropes) = cradle::strung();
 
-        let (pool_at, pool_size, pool_deep) = spa::pool(room.reaches);
+        let reaches = room.reaches;
+        let (pool_at, pool_size, pool_deep) = spa::pool(reaches);
         let (tub_at, tub_wide, tub_deep) = spa::tub(room.reaches);
         let mut pool = blitzkit::water::Water::new(pool_at, pool_size, pool_deep, spa::CELLS);
         pool.damping = spa::SETTLES;
@@ -305,6 +319,22 @@ impl Arcade {
             afghan: None,
             grain: Vec::new(),
             stonework: None,
+            storm: None,
+            dome: None,
+            gravel: None,
+            ground: Vec::new(),
+            pool_in_the_garden: {
+                let (at, size, deep) = garden::pond(reaches);
+                let mut water = blitzkit::water::Water::new(at, size, deep, garden::POND_CELLS);
+                water.damping = garden::SETTLES;
+                water.speed = garden::RUNS;
+
+                water
+            },
+            pond_mesh: None,
+            trunk: None,
+            crown: None,
+            lantern: None,
             tiled: None,
             lining: Vec::new(),
             afghan_mesh: None,
@@ -731,6 +761,9 @@ impl Game for Arcade {
         // the water, written over rather than uploaded again. Spec 0042 of the
         // engine is what this is for: without it a surface that moves is a new
         // mesh every frame and a program that grows until it stops.
+        if let Some(mesh) = self.pond_mesh {
+            renderer.update_mesh(mesh, &self.pool_in_the_garden.surface());
+        }
         if let Some(mesh) = self.pool_mesh {
             renderer.update_mesh(mesh, &self.pool.surface());
         }
@@ -763,7 +796,16 @@ impl Game for Arcade {
         ));
 
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
-        self.floor = Some(renderer.add_mesh(&room::tiled_floor(carpet::TILES)));
+        // The carpet covers the aisle alone now, which is less than half the
+        // width of the quad it used to be, so its count comes down with it. The
+        // plain eight across a quad that narrow is a weave half the size it has
+        // always been in here, and the tile is meant to be the same thing on
+        // this floor whatever the room is doing.
+        let was = (room::WALL + room::CABINET.x) * 2.0 + room::NOOK_DEEP;
+        self.floor = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
+            carpet::TILES * (room::WALL + room::CABINET.x) * 2.0 / was,
+            carpet::TILES,
+        ))));
         self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
         self.carpet = Some(renderer.add_texture(&carpet::woven()));
         let (_, rug) = room::open_floor(self.room.reaches);
@@ -802,6 +844,19 @@ impl Game for Arcade {
             })
             .collect();
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
+        self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
+        self.dome = Some(renderer.add_mesh(&garden::dome_mesh()));
+        self.gravel = Some(renderer.add_texture(&garden::gravel(0x64A4)));
+        self.pond_mesh = Some(renderer.add_mesh(&self.pool_in_the_garden.surface()));
+        self.trunk = Some(renderer.add_mesh(&garden::trunk_mesh()));
+        self.crown = Some(renderer.add_mesh(&garden::crown_mesh()));
+        self.lantern = Some(renderer.add_mesh(&garden::lantern_mesh()));
+        // one mesh per bed, each with its own count, so a rake line is the
+        // same width whichever strip it crosses
+        self.ground = garden::beds(self.room.reaches)
+            .into_iter()
+            .map(|(_, size)| renderer.add_mesh(&room::tiled_plane(size / garden::RAKE)))
+            .collect();
         self.tiled = Some(renderer.add_texture(&carpet::tiled(carpet::TILE_SEED)));
 
         // a quad per face of the basin, each with its own count of tiles, so a
@@ -1105,6 +1160,7 @@ impl Game for Arcade {
 
         self.pool.step(dt);
         self.tub.step(dt);
+        self.pool_in_the_garden.step(dt);
 
         // the eye catching up with the feet. Nothing while you are on the
         // level, because then they are the same number.
@@ -1286,14 +1342,17 @@ impl Game for Arcade {
         scene.light.intensity = aim::SUN_STRENGTH;
         scene.light.ambient = aim::FILL;
 
-        // wide enough to reach under the nook as well as the aisle, and shifted
-        // to cover it. One quad rather than two: the weave's tile count is
-        // baked into the mesh's uvs, so a second quad of a different size would
-        // lay a carpet of a different scale beside the first.
-        let across = (room::WALL + room::CABINET.x) * 2.0 + room::NOOK_DEEP;
-        let along = self.room.reaches * 2.0;
-        let laid = Transform::at(vec3(-room::NOOK_DEEP * 0.5, 0.0, 0.0))
-            .with_scale(vec3(across, 1.0, along));
+        // the aisle's carpet, and only the aisle's. It used to be a rectangle
+        // wide enough for the nook as well, which was wasted twice over: the
+        // nook has boards of its own over every inch of its floor, and the
+        // corner of the rectangle the nook does not reach came out past the
+        // nook's end wall and lay on the garden's gravel.
+        let hall = self.room.floors()[0];
+        let laid = Transform::at(vec3(hall.center().x, 0.0, hall.center().z)).with_scale(vec3(
+            hall.size().x,
+            1.0,
+            hall.size().z,
+        ));
 
         match self.carpet {
             // matte. A low shininess is a specular highlight spread over the
@@ -1306,18 +1365,26 @@ impl Game for Arcade {
         // a ceiling, because the room opened onto nothing and a corridor with
         // no lid is a corridor you are standing outside of
         if let Some(ceiling) = self.ceiling_mesh {
-            // turned over, because a plane faces up and from underneath that is
-            // a back face, which the opaque pass culls
-            // shifted with the carpet, not centred on the aisle. It was wide
-            // enough to cover the nook and sitting a nook's depth away from it,
-            // so from inside the nook half the ceiling was open sky.
-            scene.push_colored(
-                ceiling,
-                &Transform::at(vec3(-room::NOOK_DEEP * 0.5, room::TALL, 0.0))
-                    .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
-                    .with_scale(vec3(across, 1.0, along)),
-                aim::CEILING,
-            );
+            // One quad per piece of floor, so the lid is the shape of the thing
+            // it is over. The floor is an L: the hall end to end, and the nook
+            // beside the near half of it. One rectangle covering both is bigger
+            // than that L by the corner they do not share, and that corner is
+            // outdoors. It hung over the garden three metres up, six by five of
+            // dark slate with the lanterns catching its underside, which from
+            // down there is a roof over a garden that has no building on it.
+            for slab in self.room.floors().iter() {
+                let (middle, size) = (slab.center(), slab.size());
+
+                // turned over, because a plane faces up and from underneath
+                // that is a back face, which the opaque pass culls
+                scene.push_colored(
+                    ceiling,
+                    &Transform::at(vec3(middle.x, room::TALL, middle.z))
+                        .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
+                        .with_scale(vec3(size.x, 1.0, size.z)),
+                    aim::CEILING,
+                );
+            }
         }
 
         for wall in self.room.walls.iter() {
@@ -1824,6 +1891,84 @@ impl Game for Arcade {
                     spa::Made::Cut => aim::SPA_CUT,
                 },
             );
+        }
+
+        // the garden, per spec 0010: its sky, its ground, and the walls round
+        // it. The sky first, because everything else in here is seen against
+        // it.
+        {
+            if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
+                scene.push_textured(
+                    dome,
+                    storm,
+                    &Transform::at(garden::dome_at(self.room.reaches))
+                        .with_rotation(glam::Quat::from_rotation_y(self.since * garden::WEATHER)),
+                    aim::SKY,
+                    900.0,
+                );
+            }
+
+            if let Some(gravel) = self.gravel {
+                for ((bed, size), mesh) in garden::beds(self.room.reaches)
+                    .into_iter()
+                    .zip(&self.ground)
+                {
+                    scene.push_textured(
+                        *mesh,
+                        gravel,
+                        &Transform::at(bed + Vec3::Y * 0.002).with_scale(vec3(size.x, 1.0, size.y)),
+                        aim::GRAVEL,
+                        aim::DULL,
+                    );
+                }
+            }
+
+            for (at, size) in garden::facing(self.room.reaches) {
+                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::GARDEN_WALL);
+            }
+
+            // the kerb round the water and the basin under it
+            for stone in garden::basin(self.room.reaches) {
+                scene.push_colored(
+                    cube,
+                    &Transform::at((stone.min + stone.max) * 0.5).with_scale(stone.max - stone.min),
+                    aim::GARDEN_STONE,
+                );
+            }
+
+            if let Some(mesh) = self.pond_mesh {
+                scene.push_colored(mesh, &Transform::at(Vec3::ZERO), aim::POND);
+            }
+
+            // the trees: a trunk, and the plates of foliage over it
+            if let (Some(trunk), Some(crown)) = (self.trunk, self.crown) {
+                for (stands, tall, wide) in garden::trees(self.room.reaches) {
+                    scene.push_colored(
+                        trunk,
+                        &Transform::at(stands).with_scale(vec3(1.0, tall, 1.0)),
+                        aim::BARK,
+                    );
+
+                    for (up, across, thick) in garden::crowns(tall, wide) {
+                        scene.push_colored(
+                            crown,
+                            &Transform::at(stands + Vec3::Y * up)
+                                .with_scale(vec3(across, thick, across)),
+                            aim::LEAF,
+                        );
+                    }
+                }
+            }
+
+            if let Some(lantern) = self.lantern {
+                for (stands, tall) in garden::lanterns(self.room.reaches) {
+                    scene.push_colored(
+                        lantern,
+                        &Transform::at(stands).with_scale(vec3(tall * 0.8, tall, tall * 0.8)),
+                        aim::GARDEN_STONE,
+                    );
+                }
+            }
         }
 
         // the basin's lining, which is where the pool's depth comes from. Not
@@ -3485,6 +3630,19 @@ impl Game for Arcade {
                 spa::LAMP_RANGE,
             ));
         }
+
+        // the garden's, which are inside its stone lanterns and nowhere else.
+        // Spec 0010.
+        for lamp in garden::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                aim::LANTERN_LIT,
+                garden::LAMP_LIT,
+                garden::LAMP_RANGE,
+            ));
+        }
+
         let stove = spa::stove_lamp(self.room.reaches);
         shades.push((
             eye.distance_squared(stove),

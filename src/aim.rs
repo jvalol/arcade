@@ -4,7 +4,7 @@
 //! Nothing here draws. Where the sight goes and how much brighter the lit
 //! cabinet is are arithmetic, so both can be checked without a window.
 
-use glam::{vec2, vec4, Vec2, Vec3, Vec4};
+use glam::{vec2, vec3, vec4, Vec2, Vec3, Vec4};
 
 /// The sight itself. A cross, because it is one glyph in the font the engine
 /// already loads and it has a middle.
@@ -508,6 +508,34 @@ pub const MATTE: f32 = 64.0;
 /// small and bright: a hot spot. On a cask that is varnish. Oak does not do
 /// that, and neither does stone.
 pub const DULL: f32 = 900.0;
+
+/// The garden, per spec 0010.
+///
+/// The sky is past one in every channel, which is how this engine says a thing
+/// is lit rather than being lit: a storm is the brightest surface in the
+/// building and nothing is shining on it. Neon is 3.2 and this is nearer to
+/// daylight coming through cloud, so it is gentler than that and still over
+/// the line.
+pub const SKY: Vec4 = vec4(1.35, 1.40, 1.52, 1.0);
+
+/// The gravel, which is pale stone, and the wall behind it, which is the
+/// weathered plaster of a garden wall rather than the hall's.
+pub const GRAVEL: Vec4 = vec4(0.78, 0.76, 0.70, 1.0);
+pub const GARDEN_WALL: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
+
+/// The pond, the stone round it, and what grows in the garden.
+///
+/// The water is darker than the baths', which is a lit pool with a tiled
+/// floor. This one is rainwater under a storm, and what it mostly does is
+/// hold the sky.
+pub const POND: Vec4 = vec4(0.16, 0.23, 0.26, 1.0);
+pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
+pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
+pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
+
+/// What burns in a stone lantern: a candle behind paper, which is warm against
+/// everything else out here being the colour of rain.
+pub const LANTERN_LIT: Vec3 = vec3(1.0, 0.82, 0.52);
 
 /// The lamp a cabinet's band throws into the room: how far it reaches, how
 /// bright it burns, and how much brighter the one you are standing at is.
