@@ -84,6 +84,19 @@ Here both are floors and neither can move, so the faces are buried instead.
 Written down because the first version of this spec said the opposite, in as
 many words, and the walk is what settled it.
 
+**The lap is walked and not drawn.** Drawn as well, it puts this floor's top
+and the hall's in one plane over five and a half metres by three, and two
+exposed faces in one plane fight. The patch they fight over is the floor you
+wake standing on: the carpet came back torn into horizontal bands with the
+dark of this room showing between them. Nothing under the hall's floor needs
+drawing at all, so the drawn slab stops where the hall's starts and only the
+collider runs back.
+
+Two numbers for one slab is the thing this building is otherwise careful not
+to do, so they come off one function with the lap as its argument. They are
+answering different questions: one is what you can see and one is what you can
+stand on.
+
 ## Acceptance criteria
 
 - You can walk through the wall where the gap is. — `behind::tests::you_can_walk_through_where_the_gap_is`
@@ -92,6 +105,7 @@ many words, and the walk is what settled it.
 - The space is closed but for that gap. — `behind::tests::nothing_else_gets_out`
 - It does not reach into the garden, the hall or the nook. — `behind::tests::it_keeps_out_of_every_other_room`
 - Its floor laps under the hall's rather than meeting it. — `behind::tests::the_floors_lap_rather_than_meet`
+- And the lap is walked and not drawn. — `behind::tests::nothing_drawn_lies_in_the_halls_floor`
 - No column stands in the way in. — `behind::tests::nothing_stands_in_the_way_in`
 - You can get back out. — `behind::tests::you_can_walk_back_out`
 

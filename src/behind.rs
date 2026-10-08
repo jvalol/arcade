@@ -118,6 +118,29 @@ pub enum Made {
     Column,
 }
 
+/// The floor, running `back` past the near wall and under the hall's own.
+///
+/// It is drawn with no lap and walked with one, and the two numbers are not
+/// the same because they are answering different questions.
+///
+/// Walked: two floors at one height that meet edge to edge put a vertical
+/// face at the surface you are walking on, and a body resting on a surface
+/// counts as touching it, so the walk through the gap stopped dead four
+/// centimetres short of the seam. Lapped a good way under, both faces are
+/// deep inside the other slab and there is no edge at the join at all.
+///
+/// Drawn: lapped, its top and the hall's are one plane over five metres by
+/// three, and the two fight. That patch is the floor you wake standing on,
+/// and it came back as the carpet torn into bands with the dark of this room
+/// showing between them. Nothing under the hall's floor needs drawing at all,
+/// so the drawn slab stops where the hall's starts.
+fn ground(middle: Vec3, back: f32) -> Aabb {
+    Aabb::from_center_size(
+        vec3(middle.x, -THICK * 0.5, middle.z - back * 0.5),
+        vec3(SPAN, THICK, DEEP + back),
+    )
+}
+
 /// Everything solid, and what each of it is: the floor, the lid, the four
 /// walls, and the columns.
 ///
@@ -132,22 +155,9 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     let (south, north) = (middle.z - half.y, middle.z + half.y);
 
     let mut out = vec![
-        // the floor, run back under the hall's rather than meeting it.
-        //
-        // Two floors at one height that meet edge to edge put a vertical face
-        // at the surface you are walking on, and a body resting on a surface
-        // counts as touching it: the walk through the gap stopped dead four
-        // centimetres short of the seam. Lapped a good way under, both faces
-        // are deep inside the other slab and there is no edge at the join at
-        // all. This is the same fault that jammed the walk across the garden
-        // where the baths below happened to end.
-        (
-            Aabb::from_center_size(
-                vec3(middle.x, -THICK * 0.5, middle.z - LAPS * 0.5),
-                vec3(SPAN, THICK, DEEP + LAPS),
-            ),
-            Made::Ground,
-        ),
+        // the floor, drawn only as far as the hall's own floor reaches and
+        // walked a good deal further. See `ground`.
+        (ground(middle, 0.0), Made::Ground),
         // and a lid, because a space with no top is a space you are standing
         // outside of, which is the fault the hall was fixed for in spec 0001
         (
@@ -203,9 +213,19 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     out
 }
 
-/// The same, as what you cannot walk through.
+/// The same, as what you cannot walk through, with the floor lapped back
+/// under the hall's. See `ground`.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
-    built(reaches).into_iter().map(|(box_, _)| box_).collect()
+    let middle = at(reaches);
+
+    built(reaches)
+        .into_iter()
+        .map(|(box_, made)| match made {
+            // the floor, which is the Ground that is not the lid
+            Made::Ground if box_.max.y <= 0.0 => ground(middle, LAPS),
+            _ => box_,
+        })
+        .collect()
 }
 
 /// How far apart the columns stand, how thick they are, and how far from the
@@ -495,12 +515,15 @@ mod tests {
     #[test]
     fn the_floors_lap_rather_than_meet() {
         let room = room();
-        let ours = built(room.reaches)
-            .into_iter()
-            .find(|(_, made)| *made == Made::Ground)
-            .map(|(box_, _)| box_)
-            .expect("a floor");
         let hall = room.floors()[0];
+        // the floor as walked, found under the foot of somebody who has just
+        // stepped through the gap, rather than by its place in the list
+        let (from, to) = way();
+        let foot = vec3((from + to) * 0.5, -0.05, hall.max.z - crate::RADIUS);
+        let ours = solid(room.reaches)
+            .into_iter()
+            .find(|box_| box_.contains_point(foot))
+            .expect("a floor under the way in");
 
         assert!(
             (ours.max.y - hall.max.y).abs() < 1e-4,
@@ -521,6 +544,35 @@ mod tests {
             ours.min.x <= hall.min.x + 1e-4,
             "this floor starts east of the hall's, so its near face is in the open"
         );
+    }
+
+    /// The lap is walked and not drawn.
+    ///
+    /// Drawn, it put this room's floor and the hall's in one plane over five
+    /// metres by three, and the patch they fight over is the floor you wake
+    /// standing on: the carpet came back torn into bands with the dark of
+    /// this room showing between them.
+    #[test]
+    fn nothing_drawn_lies_in_the_halls_floor() {
+        let room = room();
+
+        for hall in room.floors() {
+            for (box_, made) in built(room.reaches) {
+                let level = (box_.max.y - hall.max.y).abs() < 1e-4;
+                let over = box_.min.x < hall.max.x - 1e-4
+                    && box_.max.x > hall.min.x + 1e-4
+                    && box_.min.z < hall.max.z - 1e-4
+                    && box_.max.z > hall.min.z + 1e-4;
+
+                assert!(
+                    !(level && over),
+                    "a {made:?} drawn at {box_:?} tops out in the hall's floor plane and \
+                     laps over it by {:.2} by {:.2}",
+                    box_.max.x.min(hall.max.x) - box_.min.x.max(hall.min.x),
+                    box_.max.z.min(hall.max.z) - box_.min.z.max(hall.min.z),
+                );
+            }
+        }
     }
 
     /// Spec 0011: no column stands in the way in.
