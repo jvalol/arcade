@@ -22,7 +22,6 @@ mod walk;
 mod wrecker;
 
 use blitzkit::camera::Camera;
-use blitzkit::collision::Aabb;
 use blitzkit::geometry::Geometry;
 use blitzkit::keyboard::{KeyboardInput, KeyboardKey, KeyboardKeyState};
 use blitzkit::mesh::{MeshData, Transform};
@@ -830,21 +829,12 @@ impl Game for Arcade {
     }
 
     fn load(&mut self, renderer: &mut Renderer) {
-        // The sun's map covers the room and no more. The default is forty
-        // across, and this room is five by fifteen, so a texel was 0.02 wide
-        // and the shapes on the far wall cast smears rather than shadows: the
-        // Sierpinski tetrahedron's finest face is 0.03 across, under two
-        // texels.
-        // the nook included. It was the aisle only, so the nook stood outside
-        // the sun's map entirely and nothing in it cast anything.
-        renderer.set_scene_bounds(Aabb::from_center_size(
-            vec3(-room::NOOK_DEEP * 0.5, room::TALL * 0.5, 0.0),
-            vec3(
-                (room::WALL + room::CABINET.x) * 2.0 + room::NOOK_DEEP,
-                room::TALL,
-                self.room.reaches * 2.0,
-            ),
-        ));
+        // The sun's map covers the building, every room of it, because
+        // outside the map the sun comes through the roof. It was fitted to
+        // the hall alone, which was sharp and left the cellar, the baths and
+        // the space behind the wall taking full sun through solid ground.
+        // See `Room::outline`, which has the measurements.
+        renderer.set_scene_bounds(self.room.outline());
 
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
         // The carpet covers the aisle alone now, which is less than half the

@@ -893,6 +893,41 @@ impl Room {
         out
     }
 
+    /// A box round the whole building, every room of it.
+    ///
+    /// This is what the sun's shadow map is fitted to. Outside that map a
+    /// fragment is lit and nothing casts, which is the engine's rule and the
+    /// forgiving one for a world bigger than its map, so every room that has
+    /// a roof over it has to be inside the map or the sun comes through the
+    /// roof.
+    ///
+    /// Fitted to the hall alone it was sharp, and three rooms were outside
+    /// it: the cellar and the baths are under the hall and below the box, and
+    /// the space behind the wall runs forty-four by fifty-two past the end of
+    /// it. All three were taking full sun through solid ground. It showed as
+    /// a warm wedge on the back of the hall's end wall, the first thing you
+    /// see on turning round in a room that is meant to be lit by nothing but
+    /// its own six lamps.
+    ///
+    /// The whole building is nine times the hall across, so a texel of that
+    /// map goes from eight millimetres to thirty-six. Nothing is lost by it:
+    /// the hall and the nook are roofed, the sun reaches neither, and a
+    /// measurement of both with the sun at full and at nought came back the
+    /// same to three places. The garden is the one room the sun is for, and
+    /// thirty-six millimetres is finer than anything it has to draw the edge
+    /// of.
+    pub fn outline(&self) -> Aabb {
+        let mut lo = Vec3::splat(f32::MAX);
+        let mut hi = Vec3::splat(f32::MIN);
+
+        for box_ in self.solid() {
+            lo = lo.min(box_.min);
+            hi = hi.max(box_.max);
+        }
+
+        Aabb::new(lo, hi)
+    }
+
     /// What the sight cannot see through.
     ///
     /// The walls, and only the walls. Not the benches, the cabinets or the
@@ -1019,6 +1054,39 @@ mod tests {
         (0..count)
             .map(|n| Cabinet::found(&format!("game{}", n), Path::new("/nowhere")))
             .collect()
+    }
+
+    /// The sun's map covers every room that has a roof on it.
+    ///
+    /// Outside the map a fragment is lit and nothing casts, so a roofed room
+    /// outside it takes the sun straight through its roof. Fitted to the hall
+    /// alone, the map left the cellar and the baths under the box and the
+    /// space behind the wall running past the end of it, and all three were
+    /// taking full sun through solid ground.
+    ///
+    /// The garden is not in this list and must not be: it is the one room the
+    /// sun is for, and it is roofless.
+    #[test]
+    fn the_suns_map_covers_every_roofed_room() {
+        let room = Room::of(some(12));
+        let r = room.reaches;
+        let map = room.outline();
+
+        for (what, at) in [
+            ("the hall", vec3(0.0, 1.0, 0.0)),
+            ("the nook", nook_floor(r).0 + Vec3::Y),
+            ("the cellar", crate::cellar::floor(r).0 + Vec3::Y),
+            ("the baths", crate::spa::at(r) + Vec3::Y),
+            ("the space behind the wall", crate::behind::at(r) + Vec3::Y),
+        ] {
+            assert!(
+                map.contains_point(at),
+                "{what} stands at {at:?}, outside the sun's map of {:?} .. {:?}, \
+                 so the sun comes through its roof",
+                map.min,
+                map.max
+            );
+        }
     }
 
     /// Spec 0001: there is a cabinet for every game the project has.

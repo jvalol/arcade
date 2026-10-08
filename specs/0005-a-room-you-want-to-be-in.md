@@ -51,6 +51,24 @@ room's light does not reach, and it takes the colour the bands throw up at it.
 on it reads as standing on it. The floor's darkness used to live in a constant;
 it lives in the weave now.
 
+**The sun's map covers the building and not just the hall.** Outside that map
+the engine calls a fragment lit and lets nothing cast, which is the forgiving
+answer for a world bigger than its map and the wrong one for a roofed room.
+Fitted to the hall, the map had three rooms outside it. The cellar and the
+baths are under the hall and under the box. The space behind the wall runs
+forty-four by fifty-two past the end of it. All three were taking full sun
+through solid ground, and in the room that is meant to be lit by nothing but
+its own six lamps it showed as a warm wedge on the back of the hall's end
+wall, which is the first thing you see on turning round in there.
+
+The building is nine times the hall across, so a texel of the map goes from
+eight millimetres to thirty-six, and the old comment on these bounds argued
+hard for keeping them tight. Nothing is lost by it. The hall and the nook are
+roofed and the sun reaches neither: measured with the sun at full and at
+nought, from three cameras, both rooms came back the same to three places.
+The garden is the one room the sun is for, it is roofless, and thirty-six
+millimetres is finer than the edge of anything in it.
+
 ## What it asks of blitzkit
 
 Nothing. `TextureData::from_pixels` builds the tile and the sampler already
@@ -66,6 +84,7 @@ repeats.
 - The room's surfaces are told apart, and the carpet's ground is the darkest. — `aim::tests::the_room_is_not_one_colour`
 - The light itself has a colour, warm above and cool below. — `aim::tests::the_light_is_not_neutral`
 - A band burns in its own game's colour rather than white. — `aim::tests::a_band_burns_in_its_own_colour`
+- The sun's map covers every room that has a roof on it. — `room::tests::the_suns_map_covers_every_roofed_room`
 
 ### Verified by hand
 
