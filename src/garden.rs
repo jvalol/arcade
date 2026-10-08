@@ -167,8 +167,8 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         // with no ground under it at all, which is a hole in the doorway: you
         // could walk up to the opening from either side and not through it.
         Aabb::from_center_size(
-            vec3((west + wall_at()) * 0.5, -WALL * 0.5, middle.z),
-            vec3(wall_at() - west, WALL, SPAN),
+            vec3((west + wall_at()) * 0.5, -THICK * 0.5, middle.z),
+            vec3(wall_at() - west, THICK, SPAN),
         ),
     ];
 
@@ -1003,9 +1003,21 @@ pub const POND: Vec2 = vec2(7.0, 5.4);
 pub const POND_DEEP: f32 = 0.85;
 pub const POND_AT: Vec2 = vec2(-1.1, 1.4);
 
-/// How far the water sits below the gravel, and how thick the stone round it
-/// is.
-pub const BRIM: f32 = 0.12;
+/// How high the bank round the water stands out of the gravel, how far below
+/// its top the water sits, and how wide the band of stone is.
+///
+/// The bank is higher than you can step, and that number is not a choice. The
+/// garden's ground is one slab under the whole of it, the pond included, so
+/// there is no hole to fall into: the water is drawn over ground you can stand
+/// on, and anything round it low enough to climb is a lip you walk over to
+/// stand on the pond. `walk::STEP` is 0.42, and this has to clear it.
+///
+/// A raised pond rather than a sunken one with a wall round it, because the
+/// second is a trough. The water comes up to a hand's width under the lip,
+/// which is where a koi pond's water is: near enough the top to be the thing
+/// you see when you look at it, and near enough to lean on.
+pub const BANK_UP: f32 = 0.46;
+pub const BRIM: f32 = 0.10;
 pub const KERB: f32 = 0.45;
 
 /// Where the pond's water sits, how far across it is and how deep.
@@ -1013,7 +1025,7 @@ pub fn pond(reaches: f32) -> (Vec3, Vec2, f32) {
     let middle = at(reaches);
 
     (
-        vec3(middle.x + POND_AT.x, -BRIM, middle.z + POND_AT.y),
+        vec3(middle.x + POND_AT.x, BANK_UP - BRIM, middle.z + POND_AT.y),
         POND,
         POND_DEEP,
     )
@@ -1024,42 +1036,229 @@ pub fn pond(reaches: f32) -> (Vec3, Vec2, f32) {
 /// The kerb stands a little proud of the gravel and the basin hangs below it,
 /// so the water is held in a stone trough rather than lying on the floor.
 pub fn basin(reaches: f32) -> Vec<Aabb> {
-    let mut out = kerbs(reaches);
+    let mut out = bank(reaches);
     out.push(bed(reaches));
+    // and the stones set on the bank, which are things to walk round in their
+    // own right rather than a pattern on it
+    out.extend(edging(reaches).into_iter().map(|edge| {
+        let (long, across) = if edge.turn.cos().abs() > 0.5 {
+            (edge.size.x, edge.size.z)
+        } else {
+            (edge.size.z, edge.size.x)
+        };
+
+        Aabb::from_center_size(
+            edge.at + Vec3::Y * edge.size.y * 0.5,
+            vec3(long, edge.size.y, across),
+        )
+    }));
 
     out
 }
 
-/// The four stones round the lip, which are the ones that read as stone.
+/// The bank: four runs round the lip, meeting at the corners, each one the
+/// basin's wall on that side and its rim in the same box.
 ///
-/// Apart from the bed, because they are not the same thing to look at. Cut
-/// together they were one colour, and a pale floor under see-through water is
-/// a tiled bath with a coping round it. A pond's bottom is silt.
-pub fn kerbs(reaches: f32) -> Vec<Aabb> {
+/// Each overlaps the next at a corner, which is hidden rather than fighting: a
+/// corner inside a corner.
+///
+/// The bank is what holds the water and what stops you walking into it. The
+/// stones are set on top of it: they vary, and a thing that varies cannot also
+/// be the thing that has to be continuous and higher than a step.
+pub fn bank(reaches: f32) -> Vec<Aabb> {
+    let (water, size, deep) = pond(reaches);
+    let half = size * 0.5;
+    let out = KERB;
+    let foot = water.y - deep;
+    let up = (foot + BANK_UP) * 0.5;
+    let thick = BANK_UP - foot;
+
+    vec![
+        Aabb::from_center_size(
+            vec3(water.x, up, water.z - half.y - out * 0.5),
+            vec3(size.x + out * 2.0, thick, out),
+        ),
+        Aabb::from_center_size(
+            vec3(water.x, up, water.z + half.y + out * 0.5),
+            vec3(size.x + out * 2.0, thick, out),
+        ),
+        Aabb::from_center_size(
+            vec3(water.x - half.x - out * 0.5, up, water.z),
+            vec3(out, thick, size.y),
+        ),
+        Aabb::from_center_size(
+            vec3(water.x + half.x + out * 0.5, up, water.z),
+            vec3(out, thick, size.y),
+        ),
+    ]
+}
+
+/// How long the stones round the lip run, how high they stand, and how far
+/// across the band each is.
+///
+/// Across more than the band is wide, and set towards the water, so a stone
+/// leans out over it. A run of them cut flush with the water's edge is a kerb
+/// however irregular it is: what breaks the line is the shadow under an
+/// overhang.
+pub const EDGE_LONG: (f32, f32) = (0.52, 1.12);
+pub const EDGE_UP: (f32, f32) = (0.12, 0.26);
+pub const EDGE_ACROSS: (f32, f32) = (0.46, 0.62);
+pub const EDGE_OVER: f32 = 0.42;
+
+/// How far a stone is bedded into the top of the bank.
+///
+/// A little. Sat on it they are a course of blocks, and what wants to be true
+/// of a set stone is that it was put where it is and the bank was made to take
+/// it.
+pub const EDGE_BED: f32 = 0.055;
+
+/// How far apart the stones are set, and how wide the occasional proper gap is.
+///
+/// Neither is a gap you can get through: a body is nine tenths across, and a
+/// hole in the stones that lets you walk into the pond is a hole whichever way
+/// it looks.
+pub const EDGE_GAP: f32 = 0.055;
+pub const EDGE_BREAK: f32 = 0.34;
+
+/// How much taller a rough stone stands than a flat one in the same run.
+///
+/// A lip of flats alone is crazy paving stood on edge. What an edge like this
+/// is, is mostly flats with a boulder every few feet holding them, and the
+/// boulder is the taller thing or there is no point to it.
+pub const EDGE_ROUGH: f32 = 1.45;
+
+/// One stone set round the lip.
+pub struct Edge {
+    pub at: Vec3,
+    /// Along the side it is on, up, and across the band.
+    pub size: Vec3,
+    pub turn: f32,
+    pub cut: usize,
+    /// Whether it is a boulder rather than a flat.
+    pub rough: bool,
+}
+
+/// The stones round the lip of the pond.
+///
+/// Laid along each side in turn and a bigger one at each corner, which is how
+/// an edge like this is actually built: the corners are set first because they
+/// are the two directions at once, and the runs are filled in between them.
+pub fn edging(reaches: f32) -> Vec<Edge> {
     let (water, size, _) = pond(reaches);
     let half = size * 0.5;
     let out = KERB;
+    // the stones sit towards the water across the band, so their inner halves
+    // are inside the bank and their outer edges stand proud of it
+    let set = out * EDGE_OVER;
 
-    vec![
-        // the four kerb stones, each overlapping the next at the corners,
-        // which is hidden rather than fighting: a corner inside a corner
-        Aabb::from_center_size(
-            vec3(water.x, BRIM * 0.5, water.z - half.y - out * 0.5),
-            vec3(size.x + out * 2.0, BRIM * 2.0, out),
+    let mut laid = Vec::new();
+    let mut n = 0usize;
+    // a wiggle that is the same every run and different every stone
+    let mut wiggle = move |step: usize| {
+        let on = (n as f32 * 2.3999632 + step as f32 * 0.7).sin() * 0.5 + 0.5;
+        n += 1;
+
+        on.clamp(0.0, 1.0)
+    };
+
+    for (side, (middle, along, across)) in [
+        (
+            vec3(water.x, BANK_UP - EDGE_BED, water.z - half.y - set),
+            vec2(1.0, 0.0),
+            vec2(0.0, -1.0),
         ),
-        Aabb::from_center_size(
-            vec3(water.x, BRIM * 0.5, water.z + half.y + out * 0.5),
-            vec3(size.x + out * 2.0, BRIM * 2.0, out),
+        (
+            vec3(water.x, BANK_UP - EDGE_BED, water.z + half.y + set),
+            vec2(1.0, 0.0),
+            vec2(0.0, 1.0),
         ),
-        Aabb::from_center_size(
-            vec3(water.x - half.x - out * 0.5, BRIM * 0.5, water.z),
-            vec3(out, BRIM * 2.0, size.y),
+        (
+            vec3(water.x - half.x - set, BANK_UP - EDGE_BED, water.z),
+            vec2(0.0, 1.0),
+            vec2(-1.0, 0.0),
         ),
-        Aabb::from_center_size(
-            vec3(water.x + half.x + out * 0.5, BRIM * 0.5, water.z),
-            vec3(out, BRIM * 2.0, size.y),
+        (
+            vec3(water.x + half.x + set, BANK_UP - EDGE_BED, water.z),
+            vec2(0.0, 1.0),
+            vec2(1.0, 0.0),
         ),
     ]
+    .iter()
+    .enumerate()
+    {
+        let run = if along.x > 0.5 { size.x } else { size.y };
+        let turn = if along.x > 0.5 {
+            0.0
+        } else {
+            std::f32::consts::FRAC_PI_2
+        };
+        let mut on = 0.0;
+
+        while on < run {
+            let long = (EDGE_LONG.0 + (EDGE_LONG.1 - EDGE_LONG.0) * wiggle(0)).min(run - on);
+
+            // a stub is not a stone. The leftover at the end of a run goes to
+            // the corner rather than being laid as a chip.
+            if long < EDGE_LONG.0 * 0.6 {
+                break;
+            }
+
+            let at = middle
+                + Vec3::new(along.x, 0.0, along.y) * (on + long * 0.5 - run * 0.5)
+                + Vec3::new(across.x, 0.0, across.y) * (wiggle(1) - 0.5) * 0.06;
+
+            // one in three a boulder, and the long stones stay flat: a
+            // boulder as long as a bench is a wall
+            let rough = laid.len() % 3 == 1 && long < EDGE_LONG.1 * 0.8;
+            let up = (EDGE_UP.0 + (EDGE_UP.1 - EDGE_UP.0) * wiggle(2))
+                * if rough { EDGE_ROUGH } else { 1.0 };
+
+            laid.push(Edge {
+                at,
+                size: vec3(
+                    long,
+                    up,
+                    EDGE_ACROSS.0 + (EDGE_ACROSS.1 - EDGE_ACROSS.0) * wiggle(3),
+                ),
+                // a few degrees each, so the run is set and not sawn
+                turn: turn + (wiggle(4) - 0.5) * 0.17,
+                cut: (side + laid.len()) % CUTS.len(),
+                rough,
+            });
+
+            on += long
+                + if laid.len() % 4 == 2 {
+                    EDGE_BREAK
+                } else {
+                    EDGE_GAP
+                };
+        }
+    }
+
+    // and the four corners, which are two directions at once and so the biggest
+    // stones in the run
+    for (x, z) in [(-1.0f32, -1.0f32), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+        let at = vec3(
+            water.x + x * (half.x + set),
+            BANK_UP - EDGE_BED,
+            water.z + z * (half.y + set),
+        );
+
+        laid.push(Edge {
+            at,
+            size: vec3(
+                EDGE_LONG.1 * 0.78,
+                EDGE_UP.1 * EDGE_ROUGH,
+                EDGE_ACROSS.1 * 1.05,
+            ),
+            turn: (x * z) * 0.6,
+            cut: ((x + 1.0) as usize + (z + 1.0) as usize * 2) % CUTS.len(),
+            // a boulder at each corner, which is what holds a run of flats
+            rough: true,
+        });
+    }
+
+    laid
 }
 
 /// The bed of it, which is what stops you at the bottom and what you see
@@ -1068,7 +1267,7 @@ pub fn bed(reaches: f32) -> Aabb {
     let (water, size, deep) = pond(reaches);
 
     Aabb::from_center_size(
-        vec3(water.x, -deep - BRIM - 0.15, water.z),
+        vec3(water.x, water.y - deep - 0.15, water.z),
         vec3(size.x, 0.3, size.y),
     )
 }
@@ -1957,6 +2156,235 @@ mod tests {
         }
     }
 
+    #[test]
+    fn probe3() {
+        let reaches = room().reaches;
+        let (water, size, _) = pond(reaches);
+        let half = size * 0.5;
+        let angle = 3.93f32;
+        let out = vec2(angle.cos(), angle.sin());
+        let want = half + Vec2::splat(KERB + crate::RADIUS + 1.2);
+        let gone = (want.x / out.x.abs()).min(want.y / out.y.abs());
+        let from = vec3(water.x + out.x * gone, 0.0, water.z + out.y * gone);
+        let to = vec3(water.x, 0.0, water.z);
+        let solid = room().solid();
+        let step = 1.0 / 60.0;
+        let mut at = from;
+        let mut falling = 0.0;
+        println!("from {:.3} {:.3} {:.3}", from.x, from.y, from.z);
+        let mut was = 0.0f32;
+        for n in 0..180 {
+            let way = vec3(to.x - at.x, 0.0, to.z - at.z);
+            let wish = if way.length_squared() > 1e-4 {
+                way.normalize() * crate::SPEED
+            } else {
+                Vec3::ZERO
+            };
+            let (next, fell) = crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid);
+            at = next;
+            falling = fell;
+            if (at.y - was).abs() > 1e-3 {
+                println!(
+                    "{n:3} {:.3} {:.3} {:.3}  rose {:.3}",
+                    at.x,
+                    at.y,
+                    at.z,
+                    at.y - was
+                );
+                was = at.y;
+            }
+        }
+        println!("end {:.3} {:.3} {:.3}", at.x, at.y, at.z);
+        println!(
+            "bank outer corner at {:.3},{:.3}",
+            water.x - half.x - KERB,
+            water.z - half.y - KERB
+        );
+    }
+
+    /// Spec 0010: you cannot walk into the pond.
+    ///
+    /// Walked and not measured. The lip used to be one run of coping, and the
+    /// moment it became stones with gaps between them the question of whether
+    /// you can get through a gap stopped being answerable by looking at the
+    /// numbers: a body is round, a gap is a slot between two boxes set at
+    /// angles to each other, and sliding is what `move_and_slide` is for.
+    #[test]
+    fn you_cannot_walk_into_the_pond() {
+        let reaches = room().reaches;
+        let (water, size, _) = pond(reaches);
+        let half = size * 0.5;
+
+        for turn in 0..16 {
+            let angle = turn as f32 / 16.0 * std::f32::consts::TAU;
+            let out = vec2(angle.cos(), angle.sin());
+            // from outside the walk round the pond, aimed at the middle of the
+            // water, with long enough to get there twice over
+            // out to where the ray leaves the stone, not a fixed amount on
+            // each axis. A fixed amount is a fixed amount along x and along z
+            // and so a smaller one on the diagonal: at a corner the body
+            // started a finger's width outside the bank with its own radius
+            // already inside it, and what the walk then measured was how this
+            // engine pushes a body out of a box it is spawned in.
+            let want = half + Vec2::splat(KERB + crate::RADIUS + 1.2);
+            let reach = [
+                if out.x.abs() > 1e-3 {
+                    want.x / out.x.abs()
+                } else {
+                    f32::MAX
+                },
+                if out.y.abs() > 1e-3 {
+                    want.y / out.y.abs()
+                } else {
+                    f32::MAX
+                },
+            ];
+            let gone = reach[0].min(reach[1]);
+
+            // started on the gravel, and not dropped in from above the way
+            // the other walks in here are. The drop is there because a point
+            // on the floor can be inside the furniture, and it is wrong for
+            // this one: `walk` climbs anything within `STEP` of where your
+            // feet are, so a body hovering at a third of a unit can step onto
+            // a lip it could not reach from the ground. Dropped from above it
+            // sailed over the bank and landed on the stones every time, which
+            // measures falling and not walking, and nothing in this building
+            // puts you in the air.
+            let from = vec3(water.x + out.x * gone, 0.0, water.z + out.y * gone);
+            let got = walked(from, vec3(water.x, 0.0, water.z), 4.0);
+            let off = vec2(got.x - water.x, got.z - water.z).abs();
+
+            assert!(
+                off.x > half.x - crate::RADIUS || off.y > half.y - crate::RADIUS,
+                "walked into the water from {:.2} radians: ended at {:?}",
+                angle,
+                got
+            );
+        }
+    }
+
+    /// Spec 0010: the lip is set stones and not a run of coping.
+    ///
+    /// Which is a thing about sizes rather than about shape. Cut irregular and
+    /// all of a height, a kerb is a kerb with a wavy top; what reads as set
+    /// stones is that no two are the same and some of them lean out over the
+    /// water.
+    #[test]
+    fn the_lip_is_set_stones_and_not_a_kerb() {
+        let reaches = room().reaches;
+        let (water, size, _) = pond(reaches);
+        let half = size * 0.5;
+        let laid = edging(reaches);
+
+        assert!(laid.len() > 18, "a lip of {} stones", laid.len());
+
+        let (mut lowest, mut tallest) = (f32::MAX, 0.0f32);
+        let (mut shortest, mut longest) = (f32::MAX, 0.0f32);
+        let mut over = 0;
+
+        for edge in laid.iter() {
+            lowest = lowest.min(edge.size.y);
+            tallest = tallest.max(edge.size.y);
+            shortest = shortest.min(edge.size.x);
+            longest = longest.max(edge.size.x);
+
+            // how far in it reaches, across the band it is set in
+            let off = vec2(edge.at.x - water.x, edge.at.z - water.z).abs();
+            let inner = if off.x > off.y {
+                off.x - edge.size.z * 0.5 - half.x
+            } else {
+                off.y - edge.size.z * 0.5 - half.y
+            };
+
+            if inner < 0.0 {
+                over += 1;
+            }
+        }
+
+        assert!(
+            tallest > lowest * 1.5,
+            "every stone is the same height: {:.2} to {:.2}",
+            lowest,
+            tallest
+        );
+        assert!(
+            longest > shortest * 1.4,
+            "every stone is the same length: {:.2} to {:.2}",
+            shortest,
+            longest
+        );
+        assert!(
+            over > laid.len() / 3,
+            "only {} of {} stones lean out over the water",
+            over,
+            laid.len()
+        );
+    }
+
+    /// Spec 0010: the garden stands on the roof of the baths, and neither is
+    /// inside the other.
+    ///
+    /// The garden was laid over the baths without either knowing, and it went
+    /// wrong in both directions at once. The baths' roof stood a third of a
+    /// unit above the garden's gravel, which is a ledge you cannot see, can
+    /// walk up, and can then step off into the koi pond. The garden's ground
+    /// was two units thick and hung that far down into the far corner of the
+    /// baths, where it is a block of nothing at chest height.
+    ///
+    /// Strictly below and not level with. Two floors whose tops are in one
+    /// plane put the lower one's end face in the middle of the upper one's
+    /// floor, a body resting on a surface counts as touching it, and the sweep
+    /// against that face lets you most of the way through and then jams.
+    #[test]
+    fn the_garden_sits_on_the_roof_of_the_baths() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let half = half();
+        let ground = solid(reaches)
+            .into_iter()
+            .find(|box_| box_.max.y > -1e-4 && box_.max.y < 1e-4 && box_.max.x - box_.min.x > 8.0)
+            .expect("the garden has a ground");
+
+        let mut highest = f32::MIN;
+        for below in crate::spa::solid(reaches)
+            .into_iter()
+            .chain(crate::cellar::solid(reaches))
+        {
+            let apart = (below.min.x > middle.x + half.x)
+                || (below.max.x < middle.x - half.x)
+                || (below.min.z > middle.z + half.y)
+                || (below.max.z < middle.z - half.y);
+
+            if apart {
+                continue;
+            }
+
+            assert!(
+                below.max.y < ground.max.y - 1e-3,
+                "something under the garden reaches {:.3}, and the gravel is at {:.3}: \
+                 x {:.2}..{:.2} z {:.2}..{:.2}",
+                below.max.y,
+                ground.max.y,
+                below.min.x,
+                below.max.x,
+                below.min.z,
+                below.max.z,
+            );
+
+            highest = highest.max(below.max.y);
+        }
+
+        assert!(
+            highest > f32::MIN,
+            "nothing of the building is under the garden at all, which cannot be right",
+        );
+        assert!(
+            ground.min.y >= highest - 1e-3,
+            "the garden's ground hangs {:.2} into the room below it",
+            highest - ground.min.y,
+        );
+    }
+
     /// Spec 0010: no part of the hall is laid over the garden.
     ///
     /// The hall's floor is two slabs, and the carpet and the ceiling are now
@@ -2062,12 +2490,24 @@ mod tests {
     /// Spec 0010: you can get into the garden from where you wake up.
     #[test]
     fn you_can_walk_in_from_where_you_wake() {
-        let middle = at(room().reaches);
+        let reaches = room().reaches;
         // dropped in from above rather than placed, because a point on the
         // floor can be inside something
-        let wake = vec3(0.0, 1.2, room().reaches - crate::room::INSIDE);
+        let wake = vec3(0.0, 1.2, reaches - crate::room::INSIDE);
+        // a point on the path, and not the middle of the garden. The middle
+        // of the garden is inside the pond: this walked into the water, and it
+        // only passed because the lip was low enough to climb.
+        //
+        // Half way along the path and no further. Getting in is what this is
+        // about; getting round the water is `the_walkway_goes_right_round_the_pond`,
+        // which walks it in legs the way a person does. Aimed across the whole
+        // garden instead, what it measures is whether steering straight at a
+        // target can round an obstacle, and it cannot: it caught on the corner
+        // stone of the lip and sat there for eight seconds.
+        let on = path_at(reaches, 0.45);
+        let want = vec3(on.x, 0.0, on.y);
 
-        let got = walked(wake, middle, 6.0);
+        let got = walked(wake, want, 8.0);
 
         assert!(
             got.x < wall_at() - THICK,
@@ -2075,7 +2515,7 @@ mod tests {
             got
         );
         assert!(
-            (got.z - middle.z).abs() < 2.0,
+            vec2(got.x - want.x, got.z - want.z).length() < crate::RADIUS * 2.0,
             "it got through and then lost its way: {:?}",
             got
         );

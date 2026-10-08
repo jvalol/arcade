@@ -126,6 +126,51 @@ what a tractor leaves: standing next to it you were inside a single line, the
 gravel read as a wash with a gradient across it, and the raking was not
 visible at any distance at all.
 
+**The lip is set stones, not a run of coping.** One band of pale stone round a
+rectangle of water is a swimming bath whatever it is cut from, and that is what
+this was. The lip is a bank now with stones set on it: flats mostly, varying in
+length, height and how far across the band they sit, a boulder every third one
+and a bigger boulder at each corner, thrown a little off the line and turned a
+few degrees each so the run is set and not sawn. They lean out over the water,
+because what breaks the line of a kerb is the shadow under an overhang, and
+there are gaps between them where the dark of the bank shows.
+
+The bank and the stones are two things and not one. The bank is what holds the
+water and what stops you walking into it, so it has to be continuous; the
+stones vary, and a thing that varies cannot also be the thing that is
+continuous.
+
+**The pond is raised, and the bank is higher than a step.** That is not a
+choice about how it looks. The garden's ground is one slab under the whole of
+it, the pond included, so there is no hole to fall into: the water is drawn
+over ground you can stand on, and anything round it low enough to climb is a
+lip you walk over to stand on the pond. `walk::STEP` is 0.42 and the bank
+clears it.
+
+Raised rather than sunk with a wall round it, because the second is a trough.
+The water comes up to a hand's width under the lip, which is where a koi pond's
+water is: near enough the top to be the thing you see, and near enough to lean
+on.
+
+**The garden stands on the roof of the baths.** It was laid over them without
+either knowing, and it was wrong in both directions at once. The baths' ceiling
+landed at nought and the slab over it stood from nought up, so their roof came
+through the garden's gravel as a ledge you could not see, could walk up, and
+could then step off into the koi pond. And the garden's ground was two units
+thick, so it hung that far down into the far corner of the baths, where it is a
+block of nothing at chest height.
+
+Both are the one statement: over the baths, the garden's ground is their roof.
+The ground is a slab the thickness of a floor now, and the baths' ceiling is
+below it rather than level with it. Below and not level: two floors whose tops
+are in one plane put the lower one's end face in the middle of the upper one's
+floor, a body resting on a surface counts as touching it, and the sweep against
+that face lets you most of the way through and then jams. Walking west across
+the garden stuck on nothing, at the line where the baths below happen to end.
+
+The baths lost a third of a unit of ceiling to it, and spec 0008's room is that
+much lower.
+
 **Stepping stones from the way in to the water.** You arrive and the whole
 floor is equally walkable, so you wander. A path of irregular flats tells you
 where to stand, and it turns the gravel from something you cross into
@@ -240,6 +285,9 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - The path runs from the way in to the water, at any size of room. — `garden::tests::the_path_runs_from_the_door_to_the_water`
 - Every step along it is a stride, and it is not a straight line. — `garden::tests::every_step_on_the_path_is_a_stride`
 - No stepping stone is laid on a stone, a tree, a lantern or a wall. — `garden::tests::no_stepping_stone_lands_on_anything`
+- You cannot walk into the pond, from any side. — `garden::tests::you_cannot_walk_into_the_pond`
+- The lip is set stones and not a run of coping. — `garden::tests::the_lip_is_set_stones_and_not_a_kerb`
+- The garden stands on the roof of the baths and neither is inside the other. — `garden::tests::the_garden_sits_on_the_roof_of_the_baths`
 
 ## Verified by hand
 

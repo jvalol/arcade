@@ -548,6 +548,15 @@ pub const KOI: Vec4 = vec4(0.96, 0.94, 0.92, 1.0);
 /// first time it was opened up. What is at the bottom of a pond is what has
 /// fallen into it.
 pub const POND_BED: Vec4 = vec4(0.11, 0.12, 0.09, 1.0);
+
+/// The bank the water is held in, and the stones set round its lip.
+///
+/// The bank is dark, because what you see of it is the gaps between the stones
+/// and a gap wants to read as shadow. The stones are between the bank and the
+/// gravel: a pale run of coping is a swimming bath whatever shape it is cut
+/// into, and the garden's own stonework is paler still.
+pub const POND_BANK: Vec4 = vec4(0.16, 0.16, 0.15, 1.0);
+pub const EDGE_STONE: Vec4 = vec4(0.25, 0.245, 0.23, 1.0);
 pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
 pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
 

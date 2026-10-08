@@ -23,7 +23,21 @@ use glam::{vec2, vec3, Vec2, Vec3};
 /// water reads as a cellar with a puddle in it.
 pub const DEEP: f32 = 18.0;
 pub const SPAN: f32 = 12.0;
-pub const TALL: f32 = 3.0;
+///
+/// Not three, which is what it was and is exactly how far down the cellar
+/// goes. The room's ceiling landed at nought, the slab over it stood from
+/// nought up to a third of a unit, and spec 0010 then put a garden on that
+/// ground: the baths' roof came up through the garden's gravel as a ledge you
+/// could not see, could walk up, and could then step off into the koi pond.
+///
+/// Two thirds and not a third, so the slab's top lands below the garden's
+/// ground rather than level with it. Level, the two are coplanar and the
+/// roof's own end face stands in the middle of the garden's floor: a body
+/// resting exactly on a surface counts as touching it, the sweep against that
+/// face is a degenerate one, and what it does is let you most of the way
+/// through and then jam. Walking west across the garden stuck on nothing, at
+/// the line where the baths below happen to end.
+pub const TALL: f32 = 2.4;
 
 /// The way through from the cellar: how wide, how high, and how far along the
 /// cellar's wall it is cut.

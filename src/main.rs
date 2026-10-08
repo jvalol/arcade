@@ -2011,11 +2011,11 @@ impl Game for Arcade {
                 scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::GARDEN_WALL);
             }
 
-            // the kerb round the water, and the bed under it, which are not
+            // the bank round the water, and the bed under it, which are not
             // the same thing to look at
-            for (box_, colour) in garden::kerbs(self.room.reaches)
+            for (box_, colour) in garden::bank(self.room.reaches)
                 .into_iter()
-                .map(|stone| (stone, aim::GARDEN_STONE))
+                .map(|stone| (stone, aim::POND_BANK))
                 .chain(std::iter::once((
                     garden::bed(self.room.reaches),
                     aim::POND_BED,
@@ -2026,6 +2026,33 @@ impl Game for Arcade {
                     &Transform::at((box_.min + box_.max) * 0.5).with_scale(box_.max - box_.min),
                     colour,
                 );
+            }
+
+            // and the stones set on it. One run of coping is a swimming bath
+            // whatever colour it is: what the eye reads as a pond's edge is
+            // stones of different sizes with shadow between them.
+            for edge in garden::edging(self.room.reaches) {
+                // a boulder is the rock mesh, which is a lump about its own
+                // middle with a third of it meant to be buried, so it is
+                // scaled up by what is buried and then sunk by the same
+                let (mesh, tall, up) = if edge.rough {
+                    let tall = edge.size.y / (1.0 - garden::BURIED);
+
+                    (self.stones.get(edge.cut), tall, edge.size.y - tall * 0.5)
+                } else {
+                    (self.slabs.get(edge.cut), edge.size.y, edge.size.y * 0.5)
+                };
+
+                if let Some(cut) = mesh {
+                    scene.push_material(
+                        *cut,
+                        &Transform::at(edge.at + Vec3::Y * up)
+                            .with_rotation(glam::Quat::from_rotation_y(edge.turn))
+                            .with_scale(vec3(edge.size.x, tall, edge.size.z)),
+                        aim::EDGE_STONE,
+                        aim::DULL,
+                    );
+                }
             }
 
             // the koi, before the water, so the water is the last thing
