@@ -612,11 +612,11 @@ impl Room {
                 vec3(-side - NOOK_DEEP * 0.5, TALL * 0.5, shut),
                 vec3(NOOK_DEEP, TALL, thick),
             ),
-            // the near end
-            Aabb::from_center_size(
-                vec3(0.0, TALL * 0.5, reaches),
-                vec3(side * 2.0, TALL, thick),
-            ),
+            // the near end is not here. It is two boxes with a gap between
+            // them, in `behind::near_wall`, and what is drawn is one wall
+            // across the whole of it. That is the one place in this building
+            // where the collider and the picture are meant to disagree, and it
+            // is spec 0011.
             // and the far end, reaching across the nook too
             Aabb::from_center_size(
                 vec3(-NOOK_DEEP * 0.5, TALL * 0.5, -reaches),
@@ -869,6 +869,10 @@ impl Room {
         out.extend(crate::cellar::solid(self.reaches));
         out.extend(crate::spa::solid(self.reaches));
         out.extend(crate::garden::solid(self.reaches));
+        // the hall's near end wall, which is two boxes with a gap between
+        // them, and the space that gap leads into. Spec 0011.
+        out.extend(crate::behind::near_wall(self.reaches));
+        out.extend(crate::behind::solid(self.reaches));
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
         out.extend(
@@ -1248,8 +1252,9 @@ mod tests {
 
         let room = Room::of(some(12));
         let solid = room.solid();
-        // the walls, the floor, the way down, the spa, the garden, the
-        // cabinets, the benches, the plinths and the bookcases
+        // the walls, the floor, the way down, the spa, the garden, the space
+        // behind the near end wall, the cabinets, the benches, the plinths and
+        // the bookcases
         assert_eq!(
             solid.len(),
             room.walls.len()
@@ -1257,6 +1262,8 @@ mod tests {
                 + cellar::solid(room.reaches).len()
                 + crate::spa::solid(room.reaches).len()
                 + crate::garden::solid(room.reaches).len()
+                + crate::behind::near_wall(room.reaches).len()
+                + crate::behind::solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
@@ -2063,6 +2070,8 @@ mod tests {
                 + cellar::solid(room.reaches).len()
                 + crate::spa::solid(room.reaches).len()
                 + crate::garden::solid(room.reaches).len()
+                + crate::behind::near_wall(room.reaches).len()
+                + crate::behind::solid(room.reaches).len()
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2

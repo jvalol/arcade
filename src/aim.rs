@@ -566,6 +566,116 @@ pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
 /// grey it is a lighter patch of floor; what every one of these gardens does
 /// is put something nearly black on something nearly white.
 pub const ROCK: Vec4 = vec4(0.21, 0.20, 0.19, 1.0);
+
+/// The space behind the wall, per spec 0011: its floor, its walls and the
+/// columns holding its lid up.
+///
+/// All near enough one colour, and that is the point. Every other room in here
+/// is told apart from the next by what it is made of; this is told apart by
+/// having nothing to tell apart.
+///
+/// Very dark, and darker than looks right written down. The sun and the fill
+/// are the whole building's and reach in here too, so a surface that is merely
+/// dim comes out as a lit floor running away to a lit horizon, which is a car
+/// park rather than a thing you have found. At a twentieth the lamps are the
+/// only light that does anything and everything past them is black.
+///
+/// The columns a shade off the walls and no more. Picked out, they are
+/// furniture.
+/// The plate behind the lines of text at the top left.
+///
+/// The text is drawn straight over whatever the room is doing, and the room is
+/// sometimes a neon sign four feet from your face. White on cyan is not
+/// readable, and which bit of the building happens to be behind a line of help
+/// is not something the help can know.
+///
+/// Dark and see-through, so it is a shade over the room rather than a bar
+/// across it. Black rather than grey, because grey at this alpha over a dark
+/// room is a grey box and over a bright one is still grey: black takes
+/// whatever is behind it down by the same amount wherever you stand, which is
+/// the whole point.
+pub const PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.62);
+
+/// How much wider and taller the plate is than the words on it.
+pub const PLATE_PAD: f32 = 7.0;
+
+/// Where the first line of help sits, how big it is drawn and how far apart
+/// the lines are.
+///
+/// One account of all three. They were three: a line at twenty, a line at
+/// forty-four, and nothing saying the second was the first plus a line.
+pub const SAYS_AT: Vec2 = vec2(20.0, 20.0);
+pub const SAYS_SIZE: f32 = 14.0;
+pub const SAYS_LINE: f32 = 24.0;
+
+/// Where the nth line of help goes.
+pub fn says_at(n: usize) -> Vec2 {
+    SAYS_AT + Vec2::Y * SAYS_LINE * n as f32
+}
+
+/// How thick the line round a plate is, and what colour it is.
+///
+/// A border and not only a shade. Jake asked for both: a shade alone over a
+/// busy room still leaves the text sitting in the middle of whatever is behind
+/// it, and the line is what says the words are a thing in front rather than a
+/// thing in the room.
+pub const PLATE_EDGE: f32 = 1.5;
+pub const PLATE_LINE: Vec4 = vec4(1.0, 1.0, 1.0, 0.22);
+
+/// A plate under a block of text: where its middle is, how big the shade is,
+/// and how big the line round it is.
+///
+/// A middle and not a corner, because a `Quad`'s position is its middle. Given
+/// a corner it draws the plate half its own width to the left of the words,
+/// which is what it did: the first one of these was a corner and the shade sat
+/// beside the text rather than under it.
+pub struct Plate {
+    pub at: Vec2,
+    pub size: Vec2,
+    pub line_size: Vec2,
+}
+
+/// The plate round a block of text, measured off the words.
+///
+/// Takes the lines as they are about to be drawn, each with where it goes and
+/// how big it is, because the two blocks of text in this room are laid out
+/// differently and neither of them should be laid out twice.
+///
+/// One plate for the block and not one a line. A line of this font is taller
+/// than the gap between lines, so plates a line, each padded, lap over one
+/// another, and two see-through quads in the same place are twice as dark as
+/// one: the overlap shows as a band through the middle of the words.
+pub fn plate_round(lines: &[(Vec2, &str, f32)], centred: bool) -> Option<Plate> {
+    let (mut low, mut high) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+
+    for (at, words, size) in lines.iter() {
+        let room = blitzkit::text::room_for(words, *size);
+        let from = if centred {
+            vec2(at.x - room.x * 0.5, at.y)
+        } else {
+            *at
+        };
+
+        low = low.min(from);
+        high = high.max(from + room);
+    }
+
+    if low.x > high.x {
+        return None;
+    }
+
+    let size = high - low + Vec2::splat(PLATE_PAD * 2.0);
+
+    Some(Plate {
+        at: (low + high) * 0.5,
+        size,
+        line_size: size + Vec2::splat(PLATE_EDGE * 2.0),
+    })
+}
+
+pub const BEHIND_FLOOR: Vec4 = vec4(0.013, 0.013, 0.016, 1.0);
+pub const BEHIND_WALL: Vec4 = vec4(0.065, 0.065, 0.072, 1.0);
+pub const BEHIND_COLUMN: Vec4 = vec4(0.085, 0.085, 0.092, 1.0);
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// What burns in a stone lantern: a candle behind paper, which is warm against
@@ -720,6 +830,128 @@ pub fn shape_colour(lit: bool) -> Vec4 {
 mod tests {
     use super::*;
 
+    /// Spec 0003: every line of text sits inside its plate.
+    ///
+    /// The text is drawn straight over whatever the room is doing, and the
+    /// room is sometimes a neon sign four feet from your face or a pale table
+    /// under a lamp. Which bit of the building is behind a line is not
+    /// something the line can know, so it brings its own background.
+    ///
+    /// Both blocks, laid out two different ways. The one that was hardest to
+    /// read was the centred pair under the sight, and the first plate written
+    /// for this only went under the corner.
+    #[test]
+    fn every_line_of_text_sits_on_its_plate() {
+        let help = [
+            "WASD and the mouse to get about. Arrow keys look around, and work the toy you are looking at. Escape quits.",
+            "If you know, you know. If you don't, play with one.",
+        ];
+        let window = (1600.0f32, 1200.0f32);
+
+        for many in 1..=help.len() {
+            let laid: Vec<(Vec2, &str, f32)> = help[..many]
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(n, words)| (says_at(n), words, SAYS_SIZE))
+                .collect();
+
+            inside(&laid, false, "the corner");
+        }
+
+        let said = [
+            (prompt_at(window, 0), "ball and chain", PROMPT_SIZE),
+            (
+                prompt_at(window, 1),
+                "27 of 27 standing. Swing the ball with arrow keys.",
+                DETAIL_SIZE,
+            ),
+        ];
+        for many in 1..=said.len() {
+            inside(&said[..many], true, "the prompt");
+        }
+    }
+
+    /// Every line of a block falls inside the plate, and the line is round it.
+    fn inside(lines: &[(Vec2, &str, f32)], centred: bool, what: &str) {
+        let plate = plate_round(lines, centred).expect("a plate");
+
+        for (at, words, size) in lines.iter() {
+            let room = blitzkit::text::room_for(words, *size);
+            let from = if centred {
+                vec2(at.x - room.x * 0.5, at.y)
+            } else {
+                *at
+            };
+
+            // the plate is given as a middle, so it runs half its size either
+            // way from there
+            let low = plate.at - plate.size * 0.5;
+            let high = plate.at + plate.size * 0.5;
+
+            assert!(
+                low.x <= from.x + 1e-4 && low.y <= from.y + 1e-4,
+                "{} with {} lines: one starts outside the plate",
+                what,
+                lines.len()
+            );
+            assert!(
+                high.x >= from.x + room.x - 1e-4 && high.y >= from.y + room.y - 1e-4,
+                "{} with {} lines: one runs off the plate",
+                what,
+                lines.len()
+            );
+        }
+
+        assert!(
+            plate.line_size.x > plate.size.x && plate.line_size.y > plate.size.y,
+            "{}: the line is not round the plate",
+            what
+        );
+    }
+
+    /// Nothing to plate is no plate, rather than a dot in the corner.
+    #[test]
+    fn no_words_is_no_plate() {
+        assert!(plate_round(&[], false).is_none());
+    }
+
+    /// The plate is a shade with a line round it, not a bar across the top.
+    #[test]
+    fn the_plate_is_a_shade_and_not_a_bar() {
+        assert!(
+            PLATE.w > 0.3 && PLATE.w < 0.9,
+            "a plate at {} alpha is either nothing or a bar",
+            PLATE.w
+        );
+        assert!(
+            PLATE.x < 0.1 && PLATE.y < 0.1 && PLATE.z < 0.1,
+            "the plate is not dark: {:?}",
+            PLATE
+        );
+        assert!(
+            PLATE_LINE.w > 0.05 && PLATE_LINE.w < PLATE.w,
+            "the line round it is either invisible or heavier than the shade"
+        );
+
+        // and it fits the words, so it cannot be the width of the window
+        let narrow = plate_round(&[(Vec2::ZERO, "short", SAYS_SIZE)], false).expect("a plate");
+        let wide = plate_round(
+            &[(
+                Vec2::ZERO,
+                "a good deal longer than that one was",
+                SAYS_SIZE,
+            )],
+            false,
+        )
+        .expect("a plate");
+
+        assert!(
+            wide.size.x > narrow.size.x,
+            "the plate does not follow the words"
+        );
+    }
+
     const WINDOW: (f32, f32) = (1280.0, 800.0);
 
     /// How far apart lit and unlit have to be before the difference reads from
@@ -795,26 +1027,38 @@ mod tests {
 
     /// Spec 0003: the prompt is readable against the thing it lands on, which
     /// is the brightest thing in the room.
+    ///
+    /// It used to answer that with a drop shadow of itself, and this test used
+    /// to check the shadow. The shadow is gone: a shade with a line round it
+    /// does the same job and does it over a pale table as well as a dark one,
+    /// and two mechanisms for one job is one too many. The test kept its name
+    /// and changed what it reads, because the name is the promise and the
+    /// shadow was only ever how it was kept.
     #[test]
     fn the_prompt_carries_its_own_background() {
-        let text = prompt_at(WINDOW, 0);
-        let shadow = shadow_at(text);
+        let window = (1280.0f32, 800.0f32);
+        let said = [
+            (prompt_at(window, 0), "a thing with a name", PROMPT_SIZE),
+            (
+                prompt_at(window, 1),
+                "and a line saying what to press",
+                DETAIL_SIZE,
+            ),
+        ];
+        let plate = plate_round(&said, true).expect("a plate");
 
-        assert!(shadow != text, "the shadow is not offset from the text");
         assert!(
-            shadow.y > text.y,
-            "the shadow is above the text rather than under it"
-        );
-
-        let under = SHADOW_COLOUR;
-        assert!(
-            under.w > 0.5,
-            "a shadow at {} alpha is not a background",
-            under.w
+            plate.size.x > 0.0 && plate.size.y > 0.0,
+            "the prompt has no plate under it"
         );
         assert!(
-            under.x + under.y + under.z < sight_colour(true).truncate().element_sum(),
-            "the shadow is no darker than what it sits under"
+            PLATE.w > 0.5,
+            "a plate at {} alpha is not a background",
+            PLATE.w
+        );
+        assert!(
+            PLATE.x + PLATE.y + PLATE.z < sight_colour(true).truncate().element_sum(),
+            "the plate is no darker than what it sits under"
         );
     }
 

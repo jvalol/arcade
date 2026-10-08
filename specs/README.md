@@ -18,6 +18,7 @@ not a priority, and it never changes once a spec exists.
 | [0008](0008-a-spa-off-the-cellar.md) | A pool you can walk into, a hot tub and a sauna, behind the cellar |
 | [0009](0009-a-building-you-can-hear.md) | Footsteps, splashes and the note each room has |
 | [0010](0010-a-garden-off-the-entrance.md) | A zen garden with trees and a koi pond, through the wall on your left |
+| [0011](0011-the-space-behind-the-wall.md) | A vast dark space behind the wall you wake against, with no door |
 
 ---
 

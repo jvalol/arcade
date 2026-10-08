@@ -75,6 +75,36 @@ already gives, in the place you are not looking. Said once.
 Nothing. `RenderText` already has `centered` and a colour, and `resized` already
 reports the window, so the sight is text at a position this crate works out.
 
+**Every line of text brings its own background.** They are drawn
+straight over whatever the room is doing, and the room is sometimes a neon
+sign four feet from your face: white on cyan is not readable, and which bit of
+the building is behind a line of help is not something the help can know.
+
+A plate under them, dark and see-through, so it is a shade over the room
+rather than a bar across it. Black rather than grey, because grey at this
+alpha is a grey box over a dark room and still grey over a bright one, where
+black takes whatever is behind it down by the same amount wherever you are
+standing.
+
+A line round it as well as the shade. A shade alone over a busy room still
+leaves the words sitting in the middle of whatever is behind them; the line is
+what says they are a thing in front rather than a thing in the room. Two quads
+and not a frame of four, because a frame of four is four chances to be a pixel
+out.
+
+Both blocks, and the first plate written for this only went under the corner.
+The pair under the sight was the harder one to read: it lands on whatever the
+sight has just lit, which is the brightest thing in the room, and it used to
+answer that with a drop shadow of itself. A shade with a line round it does
+the job the shadow was doing and does it over a pale table as well as a dark
+one, so the shadow is gone.
+
+Measured off the words rather than run to the edge of the window, and one
+plate for the block rather than one a line. A line of this font is taller
+than the gap between lines, so a plate a line, each padded, lap over one
+another, and two see-through quads in the same place are twice as dark as one:
+the overlap showed as a band through the middle of the help.
+
 ## Acceptance criteria
 
 - The sight is in the middle of the window. — `aim::tests::the_sight_is_in_the_middle`
@@ -87,6 +117,9 @@ reports the window, so the sight is text at a position this crate works out.
 - A cabinet that has not been built does not light up. — `aim::tests::an_unbuilt_cabinet_stays_dark`
 - Only the thing you are pointing at is lit. — `room::tests::the_one_you_are_looking_at_is_the_one`
 - The sight does not reach the far wall from the doorway. — `room::tests::the_sight_does_not_reach_across_the_room`
+- Every line of text sits inside its plate, in the corner and under the sight. — `aim::tests::every_line_of_text_sits_on_its_plate`
+- The plate is a shade with a line round it, not a bar. — `aim::tests::the_plate_is_a_shade_and_not_a_bar`
+- Nothing to plate is no plate. — `aim::tests::no_words_is_no_plate`
 
 ### Verified by hand
 

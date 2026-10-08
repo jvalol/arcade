@@ -1,6 +1,7 @@
 //! arcade: a room of cabinets, one per game. See `specs/`.
 
 mod aim;
+mod behind;
 mod cabinet;
 mod carpet;
 mod cascada;
@@ -33,7 +34,7 @@ use blitzkit::sound::{Samples, SoundSystem};
 use blitzkit::texture::TextureData;
 use blitzkit::{start, Game};
 use cabinet::{Cabinet, Playing};
-use glam::{vec2, vec3, vec4, Vec2, Vec3};
+use glam::{vec3, vec4, Vec2, Vec3};
 use room::Room;
 
 /// Where you stand, how fast, and how far you see.
@@ -264,6 +265,20 @@ struct Arcade {
     wants_lock: bool,
     locked: bool,
     quitting: bool,
+}
+
+/// Lays a plate and its line under a block of text, if there is one.
+///
+/// The line first and the shade on top of it, so what is left showing round
+/// the edge is the line. Two quads and not a frame of four: a frame of four is
+/// four chances to be a pixel out.
+fn plate(geometry: &mut Geometry, plate: Option<aim::Plate>) {
+    use blitzkit::geometry::quad::Quad;
+
+    if let Some(plate) = plate {
+        geometry.push_quad(&Quad::colored(plate.at, plate.line_size, aim::PLATE_LINE));
+        geometry.push_quad(&Quad::colored(plate.at, plate.size, aim::PLATE));
+    }
 }
 
 impl Arcade {
@@ -1063,7 +1078,7 @@ impl Game for Arcade {
     fn update(
         &mut self,
         dt: f32,
-        _geometry: &mut Geometry,
+        geometry: &mut Geometry,
         text: &mut TextRenderer,
         sound: &SoundSystem,
     ) {
@@ -1394,23 +1409,38 @@ impl Game for Arcade {
 
         // the corner says how to move, and nothing else. What to press is under
         // the sight, and saying it here as well is saying it twice.
-        text.push_render_text(RenderText {
-            position: vec2(20.0, 20.0),
-            text: String::from(
-                "WASD and the mouse to get about. Arrow keys look around, and work the toy you are looking at. Escape quits.",
-            ),
-            size: 14.0,
-            ..Default::default()
-        });
+        const HELP: &str =
+            "WASD and the mouse to get about. Arrow keys look around, and work the toy you are looking at. Escape quits.";
+        const WINK: &str = "If you know, you know. If you don't, play with one.";
+        let winking =
+            matches!(self.seen, Some(room::Seen::Display(_))) || self.spin.holding().is_some();
 
-        // and the wink, once, while the sight is on any of the five. Spec 0004:
-        // it was under every shape, five times, which is five times too many
-        // for a joke.
-        if matches!(self.seen, Some(room::Seen::Display(_))) || self.spin.holding().is_some() {
+        // the wink, once, while the sight is on any of the five. Spec 0004: it
+        // was under every shape, five times, which is five times too many for
+        // a joke.
+        let lines: Vec<&str> = if winking {
+            vec![HELP, WINK]
+        } else {
+            vec![HELP]
+        };
+
+        // a plate under them first, because the text is drawn straight over
+        // whatever the room is doing and the room is sometimes a neon sign
+        // four feet from your face.
+        let laid: Vec<(Vec2, &str, f32)> = lines
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(n, words)| (aim::says_at(n), words, aim::SAYS_SIZE))
+            .collect();
+
+        plate(geometry, aim::plate_round(&laid, false));
+
+        for (at_, words, size) in laid {
             text.push_render_text(RenderText {
-                position: vec2(20.0, 44.0),
-                text: String::from("If you know, you know. If you don't, play with one."),
-                size: 14.0,
+                position: at_,
+                text: String::from(words),
+                size,
                 ..Default::default()
             });
         }
@@ -1438,25 +1468,29 @@ impl Game for Arcade {
             }
         }
 
-        for (line, say, size) in vec![(0, name, aim::PROMPT_SIZE), (1, detail, aim::DETAIL_SIZE)]
-            .into_iter()
-            .filter_map(|(line, say, size)| say.map(|say| (line, say, size)))
-        {
-            let at = aim::prompt_at(self.window, line);
+        let said: Vec<(Vec2, String, f32)> =
+            vec![(0, name, aim::PROMPT_SIZE), (1, detail, aim::DETAIL_SIZE)]
+                .into_iter()
+                .filter_map(|(line, say, size)| {
+                    say.map(|say| (aim::prompt_at(self.window, line), say, size))
+                })
+                .collect();
 
-            // its own shadow first, since it lands on whatever the sight just
-            // lit and that is the brightest thing in the room
+        // a plate under the pair of them. It lands on whatever the sight has
+        // just lit, which is the brightest thing in the room, and it used to
+        // answer that with a drop shadow of itself. A shade with a line round
+        // it does the job the shadow was doing and does it over a pale table
+        // as well as over a dark one.
+        let round: Vec<(Vec2, &str, f32)> = said
+            .iter()
+            .map(|(at_, say, size)| (*at_, say.as_str(), *size))
+            .collect();
+
+        plate(geometry, aim::plate_round(&round, true));
+
+        for (at_, say, size) in said {
             text.push_render_text(RenderText {
-                position: aim::shadow_at(at),
-                bounds: aim::prompt_bounds(self.window),
-                text: say.clone(),
-                size,
-                color: aim::SHADOW_COLOUR,
-                centered: true,
-                ..Default::default()
-            });
-            text.push_render_text(RenderText {
-                position: at,
+                position: at_,
                 bounds: aim::prompt_bounds(self.window),
                 text: say,
                 size,
@@ -1524,6 +1558,40 @@ impl Game for Arcade {
                         .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
                         .with_scale(vec3(size.x, 1.0, size.z)),
                     aim::CEILING,
+                );
+            }
+        }
+
+        // the hall's near end wall, drawn in one piece over the gap its
+        // collider has in it. Spec 0011: this is the one place in the building
+        // where what you can walk through and what you can see disagree, and
+        // the disagreement is the room.
+        {
+            let side = room::WALL + room::CABINET.x;
+            let whole = Transform::at(vec3(0.0, room::TALL * 0.5, self.room.reaches))
+                .with_scale(vec3(side * 2.0, room::TALL, room::THICK));
+
+            match self.wall_grain {
+                Some(grain) => scene.push_textured(cube, grain, &whole, aim::WALL, aim::MATTE),
+                None => scene.push_colored(cube, &whole, aim::WALL),
+            }
+        }
+
+        // and the space it hides: its floor and lid, its walls, and the
+        // columns. Nothing else is in here and nothing else is going to be.
+        {
+            for (box_, made) in behind::built(self.room.reaches) {
+                let colour = match made {
+                    behind::Made::Ground => aim::BEHIND_FLOOR,
+                    behind::Made::Wall => aim::BEHIND_WALL,
+                    behind::Made::Column => aim::BEHIND_COLUMN,
+                };
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(box_.center()).with_scale(box_.size()),
+                    colour,
+                    aim::DULL,
                 );
             }
         }
@@ -4012,6 +4080,19 @@ impl Game for Arcade {
                 cellar::GLOW_RANGE,
             ));
         }
+        // and the space behind the wall, which is faint and cool where every
+        // other light in here is warm. Most of it is not lit at all, which is
+        // the room. Spec 0011.
+        for at_ in behind::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at_),
+                at_,
+                behind::LAMP_COLOUR,
+                behind::LAMP_LIT,
+                behind::LAMP_RANGE,
+            ));
+        }
+
         // nearest first, because what the engine drops when a building outgrows
         // it should be the lamp in the furthest room and not whichever was
         // pushed last. Not a ration any more: every fitting in the building is
