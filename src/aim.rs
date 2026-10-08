@@ -201,7 +201,13 @@ pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 /// nook are the same condition, which is a fresh checkout where only the arcade
 /// has been built, and they had a line each. Two lists of the same thing is how
 /// a sconce ended up hanging in a doorway.
-pub const NOT_BUILT: &str = "Not built. Run ./check-all";
+///
+/// It said "Not built. Run ./check-all", which is a shell command standing in
+/// a room. True, and useful to exactly one person, who already knows. An
+/// arcade has its own word for a machine that will not start and it is taped
+/// to the glass: anyone can read it, and the one person who needs to know why
+/// is the one person who can work it out.
+pub const NOT_BUILT: &str = "Out of order";
 
 /// What the cellar is furnished with: the racks, the bottles in them, the
 /// barrels, and the hoops round the barrels. Spec 0007.
