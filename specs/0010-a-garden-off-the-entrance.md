@@ -200,10 +200,48 @@ any higher it is something to trip on. Low enough that it is not in `solid`
 either, because a thing you step on is not a thing you walk round.
 
 **Trees**, turned on the lathe like everything else round in this building:
-a trunk that tapers and leans, and a crown over it. Not a cone. A cone is a fir
-and a fir is not what anybody draws in a zen garden; this wants the flat, wide,
-layered crown of a pine or a maple, which is two or three discs of foliage at
-different heights and widths.
+a trunk that tapers and leans, and pads of foliage held out from it. Not a
+cone. A cone is a fir and a fir is not what anybody draws in a zen garden.
+
+Not three discs threaded on a straight trunk either, which is what it was, and
+which is a lollipop. A tree in a garden like this is pruned for years to lean
+and pruned clear along its limbs so the foliage is only at their ends: what is
+left is a handful of clouds at different heights with sky between them, and the
+gaps are the point.
+
+So the trunk bends. The bend comes on with the square and a bit of the height,
+so the foot is upright and the lean is in the top half; a straight slope is a
+mast guyed over. Which way each one leans is not written down. Every one of
+them leans towards the water, which is what they are pruned to do and what puts
+something over the pond to look through, and a direction per tree is three more
+numbers to get wrong.
+
+One account of the trunk's line, and everything hangs off it: the mesh is built
+from it, the pads sit on it, the limbs start on it and the collider follows it.
+The first build had the lean baked into the mesh and the pads placed on the
+straight line the trunk used to be on, so every pad floated off the side of its
+own tree.
+
+Five pads, going round as they go up, each a different size, the last on the
+trunk's own line because the top of a pruned pine is its apex. Each hangs off a
+limb that leaves the trunk a little below it, because a branch goes out and up.
+A pad with no limb is a cloud.
+
+The pads wander a good deal. A smooth one is a pebble, and worse, a squashed
+sphere carries the one highlight it is given all the way round its rim as a wet
+green streak.
+
+And the trunk is a fifth thinner than it was. That number had never been
+measured against anything: the collider round a tree was a box 0.34 across and
+the trunk it stood for was 0.42 at the foot, so the tree you walked round was
+narrower than the tree you could see. Taking the collider off the trunk's own
+thickness made it show up as three trees too close to the walls, and the trunk
+was what was wrong.
+
+The collider follows the lean as far as head height and no further. A box at
+the foot lets you walk through the part of a leaning trunk that is in front of
+your face; a box round the whole lean is a tree you cannot get near on the side
+it leans away from.
 
 **Stone lanterns** stand among the trees and on the pond's edge, and they are
 the room's only light. Per the lesson of the cellar and the baths, the lamps
@@ -288,6 +326,9 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - You cannot walk into the pond, from any side. — `garden::tests::you_cannot_walk_into_the_pond`
 - The lip is set stones and not a run of coping. — `garden::tests::the_lip_is_set_stones_and_not_a_kerb`
 - The garden stands on the roof of the baths and neither is inside the other. — `garden::tests::the_garden_sits_on_the_roof_of_the_baths`
+- Every tree leans over the water, and bends rather than slopes. — `garden::tests::every_tree_leans_over_the_water`
+- Its foliage is pads going round it, not a stack of plates. — `garden::tests::a_tree_is_pads_and_not_a_stack_of_plates`
+- Every pad hangs off a limb that starts on the trunk. — `garden::tests::every_pad_hangs_off_the_trunk`
 
 ## Verified by hand
 

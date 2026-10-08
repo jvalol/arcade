@@ -163,8 +163,9 @@ struct Arcade {
     /// The garden's water, its trees and its lanterns, per spec 0010.
     pool_in_the_garden: blitzkit::water::Water,
     pond_mesh: Option<MeshId>,
-    trunk: Option<MeshId>,
+    trunks: Vec<MeshId>,
     crown: Option<MeshId>,
+    limb: Option<MeshId>,
     lantern: Option<MeshId>,
     /// The koi: a body, a tail, and a skin each. Spec 0010.
     koi: Option<MeshId>,
@@ -343,8 +344,9 @@ impl Arcade {
                 water
             },
             pond_mesh: None,
-            trunk: None,
+            trunks: Vec::new(),
             crown: None,
+            limb: None,
             lantern: None,
             koi: None,
             fin: None,
@@ -877,8 +879,15 @@ impl Game for Arcade {
             .map(|seed| renderer.add_mesh(&garden::slab_mesh(*seed)))
             .collect();
         self.pond_mesh = Some(renderer.add_mesh(&self.pool_in_the_garden.surface()));
-        self.trunk = Some(renderer.add_mesh(&garden::trunk_mesh()));
-        self.crown = Some(renderer.add_mesh(&garden::crown_mesh()));
+        // a trunk apiece, because the lean is a share of the height and the
+        // thickness is not: one mesh scaled to two heights is a sapling and a
+        // log. The pads are one lump per cut, turned and squashed per pad.
+        self.trunks = garden::trees(self.room.reaches)
+            .iter()
+            .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
+            .collect();
+        self.crown = Some(renderer.add_mesh(&garden::pad_mesh(0x5A2F)));
+        self.limb = Some(renderer.add_mesh(&garden::limb_mesh()));
         self.lantern = Some(renderer.add_mesh(&garden::lantern_mesh()));
         self.koi = Some(renderer.add_mesh(&garden::koi_mesh()));
         self.fin = Some(renderer.add_mesh(&garden::fin_mesh()));
@@ -2111,21 +2120,50 @@ impl Game for Arcade {
                 scene.push_material(mesh, &Transform::at(Vec3::ZERO), aim::POND, 420.0);
             }
 
-            // the trees: a trunk, and the plates of foliage over it
-            if let (Some(trunk), Some(crown)) = (self.trunk, self.crown) {
-                for (stands, tall, wide) in garden::trees(self.room.reaches) {
-                    scene.push_colored(
-                        trunk,
-                        &Transform::at(stands).with_scale(vec3(1.0, tall, 1.0)),
-                        aim::BARK,
-                    );
+            // the trees: a bent trunk, a limb out to each pad of foliage, and
+            // the pads. Spec 0010.
+            for (tree, trunk) in garden::trees(self.room.reaches).iter().zip(&self.trunks) {
+                scene.push_colored(*trunk, &Transform::at(tree.at), aim::BARK);
 
-                    for (up, across, thick) in garden::crowns(tall, wide) {
-                        scene.push_colored(
+                if let Some(limb) = self.limb {
+                    for (from, to) in garden::limbs(tree) {
+                        let along = to - from;
+                        let long = along.length();
+
+                        if long > 1e-3 {
+                            // the mesh is built standing on its end, so it is
+                            // turned to point along the limb rather than placed
+                            // at an angle worked out by hand
+                            scene.push_colored(
+                                limb,
+                                &Transform::at(from)
+                                    .with_rotation(glam::Quat::from_rotation_arc(
+                                        Vec3::Y,
+                                        along / long,
+                                    ))
+                                    .with_scale(vec3(garden::LIMB_THICK, long, garden::LIMB_THICK)),
+                                aim::BARK,
+                            );
+                        }
+                    }
+                }
+
+                if let Some(crown) = self.crown {
+                    for pad in garden::pads(tree) {
+                        scene.push_material(
                             crown,
-                            &Transform::at(stands + Vec3::Y * up)
-                                .with_scale(vec3(across, thick, across)),
+                            &Transform::at(pad.at)
+                                .with_rotation(glam::Quat::from_rotation_y(pad.turn))
+                                .with_scale(vec3(
+                                    pad.wide,
+                                    pad.wide * garden::PAD_FLAT,
+                                    pad.wide * 0.86,
+                                )),
                             aim::LEAF,
+                            // no highlight. The default is a broad one and on
+                            // a pad this size it is a wet green streak across
+                            // the whole of it, which is a balloon.
+                            aim::DULL,
                         );
                     }
                 }

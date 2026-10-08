@@ -175,9 +175,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     // the pond's stone, which you stand on rather than in
     out.extend(basin(reaches));
     // and the trees and lanterns, which you walk round
-    out.extend(trees(reaches).into_iter().map(|(where_, tall, _)| {
-        Aabb::from_center_size(where_ + Vec3::Y * tall * 0.5, vec3(0.34, tall, 0.34))
-    }));
+    out.extend(trees(reaches).iter().map(trunk_box));
     out.extend(lanterns(reaches).into_iter().map(|(where_, tall)| {
         Aabb::from_center_size(where_ + Vec3::Y * tall * 0.5, vec3(0.5, tall, 0.5))
     }));
@@ -430,6 +428,11 @@ pub const WANDER: f32 = 0.30;
 /// from pole to pole, so the two seams close: a wander that does not come back
 /// to itself leaves a crack up the side of the stone and a tear at the top.
 pub fn wander(seed: u32, u: f32, v: f32) -> f32 {
+    wandered(seed, u, v, WANDER)
+}
+
+/// The same, by a given amount: a stone wanders further than a pad of foliage.
+pub fn wandered(seed: u32, u: f32, v: f32, by: f32) -> f32 {
     use std::f32::consts::{PI, TAU};
 
     let mut state = seed | 1;
@@ -454,11 +457,11 @@ pub fn wander(seed: u32, u: f32, v: f32) -> f32 {
         weight += share;
     }
 
-    out / weight * WANDER
+    out / weight * by
 }
 
 /// How far a stone leans off its own axis, as a share of its height.
-pub const LEANS: f32 = 0.24;
+pub const ROCK_LEANS: f32 = 0.24;
 
 /// Which way a stone leans a given way up itself, and how far.
 ///
@@ -481,11 +484,11 @@ pub fn tip(seed: u32, v: f32) -> Vec2 {
     };
 
     let angle = (next() % 360) as f32 / 360.0 * TAU;
-    let bend = 0.4 + (next() % 100) as f32 / 125.0;
+    let belly = 0.4 + (next() % 100) as f32 / 125.0;
     let way = vec2(angle.cos(), angle.sin());
 
     // a lean, and a belly on one side of it
-    way * ((v - 0.5) * LEANS + (v * PI).sin() * LEANS * bend * 0.5)
+    way * ((v - 0.5) * ROCK_LEANS + (v * PI).sin() * ROCK_LEANS * belly * 0.5)
 }
 
 /// One stone, carved: a lump the size of a unit, a third of it meant to be
@@ -1272,7 +1275,31 @@ pub fn bed(reaches: f32) -> Aabb {
     )
 }
 
-/// Where the trees stand, how tall each one is and how wide its crown.
+/// How far a tree leans off upright, as a share of its own height, and how
+/// sharply the lean comes on up the trunk.
+///
+/// Leaning, because a tree in a garden like this is pruned for years to lean,
+/// and a straight trunk with discs on it is a lollipop. Which way it leans is
+/// not written down: every one of them leans towards the water, which is what
+/// they are pruned to do and what puts something over the pond to look through.
+///
+/// The bend comes on with the square and a bit of the height, so the foot is
+/// upright and the lean is in the top half. A straight slope is a mast guyed
+/// over; a tree bends.
+pub const LEANS: f32 = 0.26;
+pub const BENDS: f32 = 1.7;
+
+/// One tree.
+pub struct Tree {
+    pub at: Vec3,
+    pub tall: f32,
+    pub wide: f32,
+    /// Which way it leans, as a direction on the floor.
+    pub leans: Vec2,
+    pub seed: u32,
+}
+
+/// Where the trees stand, how tall each is and how wide its crown.
 ///
 /// Three, in no line and no two the same size. Four would fill it and two
 /// would look placed.
@@ -1280,49 +1307,207 @@ pub fn bed(reaches: f32) -> Aabb {
 /// None of them near the door. One stood two paces inside it and square in
 /// front of it, which is a tree you walk into on the way in and, from a step
 /// further, a tree whose crown is the whole sky.
-pub fn trees(reaches: f32) -> Vec<(Vec3, f32, f32)> {
+pub fn trees(reaches: f32) -> Vec<Tree> {
     let middle = at(reaches);
-    let put = |x: f32, z: f32| vec3(middle.x + x, 0.0, middle.z + z);
+    let (water, _, _) = pond(reaches);
 
-    vec![
-        (put(-6.8, -6.2), 4.1, 3.6),
-        (put(5.4, 4.8), 3.2, 2.8),
-        (put(-6.6, 6.9), 3.6, 3.1),
+    [
+        (vec2(-6.8, -6.2), 4.1f32, 3.6f32, 0x3D71u32),
+        (vec2(5.4, 4.8), 3.2, 2.8, 0x8C44),
+        (vec2(-6.6, 6.9), 3.6, 3.1, 0x16BE),
     ]
+    .iter()
+    .map(|(off, tall, wide, seed)| {
+        let stands = vec3(middle.x + off.x, 0.0, middle.z + off.y);
+
+        Tree {
+            at: stands,
+            tall: *tall,
+            wide: *wide,
+            leans: vec2(water.x - stands.x, water.z - stands.z).normalize_or_zero(),
+            seed: *seed,
+        }
+    })
+    .collect()
 }
 
-/// A tree: a trunk that tapers, and a crown of two or three flat layers over
-/// it.
+/// How far along its lean a trunk is a given way up itself, from nought at the
+/// foot to one at the top.
+pub fn bend(on: f32) -> f32 {
+    on.clamp(0.0, 1.0).powf(BENDS)
+}
+
+/// Where a tree's trunk is a given way up itself.
 ///
-/// Layers and not a cone. A cone is a fir, and a fir is not what anybody draws
-/// in a garden like this: a pine clipped in this style is a stack of flat
-/// plates of foliage with sky between them.
-pub fn trunk_mesh() -> blitzkit::mesh::MeshData {
-    crate::cellar::turned(10, 6, |v| {
-        // thick at the foot, thin at the fork, with a swell where it leaves
-        // the ground
-        let waist = 0.30 - v * 0.17 + (1.0 - v).powi(4) * 0.12;
+/// The one account of the trunk's line. The mesh is built from it, the pads
+/// hang off it, the limbs start on it and the collider follows it, and the
+/// first version of this had the lean written into the mesh and the pads
+/// placed on the straight line the trunk used to be on, so every pad floated
+/// off the side of the tree it belonged to.
+pub fn trunk_at(tree: &Tree, on: f32) -> Vec3 {
+    let out = tree.leans * tree.tall * LEANS * bend(on);
 
-        (v, waist)
-    })
+    tree.at + vec3(out.x, tree.tall * on.clamp(0.0, 1.0), out.y)
 }
 
-/// One plate of foliage: wide, flat, and rounded off at the rim.
-pub fn crown_mesh() -> blitzkit::mesh::MeshData {
-    crate::cellar::turned(16, 8, |v| {
-        let along = v * std::f32::consts::PI;
-
-        (0.5 - along.cos() * 0.5, along.sin())
-    })
+/// How thick a trunk is a given way up itself.
+///
+/// Thinner than it was by a fifth. The old number was never measured against
+/// anything: the collider round a tree was a box 0.34 across and the trunk it
+/// stood for was 0.42 at the foot, so the tree you walked round was narrower
+/// than the tree you could see. Taking the collider off the trunk's own
+/// thickness made the difference show up as three trees too close to the
+/// walls, and the trunk was the thing that was wrong.
+pub fn trunk_wide(on: f32) -> f32 {
+    0.26 - on * 0.14 + (1.0 - on).powi(4) * 0.08
 }
 
-/// The plates of one tree: how far up each sits, how wide it is and how thick.
-pub fn crowns(tall: f32, wide: f32) -> Vec<(f32, f32, f32)> {
-    vec![
-        (tall * 0.55, wide, 0.42),
-        (tall * 0.78, wide * 0.78, 0.36),
-        (tall * 0.96, wide * 0.46, 0.3),
-    ]
+/// The trunk, bent along its own lean.
+///
+/// Built per tree rather than once and scaled, because the lean is a share of
+/// the height and the thickness is not: one mesh scaled to two heights is a
+/// sapling and a log.
+pub fn trunk_mesh(tree: &Tree) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    let mut mesh = blitzkit::mesh::MeshData::surface(10, 14, |u, v| {
+        let round = -u * TAU;
+        let wide = trunk_wide(v) * 0.5;
+        let on = trunk_at(tree, v) - tree.at;
+
+        vec3(round.cos() * wide + on.x, on.y, round.sin() * wide + on.z)
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// The box a trunk fills, which is what you walk round.
+///
+/// Up to head height and no further. A leaning trunk is somewhere else at the
+/// top than at the foot, and a box at the foot lets you walk through the part
+/// of it that is actually in front of your face; a box round the whole lean is
+/// a tree you cannot get near on the side it leans away from.
+pub fn trunk_box(tree: &Tree) -> Aabb {
+    let head = (1.8f32 / tree.tall).min(1.0);
+    let top = trunk_at(tree, head);
+    let foot = trunk_wide(0.0);
+
+    Aabb::from_center_size(
+        vec3(
+            (tree.at.x + top.x) * 0.5,
+            tree.tall * 0.5,
+            (tree.at.z + top.z) * 0.5,
+        ),
+        vec3(
+            foot + (top.x - tree.at.x).abs(),
+            tree.tall,
+            foot + (top.z - tree.at.z).abs(),
+        ),
+    )
+}
+
+/// Where a tree's pads of foliage sit: how far up the trunk, how far out from
+/// it, how far round, and how wide.
+///
+/// Pads and not plates. Three flat discs threaded on the trunk is a fir and a
+/// tree in a garden like this is pruned the other way about: the foliage is
+/// cleared off the limbs except at their ends, so what is left is a handful of
+/// clouds at different heights with sky between them. The gaps are the point.
+///
+/// Five, going round as they go up, each a different size, and the last one on
+/// the trunk's own line because the top of a pruned pine is its apex.
+const PADS: [(f32, f32, f32, f32); 5] = [
+    (0.45, 0.44, 0.00, 0.62),
+    (0.58, 0.38, 0.42, 0.50),
+    (0.70, 0.33, 0.80, 0.47),
+    (0.83, 0.28, 0.24, 0.37),
+    (0.98, 0.05, 0.62, 0.29),
+];
+
+/// One pad: where it sits, how far across and how far round.
+pub struct Pad {
+    pub at: Vec3,
+    pub wide: f32,
+    pub turn: f32,
+}
+
+/// The pads of one tree.
+pub fn pads(tree: &Tree) -> Vec<Pad> {
+    let about = (tree.seed % 360) as f32 / 360.0;
+
+    PADS.iter()
+        .enumerate()
+        .map(|(n, (up, out, round, wide))| {
+            // turned round by the tree's own amount, so three trees built from
+            // one list are not three of the same tree
+            let round = (round + about) * std::f32::consts::TAU;
+            let along = vec2(round.cos(), round.sin()) * out * tree.wide;
+            let on = trunk_at(tree, *up);
+
+            Pad {
+                at: vec3(on.x + along.x, on.y, on.z + along.y),
+                wide: wide * tree.wide,
+                turn: round + n as f32 * 0.9,
+            }
+        })
+        .collect()
+}
+
+/// The limb under each pad: where it leaves the trunk and where it ends.
+///
+/// A pad with no limb is a cloud. The limb leaves the trunk a little below the
+/// pad, because a branch goes out and up rather than straight out.
+pub fn limbs(tree: &Tree) -> Vec<(Vec3, Vec3)> {
+    pads(tree)
+        .into_iter()
+        .map(|pad| {
+            let on = ((pad.at.y / tree.tall) - LIMB_UNDER).max(0.0);
+
+            (trunk_at(tree, on), pad.at)
+        })
+        .collect()
+}
+
+/// How far below its pad a limb leaves the trunk, as a share of the height,
+/// and how thick a limb is against the pad it carries.
+pub const LIMB_UNDER: f32 = 0.12;
+pub const LIMB_THICK: f32 = 0.055;
+
+/// How flat a pad is against how wide, and how far its edge wanders.
+///
+/// Flat, because a pruned pad is a plate of needles held out level, and round
+/// it is a bush. Wandering, and wandering a good deal: a smooth one is a
+/// pebble, and worse than that, a squashed sphere carries the one highlight it
+/// is given all the way round its rim as a wet green streak. What breaks that
+/// up is the same thing that says foliage, which is a surface that is not
+/// going anywhere smoothly.
+pub const PAD_FLAT: f32 = 0.33;
+pub const PAD_WANDER: f32 = 0.31;
+
+/// One pad of foliage, lumpy and smooth.
+///
+/// Smooth and not faceted, which is the opposite of the stones. A faceted pad
+/// is cut glass; what reads as a mass of needles is a surface with no edges in
+/// it at all.
+pub fn pad_mesh(seed: u32) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::{PI, TAU};
+
+    let mut mesh = blitzkit::mesh::MeshData::surface(16, 9, |u, v| {
+        let round = -u * TAU;
+        let up = v * PI;
+        let out = (0.5 + wandered(seed, u, v, PAD_WANDER)) * up.sin();
+
+        vec3(round.cos() * out, -up.cos() * 0.5, round.sin() * out)
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// A limb: a taper from the trunk to the pad, built along y.
+pub fn limb_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(7, 4, |v| (v, 1.0 - v * 0.45))
 }
 
 /// Where the stone lanterns stand and how tall each is.
@@ -2136,13 +2321,13 @@ mod tests {
                 );
             }
 
-            for (where_, _, _) in trees(reaches) {
-                let apart = here.distance(vec2(where_.x, where_.z));
+            for tree in trees(reaches) {
+                let apart = here.distance(vec2(tree.at.x, tree.at.z));
 
                 assert!(
                     apart > step.wide * 0.5 + 0.17,
                     "a stepping stone is under a tree at {:?}",
-                    where_
+                    tree.at
                 );
             }
 
@@ -2385,6 +2570,134 @@ mod tests {
         );
     }
 
+    /// Spec 0010: every tree leans towards the water, and leans rather than
+    /// slopes.
+    ///
+    /// Which way is not written down anywhere. Written down it is three more
+    /// numbers to get wrong, and the one thing these trees are pruned to do is
+    /// reach out over the pond.
+    #[test]
+    fn every_tree_leans_over_the_water() {
+        let reaches = room().reaches;
+        let (water, _, _) = pond(reaches);
+
+        for tree in trees(reaches) {
+            let top = trunk_at(&tree, 1.0);
+            let was = vec2(water.x - tree.at.x, water.z - tree.at.z).length();
+            let now = vec2(water.x - top.x, water.z - top.z).length();
+
+            assert!(
+                now < was - tree.tall * LEANS * 0.5,
+                "a tree's top is {:.2} from the water and its foot is {:.2}",
+                now,
+                was
+            );
+
+            // and it bends: the lean is in the top half, so half way up it is
+            // nowhere near half way over
+            let middle = trunk_at(&tree, 0.5);
+            let over = vec2(middle.x - tree.at.x, middle.z - tree.at.z).length();
+            let whole = vec2(top.x - tree.at.x, top.z - tree.at.z).length();
+
+            assert!(
+                over < whole * 0.4,
+                "half way up it is {:.0}% of the way over, which is a mast and not a tree",
+                over / whole * 100.0
+            );
+        }
+    }
+
+    /// Spec 0010: the pads go round the trunk and are not three of a size.
+    ///
+    /// A tree whose foliage is all on one side is a hedge that lost an
+    /// argument, and one whose pads are a stack of the same disc is the fir
+    /// this was.
+    #[test]
+    fn a_tree_is_pads_and_not_a_stack_of_plates() {
+        let reaches = room().reaches;
+
+        for tree in trees(reaches) {
+            let laid = pads(&tree);
+
+            assert!(laid.len() > 3, "a tree of {} pads", laid.len());
+
+            let (mut small, mut big) = (f32::MAX, 0.0f32);
+            let (mut low, mut high) = (f32::MAX, 0.0f32);
+            let mut round = Vec2::ZERO;
+
+            for pad in laid.iter() {
+                small = small.min(pad.wide);
+                big = big.max(pad.wide);
+                low = low.min(pad.at.y);
+                high = high.max(pad.at.y);
+                round += vec2(pad.at.x - tree.at.x, pad.at.z - tree.at.z);
+            }
+
+            assert!(
+                big > small * 1.6,
+                "every pad is the same size: {:.2} to {:.2}",
+                small,
+                big
+            );
+            assert!(
+                high - low > tree.tall * 0.4,
+                "the pads are all at one height, over {:.2} of a tree {:.2} tall",
+                high - low,
+                tree.tall
+            );
+            // they go round, so what is left of the trunk's own lean when you
+            // add them all up is the lean and not a side
+            let leaning = round.dot(tree.leans);
+            assert!(
+                (round - tree.leans * leaning).length() < tree.wide * 0.6,
+                "the pads are all on one side of the trunk: {:?}",
+                round
+            );
+        }
+    }
+
+    /// Spec 0010: every pad hangs off a limb that starts on the trunk.
+    ///
+    /// A pad with no limb under it is a cloud, and a limb that starts in thin
+    /// air is worse than none. Both ends are taken from `trunk_at`, so this is
+    /// the test that they are taken from the same `trunk_at`: the first build
+    /// of this had the lean inside the trunk's mesh and the pads placed on the
+    /// straight line the trunk used to be on.
+    #[test]
+    fn every_pad_hangs_off_the_trunk() {
+        let reaches = room().reaches;
+
+        for tree in trees(reaches) {
+            let laid = pads(&tree);
+            let out = limbs(&tree);
+
+            assert_eq!(laid.len(), out.len(), "a limb short");
+
+            for (pad, (from, to)) in laid.iter().zip(out.iter()) {
+                assert!(
+                    to.distance(pad.at) < 1e-4,
+                    "a limb ends {:.3} from its pad",
+                    to.distance(pad.at)
+                );
+
+                // the foot of the limb is on the trunk's line at that height,
+                // within the thickness of the trunk there
+                let on = (from.y / tree.tall).clamp(0.0, 1.0);
+                let line = trunk_at(&tree, on);
+
+                assert!(
+                    vec2(from.x - line.x, from.z - line.z).length() < trunk_wide(on),
+                    "a limb starts off the trunk at {:?}",
+                    from
+                );
+                assert!(
+                    from.y < pad.at.y - 1e-3,
+                    "a limb goes down to its pad rather than up to it",
+                );
+            }
+        }
+    }
+
     /// Spec 0010: no part of the hall is laid over the garden.
     ///
     /// The hall's floor is two slabs, and the carpet and the ceiling are now
@@ -2540,7 +2853,22 @@ mod tests {
 
         let standing: Vec<(&str, Vec3, f32)> = trees(reaches)
             .into_iter()
-            .map(|(where_, _, _)| ("a tree", where_, 0.34))
+            .map(|tree| {
+                // the trunk's own box, which is wider than the trunk because
+                // it leans: taken as the trunk's thickness alone, a tree you
+                // can walk through at head height passes this
+                let box_ = trunk_box(&tree);
+
+                (
+                    "a tree",
+                    vec3(
+                        (box_.min.x + box_.max.x) * 0.5,
+                        0.0,
+                        (box_.min.z + box_.max.z) * 0.5,
+                    ),
+                    (box_.max.x - box_.min.x).max(box_.max.z - box_.min.z),
+                )
+            })
             .chain(
                 lanterns(reaches)
                     .into_iter()
