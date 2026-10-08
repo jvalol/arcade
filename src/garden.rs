@@ -181,6 +181,16 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     out.extend(lanterns(reaches).into_iter().map(|(where_, tall)| {
         Aabb::from_center_size(where_ + Vec3::Y * tall * 0.5, vec3(0.5, tall, 0.5))
     }));
+    // and the set stones, one box each: a group is three things to walk round
+    // and not one, and the gaps between them are where your foot goes
+    out.extend(rocks(reaches).into_iter().map(|stone| {
+        let up = stands(stone.size);
+
+        Aabb::from_center_size(
+            stone.at + Vec3::Y * up * 0.5,
+            vec3(stone.size.x, up, stone.size.z),
+        )
+    }));
 
     out
 }
@@ -366,16 +376,350 @@ pub fn beds(reaches: f32) -> Vec<(Vec3, Vec2)> {
     ]
 }
 
-/// How far apart the rake's lines are, which is also how big a gravel tile is.
-pub const RAKE: f32 = 1.6;
+/// Flat shading, by giving every triangle its own three corners.
+///
+/// `compute_normals` averages a face's normal into the corners it shares, which
+/// is right for a barrel and wrong for a stone: a boulder of twelve facets
+/// shaded smooth is a potato. A rock is the one thing in this garden whose
+/// faces you are meant to see.
+pub fn faceted(mesh: blitzkit::mesh::MeshData) -> blitzkit::mesh::MeshData {
+    use blitzkit::mesh::Vertex;
 
-/// Raked gravel, as a picture one rake's width across.
+    let mut vertices = Vec::with_capacity(mesh.indices.len());
+
+    for triangle in mesh.indices.chunks_exact(3) {
+        let corners = [
+            mesh.vertices[triangle[0] as usize],
+            mesh.vertices[triangle[1] as usize],
+            mesh.vertices[triangle[2] as usize],
+        ];
+        let (a, b, c) = (
+            Vec3::from(corners[0].position),
+            Vec3::from(corners[1].position),
+            Vec3::from(corners[2].position),
+        );
+        let normal = (b - a).cross(c - a).normalize_or_zero().to_array();
+
+        for corner in corners.iter() {
+            vertices.push(Vertex::new(corner.position, normal, corner.uv));
+        }
+    }
+
+    let indices = (0..vertices.len() as u32).collect();
+
+    blitzkit::mesh::MeshData::new(vertices, indices)
+}
+
+/// How many facets a stone is cut into, round and from pole to pole.
+///
+/// Few. A stone of a hundred faces is a ball with a texture problem; what makes
+/// it read as rock is being able to count the planes.
+pub const CUT_ROUND: u32 = 11;
+pub const CUT_STEPS: u32 = 7;
+
+/// How far a stone wanders off round, as a share of its radius.
+pub const WANDER: f32 = 0.30;
+
+/// How far a stone is out of round at a point on it.
+///
+/// Three waves rather than noise, because a stone wants a shape and not a
+/// texture: a boulder is a few big planes meeting at edges, and a sum of
+/// octaves gives it a rind of warts instead.
+///
+/// Every wave is a whole number of turns round and a whole number of halves
+/// from pole to pole, so the two seams close: a wander that does not come back
+/// to itself leaves a crack up the side of the stone and a tear at the top.
+pub fn wander(seed: u32, u: f32, v: f32) -> f32 {
+    use std::f32::consts::{PI, TAU};
+
+    let mut state = seed | 1;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        state
+    };
+
+    let mut out = 0.0;
+    let mut weight = 0.0;
+
+    for n in 0..3 {
+        let round = 1.0 + (next() % 3) as f32;
+        let up = 1.0 + (next() % 2) as f32;
+        let phase = (next() % 360) as f32 / 360.0 * TAU;
+        let share = 1.0 / (1.0 + n as f32);
+
+        out += (u * TAU * round + phase).sin() * (v * PI * up).sin() * share;
+        weight += share;
+    }
+
+    out / weight * WANDER
+}
+
+/// How far a stone leans off its own axis, as a share of its height.
+pub const LEANS: f32 = 0.24;
+
+/// Which way a stone leans a given way up itself, and how far.
+///
+/// A function of the way up alone, which is the only kind of wandering that can
+/// move a pole. Roundness that varies with u has to come back to nothing at the
+/// top and the bottom or the stone is torn open there, so on its own it leaves
+/// a lump that is still a ball in outline: pinched at two points, the same
+/// width every way across. What makes the outline lopsided is leaning the whole
+/// of it over, and a lean takes the poles with it.
+pub fn tip(seed: u32, v: f32) -> Vec2 {
+    use std::f32::consts::{PI, TAU};
+
+    let mut state = seed.wrapping_mul(2_654_435_761) | 1;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        state
+    };
+
+    let angle = (next() % 360) as f32 / 360.0 * TAU;
+    let bend = 0.4 + (next() % 100) as f32 / 125.0;
+    let way = vec2(angle.cos(), angle.sin());
+
+    // a lean, and a belly on one side of it
+    way * ((v - 0.5) * LEANS + (v * PI).sin() * LEANS * bend * 0.5)
+}
+
+/// One stone, carved: a lump the size of a unit, a third of it meant to be
+/// under the gravel.
+pub fn rock_mesh(seed: u32) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::{PI, TAU};
+
+    faceted(blitzkit::mesh::MeshData::surface(
+        CUT_ROUND,
+        CUT_STEPS,
+        |u, v| {
+            // wound the way `turned` winds, which is for looking at from
+            // outside
+            let round = -u * TAU;
+            let up = v * PI;
+            let out = (0.5 + wander(seed, u, v)) * up.sin();
+            let lean = tip(seed, v);
+
+            vec3(
+                round.cos() * out + lean.x,
+                -up.cos() * 0.5,
+                round.sin() * out + lean.y,
+            )
+        },
+    ))
+}
+
+/// How much of a stone is under the gravel.
+///
+/// A third. Set on the surface they are pebbles on a tray, and the one thing
+/// every account of this says is that a stone has to look like it came up out
+/// of the ground rather than having been put down on it.
+pub const BURIED: f32 = 0.34;
+
+/// How many cuts there are, and so how many stones are the same stone.
+pub const CUTS: [u32; 3] = [0x4E21, 0x91C7, 0x2BD5];
+
+/// A group of stones: where its middle is from the middle of the garden, which
+/// way round it is set, how big it is and how many stones it has.
+#[derive(Clone, Copy)]
+pub struct Group {
+    pub about: Vec2,
+    pub turn: f32,
+    pub size: f32,
+    pub stones: usize,
+}
+
+/// Where the groups are.
+///
+/// In the open gravel, which in this garden is the south strip and the east
+/// one: the pond takes the middle and the walk round it takes a body's width
+/// outside that, and what is left either side of the water is a corridor and
+/// not a place to put anything.
+///
+/// Three groups of three, three and two. Odd numbers, and never the same
+/// number twice, which is the one rule every account of these gardens agrees
+/// on.
+pub const GROUPS: [Group; 3] = [
+    Group {
+        about: vec2(2.2, -5.4),
+        turn: 0.4,
+        size: 1.0,
+        stones: 3,
+    },
+    Group {
+        about: vec2(-4.2, -5.6),
+        turn: 2.3,
+        size: 0.82,
+        stones: 3,
+    },
+    Group {
+        about: vec2(5.8, -0.5),
+        turn: -1.1,
+        size: 0.7,
+        stones: 2,
+    },
+];
+
+/// The stones of a group: where each sits from its middle, how big it is and
+/// which cut it is.
+///
+/// One tall, one low and broad, one small, and the small one nearer the tall
+/// one than the broad one is. Three of a size evenly spaced is a bus queue, and
+/// what this is meant to read as is two things, one of which is two things.
+const SET: [(Vec2, Vec3, usize); 3] = [
+    (vec2(0.0, 0.0), vec3(0.60, 1.18, 0.52), 0),
+    (vec2(0.84, -0.40), vec3(0.98, 0.44, 0.82), 1),
+    (vec2(-0.30, 0.46), vec3(0.42, 0.62, 0.38), 2),
+];
+
+/// One stone as it stands.
+pub struct Stone {
+    /// Where it meets the gravel.
+    pub at: Vec3,
+    /// How wide, how tall and how deep, before any of it is buried.
+    pub size: Vec3,
+    pub turn: f32,
+    /// Which of the cuts it is.
+    pub cut: usize,
+}
+
+/// Every stone in the garden.
+pub fn rocks(reaches: f32) -> Vec<Stone> {
+    let middle = at(reaches);
+
+    GROUPS
+        .iter()
+        .flat_map(|group| {
+            let (sin, cos) = group.turn.sin_cos();
+
+            SET.iter()
+                .take(group.stones)
+                .enumerate()
+                .map(move |(n, (off, size, cut))| {
+                    // turned about the group's middle, so no two groups are
+                    // the same group seen from the same side
+                    let off =
+                        vec2(off.x * cos - off.y * sin, off.x * sin + off.y * cos) * group.size;
+
+                    Stone {
+                        at: vec3(
+                            middle.x + group.about.x + off.x,
+                            0.0,
+                            middle.z + group.about.y + off.y,
+                        ),
+                        size: *size * group.size,
+                        // and each stone turned again, so the same cut used
+                        // twice is not the same stone twice
+                        turn: group.turn + n as f32 * 1.9,
+                        cut: *cut,
+                    }
+                })
+        })
+        .collect()
+}
+
+/// How far a stone stands out of the ground.
+pub fn stands(size: Vec3) -> f32 {
+    size.y * (1.0 - BURIED)
+}
+
+/// How far across a group is: the furthest any of its stones reaches from its
+/// middle, doubled.
+///
+/// Groups clear the walls and the walk as groups and not as stones. The stones
+/// of one are meant to be within touching distance of each other, which is the
+/// whole of what makes them a group rather than three stones; a rule that
+/// keeps every stone a body's width from every other stone forbids a group.
+pub fn group_wide(group: &Group) -> f32 {
+    SET.iter()
+        .take(group.stones)
+        .map(|(off, size, _)| (off.length() + size.x.max(size.z) * 0.5) * group.size)
+        .fold(0.0f32, f32::max)
+        * 2.0
+}
+
+/// Every group: where its middle stands and how far across it is.
+pub fn group_at(reaches: f32) -> Vec<(Vec3, f32)> {
+    let middle = at(reaches);
+
+    GROUPS
+        .iter()
+        .map(|group| {
+            (
+                vec3(middle.x + group.about.x, 0.0, middle.z + group.about.y),
+                group_wide(group),
+            )
+        })
+        .collect()
+}
+
+/// The middle of each group flat, which is what the raking runs round.
+pub fn group_middles(reaches: f32) -> Vec<Vec2> {
+    group_at(reaches)
+        .into_iter()
+        .map(|(where_, _)| vec2(where_.x, where_.z))
+        .collect()
+}
+
+/// How far apart the rake's lines are.
+///
+/// A hand's width. It was a metre and a half, which is the width of a furrow a
+/// tractor leaves: standing next to it you were inside one line, so the gravel
+/// read as a wash with a gradient across it and the raking was not visible at
+/// any distance at all. What a rake leaves is a corrugation you can see the
+/// whole of from where you stand.
+pub const RAKE: f32 = 0.22;
+
+/// How many pixels a unit of gravel is painted at, and how far the rings round
+/// a group of stones run before the straight raking takes over.
+///
+/// A bed gets one picture of its own rather than one tile repeated, because the
+/// rings have to know where the stones are and a tile cannot.
+///
+/// Enough pixels for about nine to a line, so a furrow is a furrow and not a
+/// stair. The rings are ten lines out, which is a whole number of them on
+/// purpose: the handover lands on a line and reads as the outermost ring
+/// rather than as a cut edge.
+pub const PER_UNIT: f32 = 46.0;
+pub const RINGS: f32 = RAKE * 10.0;
+
+/// How far along the furrows a point is, in whole lines.
+///
+/// Rings where there are stones and straight lines where there are none, with
+/// the handover falling on a furrow so the outermost ring reads as a line and
+/// not as a cut edge.
+pub fn furrow_at(here: Vec2, about: &[Vec2]) -> f32 {
+    let near = about
+        .iter()
+        .map(|group| here.distance(*group))
+        .fold(f32::MAX, f32::min);
+
+    let from = if near < RINGS { near } else { here.y };
+
+    from / RAKE
+}
+
+/// Raked gravel: one bed of it, painted in the garden's own coordinates.
 ///
 /// Lines rather than a scatter. A gravel texture of pure speckle is sand, and
-/// the one thing everybody has seen in a picture of this kind of garden is the
-/// rake's lines going round in parallel.
-pub fn gravel(seed: u32) -> blitzkit::texture::TextureData {
-    const SIDE: u32 = 128;
+/// what says somebody keeps this garden is the raking.
+///
+/// Straight in the open and round where there are stones. Straight everywhere
+/// it was wallpaper: lines with nothing to break round are corduroy, and the
+/// rings are the whole point of the thing, which is that the stones are
+/// islands and the gravel is water.
+pub fn raked(
+    seed: u32,
+    middle: Vec3,
+    size: Vec2,
+    about: &[Vec2],
+) -> blitzkit::texture::TextureData {
+    let across = ((size.x * PER_UNIT).round() as u32).max(4);
+    let along = ((size.y * PER_UNIT).round() as u32).max(4);
     let mut rng = seed | 1;
     let mut next = move || {
         rng ^= rng << 13;
@@ -384,16 +728,18 @@ pub fn gravel(seed: u32) -> blitzkit::texture::TextureData {
         rng
     };
 
-    let mut pixels = Vec::with_capacity((SIDE * SIDE * 4) as usize);
-    for y in 0..SIDE {
-        // one furrow across the tile, so the lines run on from tile to tile
-        let along = y as f32 / SIDE as f32 * std::f32::consts::TAU;
-        let furrow = along.sin() * 0.5 + 0.5;
+    let mut pixels = Vec::with_capacity((across * along * 4) as usize);
+    for j in 0..along {
+        let z = middle.z + (j as f32 / along as f32 - 0.5) * size.y;
 
-        for _ in 0..SIDE {
+        for i in 0..across {
+            let x = middle.x + (i as f32 / across as f32 - 0.5) * size.x;
+            let here = vec2(x, z);
+            let phase = furrow_at(here, about);
+            let furrow = (phase * std::f32::consts::TAU).sin() * 0.5 + 0.5;
             // the grit itself, which is what stops the furrows being corduroy
             let grit = (next() % 24) as f32 / 24.0;
-            let tone = 150.0 + furrow * 38.0 - grit * 26.0;
+            let tone = 142.0 + furrow * 52.0 - grit * 22.0;
 
             pixels.extend_from_slice(&[
                 (tone * 1.02) as u8,
@@ -404,7 +750,7 @@ pub fn gravel(seed: u32) -> blitzkit::texture::TextureData {
         }
     }
 
-    blitzkit::texture::TextureData::from_pixels(SIDE, SIDE, pixels)
+    blitzkit::texture::TextureData::from_pixels(across, along, pixels)
 }
 
 /// The faces of the garden's walls, as a box each.
@@ -491,7 +837,19 @@ pub fn pond(reaches: f32) -> (Vec3, Vec2, f32) {
 /// The kerb stands a little proud of the gravel and the basin hangs below it,
 /// so the water is held in a stone trough rather than lying on the floor.
 pub fn basin(reaches: f32) -> Vec<Aabb> {
-    let (water, size, deep) = pond(reaches);
+    let mut out = kerbs(reaches);
+    out.push(bed(reaches));
+
+    out
+}
+
+/// The four stones round the lip, which are the ones that read as stone.
+///
+/// Apart from the bed, because they are not the same thing to look at. Cut
+/// together they were one colour, and a pale floor under see-through water is
+/// a tiled bath with a coping round it. A pond's bottom is silt.
+pub fn kerbs(reaches: f32) -> Vec<Aabb> {
+    let (water, size, _) = pond(reaches);
     let half = size * 0.5;
     let out = KERB;
 
@@ -514,12 +872,18 @@ pub fn basin(reaches: f32) -> Vec<Aabb> {
             vec3(water.x + half.x + out * 0.5, BRIM * 0.5, water.z),
             vec3(out, BRIM * 2.0, size.y),
         ),
-        // and the floor of it, which is what stops you at the bottom
-        Aabb::from_center_size(
-            vec3(water.x, -deep - BRIM - 0.15, water.z),
-            vec3(size.x, 0.3, size.y),
-        ),
     ]
+}
+
+/// The bed of it, which is what stops you at the bottom and what you see
+/// through the water.
+pub fn bed(reaches: f32) -> Aabb {
+    let (water, size, deep) = pond(reaches);
+
+    Aabb::from_center_size(
+        vec3(water.x, -deep - BRIM - 0.15, water.z),
+        vec3(size.x, 0.3, size.y),
+    )
 }
 
 /// Where the trees stand, how tall each one is and how wide its crown.
@@ -653,9 +1017,604 @@ pub const RUNS: f32 = 2.1;
 pub const LAMP_LIT: f32 = 1.5;
 pub const LAMP_RANGE: f32 = 4.5;
 
+/// How fat a koi is at its widest, as a fraction of its length, and how far
+/// along it that is.
+///
+/// Forward of the middle, because a fish's shoulders are behind its head and
+/// everything behind them is taper. A spindle fattest in the middle is a
+/// lozenge and reads as a bar of soap.
+pub const KOI_FAT: f32 = 0.26;
+pub const KOI_SHOULDER: f32 = 0.62;
+
+/// How wide a koi is against how deep it is. A fish is a flat thing carried on
+/// edge, and a round one is a sausage.
+pub const KOI_FLAT: f32 = 0.66;
+
+/// How far behind the body the tail trails, how far across it spreads and how
+/// far it swings, and how often it swings a second.
+pub const FIN_LONG: f32 = 0.30;
+pub const FIN_WIDE: f32 = 0.34;
+pub const FIN_DEEP: f32 = 0.30;
+pub const WAG: f32 = 0.34;
+pub const BEATS: f32 = 0.75;
+
+/// How far a koi rises and falls as it goes round, and how far under the
+/// surface the shallowest of them may come.
+///
+/// They hang at a depth each and drift about it. Held exactly, three fish at
+/// three fixed heights are three beads on three wires.
+pub const BOB: f32 = 0.03;
+
+/// How fat a koi is a given way along itself, nought at the tail and one at
+/// the nose.
+pub fn koi_waist(v: f32) -> f32 {
+    if v >= KOI_SHOULDER {
+        // the head, which is a quarter ellipse from the shoulder to a snout
+        // that is blunt rather than pointed. A fish is not an arrow.
+        let on = (v - KOI_SHOULDER) / (1.0 - KOI_SHOULDER);
+
+        KOI_FAT * (1.0 - on * on * 0.86).max(0.0).sqrt()
+    } else {
+        // and the body behind them, down to the stalk the tail hangs off
+        let on = v / KOI_SHOULDER;
+
+        KOI_FAT * (0.07 + 0.93 * on.powf(0.75))
+    }
+}
+
+/// The koi's body, turned like everything else round in this building.
+pub fn koi_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(12, 18, |v| (v - 0.5, koi_waist(v)))
+}
+
+/// The tail: a fan off the stalk, root at nought and trailing edge at one.
+///
+/// What you see of a fish in dark water, before you see the fish, is the tail
+/// going over. A body alone drifts like a leaf.
+pub fn fin_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(8, 6, |v| (v, 0.10 + v * v * 0.90))
+}
+
+/// One koi's round: a circle, and nothing else.
+///
+/// Not simulated, per spec 0010. A fish that knows where another fish is, is a
+/// spec of its own. What keeps three fixed circles from reading as three clock
+/// hands is that no two share a middle, a speed, a direction or a depth, and
+/// the depths are what keep them from swimming through each other.
+#[derive(Clone, Copy)]
+pub struct Round {
+    /// The middle of the circle, from the middle of the water.
+    pub about: Vec2,
+    /// How far out from that middle it swims.
+    pub out: f32,
+    /// Turns a second, signed: a negative one goes round the other way.
+    pub turns: f32,
+    /// How far under the surface it hangs, and how often it rises and falls.
+    pub under: f32,
+    pub rises: f32,
+    /// Nose to the root of the tail.
+    pub long: f32,
+    /// Where in its own circle it is when the room opens, in turns.
+    pub from: f32,
+}
+
+/// The three of them.
+///
+/// Three, like the trees, and for the same reason: two is a pair and four is a
+/// shoal. The outer one is the big one and the deep one is the small quick
+/// one, which is the order a pond puts them in by itself.
+pub const ROUNDS: [Round; 3] = [
+    Round {
+        about: vec2(-0.9, -0.3),
+        out: 1.6,
+        turns: 0.042,
+        under: 0.17,
+        rises: 0.11,
+        long: 0.62,
+        from: 0.0,
+    },
+    Round {
+        about: vec2(1.2, 0.6),
+        out: 1.5,
+        turns: -0.055,
+        under: 0.45,
+        rises: 0.17,
+        long: 0.54,
+        from: 0.3,
+    },
+    Round {
+        about: vec2(-0.4, 1.1),
+        out: 0.8,
+        turns: 0.071,
+        under: 0.70,
+        rises: 0.23,
+        long: 0.42,
+        from: 0.65,
+    },
+];
+
+/// A koi as it is this instant.
+pub struct Swims {
+    pub at: Vec3,
+    /// Which way its nose points, as a turn about y from +z.
+    pub heading: f32,
+    pub long: f32,
+    /// How far the tail is over, in radians.
+    pub wag: f32,
+    /// How far under the surface it is hanging, which is what says how much
+    /// of a wake it drags.
+    pub under: f32,
+}
+
+/// Where the koi are now.
+pub fn koi(reaches: f32, since: f32) -> Vec<Swims> {
+    use std::f32::consts::TAU;
+
+    let (water, _, _) = pond(reaches);
+
+    ROUNDS
+        .iter()
+        .map(|round| {
+            let round_to = (round.from + since * round.turns) * TAU;
+            // the tangent is a quarter turn on from where it stands, and the
+            // sign of `turns` is which quarter
+            let way = round.turns.signum();
+            let (dx, dz) = (-round_to.sin() * way, round_to.cos() * way);
+
+            Swims {
+                at: vec3(
+                    water.x + round.about.x + round_to.cos() * round.out,
+                    water.y - round.under + ((since * round.rises + round.from) * TAU).sin() * BOB,
+                    water.z + round.about.y + round_to.sin() * round.out,
+                ),
+                heading: dx.atan2(dz),
+                long: round.long,
+                wag: ((since * BEATS + round.from) * TAU).sin() * WAG,
+                under: round.under,
+            }
+        })
+        .collect()
+}
+
+/// How hard a koi pushes the water over it, and how deep it has to be before
+/// that push counts for nothing.
+///
+/// Per second, not per frame, so the wake is the same wake whatever the room
+/// is managing. A koi near the surface drags a dimple after it and the deep
+/// one drags nothing, which is the whole of why this pond is not a mirror.
+///
+/// Gentle. Three fish stirring hard is a chop, every facet of it catches the
+/// sun, and a pond under a storm came out glittering like a sea. Most of the
+/// time this is meant to be a mirror with something moving under it.
+pub const STIRS: f32 = 0.28;
+pub const SHOWS: f32 = 0.9;
+
+/// How hard a koi at a given depth pushes, as a share of `STIRS`.
+pub fn stirred(under: f32) -> f32 {
+    (1.0 - under / SHOWS).clamp(0.0, 1.0).powi(2)
+}
+
+/// How many pixels a koi's skin is painted at.
+pub const SKIN: u32 = 64;
+
+/// A koi's skin: a pale ground with patches laid over it.
+///
+/// Painted rather than coloured, because one colour per fish is three fish the
+/// colour of plastic. What a koi is, is the patching: a white one with red
+/// over its shoulders is a different animal from a red one.
+///
+/// The patches run in `u`, which goes round the body, so one that falls off the
+/// side comes back on the other. Along `v` it just stops, which is right: a
+/// patch does not wrap round a nose.
+pub fn koi_skin(seed: u32, patch: [f32; 3], patches: usize) -> blitzkit::texture::TextureData {
+    let mut state = seed | 1;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        (state >> 8) as f32 / ((1u32 << 24) as f32)
+    };
+
+    // each patch as a middle in uv, a size and a softness
+    let blots: Vec<(f32, f32, f32, f32)> = (0..patches)
+        .map(|_| {
+            (
+                next(),
+                0.12 + next() * 0.76,
+                0.10 + next() * 0.16,
+                0.3 + next() * 0.5,
+            )
+        })
+        .collect();
+
+    let mut pixels = Vec::with_capacity((SKIN * SKIN * 4) as usize);
+    for y in 0..SKIN {
+        for x in 0..SKIN {
+            let (u, v) = (x as f32 / SKIN as f32, y as f32 / SKIN as f32);
+            let mut on: f32 = 0.0;
+
+            for (bu, bv, size, soft) in blots.iter().copied() {
+                // round the body the short way, so a patch at u nought is one
+                // patch and not two half ones
+                let du = (u - bu).abs().min(1.0 - (u - bu).abs());
+                let dv = v - bv;
+                let far = ((du * du) + (dv * dv)).sqrt() / size;
+                let edge = (1.0 - far).clamp(0.0, 1.0);
+
+                on = on.max(edge.powf(soft));
+            }
+
+            // hard edges. A koi's patches have a line round them; a soft wash
+            // is a fish that has been left in the sun.
+            let shaped = (on * 1.8 - 0.4).clamp(0.0, 1.0);
+            let ground = [242.0, 240.0, 234.0];
+            let paint =
+                |n: usize| (ground[n] + (patch[n] * 255.0 - ground[n]) * shaped).round() as u8;
+
+            pixels.extend_from_slice(&[paint(0), paint(1), paint(2), 255]);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(SKIN, SKIN, pixels)
+}
+
+/// What each of the three wears: a seed, the colour of its patches and how
+/// many it has.
+///
+/// A red one over white, an orange one carrying more of it, and a dark one
+/// with a few patches of near black. Three fish of one colour is three of the
+/// same fish.
+pub const SKINS: [(u32, [f32; 3], usize); 3] = [
+    (0x51C3, [0.84, 0.26, 0.12], 4),
+    (0x2E07, [0.90, 0.48, 0.14], 6),
+    (0x7A19, [0.14, 0.13, 0.16], 3),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0010: every koi stays in the water, all the way round.
+    ///
+    /// Nose and the tip of the tail, not the middle. A fish placed by its
+    /// middle inside a pond still has its nose through the kerb for a quarter
+    /// of every lap, and the nose is the end you watch.
+    #[test]
+    fn every_koi_stays_in_the_water() {
+        let room = room();
+        let (water, size, deep) = pond(room.reaches);
+        let half = size * 0.5;
+        // the surface, and the top of the slab the basin's floor is
+        let (top, bottom) = (water.y, water.y - deep);
+
+        let mut step = 0.0f32;
+        while step < 600.0 {
+            for (n, fish) in koi(room.reaches, step).iter().enumerate() {
+                let along = vec3(fish.heading.sin(), 0.0, fish.heading.cos());
+                // nose at half a length; the tail's fan trails past that
+                let reach = fish.long * (0.5 + FIN_LONG);
+                let thick = fish.long * KOI_FAT * 0.5;
+
+                for end in [fish.at + along * fish.long * 0.5, fish.at - along * reach] {
+                    assert!(
+                        (end.x - water.x).abs() < half.x && (end.z - water.z).abs() < half.y,
+                        "koi {} is through the kerb at {:.1}s: {:?}",
+                        n,
+                        step,
+                        end,
+                    );
+                }
+
+                assert!(
+                    fish.at.y + thick < top,
+                    "koi {} breaks the surface at {:.1}s: {} against {}",
+                    n,
+                    step,
+                    fish.at.y + thick,
+                    top,
+                );
+                assert!(
+                    fish.at.y - thick > bottom,
+                    "koi {} is through the floor of the pond at {:.1}s: {} against {}",
+                    n,
+                    step,
+                    fish.at.y - thick,
+                    bottom,
+                );
+            }
+
+            step += 0.05;
+        }
+    }
+
+    /// Spec 0010: no two of them ever swim through each other.
+    ///
+    /// Nothing watches for that at run time and nothing is going to: a fish
+    /// that avoids another fish is a spec of its own. The circles are laid out
+    /// so it cannot happen, and this is what says they still are.
+    #[test]
+    fn no_two_koi_swim_through_each_other() {
+        let room = room();
+        let mut closest = f32::MAX;
+
+        let mut step = 0.0f32;
+        while step < 600.0 {
+            let fish = koi(room.reaches, step);
+
+            for a in 0..fish.len() {
+                for b in (a + 1)..fish.len() {
+                    let apart = fish[a].at.distance(fish[b].at);
+                    let want = (fish[a].long + fish[b].long) * KOI_FAT * 0.5;
+
+                    closest = closest.min(apart - want);
+                    assert!(
+                        apart > want,
+                        "koi {} and {} are in the same water at {:.1}s: {:.3} apart, {:.3} wanted",
+                        a,
+                        b,
+                        step,
+                        apart,
+                        want,
+                    );
+                }
+            }
+
+            step += 0.05;
+        }
+
+        // and the depths are what do it, so the clearance should be most of a
+        // body rather than a hair that happens to have worked out
+        assert!(
+            closest > 0.05,
+            "the koi clear each other by only {:.3}",
+            closest,
+        );
+    }
+
+    /// A koi points the way it is going.
+    ///
+    /// Taken from the circle rather than from where it was last frame, so this
+    /// is the test that the quarter turn is the right quarter. Pointed the
+    /// other way they swim the whole pond backwards, which looks like nothing
+    /// in particular until you notice the tails are leading.
+    #[test]
+    fn a_koi_points_the_way_it_swims() {
+        let room = room();
+
+        for (n, (now, soon)) in koi(room.reaches, 0.0)
+            .iter()
+            .zip(koi(room.reaches, 0.25).iter())
+            .enumerate()
+        {
+            let moved = (soon.at - now.at) * vec3(1.0, 0.0, 1.0);
+            let along = vec3(now.heading.sin(), 0.0, now.heading.cos());
+
+            assert!(moved.length() > 1e-4, "koi {} is not going anywhere", n);
+            assert!(
+                moved.normalize().dot(along) > 0.99,
+                "koi {} swims {:?} and points {:?}",
+                n,
+                moved.normalize(),
+                along,
+            );
+        }
+    }
+
+    /// The body is a fish shape: fattest forward of the middle, and it comes
+    /// to something at both ends rather than being cut off.
+    #[test]
+    fn the_koi_is_fattest_at_its_shoulders() {
+        let fattest = (0..=100)
+            .map(|n| n as f32 / 100.0)
+            .fold((0.0f32, 0.0f32), |best, v| {
+                if koi_waist(v) > best.1 {
+                    (v, koi_waist(v))
+                } else {
+                    best
+                }
+            });
+
+        assert!(
+            (fattest.0 - KOI_SHOULDER).abs() < 0.03,
+            "the widest part is at {:.2}, not at the shoulders",
+            fattest.0,
+        );
+        assert!(koi_waist(0.0) < KOI_FAT * 0.2, "the tail stalk is not thin");
+        assert!(
+            koi_waist(1.0) > 0.0 && koi_waist(1.0) < KOI_FAT * 0.6,
+            "the snout is either a point or a cliff: {:.3}",
+            koi_waist(1.0),
+        );
+    }
+
+    /// Spec 0010: the shallow koi is what moves the water and the deep one is
+    /// not.
+    ///
+    /// A pond stirred the same by all three is a pond with a mechanism in it.
+    /// The thing you are meant to read off the surface is that something is
+    /// down there and how far down.
+    #[test]
+    fn only_the_koi_near_the_surface_stir_it() {
+        let stirs: Vec<f32> = ROUNDS.iter().map(|round| stirred(round.under)).collect();
+
+        assert!(
+            stirs[0] > 0.5,
+            "the shallow one barely stirs: {:.2}",
+            stirs[0]
+        );
+        assert!(
+            stirs[2] < 0.1,
+            "the deep one stirs the surface anyway: {:.2}",
+            stirs[2]
+        );
+        assert!(
+            stirs[0] > stirs[1] && stirs[1] > stirs[2],
+            "deeper should mean less: {:?}",
+            stirs
+        );
+        assert_eq!(stirred(SHOWS * 2.0), 0.0, "below the floor it still pushes");
+    }
+
+    /// Spec 0010: a stone is a stone and not a ball.
+    ///
+    /// The fault this building has hit with every turned thing is a mesh with
+    /// no surface on it: too few steps and it draws two points and no skin,
+    /// which is how the candles, the clock dial and the fire's coals all came
+    /// out invisible at once.
+    #[test]
+    fn a_stone_is_cut_and_out_of_round() {
+        for seed in CUTS.iter().copied() {
+            let mesh = rock_mesh(seed);
+
+            assert!(
+                mesh.triangle_count() > 50,
+                "a stone of {} triangles has no shape to see",
+                mesh.triangle_count()
+            );
+
+            // measured round its waist rather than off its bounding box. A
+            // box says how wide the widest part is and nothing about whether
+            // the thing inside it is round, and a lump wandering in and out by
+            // the same amount all the way round fills the same box a ball does.
+            let waist: Vec<Vec3> = mesh
+                .vertices
+                .iter()
+                .map(|vertex| Vec3::from(vertex.position))
+                .filter(|at| at.y.abs() < 0.12)
+                .collect();
+
+            assert!(
+                waist.len() > 12,
+                "stone {:x} has no middle to measure: {} vertices",
+                seed,
+                waist.len()
+            );
+
+            let middle = waist.iter().copied().sum::<Vec3>() / waist.len() as f32;
+            let (mut near, mut far) = (f32::MAX, 0.0f32);
+            for at in waist.iter() {
+                let out = vec2(at.x - middle.x, at.z - middle.z).length();
+
+                near = near.min(out);
+                far = far.max(out);
+            }
+
+            assert!(
+                far > near * 1.3,
+                "stone {:x} is as round as a ball: {:.3} to {:.3} across its waist",
+                seed,
+                near,
+                far
+            );
+        }
+    }
+
+    /// The two seams close: round the back, and at both poles.
+    ///
+    /// A wander that does not come back to itself leaves a crack up the side
+    /// of the stone and a tear at the top, and neither shows in a test that
+    /// only counts triangles.
+    #[test]
+    fn a_stone_has_no_crack_up_the_back_of_it() {
+        for seed in CUTS.iter().copied() {
+            for step in 0..=8 {
+                let v = step as f32 / 8.0;
+
+                assert!(
+                    (wander(seed, 0.0, v) - wander(seed, 1.0, v)).abs() < 1e-5,
+                    "stone {:x} does not meet itself at v {}",
+                    seed,
+                    v
+                );
+            }
+
+            for step in 0..=8 {
+                let u = step as f32 / 8.0;
+
+                for v in [0.0, 1.0] {
+                    assert!(
+                        wander(seed, u, v).abs() < 1e-5,
+                        "stone {:x} is torn at the pole at u {}",
+                        seed,
+                        u
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0010: no group is three of a size evenly spaced.
+    ///
+    /// Which is the only thing anybody writing about these gardens agrees on,
+    /// and the one a list of coordinates gets wrong by default.
+    #[test]
+    fn a_group_is_not_a_bus_queue() {
+        for group in GROUPS.iter() {
+            let set: Vec<_> = SET.iter().take(group.stones).collect();
+
+            for (n, (_, size, _)) in set.iter().enumerate() {
+                for (_, other, _) in set[n + 1..].iter() {
+                    let (tall, short) = (size.y.max(other.y), size.y.min(other.y));
+
+                    assert!(
+                        tall > short * 1.3,
+                        "two stones of a group are the same height: {} and {}",
+                        size.y,
+                        other.y
+                    );
+                }
+            }
+
+            if set.len() < 3 {
+                continue;
+            }
+
+            // and not in a line, which three stones put round a middle fall
+            // into the moment two of them are opposite each other
+            let (a, b, c) = (set[0].0, set[1].0, set[2].0);
+            let bend = (b - a).perp_dot(c - a).abs();
+
+            assert!(
+                bend > 0.2,
+                "the three stones of a group are in a row: {:.3}",
+                bend
+            );
+        }
+    }
+
+    /// Spec 0010: the raking goes round the stones and straight everywhere
+    /// else.
+    ///
+    /// Straight everywhere, it is corduroy with rocks standing on it. The
+    /// rings are what say the stones are islands.
+    #[test]
+    fn the_raking_runs_round_the_stones() {
+        let reaches = room().reaches;
+        let about = group_middles(reaches);
+        let first = about[0];
+
+        // two points the same way out from a group are on the same furrow,
+        // whichever side of it they are
+        let near = RINGS * 0.5;
+        for turn in 0..8 {
+            let angle = turn as f32 / 8.0 * std::f32::consts::TAU;
+            let on = first + vec2(angle.cos(), angle.sin()) * near;
+
+            assert!(
+                (furrow_at(on, &about) - near / RAKE).abs() < 1e-4,
+                "the raking does not ring the stones at {:?}",
+                on
+            );
+        }
+
+        // and well away from every group it runs in lines of a steady z
+        let far = vec2(first.x, first.y) + vec2(0.0, RINGS * 3.0);
+        assert!(
+            (furrow_at(far, &about) - furrow_at(far + vec2(2.0, 0.0), &about)).abs() < 1e-4,
+            "the raking is not straight away from the stones",
+        );
+    }
 
     /// Spec 0010: no part of the hall is laid over the garden.
     ///
@@ -805,6 +1764,11 @@ mod tests {
                 lanterns(reaches)
                     .into_iter()
                     .map(|(where_, _)| ("a lantern", where_, 0.5)),
+            )
+            .chain(
+                group_at(reaches)
+                    .into_iter()
+                    .map(|(where_, wide)| ("a set of stones", where_, wide)),
             )
             .collect();
 

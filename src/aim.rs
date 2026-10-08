@@ -528,9 +528,35 @@ pub const GARDEN_WALL: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
 /// The water is darker than the baths', which is a lit pool with a tiled
 /// floor. This one is rainwater under a storm, and what it mostly does is
 /// hold the sky.
-pub const POND: Vec4 = vec4(0.16, 0.23, 0.26, 1.0);
+///
+/// See-through, which it was not. Opaque it is a sheet of slate with a kerb
+/// round it, and everything a pond is for is under it: there is no point
+/// putting fish in a pond you cannot see into. Short of clear, because this is
+/// rainwater and not a swimming bath, so the deepest koi is a shape going by
+/// and the shallowest is a fish.
+pub const POND: Vec4 = vec4(0.16, 0.23, 0.26, 0.78);
+
+/// What a koi's skin is tinted by, which is as near nothing as this engine
+/// gets. The patching is painted into the texture, so a tint here is a fish
+/// seen through coloured glass.
+pub const KOI: Vec4 = vec4(0.96, 0.94, 0.92, 1.0);
+
+/// The bed of the pond, which is silt and not stone.
+///
+/// Cut from the same grey as the kerb, a pale floor under see-through water is
+/// a tiled bath with a coping round it, which is what this came out as the
+/// first time it was opened up. What is at the bottom of a pond is what has
+/// fallen into it.
+pub const POND_BED: Vec4 = vec4(0.11, 0.12, 0.09, 1.0);
 pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
 pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
+
+/// The set stones, which are darker than anything else out here.
+///
+/// A rock reads against the gravel or it does not read. Cut near the kerb's
+/// grey it is a lighter patch of floor; what every one of these gardens does
+/// is put something nearly black on something nearly white.
+pub const ROCK: Vec4 = vec4(0.21, 0.20, 0.19, 1.0);
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// What burns in a stone lantern: a candle behind paper, which is warm against

@@ -152,15 +152,23 @@ struct Arcade {
     /// The garden's sky and the dome it is painted on, per spec 0010.
     storm: Option<TextureId>,
     dome: Option<MeshId>,
-    /// The gravel the garden is floored with, and the quad it is laid on.
-    gravel: Option<TextureId>,
-    ground: Vec<MeshId>,
+    /// The gravel the garden is floored with: one picture per bed, painted in
+    /// the garden's own coordinates so the raking knows where the stones are,
+    /// and the one quad all of them are laid on.
+    gravel: Vec<TextureId>,
+    ground: Option<MeshId>,
+    /// The carved stones, per spec 0010.
+    stones: Vec<MeshId>,
     /// The garden's water, its trees and its lanterns, per spec 0010.
     pool_in_the_garden: blitzkit::water::Water,
     pond_mesh: Option<MeshId>,
     trunk: Option<MeshId>,
     crown: Option<MeshId>,
     lantern: Option<MeshId>,
+    /// The koi: a body, a tail, and a skin each. Spec 0010.
+    koi: Option<MeshId>,
+    fin: Option<MeshId>,
+    skins: Vec<TextureId>,
     splashes: Vec<Samples>,
     airs: Vec<(Vec3, Samples)>,
     /// How long the note playing now has left.
@@ -321,8 +329,9 @@ impl Arcade {
             stonework: None,
             storm: None,
             dome: None,
-            gravel: None,
-            ground: Vec::new(),
+            gravel: Vec::new(),
+            ground: None,
+            stones: Vec::new(),
             pool_in_the_garden: {
                 let (at, size, deep) = garden::pond(reaches);
                 let mut water = blitzkit::water::Water::new(at, size, deep, garden::POND_CELLS);
@@ -335,6 +344,9 @@ impl Arcade {
             trunk: None,
             crown: None,
             lantern: None,
+            koi: None,
+            fin: None,
+            skins: Vec::new(),
             tiled: None,
             lining: Vec::new(),
             afghan_mesh: None,
@@ -846,17 +858,35 @@ impl Game for Arcade {
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh()));
-        self.gravel = Some(renderer.add_texture(&garden::gravel(0x64A4)));
+        // one picture per bed rather than one tile repeated over all of them:
+        // the raking runs in rings round the stones, and a tile cannot know
+        // where a stone is
+        let groups = garden::group_middles(self.room.reaches);
+        self.gravel = garden::beds(self.room.reaches)
+            .into_iter()
+            .map(|(bed, size)| renderer.add_texture(&garden::raked(0x64A4, bed, size, &groups)))
+            .collect();
+        self.stones = garden::CUTS
+            .iter()
+            .map(|seed| renderer.add_mesh(&garden::rock_mesh(*seed)))
+            .collect();
         self.pond_mesh = Some(renderer.add_mesh(&self.pool_in_the_garden.surface()));
         self.trunk = Some(renderer.add_mesh(&garden::trunk_mesh()));
         self.crown = Some(renderer.add_mesh(&garden::crown_mesh()));
         self.lantern = Some(renderer.add_mesh(&garden::lantern_mesh()));
-        // one mesh per bed, each with its own count, so a rake line is the
-        // same width whichever strip it crosses
-        self.ground = garden::beds(self.room.reaches)
-            .into_iter()
-            .map(|(_, size)| renderer.add_mesh(&room::tiled_plane(size / garden::RAKE)))
+        self.koi = Some(renderer.add_mesh(&garden::koi_mesh()));
+        self.fin = Some(renderer.add_mesh(&garden::fin_mesh()));
+        // a skin each, painted rather than tinted: three fish of one colour
+        // are three of the same fish
+        self.skins = garden::SKINS
+            .iter()
+            .map(|(seed, patch, patches)| {
+                renderer.add_texture(&garden::koi_skin(*seed, *patch, *patches))
+            })
             .collect();
+        // one quad for all of them. Each bed wears its own picture, counted
+        // nought to one, so there is nothing left for a per bed mesh to say.
+        self.ground = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.tiled = Some(renderer.add_texture(&carpet::tiled(carpet::TILE_SEED)));
 
         // a quad per face of the basin, each with its own count of tiles, so a
@@ -1160,6 +1190,17 @@ impl Game for Arcade {
 
         self.pool.step(dt);
         self.tub.step(dt);
+        // the koi, pushing the water over them as they go. Spec 0010: the
+        // pond is still water, and what stops it being a mirror is the fish.
+        // Speed and not height, and by the second and not by the frame, so the
+        // wake is the same wake whatever this machine is managing.
+        for fish in garden::koi(self.room.reaches, self.since) {
+            let by = garden::STIRS * garden::stirred(fish.under) * dt;
+
+            if by > 0.0 {
+                self.pool_in_the_garden.push(fish.at, fish.long * 1.3, by);
+            }
+        }
         self.pool_in_the_garden.step(dt);
 
         // the eye catching up with the feet. Nothing while you are on the
@@ -1908,16 +1949,33 @@ impl Game for Arcade {
                 );
             }
 
-            if let Some(gravel) = self.gravel {
-                for ((bed, size), mesh) in garden::beds(self.room.reaches)
+            if let Some(ground) = self.ground {
+                for ((bed, size), gravel) in garden::beds(self.room.reaches)
                     .into_iter()
-                    .zip(&self.ground)
+                    .zip(&self.gravel)
                 {
                     scene.push_textured(
-                        *mesh,
-                        gravel,
+                        ground,
+                        *gravel,
                         &Transform::at(bed + Vec3::Y * 0.002).with_scale(vec3(size.x, 1.0, size.y)),
                         aim::GRAVEL,
+                        aim::DULL,
+                    );
+                }
+            }
+
+            // the stones, set a third of the way into the gravel. Spec 0010.
+            for stone in garden::rocks(self.room.reaches) {
+                if let Some(cut) = self.stones.get(stone.cut) {
+                    // a pinpoint highlight, like the stonework. The default is
+                    // a broad one, which on a face this size is the whole face
+                    // gone white and a boulder made of polystyrene.
+                    scene.push_material(
+                        *cut,
+                        &Transform::at(stone.at + Vec3::Y * stone.size.y * (0.5 - garden::BURIED))
+                            .with_rotation(glam::Quat::from_rotation_y(stone.turn))
+                            .with_scale(stone.size),
+                        aim::ROCK,
                         aim::DULL,
                     );
                 }
@@ -1927,17 +1985,77 @@ impl Game for Arcade {
                 scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::GARDEN_WALL);
             }
 
-            // the kerb round the water and the basin under it
-            for stone in garden::basin(self.room.reaches) {
+            // the kerb round the water, and the bed under it, which are not
+            // the same thing to look at
+            for (box_, colour) in garden::kerbs(self.room.reaches)
+                .into_iter()
+                .map(|stone| (stone, aim::GARDEN_STONE))
+                .chain(std::iter::once((
+                    garden::bed(self.room.reaches),
+                    aim::POND_BED,
+                )))
+            {
                 scene.push_colored(
                     cube,
-                    &Transform::at((stone.min + stone.max) * 0.5).with_scale(stone.max - stone.min),
-                    aim::GARDEN_STONE,
+                    &Transform::at((box_.min + box_.max) * 0.5).with_scale(box_.max - box_.min),
+                    colour,
                 );
             }
 
+            // the koi, before the water, so the water is the last thing
+            // between you and them. Spec 0010.
+            if let (Some(koi), Some(fin)) = (self.koi, self.fin) {
+                for (fish, skin) in garden::koi(self.room.reaches, self.since)
+                    .iter()
+                    .zip(&self.skins)
+                {
+                    // turned about y like everything round in this building,
+                    // which builds a fish standing on its tail. A quarter turn
+                    // about x lays it down with its nose on +z, and the yaw
+                    // takes it from there.
+                    let laid = glam::Quat::from_rotation_y(fish.heading)
+                        * glam::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+
+                    scene.push_textured(
+                        koi,
+                        *skin,
+                        &Transform::at(fish.at).with_rotation(laid).with_scale(vec3(
+                            fish.long * garden::KOI_FLAT,
+                            fish.long,
+                            fish.long,
+                        )),
+                        aim::KOI,
+                        aim::MATTE,
+                    );
+
+                    // and the tail, hung off the stalk and swinging. Laid the
+                    // other way about x, so its root is at the stalk and the
+                    // fan trails behind rather than growing out of the nose.
+                    let along = vec3(fish.heading.sin(), 0.0, fish.heading.cos());
+                    let swung = glam::Quat::from_rotation_y(fish.heading + fish.wag)
+                        * glam::Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+
+                    scene.push_textured(
+                        fin,
+                        *skin,
+                        &Transform::at(fish.at - along * fish.long * 0.5)
+                            .with_rotation(swung)
+                            .with_scale(vec3(
+                                fish.long * garden::FIN_WIDE,
+                                fish.long * garden::FIN_LONG,
+                                fish.long * garden::FIN_DEEP,
+                            )),
+                        aim::KOI,
+                        aim::MATTE,
+                    );
+                }
+            }
+
+            // a tight highlight, like the baths' water. The default is a
+            // broad one, which over a surface this size is a sheen across the
+            // whole pond and the single thing that made it read as a bath.
             if let Some(mesh) = self.pond_mesh {
-                scene.push_colored(mesh, &Transform::at(Vec3::ZERO), aim::POND);
+                scene.push_material(mesh, &Transform::at(Vec3::ZERO), aim::POND, 420.0);
             }
 
             // the trees: a trunk, and the plates of foliage over it

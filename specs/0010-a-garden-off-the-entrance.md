@@ -47,12 +47,84 @@ Still water, not a pool. The baths are stirred by wading and by the fountain;
 this one is stirred by the fish and by nothing else, and most of the time it is
 a mirror.
 
-**There are koi in it.** Three or four, slow, each going its own way round, and
-each one pushing the surface as it passes. They are the reason the pond is not
-a mirror and they are the only moving things in the room.
+**There are koi in it.** Three, slow, each going its own way round, and each
+one pushing the surface as it passes. They are the reason the pond is not a
+mirror and they are the only moving things in the room.
 
-Not built yet. Everything else in this spec is, and the pond is water with
-nothing in it until they are.
+Three and not four, like the trees and for the same reason: two is a pair and
+four is a shoal. The big one swims the outer circle near the surface, the
+small quick one swims a tight circle near the bottom, and that is the order a
+pond puts them in by itself.
+
+Each is a turned body with a fan of a tail hung off the stalk, swinging. A
+body on its own drifts like a leaf; what says fish, before you can make out a
+fish, is the tail going over.
+
+Patched, not coloured. One colour per fish is three fish the colour of
+plastic, and what a koi is, is the patching: a white one with red over its
+shoulders is a different animal from a red one. Each wears a painted skin,
+whose patches run round the body the short way so one falling off the side
+comes back on the other.
+
+The pond's water had to be opened up for any of this. It was drawn opaque,
+which is a sheet of slate with a kerb round it, and there is no point putting
+fish in a pond you cannot see into. Short of clear, because this is rainwater
+under a storm: the deepest koi is a shape going by and the shallowest is a
+fish.
+
+The pond's bed is silt and not stone. Cut from the same grey as the kerb, a
+pale floor under see-through water is a tiled bath with a coping round it,
+which is exactly what this came out as the moment the water was opened up.
+
+The water's highlight is a tight one, like the baths'. The default is a broad
+one, and over a surface this size that is a sheen across the whole pond, which
+was the other half of the bath.
+
+And the stir falls off with depth. Stirred the same by all three, the pond has
+a mechanism in it. What the surface is for is saying that something is down
+there and roughly how far down, so the shallow one drags a dimple after it and
+the deep one drags nothing.
+
+**Set stones, and the raking that goes round them.** This is what the garden
+was missing. A zen garden is rocks; the gravel is the thing around them, and
+raking with nothing to break round is corduroy.
+
+Three groups, of three, three and two. Odd numbers and never the same number
+twice. Each group is one tall stone, one low and broad, and in the threes a
+small one set nearer the tall one than the broad one is, so the group reads as
+two things one of which is two things rather than as a bus queue. A third of
+every stone is under the gravel, because set on the surface they are pebbles
+on a tray and the one thing every account of these gardens insists on is that
+a stone has to look like it came up rather than having been put down.
+
+In the open gravel, which in this garden is the south strip and the east one.
+The pond takes the middle and the walk round it takes a body's width outside
+that; what is left either side of the water is a corridor and not a place to
+put anything.
+
+Carved and faceted. `compute_normals` averages a face's normal into the
+corners it shares, which is right for a barrel and wrong for a stone: a
+boulder of a dozen facets shaded smooth is a potato. A rock is the one thing
+in this garden whose faces you are meant to see.
+
+Out of round two ways, because one is not enough. Roundness that varies the
+way round the stone has to come back to nothing at the poles or the stone is
+torn open there, and on its own it leaves a lump that is still a ball in
+outline. What makes the outline lopsided is leaning the whole of it over,
+which a function of the height alone can do because it takes the poles with
+it.
+
+The raking runs in rings round each group and straight everywhere else, so the
+stones are islands and the gravel is water. That means a bed is painted its
+own picture in the garden's own coordinates rather than wearing one tile
+repeated, since a tile cannot know where a stone is. The rings stop ten lines
+out, a whole number on purpose, so the handover lands on a line and reads as
+the outermost ring rather than as a cut edge.
+
+The lines are a hand's width apart. They were a metre and a half, which is
+what a tractor leaves: standing next to it you were inside a single line, the
+gravel read as a wash with a gradient across it, and the raking was not
+visible at any distance at all.
 
 **Trees**, turned on the lathe like everything else round in this building:
 a trunk that tapers and leans, and a crown over it. Not a cone. A cone is a fir
@@ -128,6 +200,15 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - And out again from the far side, by way of the door. — `garden::tests::you_can_walk_back_out_from_the_far_side`
 - Nothing stands in the pond, against a wall, in the way in, or on the walk. — `garden::tests::nothing_stands_where_you_have_to_walk`
 - No part of the hall is laid over the garden. — `garden::tests::nothing_of_the_hall_is_laid_over_the_garden`
+- Every koi stays in the water, nose and tail, all the way round. — `garden::tests::every_koi_stays_in_the_water`
+- No two of them ever swim through each other. — `garden::tests::no_two_koi_swim_through_each_other`
+- Each points the way it is going. — `garden::tests::a_koi_points_the_way_it_swims`
+- A koi is fattest at the shoulders and comes to something at both ends. — `garden::tests::the_koi_is_fattest_at_its_shoulders`
+- The shallow one stirs the water and the deep one does not. — `garden::tests::only_the_koi_near_the_surface_stir_it`
+- A stone is cut, has a surface, and is out of round. — `garden::tests::a_stone_is_cut_and_out_of_round`
+- It has no crack up the back of it and no tear at either pole. — `garden::tests::a_stone_has_no_crack_up_the_back_of_it`
+- No group is stones of a size in a row. — `garden::tests::a_group_is_not_a_bus_queue`
+- The raking rings the stones and runs straight away from them. — `garden::tests::the_raking_runs_round_the_stones`
 
 ## Verified by hand
 
