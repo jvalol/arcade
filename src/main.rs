@@ -157,8 +157,9 @@ struct Arcade {
     /// and the one quad all of them are laid on.
     gravel: Vec<TextureId>,
     ground: Option<MeshId>,
-    /// The carved stones, per spec 0010.
+    /// The carved stones and the stepping stones, per spec 0010.
     stones: Vec<MeshId>,
+    slabs: Vec<MeshId>,
     /// The garden's water, its trees and its lanterns, per spec 0010.
     pool_in_the_garden: blitzkit::water::Water,
     pond_mesh: Option<MeshId>,
@@ -332,6 +333,7 @@ impl Arcade {
             gravel: Vec::new(),
             ground: None,
             stones: Vec::new(),
+            slabs: Vec::new(),
             pool_in_the_garden: {
                 let (at, size, deep) = garden::pond(reaches);
                 let mut water = blitzkit::water::Water::new(at, size, deep, garden::POND_CELLS);
@@ -869,6 +871,10 @@ impl Game for Arcade {
         self.stones = garden::CUTS
             .iter()
             .map(|seed| renderer.add_mesh(&garden::rock_mesh(*seed)))
+            .collect();
+        self.slabs = garden::CUTS
+            .iter()
+            .map(|seed| renderer.add_mesh(&garden::slab_mesh(*seed)))
             .collect();
         self.pond_mesh = Some(renderer.add_mesh(&self.pool_in_the_garden.surface()));
         self.trunk = Some(renderer.add_mesh(&garden::trunk_mesh()));
@@ -1959,6 +1965,26 @@ impl Game for Arcade {
                         *gravel,
                         &Transform::at(bed + Vec3::Y * 0.002).with_scale(vec3(size.x, 1.0, size.y)),
                         aim::GRAVEL,
+                        aim::DULL,
+                    );
+                }
+            }
+
+            // the stepping stones, sunk nearly flush. Before the set stones
+            // because the path runs past them and a slab laid over a boulder
+            // is a slab laid over a boulder either way round.
+            for step in garden::steps(self.room.reaches) {
+                if let Some(cut) = self.slabs.get(step.cut) {
+                    let thick = step.wide * garden::SLAB_THICK;
+
+                    scene.push_material(
+                        *cut,
+                        // its top a knuckle proud of the gravel, which puts
+                        // its middle half a thickness below that
+                        &Transform::at(step.at + Vec3::Y * (garden::STEP_UP - thick * 0.5))
+                            .with_rotation(glam::Quat::from_rotation_y(step.turn))
+                            .with_scale(vec3(step.wide, thick, step.wide * 0.86)),
+                        aim::ROCK,
                         aim::DULL,
                     );
                 }

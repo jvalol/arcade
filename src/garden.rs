@@ -665,6 +665,193 @@ pub fn group_middles(reaches: f32) -> Vec<Vec2> {
         .collect()
 }
 
+/// How far the path bows off the straight line between its ends.
+///
+/// Bowed, and bowed away from the water. A straight line between two points is
+/// a kerb, and the whole business of a path of these is that it makes you look
+/// down and take one step at a time.
+pub const PATH_BOW: f32 = 0.9;
+
+/// How far apart the stones are, middle to middle, and how far each is thrown
+/// off the line of the path.
+///
+/// A stride. Closer and you shuffle, further and you stretch, and the one thing
+/// everybody says about these is that the spacing is the pace they want you to
+/// go at.
+pub const STRIDE: f32 = 0.62;
+pub const THROWN: f32 = 0.07;
+
+/// How far a stepping stone stands out of the gravel.
+///
+/// A knuckle. Flush, it is a pattern on the floor; any higher and it is
+/// something to trip on, which is the opposite of what it is for. Low enough
+/// that it is not in `solid` either: a thing you step on is not a thing you
+/// walk round.
+pub const STEP_UP: f32 = 0.055;
+
+/// How wide the stepping stones run.
+pub const STEPS_WIDE: (f32, f32) = (0.40, 0.58);
+
+/// Where the path starts: a stride inside the way in, on the middle of it.
+///
+/// Taken from the opening rather than written down. It was written down, as a
+/// place in the garden, and the opening is a fixed distance from the near end
+/// of the hall while the garden's middle is not: add two cabinets and the hall
+/// gets longer, the garden's middle moves half of that, and the path's first
+/// stone ends up a stride and a half outside the door. This is the same fault
+/// the tests in here were already built to catch once.
+pub fn path_from(reaches: f32) -> Vec2 {
+    let (from_z, to_z) = way(reaches);
+
+    vec2(wall_at() - STRIDE * 1.5, (from_z + to_z) * 0.5)
+}
+
+/// And where it ends: off the near corner of the pond's stone, by half a step,
+/// so the last one is at the water and not on the kerb.
+pub fn path_to(reaches: f32) -> Vec2 {
+    let (water, size, _) = pond(reaches);
+    let stone = size * 0.5 + Vec2::splat(KERB);
+
+    vec2(
+        water.x + stone.x + STRIDE * 0.5,
+        water.z - stone.y - STRIDE * 0.5,
+    )
+}
+
+/// A point along the path, from nought at the door to one at the water.
+pub fn path_at(reaches: f32, on: f32) -> Vec2 {
+    let (from, to) = (path_from(reaches), path_to(reaches));
+    let line = to - from;
+    // bowed away from the water, which is the side the pond is not on
+    let off = vec2(-line.y, line.x).normalize_or_zero() * PATH_BOW * 2.0;
+    let bend = (from + to) * 0.5 + off;
+    let back = 1.0 - on;
+
+    from * (back * back) + bend * (2.0 * back * on) + to * (on * on)
+}
+
+/// One stepping stone: where it sits, how far across, which way round and
+/// which cut.
+pub struct Step {
+    pub at: Vec3,
+    pub wide: f32,
+    pub turn: f32,
+    pub cut: usize,
+}
+
+/// The stepping stones, laid a stride apart along the path.
+///
+/// Walked rather than divided. The path is bowed, so dividing nought to one
+/// into equal pieces puts the stones closer together round the bend and further
+/// apart on the straights, which is the one thing the spacing is not allowed to
+/// do.
+pub fn steps(reaches: f32) -> Vec<Step> {
+    const SAMPLES: usize = 400;
+
+    let mut walked = Vec::with_capacity(SAMPLES + 1);
+    let mut along = 0.0;
+    let mut last = path_at(reaches, 0.0);
+
+    walked.push((0.0f32, last));
+    for n in 1..=SAMPLES {
+        let here = path_at(reaches, n as f32 / SAMPLES as f32);
+        along += here.distance(last);
+        walked.push((along, here));
+        last = here;
+    }
+
+    let mut out = Vec::new();
+    let mut want = 0.0;
+    let mut n = 0usize;
+
+    while want <= along {
+        let found = walked
+            .windows(2)
+            .find(|pair| pair[1].0 >= want)
+            .map(|pair| {
+                let (from, to) = (pair[0], pair[1]);
+                let part = if to.0 > from.0 {
+                    (want - from.0) / (to.0 - from.0)
+                } else {
+                    0.0
+                };
+
+                (from.1 + (to.1 - from.1) * part, (to.1 - from.1))
+            });
+
+        if let Some((where_, way)) = found {
+            // thrown off the line, left and right by turns, so the path is not
+            // a dotted line somebody drew
+            let side = vec2(-way.y, way.x).normalize_or_zero();
+            let jog = if n.is_multiple_of(2) { THROWN } else { -THROWN };
+            let on = where_ + side * jog;
+            // and each one its own size and its own way round. A path of one
+            // stone repeated is a row of tiles.
+            let wiggle = ((n as f32 * 2.399).sin() * 0.5 + 0.5).clamp(0.0, 1.0);
+
+            out.push(Step {
+                at: vec3(on.x, 0.0, on.y),
+                wide: STEPS_WIDE.0 + (STEPS_WIDE.1 - STEPS_WIDE.0) * wiggle,
+                turn: n as f32 * 1.37,
+                cut: n % CUTS.len(),
+            });
+        }
+
+        want += STRIDE;
+        n += 1;
+    }
+
+    out
+}
+
+/// How thick a stepping stone is against how wide.
+///
+/// How deep it sits is not written down beside this. The top stands `STEP_UP`
+/// out of the gravel and the rest of it is under, which is one number and not
+/// two: a thickness and a sinking, named apart, are two accounts of where the
+/// top of the stone is and they come apart the first time either moves.
+pub const SLAB_THICK: f32 = 0.34;
+
+/// How far along a slab a given point is and how far out, as a share of the
+/// whole: a flat top, a rim that is widest below it, and a flat bottom.
+///
+/// Not a squashed boulder. A turned lump flattened has a domed top, and the top
+/// is the one face of a stepping stone anybody ever sees: it has to be flat
+/// enough to stand on and to read as cut.
+pub fn slab_at(v: f32) -> (f32, f32) {
+    if v < 0.12 {
+        (-0.5, v / 0.12 * 0.92)
+    } else if v < 0.5 {
+        let on = (v - 0.12) / 0.38;
+
+        (-0.5 + on * 0.46, 0.92 + on * 0.08)
+    } else if v < 0.88 {
+        let on = (v - 0.5) / 0.38;
+
+        (-0.04 + on * 0.54, 1.0 - on * 0.12)
+    } else {
+        let on = (v - 0.88) / 0.12;
+
+        (0.5, 0.88 * (1.0 - on))
+    }
+}
+
+/// One stepping stone, cut.
+pub fn slab_mesh(seed: u32) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    faceted(blitzkit::mesh::MeshData::surface(CUT_ROUND, 12, |u, v| {
+        let round = -u * TAU;
+        let (up, wide) = slab_at(v);
+        // the outline wanders, and like the stones' it comes back to
+        // nothing at both ends, which here are the middles of the two
+        // flat faces rather than the top and the bottom of a lump
+        let out = wide * 0.5 * (1.0 + wander(seed, u, v) * 1.3);
+
+        vec3(round.cos() * out, up, round.sin() * out)
+    }))
+}
+
 /// How far apart the rake's lines are.
 ///
 /// A hand's width. It was a metre and a half, which is the width of a furrow a
@@ -1614,6 +1801,160 @@ mod tests {
             (furrow_at(far, &about) - furrow_at(far + vec2(2.0, 0.0), &about)).abs() < 1e-4,
             "the raking is not straight away from the stones",
         );
+    }
+
+    /// Spec 0010: the path goes from the way in to the water.
+    ///
+    /// Both ends, because a path that starts in the open is a row of stones and
+    /// one that stops short of the water goes nowhere.
+    #[test]
+    fn the_path_runs_from_the_door_to_the_water() {
+        // at several sizes of room, because both ends of this moved with the
+        // cabinet count the first time and only one of them was derived
+        for count in [6usize, 9, 12, 14, 17] {
+            let reaches = crate::room::Room::of(
+                (0..count)
+                    .map(|n| {
+                        crate::cabinet::Cabinet::found(
+                            &format!("game{}", n),
+                            std::path::Path::new("/nowhere"),
+                        )
+                    })
+                    .collect(),
+            )
+            .reaches;
+
+            the_path_at(reaches);
+        }
+    }
+
+    fn the_path_at(reaches: f32) {
+        let laid = steps(reaches);
+        let (water, size, _) = pond(reaches);
+        let (from_z, to_z) = way(reaches);
+
+        assert!(laid.len() > 4, "a path of {} stones", laid.len());
+
+        let first = laid.first().unwrap().at;
+        let last = laid.last().unwrap().at;
+
+        // the first one is inside the opening, across its width and a stride
+        // or two in from the wall
+        assert!(
+            first.z > from_z - 0.6 && first.z < to_z + 0.6,
+            "the path starts off to one side of the way in: {:?}",
+            first
+        );
+        assert!(
+            (first.x - wall_at()).abs() < 2.4,
+            "the path starts {:.2} from the wall, which is out in the open",
+            (first.x - wall_at()).abs()
+        );
+
+        // and the last is at the kerb, not short of it and not in the water
+        let off = vec2(last.x - water.x, last.z - water.z).abs();
+        let stone = size * 0.5 + Vec2::splat(KERB);
+
+        assert!(
+            off.x > stone.x || off.y > stone.y,
+            "the path's last stone is in the pond at {:?}",
+            last
+        );
+        assert!(
+            (off.x - stone.x).min(off.y - stone.y) < STRIDE * 2.0,
+            "the path stops {:.2} short of the water",
+            (off.x - stone.x).min(off.y - stone.y)
+        );
+    }
+
+    /// Spec 0010: every step is a stride, and the path is not a straight line.
+    ///
+    /// Walked rather than divided, so the gaps have to come out even round the
+    /// bend as well as on the straights. Dividing the curve into equal pieces
+    /// of its own parameter is the easy way and it bunches the stones up where
+    /// it turns.
+    #[test]
+    fn every_step_on_the_path_is_a_stride() {
+        let laid = steps(room().reaches);
+
+        for pair in laid.windows(2) {
+            let apart = vec2(pair[1].at.x - pair[0].at.x, pair[1].at.z - pair[0].at.z).length();
+
+            assert!(
+                (apart - STRIDE).abs() < THROWN * 2.2 + 0.03,
+                "two stones are {:.3} apart and a stride is {:.3}",
+                apart,
+                STRIDE
+            );
+        }
+
+        // and the bow is real: the middle of the path is off the line between
+        // its ends
+        let reaches = room().reaches;
+        let middle = path_at(reaches, 0.5);
+        let line = (path_from(reaches) + path_to(reaches)) * 0.5;
+
+        assert!(
+            middle.distance(line) > PATH_BOW * 0.8,
+            "the path is {:.2} off straight, which is straight",
+            middle.distance(line)
+        );
+    }
+
+    /// Spec 0010: nothing of the path lands on anything else.
+    ///
+    /// The stones are not in `solid`, since a thing you step on is not a thing
+    /// you walk round, which means nothing at run time will stop one being laid
+    /// through a boulder or over the kerb.
+    #[test]
+    fn no_stepping_stone_lands_on_anything() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let half = half();
+
+        for step in steps(reaches) {
+            let here = vec2(step.at.x, step.at.z);
+
+            for stone in rocks(reaches) {
+                let apart = here.distance(vec2(stone.at.x, stone.at.z));
+                let want = (step.wide + stone.size.x.max(stone.size.z)) * 0.5;
+
+                assert!(
+                    apart > want,
+                    "a stepping stone is laid against a set stone: {:.2} apart, {:.2} wanted",
+                    apart,
+                    want
+                );
+            }
+
+            for (where_, tall) in lanterns(reaches) {
+                let apart = here.distance(vec2(where_.x, where_.z));
+
+                assert!(
+                    apart > step.wide * 0.5 + 0.25 + tall * 0.0,
+                    "a stepping stone is under a lantern at {:?}",
+                    where_
+                );
+            }
+
+            for (where_, _, _) in trees(reaches) {
+                let apart = here.distance(vec2(where_.x, where_.z));
+
+                assert!(
+                    apart > step.wide * 0.5 + 0.17,
+                    "a stepping stone is under a tree at {:?}",
+                    where_
+                );
+            }
+
+            // and on the gravel, not through a wall
+            assert!(
+                (here.x - middle.x).abs() + step.wide * 0.5 < half.x
+                    && (here.y - middle.z).abs() + step.wide * 0.5 < half.y,
+                "a stepping stone is through a wall at {:?}",
+                here
+            );
+        }
     }
 
     /// Spec 0010: no part of the hall is laid over the garden.

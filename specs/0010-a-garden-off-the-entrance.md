@@ -126,6 +126,34 @@ what a tractor leaves: standing next to it you were inside a single line, the
 gravel read as a wash with a gradient across it, and the raking was not
 visible at any distance at all.
 
+**Stepping stones from the way in to the water.** You arrive and the whole
+floor is equally walkable, so you wander. A path of irregular flats tells you
+where to stand, and it turns the gravel from something you cross into
+something you look at.
+
+A stride apart, middle to middle, because the spacing is the pace the garden
+wants you to go at. Thrown left and right of the line by turns, each its own
+size and its own way round: a path of one stone repeated is a row of tiles.
+Bowed, and bowed away from the water, since a straight line between two points
+is a kerb.
+
+Walked rather than divided. The path is a curve, so cutting its own parameter
+into equal pieces bunches the stones up round the bend and spreads them on the
+straights, which is the one thing the spacing is not allowed to do.
+
+Both ends are taken from the room and neither is written down. The first
+version wrote them down as places in the garden, and the opening sits a fixed
+distance from the near end of the hall while the garden's middle does not: at
+twelve cabinets instead of fourteen the first stone was a stride and a half
+outside the door. The test walks the path at five different cabinet counts for
+that reason.
+
+A flat slab and not a squashed boulder. A turned lump flattened has a domed
+top, and the top is the one face of a stepping stone anybody ever sees. It
+stands a knuckle out of the gravel: flush, it is a pattern on the floor, and
+any higher it is something to trip on. Low enough that it is not in `solid`
+either, because a thing you step on is not a thing you walk round.
+
 **Trees**, turned on the lathe like everything else round in this building:
 a trunk that tapers and leans, and a crown over it. Not a cone. A cone is a fir
 and a fir is not what anybody draws in a zen garden; this wants the flat, wide,
@@ -209,6 +237,9 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - It has no crack up the back of it and no tear at either pole. — `garden::tests::a_stone_has_no_crack_up_the_back_of_it`
 - No group is stones of a size in a row. — `garden::tests::a_group_is_not_a_bus_queue`
 - The raking rings the stones and runs straight away from them. — `garden::tests::the_raking_runs_round_the_stones`
+- The path runs from the way in to the water, at any size of room. — `garden::tests::the_path_runs_from_the_door_to_the_water`
+- Every step along it is a stride, and it is not a straight line. — `garden::tests::every_step_on_the_path_is_a_stride`
+- No stepping stone is laid on a stone, a tree, a lantern or a wall. — `garden::tests::no_stepping_stone_lands_on_anything`
 
 ## Verified by hand
 
