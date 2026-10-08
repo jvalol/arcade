@@ -148,17 +148,9 @@ struct Arcade {
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
     stonework: Option<TextureId>,
-    /// Everything the building makes a sound with, worked out once and played
-    /// as often as it likes. Spec 0009.
-    steps: Vec<(noise::Underfoot, Vec<Samples>)>,
-    /// Which of each floor's steps comes next, so the same one is never heard
-    /// twice running.
-    stepped: usize,
     splashes: Vec<Samples>,
     airs: Vec<(Vec3, Samples)>,
-    /// How far you have walked since the last footstep, and how long the note
-    /// playing now has left.
-    paced: f32,
+    /// How long the note playing now has left.
     aired: f32,
     /// Whether you were in the water last frame, so going in can be heard.
     was_wading: bool,
@@ -261,11 +253,8 @@ impl Arcade {
                 tub_deep,
                 spa::TUB_CELLS,
             ),
-            steps: Vec::new(),
-            stepped: 0,
             splashes: Vec::new(),
             airs: Vec::new(),
-            paced: 0.0,
             aired: 0.0,
             was_wading: false,
             knock: None,
@@ -605,37 +594,6 @@ impl Arcade {
         ]
     }
 
-    /// What you are standing on, which decides which footstep you hear.
-    ///
-    /// Taken from where you are rather than from a flag somebody sets on the
-    /// way through a door, because a flag is a second account of where you are
-    /// and this building has learned what two accounts of one thing do.
-    fn underfoot(&self) -> noise::Underfoot {
-        if spa::wading(self.room.reaches, self.at) {
-            return noise::Underfoot::Water;
-        }
-
-        let floor = -cellar::DOWN;
-        if self.at.y < floor + 0.5 {
-            // the baths and the cellar are both down here, and the baths are
-            // the far side of the cellar's own wall
-            if self.at.z > cellar::opening(self.room.reaches) + cellar::SPAN * 0.5 {
-                return noise::Underfoot::Tile;
-            }
-
-            return noise::Underfoot::Stone;
-        }
-        if self.at.y < -0.1 {
-            // on the stair, which is stone whatever is at the bottom of it
-            return noise::Underfoot::Stone;
-        }
-        if self.at.x < -(room::WALL + room::CABINET.x) {
-            return noise::Underfoot::Boards;
-        }
-
-        noise::Underfoot::Carpet
-    }
-
     /// Where you are looking from, which is your eye and not your feet.
     fn looking_from(&self) -> Vec3 {
         vec3(self.at.x, self.eye + EYE, self.at.z)
@@ -923,29 +881,6 @@ impl Game for Arcade {
             self.gyro.set_going();
         }
 
-        // every sound the building makes, worked out once. Spec 0009: a
-        // footstep that made its own samples on every step would be a game that
-        // allocated on every step.
-        self.steps = [
-            noise::Underfoot::Carpet,
-            noise::Underfoot::Boards,
-            noise::Underfoot::Stone,
-            noise::Underfoot::Tile,
-            noise::Underfoot::Water,
-        ]
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(n, on)| {
-            // several of each, because hearing one sample every stride is what
-            // made the first of these sound like a machine
-            let steps = (0..noise::STEPS)
-                .map(|m| noise::step(on, 0x57E9 + (n * noise::STEPS + m) as u32 * 7919))
-                .collect();
-
-            (on, steps)
-        })
-        .collect();
         self.splashes = (0..4)
             .map(|n| noise::splash(2.0 + n as f32 * 1.2, 0x51A5 + n * 7919))
             .collect();
@@ -1072,23 +1007,6 @@ impl Game for Arcade {
         // everything that comes from somewhere swings as you turn. Spec 0019 of
         // the engine.
         sound.set_listener(self.looking_from(), self.facing(), Vec3::Y);
-
-        // a footstep every stride, paced by how far you have actually walked
-        // rather than by a clock, so slowing down slows them and standing still
-        // is silence. Spec 0009.
-        self.paced += went * dt;
-        if self.paced >= noise::STRIDE {
-            self.paced -= noise::STRIDE;
-
-            let on = self.underfoot();
-            self.stepped = self.stepped.wrapping_add(1);
-
-            if let Some((_, steps)) = self.steps.iter().find(|(floor, _)| *floor == on) {
-                if let Some(step) = steps.get(self.stepped % steps.len().max(1)) {
-                    sound.play(step);
-                }
-            }
-        }
 
         // a knock for every brick the ball takes off the wall, from the bench
         // it happens on. The one thing in this building that hits anything.
