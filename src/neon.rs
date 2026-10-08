@@ -48,6 +48,17 @@ pub const HANGS: f32 = 2.2;
 pub const TUBE: f32 = 0.036;
 pub const PROUD: f32 = 0.026;
 
+/// How far inside the can's outline the tube run sits.
+///
+/// Inside it, and not flush with it. Flush, every bar's outer face is in the
+/// same plane as the face of the can behind it, and two exposed faces in one
+/// plane is the fault this building has now fought six times: the underside of
+/// this sign came out as a band of speckle, which is the depth test picking
+/// between them by rounding.
+///
+/// Small. This is a reveal round a fitting, not a border.
+pub const INSET: f32 = 0.016;
+
 /// The lettering: how many texels tall it is drawn, how tall it is hung, and
 /// how much of the can it crosses.
 pub const TEXELS: f32 = 64.0;
@@ -83,22 +94,27 @@ pub fn at(reaches: f32) -> Vec3 {
 /// Inside the can's outline rather than around it, so the can reads as the
 /// frame and the tube as what is fitted into it. Four bars and not a ring
 /// mesh: the corners overlap, which is what a bent tube does anyway.
+///
+/// Each bar stops at the middle of the one it meets rather than running out to
+/// the can's edge. Run to the edge, a horizontal bar's end face lands in the
+/// same plane as the vertical bar's outer face and as the can's side, which is
+/// the same fault as being flush with the can, one corner further in.
 pub fn tubes() -> [(Vec3, Vec3); 4] {
     let through = THICK + PROUD * 2.0;
-    let across = (WIDE - TUBE) * 0.5;
-    let up = (TALL - TUBE) * 0.5;
+    let across = (WIDE - TUBE) * 0.5 - INSET;
+    let up = (TALL - TUBE) * 0.5 - INSET;
 
     [
-        (Vec3::Y * up, vec3(WIDE, TUBE, through)),
-        (Vec3::NEG_Y * up, vec3(WIDE, TUBE, through)),
-        (Vec3::NEG_X * across, vec3(TUBE, TALL, through)),
-        (Vec3::X * across, vec3(TUBE, TALL, through)),
+        (Vec3::Y * up, vec3(across * 2.0, TUBE, through)),
+        (Vec3::NEG_Y * up, vec3(across * 2.0, TUBE, through)),
+        (Vec3::NEG_X * across, vec3(TUBE, up * 2.0, through)),
+        (Vec3::X * across, vec3(TUBE, up * 2.0, through)),
     ]
 }
 
 /// How wide the lettering is drawn, which is the can inside its tubes.
 pub fn span() -> f32 {
-    WIDE - (TUBE + MARGIN) * 2.0
+    WIDE - (TUBE + MARGIN + INSET) * 2.0
 }
 
 /// How long a stem is, from the top of the can to the ceiling.
@@ -199,19 +215,50 @@ mod tests {
                 size.z,
                 THICK
             );
-            // it stays on the can rather than hanging off the edge of it
-            assert!(middle.x.abs() + size.x * 0.5 <= WIDE * 0.5 + 1e-6);
-            assert!(middle.y.abs() + size.y * 0.5 <= TALL * 0.5 + 1e-6);
-            // and it reaches both corners of the side it is on
-            let long = if size.x > size.y { size.x } else { size.y };
-            let whole = if size.x > size.y { WIDE } else { TALL };
+            // inside the can's outline, and not flush with it. This used to
+            // assert the opposite, that each bar reaches both corners of the
+            // side it is on, and that is what put the bar's outer face in the
+            // same plane as the can's: the underside of the sign came out as a
+            // band of speckle.
             assert!(
-                (long - whole).abs() < 1e-6,
-                "a tube {} long on a side {} long",
-                long,
-                whole
+                middle.x.abs() + size.x * 0.5 < WIDE * 0.5 - 1e-6,
+                "a bar reaches {} across a can {} across",
+                (middle.x.abs() + size.x * 0.5) * 2.0,
+                WIDE
+            );
+            assert!(
+                middle.y.abs() + size.y * 0.5 < TALL * 0.5 - 1e-6,
+                "a bar reaches {} down a can {} down",
+                (middle.y.abs() + size.y * 0.5) * 2.0,
+                TALL
             );
         }
+
+        // and the ring still closes. Each bar ends at the middle of the one it
+        // meets: short of that is a gap at the corner, past it is the bar's end
+        // face in the same plane as the other's outer face, which is the first
+        // fault one corner further in.
+        let [top, _, left, _] = tubes();
+        assert!(
+            ((top.0.x.abs() + top.1.x * 0.5) - left.0.x.abs()).abs() < 1e-6,
+            "the long bars stop {} out and the uprights stand {} out",
+            top.0.x.abs() + top.1.x * 0.5,
+            left.0.x.abs()
+        );
+        assert!(
+            ((left.0.y.abs() + left.1.y * 0.5) - top.0.y.abs()).abs() < 1e-6,
+            "the uprights stop {} up and the long bars sit {} up",
+            left.0.y.abs() + left.1.y * 0.5,
+            top.0.y.abs()
+        );
+
+        // the reveal is the reveal, measured rather than assumed
+        assert!(
+            (WIDE * 0.5 - (left.0.x.abs() + TUBE * 0.5) - INSET).abs() < 1e-6,
+            "the tube run sits {} inside the can, not {}",
+            WIDE * 0.5 - (left.0.x.abs() + TUBE * 0.5),
+            INSET
+        );
     }
 
     /// Spec 0001: and the lettering fits between the tubes.
