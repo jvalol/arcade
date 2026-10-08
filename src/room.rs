@@ -1734,6 +1734,7 @@ mod tests {
                     crate::RADIUS,
                     1.0 / 60.0,
                     &solid,
+                    true,
                 );
                 at = next;
                 falling = fell;
@@ -1812,7 +1813,7 @@ mod tests {
 
             for _ in 0..frames {
                 let (next, fell) =
-                    crate::walk::walk(at, way, falling, crate::RADIUS, 1.0 / 60.0, &solid);
+                    crate::walk::walk(at, way, falling, crate::RADIUS, 1.0 / 60.0, &solid, true);
                 at = next;
                 falling = fell;
             }

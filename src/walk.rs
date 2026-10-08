@@ -65,6 +65,27 @@ pub const STEP: f32 = 0.42;
 /// number for how blocked is blocked enough is a guess.
 pub const BLOCKED: f32 = 0.995;
 
+/// How fast you may gain height, in units a second.
+///
+/// A step is climbed whole and in one frame, which is right: half way up a
+/// riser is nowhere. What was wrong is that nothing paced them. At four units a
+/// second a tread is crossed in a fifteenth of a second and the riser over it
+/// went by in the same frame, so the stair out of the cellar was climbed at
+/// better than three units a second upwards and a flight went past in under a
+/// second.
+///
+/// So the climb is rationed rather than slowed. A step costs its own height out
+/// of a budget that fills at this rate, and until the budget covers the next
+/// riser the body simply walks into it. The stair paces you, and it paces you
+/// by the one thing a stair actually is, which is height.
+///
+/// Tuned by watching it rather than by arithmetic. A fifth of the walking
+/// speed is the ratio a person climbs at, and in here it came out at five and a
+/// half seconds for the flight out of the cellar, which Jake called too slow in
+/// the same breath as the first number was too fast. This is two and a third
+/// seconds for the same flight.
+pub const CLIMBS: f32 = 2.4;
+
 /// Where a sphere of this radius sits when its feet are at `at`.
 fn body(at: Vec3, radius: f32) -> Sphere {
     Sphere::new(at + Vec3::Y * radius, radius)
@@ -83,6 +104,7 @@ pub fn walk(
     radius: f32,
     dt: f32,
     solid: &[Aabb],
+    may_climb: bool,
 ) -> (Vec3, f32) {
     let mut at = at;
     let mut climbed = false;
@@ -92,7 +114,7 @@ pub fn walk(
         let got = (flat.xz() - at.xz()).length();
         let wanted = wish.length() * dt;
 
-        at = if got < wanted * BLOCKED {
+        at = if got < wanted * BLOCKED && may_climb {
             over_a_step(at, flat, wish, radius, dt, solid)
         } else {
             flat
@@ -335,12 +357,121 @@ mod tests {
         let mut falling = 0.0;
 
         for _ in 0..(seconds / DT) as usize {
-            let (next, fell) = walk(at, Vec3::X * SPEED, falling, RADIUS, DT, solid);
+            let (next, fell) = walk(at, Vec3::X * SPEED, falling, RADIUS, DT, solid, true);
             at = next;
             falling = fell;
         }
 
         at
+    }
+
+    /// Spec 0007: a stair is climbed at a stair's pace.
+    ///
+    /// The fault this is here for, stated as what it looked like rather than as
+    /// the number that fixes it. A step is climbed whole and in one frame,
+    /// which is right, and nothing paced them: a tread is crossed in a
+    /// fifteenth of a second at walking speed and the riser over it went by in
+    /// the same frame, so the flight out of the cellar was climbed at better
+    /// than three units a second upwards and went past in under a second.
+    ///
+    /// Walked up the building's own stair and not a flight built here. A flight
+    /// built for a test is a flight whose shape is the thing under test, and
+    /// the first one written for this let the body through its own top riser.
+    ///
+    /// Walked with the ration the game keeps, because the rationing is the
+    /// point: climbing with `may_climb` always true is what was wrong.
+    #[test]
+    fn a_stair_is_climbed_at_a_stairs_pace() {
+        let room = crate::room::Room::of(
+            (0..12)
+                .map(|n| {
+                    crate::cabinet::Cabinet::found(
+                        &format!("game{}", n),
+                        std::path::Path::new("/nowhere"),
+                    )
+                })
+                .collect(),
+        );
+        let solid = room.solid();
+        let (foot, _) = crate::cellar::floor(room.reaches);
+        // at the bottom of the flight, facing up it
+        let (mut at, mut falling, mut owed) = (
+            vec3(
+                crate::cellar::stair_foot() - 1.2,
+                -crate::cellar::DOWN,
+                foot.z,
+            ),
+            0.0f32,
+            0.0f32,
+        );
+        let began = at.y;
+        let mut took = 0.0f32;
+
+        for _ in 0..(40.0 / DT) as usize {
+            let (next, fell) = walk(
+                at,
+                Vec3::X * SPEED,
+                falling,
+                RADIUS,
+                DT,
+                &solid,
+                owed <= 0.0,
+            );
+            owed = (owed - CLIMBS * DT).max(0.0) + (next.y - at.y).max(0.0);
+            at = next;
+            falling = fell;
+            took += DT;
+
+            if at.y > -0.2 {
+                break;
+            }
+        }
+
+        let up = at.y - began;
+        assert!(
+            up > crate::cellar::DOWN - 0.3,
+            "it got up {:.2} of {:.2}",
+            up,
+            crate::cellar::DOWN
+        );
+
+        let rate = up / took;
+        assert!(
+            rate < CLIMBS * 1.35,
+            "it climbed {:.2} a second and the ration is {:.2}",
+            rate,
+            CLIMBS
+        );
+        assert!(
+            rate > CLIMBS * 0.4,
+            "it climbed {:.2} a second, which is standing still",
+            rate
+        );
+        assert!(
+            took > 1.4,
+            "a flight of {:.1} went by in {:.2} seconds",
+            crate::cellar::DOWN,
+            took
+        );
+    }
+
+    /// Climbing with no ration left is simply walking into the riser.
+    ///
+    /// Which is what paces the stair. Were the body let past some other way,
+    /// the ration would slow the ascent and the walk would run ahead of it.
+    #[test]
+    fn with_no_ration_a_riser_is_a_wall() {
+        let solid = a_step(0.25);
+        let (mut at, mut falling) = (Vec3::ZERO, 0.0);
+
+        for _ in 0..(3.0 / DT) as usize {
+            let (next, fell) = walk(at, Vec3::X * SPEED, falling, RADIUS, DT, &solid, false);
+            at = next;
+            falling = fell;
+        }
+
+        assert!(at.y < 0.05, "it got up a riser with no ration: {:?}", at);
+        assert!(at.x < 2.0, "it walked through the riser to {:.2}", at.x);
     }
 
     /// Spec 0007: a step of the stair's own riser is something you walk up.
@@ -385,7 +516,7 @@ mod tests {
         let mut at = vec3(0.0, 3.0, 0.0);
         let mut falling = 0.0;
         for _ in 0..240 {
-            let (next, fell) = walk(at, Vec3::ZERO, falling, RADIUS, DT, &floor);
+            let (next, fell) = walk(at, Vec3::ZERO, falling, RADIUS, DT, &floor, true);
             at = next;
             falling = fell;
         }
@@ -404,7 +535,7 @@ mod tests {
         let mut at = vec3(6.0, riser, 0.0);
         let mut falling = 0.0;
         for _ in 0..180 {
-            let (next, fell) = walk(at, Vec3::NEG_X * SPEED, falling, RADIUS, DT, &solid);
+            let (next, fell) = walk(at, Vec3::NEG_X * SPEED, falling, RADIUS, DT, &solid, true);
             at = next;
             falling = fell;
         }

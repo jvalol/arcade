@@ -17,24 +17,83 @@ clack is two short tones a fifth apart. Neither will be mistaken for the real
 thing, and neither has to be: what they have to do is tell you that you went in
 the water, and that something over there happened.
 
-**There are no footsteps.** There were, and they were the best measured and
-worst sounding thing in this building. The floor was rung as a struck object,
-the ring was driven by a swelling contact rather than an impulse, each floor
-had its own note and decay, there were several of every one so no two strides
-repeated, and the carpet was given a rustle instead of a boom. Every one of
-those was a real fault found and fixed, and the result still did not sound like
-a person walking.
+**The footsteps are recordings.** Everything else in here is worked out by the
+code that plays it; these are the exception, and the exception was earned.
 
-Jake pinned them, played on, and then said to take them out until they feel
-natural. A sound that is nearly right is worse than no sound: silence is a
-choice a room can carry, and a footstep that is not quite a footstep is a thing
-the ear keeps going back to.
+They were synthesised first and they were the best measured and worst sounding
+thing in the building. The floor was rung as a struck object, the ring was
+driven by a swelling contact rather than an impulse, each floor had its own note
+and decay, there were several of every one so no two strides repeated, and the
+carpet was given a rustle instead of a boom. Every one of those was a real fault
+found and fixed, and it still did not sound like a person walking, so they came
+out entirely: a sound that is nearly right is worse than no sound, because
+silence is a choice a room can carry and a footstep that is not quite a footstep
+is a thing the ear keeps going back to.
 
-So they are gone rather than disabled. `Underfoot`, `step`, the per floor
-table, the resonators that drove it and the eight tests that held it are all
-out of the source, where git has them if they are ever worth another go. What
-is left is what nobody has complained about: the splash, the clack, the bubble,
-the fire, the trickle, the hum and the steam.
+What was wrong was never the pacing or the number of variants. A step is the one
+sound in here you hear hundreds of times an hour and the one your ear already
+knows by heart, and a noise burst under an envelope is a noise burst under an
+envelope however carefully the envelope was chosen.
+
+So there are twenty recordings bundled in `res/steps`, all of them CC0, from
+three sources that `res/steps/README.md` names. Four floors: carpet in the hall,
+boards in the nook and the cellar and on the stair, tile in the baths, gravel in
+the garden. Four of each, and six of the boards.
+
+Four floors and not five. There was a stone, under the cellar and the stair, and
+no floor in this building is stone: the cellar's is hardwood laid over the stone
+it sits on and the stair's treads are drawn with the same boards. What it
+sounded like was walking on pebbles in a room with a wooden floor, which is what
+it was.
+
+**What you are standing on is worked out from where you are**, and not from a
+flag set on the way through a door. A flag is a second account of where you are
+and this building has learned what two accounts of one thing do. It reads in the
+order the place is stacked: everything below the hall, then the stair, then the
+two rooms off the hall's left wall, then the hall. The garden and the nook are
+both through that wall and the nook stops short of the garden, so which side of
+the wall you are on is not enough on its own.
+
+**One is played every stride**, paced by how far you have actually walked rather
+than by a clock, so slowing down slows them and standing still is silence.
+
+**A stride and not a pace**, and a step shorter than the gap between steps.
+These two go together and they are arithmetic rather than taste. The stride was
+0.85 of a unit, which is a pace, and at the speed this building walks you that
+is nearly five steps a second: a sprint cadence under a body that is plainly not
+sprinting. And the engine appends to a player that runs one sound after another
+and is not a mixer, so a step that outlasts the gap to the next one never
+finishes before the next is due. The recordings ran to most of a second against
+a gap of a fifth of one, so ten seconds of walking left half a minute of
+footsteps still to play, which is why they went on after you had stopped.
+
+The stride is 1.6 now, which is a jog's stride at a jog's speed and about two
+and a half steps a second. `noise::longest` takes the gap from that and the
+walking speed and leaves a margin under it, so the cap on a recording is worked
+out rather than written down, and a file that breaks it is dropped at load as
+well as failing a test. A floor gone quiet is a better fault than a floor that
+runs behind.
+
+**No step is the one before it.** The repetition is what gives a footstep away,
+not the recording, so the file walks the list in order and both the pitch and
+the level move a little every time. Picked at random instead, the same file
+comes up twice running every few steps and that is the one pair anybody notices.
+A twelfth of a tone and a sixth of the level, which is as far as a step can go
+before it is a different shoe on a different floor.
+
+Both of those are applied as the sound goes out, not baked into the files: the
+engine's `Samples::pitched` and `Samples::gain` share the buffer they came from,
+so a step that is never quite the last step costs nothing. Spec 0045 of the
+engine.
+
+**How loud a floor is, is a decision.** The files are all normalised to one peak
+so that it can be: left alone, carpet would be as loud as stone if the carpet
+recording happened to be the hotter file. Carpet is the quiet one and stone is
+the loud one.
+
+**The pool has no sound underfoot.** None of the three CC0 packs has a wade, and
+nothing in them is close enough to stand in for one. Going in still splashes;
+walking about in it does not.
 
 **Water** answers what you do to it. Going in is a splash, and its size comes
 from how fast you went in. Wading on is a wash. The fountain
@@ -70,6 +129,13 @@ the engine's and stays available.
 - None of them starts or ends with a jump, which is a click. — `noise::tests::nothing_begins_or_ends_with_a_click`
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
 - One note plays at a time, and it is the nearest one within earshot. — `noise::tests::one_note_plays_at_a_time_and_it_is_the_nearest`
+- Every floor has footsteps and every one of them reads. — `noise::tests::every_floor_has_footsteps_that_read`
+- No two floors share a recording. — `noise::tests::no_two_floors_sound_the_same`
+- Each room sounds like what it is floored with. — `noise::tests::each_room_sounds_like_its_own_floor`
+- No step is the file, the pitch or the level of the one before it. — `noise::tests::no_step_is_the_one_before_it`
+- A step is bent and not mangled. — `noise::tests::a_step_is_bent_and_not_mangled`
+- Walking never queues more footsteps than there is time to play them. — `noise::tests::walking_does_not_run_the_queue_behind`
+- Carpet is the quiet floor and tile the loud one. — `noise::tests::carpet_is_the_quiet_floor_and_tile_the_loud_one`
 
 ### Verified by hand
 

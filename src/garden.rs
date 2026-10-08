@@ -138,7 +138,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         Aabb::from_center_size(
             vec3(
                 wall_at(),
-                (crate::room::TALL + HIGH) * 0.5,
+                HIGH * 0.55,
                 (near(reaches) + way(reaches).0) * 0.5,
             ),
             vec3(
@@ -154,6 +154,22 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
                 (way(reaches).1 + reaches) * 0.5,
             ),
             vec3(THICK, HIGH - crate::room::TALL, reaches - way(reaches).1),
+        ),
+        // and a parapet over the rest of it, where the nook's end wall closes
+        // the garden. That wall stops at the nook's ceiling and the garden is a
+        // metre taller, so there was a strip of nothing along the whole of it:
+        // from inside the nook, looking up near that end, a wedge of the
+        // garden's sky came through the ceiling.
+        //
+        // The same fault as the parapet over the hall's wall, on the other
+        // borrowed wall. Both were borrowed and only one was topped.
+        Aabb::from_center_size(
+            vec3(
+                west + DEEP - NOOK_DEEP * 0.5,
+                (crate::room::TALL + HIGH) * 0.5,
+                south,
+            ),
+            vec3(NOOK_DEEP, HIGH - crate::room::TALL, THICK),
         ),
         // the east wall past the hall, where the hall's own wall has run out
         Aabb::from_center_size(
@@ -327,12 +343,33 @@ pub fn dome_mesh() -> blitzkit::mesh::MeshData {
     mesh
 }
 
-/// Where the dome stands: over the middle of the garden, springing from the
-/// top of its walls.
+/// How high the sky springs.
+///
+/// Between the building's ceilings and the top of the garden's walls, and both
+/// ends of that are load bearing.
+///
+/// Above the ceilings, because the dome is nineteen across and the garden is
+/// sixteen: it reaches well past the garden and over the hall and the nook,
+/// and anything of it below their ceilings is inside those rooms. Sprung at a
+/// little over half the garden's height, which it was, the rim sat at 2.31 and
+/// every ceiling in this building is at 3.2, so the rim ran through the nook
+/// and the hall at head height. From in there it is a pale blade hanging
+/// through the ceiling, and it took a recording, a camera put exactly where
+/// Jake was standing, and a build with the dome left out to find.
+///
+/// Below the garden's own walls, which is the older reason: level with them or
+/// over them and you see the rim from inside the garden, which is the edge of
+/// the sky.
+pub fn springs() -> f32 {
+    (crate::room::TALL + HIGH) * 0.5
+}
+
+/// Where the dome stands: over the middle of the garden, springing between the
+/// building's ceilings and the top of the garden's walls.
 pub fn dome_at(reaches: f32) -> Vec3 {
     let middle = at(reaches);
 
-    vec3(middle.x, HIGH * 0.55, middle.z)
+    vec3(middle.x, springs(), middle.z)
 }
 
 /// The gravel, as the four strips of it round the pond.
@@ -2365,7 +2402,8 @@ mod tests {
             } else {
                 Vec3::ZERO
             };
-            let (next, fell) = crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid);
+            let (next, fell) =
+                crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
             at = next;
             falling = fell;
             if (at.y - was).abs() > 1e-3 {
@@ -2698,6 +2736,124 @@ mod tests {
         }
     }
 
+    /// Spec 0010: the garden is closed all the way up, on every side.
+    ///
+    /// Two of its walls are borrowed from rooms a metre shorter than it, and
+    /// only one of them was topped. Over the nook's end wall there was a strip
+    /// of nothing the whole width of the nook: from in there, looking up at
+    /// that end, a wedge of the garden's sky came through the ceiling, and from
+    /// the garden you were looking down into the nook.
+    ///
+    /// Swept along each side rather than checked at a corner, because a gap in
+    /// the middle of a wall is what this was.
+    #[test]
+    fn the_garden_is_closed_all_the_way_up() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let half = half();
+        let solid = solid(reaches);
+        let (from_z, to_z) = way(reaches);
+
+        // every side, at the height between the rooms' ceilings and the
+        // garden's own, which is the band that was open
+        for up in [crate::room::TALL + 0.05, (crate::room::TALL + HIGH) * 0.5] {
+            for step in 0..=120 {
+                let on = step as f32 / 120.0;
+
+                for (what, at_) in [
+                    (
+                        "the south wall",
+                        vec3(middle.x - half.x + on * half.x * 2.0, up, middle.z - half.y),
+                    ),
+                    (
+                        "the north wall",
+                        vec3(middle.x - half.x + on * half.x * 2.0, up, middle.z + half.y),
+                    ),
+                    (
+                        "the west wall",
+                        vec3(middle.x - half.x, up, middle.z - half.y + on * half.y * 2.0),
+                    ),
+                    (
+                        "the east wall",
+                        vec3(middle.x + half.x, up, middle.z - half.y + on * half.y * 2.0),
+                    ),
+                ] {
+                    // the way in is a hole on purpose
+                    if what == "the east wall" && at_.z > from_z - 0.2 && at_.z < to_z + 0.2 {
+                        continue;
+                    }
+
+                    let shut = solid
+                        .iter()
+                        .any(|box_| box_.contains_point(at_) || near(box_, at_) < 0.2);
+
+                    assert!(shut, "{} is open at {:?}", what, at_);
+                }
+            }
+        }
+    }
+
+    /// How far a point is from a box, nought if it is inside.
+    fn near(box_: &Aabb, at_: Vec3) -> f32 {
+        let on = vec3(
+            at_.x.clamp(box_.min.x, box_.max.x),
+            at_.y.clamp(box_.min.y, box_.max.y),
+            at_.z.clamp(box_.min.z, box_.max.z),
+        );
+
+        on.distance(at_)
+    }
+
+    /// Spec 0010: no part of the sky is inside the building.
+    ///
+    /// The dome is nineteen across and the garden is sixteen, so it reaches
+    /// well past the garden and over the hall and the nook. Anything of it
+    /// below their ceilings is inside those rooms, and sprung at a little over
+    /// half the garden's height its rim sat at 2.31 against ceilings at 3.2:
+    /// from the nook it was a pale blade hanging down through the ceiling.
+    ///
+    /// Measured at the rim, which is the lowest the dome ever gets, and
+    /// against the ceiling of every room the dome reaches over.
+    #[test]
+    fn no_part_of_the_sky_is_inside_the_building() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let stands = dome_at(reaches);
+
+        // the rim is the lowest of it, and the whole of the dome is at that
+        // height or above
+        let mut lowest = f32::MAX;
+        for vertex in dome_mesh().vertices.iter() {
+            lowest = lowest.min(vertex.position[1]);
+        }
+        let rim = stands.y + lowest;
+
+        assert!(
+            rim > crate::room::TALL,
+            "the sky comes down to {:.2} and the rooms it crosses have ceilings at {:.2}",
+            rim,
+            crate::room::TALL
+        );
+
+        // and it reaches over them, which is why that matters
+        let over = |x: f32, z: f32| vec2(x - middle.x, z - middle.z).length() < DOME;
+        assert!(over(0.0, 0.0), "the dome should reach over the hall");
+        assert!(
+            over(-crate::room::WALL - CABINET.x - NOOK_DEEP * 0.5, 0.0),
+            "the dome should reach over the nook"
+        );
+
+        // still tucked under the garden's own walls, which is the older reason
+        // it is sprung low at all: level with them and you see the edge of the
+        // sky from inside the garden
+        assert!(
+            rim < HIGH,
+            "the rim is at {:.2} and the garden's walls stop at {:.2}",
+            rim,
+            HIGH
+        );
+    }
+
     /// Spec 0010: no part of the hall is laid over the garden.
     ///
     /// The hall's floor is two slabs, and the carpet and the ceiling are now
@@ -2792,7 +2948,8 @@ mod tests {
                 Vec3::ZERO
             };
 
-            let (next, fell) = crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid);
+            let (next, fell) =
+                crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
             at = next;
             falling = fell;
         }

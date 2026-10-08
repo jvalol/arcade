@@ -11,8 +11,7 @@ courtesy and not a condition.
 | Surface | Variants | From |
 | --- | --- | --- |
 | `carpet` | 4 | [Owlish Media Sound Effects](https://opengameart.org/content/sound-effects-pack), `hard-footstep1`–`4` |
-| `boards` | 3 | [Different steps on wood, stone, leaves, gravel and mud](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) by TinyWorlds, `wood01`–`03` |
-| `stone` | 6 | [Fantozzi's Footsteps](https://opengameart.org/content/fantozzis-footsteps-grasssand-stone), the stone half |
+| `boards` | 6 | [Different steps on wood, stone, leaves, gravel and mud](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) by TinyWorlds, `wood01`–`03`, and Owlish Media's `step1`, `step3`, `step4` |
 | `tile` | 4 | Owlish Media again, the four reverberant ones |
 | `gravel` | 6 | Fantozzi's Footsteps, the sand half |
 
@@ -46,6 +45,11 @@ pitch and level that vary from step to step are applied at run time by
 packs has one. Spec 0009 says what it should be. Fantozzi's sand is standing in
 for the garden's gravel, which is close enough to be right; nothing in here is
 close enough to be water.
+
+**Boards carries three rooms**, which is why it has six where the others have
+four: the nook, the cellar and the stair. There was a `stone` set, and it is
+gone, because no floor in this building is stone and it sounded like walking on
+pebbles in a room with a wooden floor.
 
 **Carpet is the weakest match.** It is a hard-floor recording picked for being
 the dullest of what was available, and the hall is the most walked floor in the

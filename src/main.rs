@@ -46,7 +46,7 @@ const EYE: f32 = 1.55;
 /// nothing to catch up with anyway, and long enough to turn fourteen quarter
 /// unit drops a second into going down a slope.
 const EYE_LAGS: f32 = 0.09;
-const SPEED: f32 = 4.2;
+pub const SPEED: f32 = 4.2;
 const LOOK: f32 = 0.0022;
 const PITCH_LIMIT: f32 = 1.3;
 
@@ -148,6 +148,8 @@ struct Arcade {
     wineglass: Option<MeshId>,
     afghan: Option<TextureId>,
     grain: Vec<TextureId>,
+    /// The stairwell's boarding, a quad per face. Spec 0007.
+    boarding: Vec<MeshId>,
     stonework: Option<TextureId>,
     /// The garden's sky and the dome it is painted on, per spec 0010.
     storm: Option<TextureId>,
@@ -171,6 +173,14 @@ struct Arcade {
     koi: Option<MeshId>,
     fin: Option<MeshId>,
     skins: Vec<TextureId>,
+    /// A footstep for every floor, read out of the files bundled beside this.
+    /// Spec 0009, and the engine's 0045.
+    steps: Vec<(noise::Underfoot, Vec<Samples>)>,
+    /// How far you have walked since the last one, and how many you have taken.
+    /// What a climb still owes, in height. See `walk::CLIMBS`.
+    climbs: f32,
+    paced: f32,
+    stepped: usize,
     splashes: Vec<Samples>,
     airs: Vec<(Vec3, Samples)>,
     /// How long the note playing now has left.
@@ -277,6 +287,10 @@ impl Arcade {
                 tub_deep,
                 spa::TUB_CELLS,
             ),
+            steps: Vec::new(),
+            climbs: 0.0,
+            paced: 0.0,
+            stepped: 0,
             splashes: Vec::new(),
             airs: Vec::new(),
             aired: 0.0,
@@ -328,6 +342,7 @@ impl Arcade {
             wineglass: None,
             afghan: None,
             grain: Vec::new(),
+            boarding: Vec::new(),
             stonework: None,
             storm: None,
             dome: None,
@@ -640,6 +655,11 @@ impl Arcade {
         ]
     }
 
+    /// What you are standing on, which decides which footstep you hear.
+    fn underfoot(&self) -> noise::Underfoot {
+        noise::underfoot(self.room.reaches, self.at)
+    }
+
     /// Where you are looking from, which is your eye and not your feet.
     fn looking_from(&self) -> Vec3 {
         vec3(self.at.x, self.eye + EYE, self.at.z)
@@ -859,6 +879,17 @@ impl Game for Arcade {
                 renderer.add_texture(&carpet::grained(carpet::GRAIN_SEED.wrapping_add(n * 7919)))
             })
             .collect();
+        // a quad per face of the stairwell, each counted from its own size so a
+        // board is a board's width whichever face it is on
+        self.boarding = cellar::shaft_faces(self.room.reaches)
+            .into_iter()
+            .map(|(_, size, _)| {
+                renderer.add_mesh(&room::tiled_plane(glam::vec2(
+                    size.x / cellar::PANEL_WIDE,
+                    size.y / cellar::PANEL_LONG,
+                )))
+            })
+            .collect();
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh()));
@@ -981,6 +1012,28 @@ impl Game for Arcade {
             self.gyro.set_going();
         }
 
+        // the footsteps, read out of the files bundled beside this. A file
+        // that will not read is dropped rather than taken as a crash: a
+        // footstep is not worth refusing to open the building over, and the
+        // tests are what say the files are good.
+        self.steps = noise::FLOORS
+            .iter()
+            .copied()
+            .map(|on| {
+                let heard = noise::steps(on)
+                    .iter()
+                    .filter_map(|bytes| Samples::from_wav(bytes).ok())
+                    // and anything that outlasts the gap to the next step is
+                    // dropped as well. The engine queues rather than mixes, so
+                    // one of those is a backlog that grows for as long as you
+                    // walk; a floor that has gone quiet is the better fault,
+                    // and `noise::tests` is what says it has not.
+                    .filter(|got| got.seconds() <= noise::longest())
+                    .collect();
+
+                (on, heard)
+            })
+            .collect();
         self.splashes = (0..4)
             .map(|n| noise::splash(2.0 + n as f32 * 1.2, 0x51A5 + n * 7919))
             .collect();
@@ -1098,8 +1151,17 @@ impl Game for Arcade {
             RADIUS,
             dt,
             &self.room.solid(),
+            // a step costs its own height out of a budget that fills at
+            // `walk::CLIMBS` a second, and until the budget covers the next
+            // riser you simply walk into it. Nothing paced the stair before
+            // this: a tread is crossed in a fifteenth of a second and the riser
+            // over it went by in the same frame, so the flight out of the
+            // cellar went past at better than three units a second upwards.
+            self.climbs <= 0.0,
         );
         let went = (at - self.at).length() / dt.max(1e-4);
+        // what the climb cost, and the budget filling back up
+        self.climbs = (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0);
         self.at = at;
         self.falling = falling;
 
@@ -1107,6 +1169,29 @@ impl Game for Arcade {
         // everything that comes from somewhere swings as you turn. Spec 0019 of
         // the engine.
         sound.set_listener(self.looking_from(), self.facing(), Vec3::Y);
+
+        // a footstep every stride, paced by how far you have actually walked
+        // rather than by a clock, so slowing down slows them and standing still
+        // is silence. Spec 0009.
+        self.paced += went * dt;
+        if self.paced >= noise::STRIDE {
+            self.paced -= noise::STRIDE;
+
+            let on = self.underfoot();
+            self.stepped = self.stepped.wrapping_add(1);
+
+            if let Some((_, heard)) = self.steps.iter().find(|(floor, _)| *floor == on) {
+                let (which, pitch, quieter) = noise::bend(self.stepped, heard.len());
+
+                if let Some(step) = heard.get(which) {
+                    // bent on the way out rather than baked into the files:
+                    // both of these share the buffer they came from, so a step
+                    // that is never quite the last step costs nothing. The
+                    // engine's spec 0045.
+                    sound.play(&step.pitched(pitch).gain(noise::loudness(on) * quieter));
+                }
+            }
+        }
 
         // a knock for every brick the ball takes off the wall, from the bench
         // it happens on. The one thing in this building that hits anything.
@@ -1900,12 +1985,18 @@ impl Game for Arcade {
                 // the shaft is panelled like the room it leads to. Left as the
                 // stone it started as, the way down is a grey chute into a
                 // mahogany library.
-                cellar::Made::Shaft => match self.grain.first() {
-                    Some(grain) => {
-                        scene.push_textured(cube, *grain, &laid, aim::TIMBER[0], aim::DULL)
-                    }
-                    None => scene.push_colored(cube, &laid, aim::TIMBER[0]),
-                },
+                //
+                // Boarded and not grained. A cube's texture runs nought to one
+                // on every face however big the face is, so one board's grain
+                // on a wall this size is that board blown up to three metres: a
+                // hundred and twenty-eight pixels across the whole of it, with
+                // the cathedral figure come out as scallops the size of your
+                // head and every texel a visible block. The boards picture is
+                // six planks wide and stretches to something that reads as
+                // boarding.
+                // flat, with the boarding laid on its faces below. Textured
+                // here it is one board stretched over the whole wall.
+                cellar::Made::Shaft => scene.push_colored(cube, &laid, aim::TIMBER[0]),
                 cellar::Made::Soffit => {}
                 // the floor warmer and a shade apart from the walls, so a room
                 // is a floor and walls rather than one box
@@ -2478,6 +2569,29 @@ impl Game for Arcade {
         ] {
             if let Some(mesh) = mesh {
                 scene.push_material(mesh, &Transform::at(Vec3::ZERO), colour, 420.0);
+            }
+        }
+
+        // the stairwell's boarding, laid on the faces of its walls rather than
+        // stretched over them. Spec 0007.
+        if let Some(grain) = self.grain.first() {
+            for ((middle, size, looks), mesh) in cellar::shaft_faces(self.room.reaches)
+                .into_iter()
+                .zip(&self.boarding)
+            {
+                // a quad lies flat and faces up, so a quarter turn about x
+                // stands it on edge looking along z
+                let turn = glam::Quat::from_rotation_x(looks * std::f32::consts::FRAC_PI_2);
+
+                scene.push_textured(
+                    *mesh,
+                    *grain,
+                    &Transform::at(middle)
+                        .with_rotation(turn)
+                        .with_scale(vec3(size.x, 1.0, size.y)),
+                    aim::TIMBER[0],
+                    aim::DULL,
+                );
             }
         }
 

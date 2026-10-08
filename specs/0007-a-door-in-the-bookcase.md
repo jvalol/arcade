@@ -152,6 +152,32 @@ cellar wanted: with no light of its own it came out as flat grey surfaces with n
 shape to any of them. It goes in the same list as the nook's sconces and the
 sign's pendant and is chosen off the same distance.
 
+**A stair is climbed at a stair's pace.** A step is taken whole and in one
+frame, which is right: half way up a riser is nowhere. What was missing is that
+nothing paced them. At this building's walking speed a tread is crossed in a
+fifteenth of a second and the riser over it went by in the same frame, so the
+flight out of the cellar was climbed at better than three units a second upwards
+and the whole of it went past in under a second.
+
+So the climb is rationed rather than slowed. A step costs its own height out of
+a budget that fills at `walk::CLIMBS` a second, and until the budget covers the
+next riser the body simply walks into it. The stair paces you, and it paces you
+by the one thing a stair actually is, which is height.
+
+The ration is watched rather than worked out. A fifth of the walking speed is
+the ratio a person climbs at and it came out at five and a half seconds for the
+flight out of the cellar, which was called too slow in the same breath as the
+first version was too fast. It is two and a third seconds for that flight now.
+
+**The stairwell is boarded and not papered.** Its walls were drawn as textured
+boxes, and a box's texture runs nought to one on every face however big the face
+is, so the grain that is right on a tread came out here as one board blown up to
+four metres: a hundred and twenty-eight pixels of picture across the whole wall,
+the cathedral figure in scallops the size of your head, every texel a block you
+could count. The walls are flat now with boarding laid on their faces as tiled
+quads, a board's width each, standing a hair proud so that nothing shares a
+plane with anything.
+
 ## Acceptance criteria
 
 - You can walk up a step, and the shallowest is not the hardest. — `walk::tests::it_climbs_a_step`
@@ -167,6 +193,8 @@ sign's pendant and is chosen off the same distance.
 - One book opens the wall, and the rest of the shelf does not. — `room::tests::one_book_opens_the_wall`
 - The door does not open or close through you. — `room::tests::the_door_does_not_open_through_you`
 - Nothing down the way down is inside the room above it. — `room::tests::the_way_down_keeps_out_of_the_room`
+- A stair is climbed at a stair's pace. — `walk::tests::a_stair_is_climbed_at_a_stairs_pace`
+- With no ration left a riser is a wall. — `walk::tests::with_no_ration_a_riser_is_a_wall`
 - Every repo is a cabinet in the hall, a bench in the nook, or a table in the cellar. — `tests::it_knows_every_game_the_project_does`
 
 ### Verified by hand

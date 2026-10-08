@@ -11,7 +11,7 @@
 
 use crate::room::{self, CABINET, NOOK_DEEP, THICK, WALL};
 use blitzkit::collision::Aabb;
-use glam::{vec3, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3};
 
 /// How far down the cellar is from the nook.
 pub const DOWN: f32 = 3.0;
@@ -937,6 +937,53 @@ pub fn ceiling(reaches: f32) -> (Vec<Timber>, Vec<Timber>) {
     (beams, coffers)
 }
 
+/// How wide a board of the stairwell's panelling is, and how long.
+///
+/// The shaft is boarded and not papered with one enormous board. A cube's
+/// texture runs nought to one on every face however big the face is, so the
+/// grain that is right on a stair tread came out on this wall as one
+/// cathedral-figure arch four metres across, in blocks you could count: a
+/// hundred and twenty-eight pixels of picture over four and a third metres of
+/// wall.
+pub const PANEL_WIDE: f32 = 0.26;
+pub const PANEL_LONG: f32 = 2.2;
+
+/// How far the boarding stands off the wall behind it.
+///
+/// Off it rather than in it. Laid in the same plane as the face it covers, two
+/// exposed surfaces share a plane and fight, which is the fault this building
+/// has now hit seven times.
+pub const PANEL_PROUD: f32 = 0.012;
+
+/// The faces of the stairwell worth boarding: the middle of each, how big it
+/// is, and which way along z it looks.
+///
+/// Both z faces of each wall of the shaft, because which of the two you can see
+/// depends on which side of it you are, and a face inside the other wall is
+/// hidden rather than fighting.
+pub fn shaft_faces(reaches: f32) -> Vec<(Vec3, Vec2, f32)> {
+    built(reaches)
+        .into_iter()
+        .filter(|(_, made)| *made == Made::Shaft)
+        .flat_map(|(box_, _)| {
+            let size = box_.max - box_.min;
+            let middle = (box_.min + box_.max) * 0.5;
+
+            [-1.0f32, 1.0].iter().copied().map(move |looks| {
+                (
+                    vec3(
+                        middle.x,
+                        middle.y,
+                        if looks > 0.0 { box_.max.z } else { box_.min.z } + looks * PANEL_PROUD,
+                    ),
+                    vec2(size.x, size.y),
+                    looks,
+                )
+            })
+        })
+        .collect()
+}
+
 /// The raked ceiling over the flight, as a middle, a size and a turn about z.
 ///
 /// One slab following the slope rather than the dozen steps the collision is
@@ -1552,7 +1599,7 @@ mod tests {
         let mut at = vec3(back() - 0.5, 0.0, along);
         let mut falling = 0.0;
         for _ in 0..300 {
-            let (next, fell) = walk(at, Vec3::NEG_X * speed, falling, radius, dt, &solid);
+            let (next, fell) = walk(at, Vec3::NEG_X * speed, falling, radius, dt, &solid, true);
             at = next;
             falling = fell;
         }
@@ -1569,7 +1616,7 @@ mod tests {
         // in this test's geometry, so walking on walks off the end of the world.
         let mut back_up = false;
         for _ in 0..360 {
-            let (next, fell) = walk(at, Vec3::X * speed, falling, radius, dt, &solid);
+            let (next, fell) = walk(at, Vec3::X * speed, falling, radius, dt, &solid, true);
             at = next;
             falling = fell;
 

@@ -1837,7 +1837,8 @@ mod tests {
                 Vec3::ZERO
             };
 
-            let (next, fell) = crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid);
+            let (next, fell) =
+                crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
             at = next;
             falling = fell;
         }

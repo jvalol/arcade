@@ -258,6 +258,24 @@ its rim and every way you can look up lands on cloud. Sprung level with them
 and only as wide as the garden, there was a wedge of black over one corner
 where the sky ran out.
 
+**And sprung above the building's ceilings**, which is the other end of the
+same decision and was missed. The dome is nineteen across against a garden of
+sixteen, so it reaches well past the garden and over the hall and the nook, and
+anything of it below their ceilings is inside those rooms. At a little over
+half the garden's height the rim sat at 2.31 and every ceiling in here is at
+3.2: the rim ran through the nook and the hall at head height, and from in
+there it was a pale blade hanging down through the ceiling.
+
+There is no radius that fixes it, which is why the height is the thing that
+moves. The nook is nearer the garden's middle than the garden's own corners
+are, so a dome small enough to keep its rim out of the nook is too small to
+cover the garden. It springs between the building's ceilings and the top of the
+garden's walls instead, and both ends of that are load bearing.
+
+It took a recording, a build that logged where the camera was so the one view
+that shows it could be stood in exactly, and a build with the dome left out, to
+find. Six guesses at where to point a camera found nothing.
+
 It is wound to be seen from inside, which is the opposite of everything else
 this building turns. Made two sided instead, every triangle had a twin a hair
 away facing the other way, and the sky came out in patches of cloud and patches
@@ -284,6 +302,17 @@ of a number that split the floor itself.
 The carpet goes over the aisle alone, because the nook has boards of its own
 over every inch of its floor and always did. Its tile count comes down with its
 width so the weave is the size it has always been.
+
+**Both borrowed walls are topped, and only one of them was.** The hall's wall
+got its parapet. The nook's end wall, which is the garden's near side, did not,
+and it stops at the nook's ceiling while the garden is a metre taller: there was
+a strip of nothing the whole width of the nook. From inside the nook, looking up
+at that end, a wedge of the garden's sky came through the ceiling, and from the
+garden you were looking down into the nook.
+
+The test for it sweeps every side of the garden at the height between the rooms'
+ceilings and the garden's own, rather than checking the corners, because a gap
+in the middle of a wall is what this was.
 
 **The wall it borrows is finished on both sides.** The nook's end wall is the
 garden's near wall, and from in here it is a garden wall, not the back of a
@@ -326,6 +355,8 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - You cannot walk into the pond, from any side. — `garden::tests::you_cannot_walk_into_the_pond`
 - The lip is set stones and not a run of coping. — `garden::tests::the_lip_is_set_stones_and_not_a_kerb`
 - The garden stands on the roof of the baths and neither is inside the other. — `garden::tests::the_garden_sits_on_the_roof_of_the_baths`
+- The garden is closed all the way up, on every side. — `garden::tests::the_garden_is_closed_all_the_way_up`
+- No part of the sky is inside the building. — `garden::tests::no_part_of_the_sky_is_inside_the_building`
 - Every tree leans over the water, and bends rather than slopes. — `garden::tests::every_tree_leans_over_the_water`
 - Its foliage is pads going round it, not a stack of plates. — `garden::tests::a_tree_is_pads_and_not_a_stack_of_plates`
 - Every pad hangs off a limb that starts on the trunk. — `garden::tests::every_pad_hangs_off_the_trunk`
