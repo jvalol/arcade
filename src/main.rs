@@ -1550,6 +1550,17 @@ impl Game for Arcade {
                     aim::CEILING,
                 );
             }
+
+            // and the grid hung under it, which is what is over an arcade and
+            // is also sixteen units of lines running away from you. Spec 0012.
+            let (bars, tiles) = self.room.lattice();
+
+            for (at, size) in tiles.iter() {
+                scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_TILE);
+            }
+            for (at, size) in bars.iter() {
+                scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_BAR);
+            }
         }
 
         // the hall's near end wall, drawn in one piece over the gap its
@@ -1935,7 +1946,7 @@ impl Game for Arcade {
 
             // two chains to the ceiling, each link turned across the one under
             // it, which is what makes a stack of blocks read as a chain
-            let links = sign::links(room::TALL);
+            let links = sign::links(room::soffit());
             for side in [-1.0f32, 1.0] {
                 let foot = at + Vec3::X * side * sign::CHAIN_AT + Vec3::Y * sign::TALL * 0.5;
 
@@ -1963,12 +1974,12 @@ impl Game for Arcade {
                 &Transform::at(shade).with_scale(sign::SHADE),
                 aim::SHADE,
             );
-            let stem = (room::TALL + shade.y + sign::SHADE.y * 0.5) * 0.5;
+            let stem = (room::soffit() + shade.y + sign::SHADE.y * 0.5) * 0.5;
             scene.push_colored(
                 cube,
                 &Transform::at(vec3(shade.x, stem, shade.z)).with_scale(vec3(
                     0.016,
-                    room::TALL - shade.y - sign::SHADE.y * 0.5,
+                    room::soffit() - shade.y - sign::SHADE.y * 0.5,
                     0.016,
                 )),
                 aim::SIGN_CHAIN,
@@ -2011,7 +2022,7 @@ impl Game for Arcade {
 
             // two stems to the ceiling. Rigid, where the nook's sign is on
             // chains: there is a transformer in a box this size.
-            let long = neon::stem(room::TALL);
+            let long = neon::stem(room::soffit());
             for side in [-1.0f32, 1.0] {
                 scene.push_colored(
                     cube,
@@ -2071,6 +2082,7 @@ impl Game for Arcade {
         for (box_, made) in spa::built(self.room.reaches)
             .into_iter()
             .chain(spa::fittings(self.room.reaches))
+            .chain(spa::ceiling(self.room.reaches))
         {
             let laid = Transform::at(box_.center()).with_scale(box_.size());
 

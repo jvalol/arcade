@@ -19,6 +19,7 @@ not a priority, and it never changes once a spec exists.
 | [0009](0009-a-building-you-can-hear.md) | Footsteps, splashes and the note each room has |
 | [0010](0010-a-garden-off-the-entrance.md) | A zen garden with trees and a koi pond, through the wall on your left |
 | [0011](0011-the-space-behind-the-wall.md) | A vast dark space behind the wall you wake against, with no door |
+| [0012](0012-two-ceilings-worth-looking-up-at.md) | A grid over the hall and tile over the baths, so two more rooms are worth looking up in |
 
 ---
 

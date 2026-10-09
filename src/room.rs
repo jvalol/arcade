@@ -98,6 +98,25 @@ pub const NOOK_DOOR: f32 = END - CABINET.z * 0.5;
 /// How far the room's walls are from its middle, how high, and how thick.
 pub const WALL: f32 = 2.0;
 pub const TALL: f32 = 3.2;
+
+/// A piece of the grid over the hall: where it is and how big. Spec 0012.
+pub type Hung = (Vec3, Vec3);
+
+/// The grid over the hall: how big a ceiling tile is, how far the bar between
+/// two of them hangs below, and how wide that bar is. Spec 0012.
+pub const CEIL_TILE: f32 = 1.15;
+pub const CEIL_DROP: f32 = 0.055;
+pub const CEIL_BAR: f32 = 0.05;
+
+/// How high the ceiling you can see is, as against the lid over it.
+///
+/// Everything hung in the hall hangs from this. The neon's stem and the
+/// sign's pendant both ran to `TALL`, which with a grid under it puts them
+/// through the tiles: right for a cable and wrong for the two things in the
+/// room that are meant to be hanging.
+pub fn soffit() -> f32 {
+    TALL - CEIL_DROP
+}
 pub const THICK: f32 = 0.3;
 
 /// How far inside the near wall you wake up.
@@ -893,6 +912,82 @@ impl Room {
         out
     }
 
+    /// The grid over the lid: the bars, and the tile sunk behind each square
+    /// of them. Spec 0012.
+    ///
+    /// Laid to the world rather than to each piece of the lid. The floor is
+    /// an L and the ceiling is one quad per piece of it, so a grid taken from
+    /// each piece's own corner has the two meeting out of step along the
+    /// join, which is the join you walk through. Snapped to the world they
+    /// are one grid with a wall standing in it.
+    ///
+    /// Each piece carries a trim flush inside its own edge as well, which is
+    /// what a real grid has where it meets a wall. Flush inside rather than
+    /// centred on the edge: centred, the two pieces' trims at the join would
+    /// be the same box drawn twice, and two of those is the oldest fault in
+    /// this building.
+    pub fn lattice(&self) -> (Vec<Hung>, Vec<Hung>) {
+        let (mut bars, mut tiles) = (Vec::new(), Vec::new());
+
+        // the world's own lines that fall inside a run, with the run's two
+        // ends for the trim. A line too near an end is dropped rather than
+        // left to make a sliver of a tile nobody can see.
+        let lines = |from: f32, to: f32| {
+            let mut out = vec![from + CEIL_BAR * 0.5];
+            let first = (from / CEIL_TILE).ceil() as i32;
+            let last = (to / CEIL_TILE).floor() as i32;
+
+            out.extend(
+                (first..=last)
+                    .map(|n| n as f32 * CEIL_TILE)
+                    .filter(|on| *on > from + CEIL_BAR * 2.0 && *on < to - CEIL_BAR * 2.0),
+            );
+            out.push(to - CEIL_BAR * 0.5);
+
+            out
+        };
+
+        for slab in self.floors().iter() {
+            let (down, across) = (lines(slab.min.x, slab.max.x), lines(slab.min.z, slab.max.z));
+            let (deep, span) = (slab.size().x, slab.size().z);
+            let (middle_x, middle_z) = (slab.center().x, slab.center().z);
+
+            for on in down.iter() {
+                bars.push((
+                    vec3(*on, TALL - CEIL_DROP * 0.5, middle_z),
+                    vec3(CEIL_BAR, CEIL_DROP, span),
+                ));
+            }
+            for on in across.iter() {
+                bars.push((
+                    vec3(middle_x, TALL - CEIL_DROP * 0.5, *on),
+                    vec3(deep, CEIL_DROP, CEIL_BAR),
+                ));
+            }
+
+            // and a tile behind every square, sunk above the bars so that
+            // nothing up there is level with anything
+            for (near_x, far_x) in down.iter().zip(down.iter().skip(1)) {
+                for (near_z, far_z) in across.iter().zip(across.iter().skip(1)) {
+                    tiles.push((
+                        vec3(
+                            (near_x + far_x) * 0.5,
+                            TALL - CEIL_DROP * 0.25,
+                            (near_z + far_z) * 0.5,
+                        ),
+                        vec3(
+                            far_x - near_x - CEIL_BAR,
+                            CEIL_DROP * 0.3,
+                            far_z - near_z - CEIL_BAR,
+                        ),
+                    ));
+                }
+            }
+        }
+
+        (bars, tiles)
+    }
+
     /// A box round the whole building, every room of it.
     ///
     /// This is what the sun's shadow map is fitted to. Outside that map a
@@ -1054,6 +1149,95 @@ mod tests {
         (0..count)
             .map(|n| Cabinet::found(&format!("game{}", n), Path::new("/nowhere")))
             .collect()
+    }
+
+    /// Spec 0012: the grid over the lid is laid to the world.
+    ///
+    /// The floor is an L and the ceiling is drawn one quad per piece of it.
+    /// Taken from each piece's own corner the two meet out of step along the
+    /// join, which is the join you walk through. Taken off the world they are
+    /// one grid with a wall standing in it, whatever shape the pieces are and
+    /// wherever a later room puts its own.
+    ///
+    /// Asked of the lines rather than of the two pieces against each other,
+    /// because these two happen to start at the same z and would agree there
+    /// by luck however the grid was taken. A test that passes by luck was
+    /// written first and is why this one says what it says.
+    #[test]
+    fn the_lid_is_one_grid_laid_to_the_world() {
+        let room = Room::of(some(12));
+        let floors = room.floors();
+        let (bars, _) = room.lattice();
+
+        // where a trim is: flush inside each piece's own four edges
+        let mut trims = Vec::new();
+        for slab in floors.iter() {
+            for (near, far) in [(slab.min.x, slab.max.x), (slab.min.z, slab.max.z)] {
+                trims.push(near + CEIL_BAR * 0.5);
+                trims.push(far - CEIL_BAR * 0.5);
+            }
+        }
+
+        let mut lines = 0;
+        for (at, size) in bars.iter() {
+            let on = if size.x > size.z { at.z } else { at.x };
+
+            if trims.iter().any(|edge| (edge - on).abs() < 1e-3) {
+                continue;
+            }
+
+            let off = on / CEIL_TILE;
+            assert!(
+                (off - off.round()).abs() < 1e-3,
+                "a bar at {:.3} is neither a trim nor on the world's grid: it \
+                 is {:.3} tiles out, so it was laid to its own piece of the lid",
+                on,
+                off
+            );
+            lines += 1;
+        }
+
+        assert!(lines > 8, "only {} lines to speak of", lines);
+    }
+
+    /// Spec 0012: no tile is level with the bar beside it.
+    ///
+    /// A suspended ceiling is a lattice with the tiles dropped onto it from
+    /// above, so the bar's underside is the lowest thing up there. Laid
+    /// level instead they are two faces in one plane, which is the fault
+    /// this building has fought seven times.
+    #[test]
+    fn no_ceiling_tile_is_level_with_a_bar() {
+        let room = Room::of(some(12));
+        let (bars, tiles) = room.lattice();
+
+        assert!(!bars.is_empty() && !tiles.is_empty(), "no grid to speak of");
+
+        for (at, size) in tiles.iter() {
+            let under = at.y - size.y * 0.5;
+
+            for (bar, bar_size) in bars.iter() {
+                let below = bar.y - bar_size.y * 0.5;
+
+                assert!(
+                    under > below + 1e-3,
+                    "a tile's underside at {:.4} is not above the bar's at \
+                     {:.4}",
+                    under,
+                    below
+                );
+
+                // and nothing of one is over anything of the other
+                let apart = (at.x - bar.x).abs() > (size.x + bar_size.x) * 0.5 - 1e-4
+                    || (at.z - bar.z).abs() > (size.z + bar_size.z) * 0.5 - 1e-4;
+                assert!(
+                    apart,
+                    "a tile at {:?} lies over a bar at {:?}",
+                    at.truncate(),
+                    bar.truncate()
+                );
+            }
+        }
     }
 
     /// The sun's map covers every room that has a roof on it.

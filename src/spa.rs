@@ -214,6 +214,23 @@ pub const PIERS: usize = 5;
 pub const INLAY: f32 = 0.22;
 pub const INLAY_IN: f32 = 0.55;
 
+/// The ceiling: how far its ribs hang below the lid, how wide one is, and
+/// how far apart they stand. Spec 0012.
+///
+/// Ribs and not tile. Tiling the lid was the first answer, because every
+/// other surface in this room is tiled, and it came back as noise: you see a
+/// ceiling at a glancing angle, the picture compresses to nothing along the
+/// way you are looking, and what is left is a grid beating against the
+/// pixels. The cellar's lid works because it is built and not painted, and
+/// so is this one.
+///
+/// Across the room rather than along it. The room is eighteen by twelve and
+/// you walk the eighteen, so ribs across are a thing you pass under and ribs
+/// along are two lines going nowhere.
+pub const RIB: f32 = 0.28;
+pub const RIB_DOWN: f32 = 0.15;
+pub const RIB_STEP: f32 = 1.6;
+
 /// The fittings: how big a sconce is, how far up it sits, and the urns.
 pub const SCONCE: Vec3 = vec3(0.26, 0.4, 0.16);
 pub const SCONCE_UP: f32 = 2.0;
@@ -1218,6 +1235,83 @@ pub fn pace(reaches: f32, at: Vec3, walking: f32) -> f32 {
 /// moved.
 pub const TILE: f32 = 0.25;
 
+/// The ceiling: a border course round it and the ribs spanning between.
+///
+/// The border mirrors the one laid into the floor and takes the same two
+/// numbers, called rather than written again. It starts past the sauna where
+/// the floor's does: the sauna's roof is a hand's breadth under this ceiling
+/// and a border drawn over it is a border nobody sees.
+///
+/// The ribs stop at the border rather than crossing it. Crossing, the two
+/// overlap and their undersides are one plane over every square they share,
+/// which is the fault this building has fought seven times. Stopped, their
+/// ends are buried in the border's own side and a rib reads as landing on
+/// it, which is what a rib does.
+///
+/// Nothing is laid over the lid itself. The plaster is already there and
+/// already the right colour; what it wanted was something hanging under it.
+pub fn ceiling(reaches: f32) -> Vec<(Aabb, Made)> {
+    let foot = cellar::stair_foot();
+    let side = near(reaches);
+    let back = foot - DEEP;
+    let far_side = side + SPAN;
+    let hung = -cellar::DOWN + TALL - RIB_DOWN * 0.5;
+    let box_ = sauna(reaches);
+
+    let (one, two) = (
+        (back + INLAY_IN).max(box_.max.x + INLAY_IN),
+        foot - INLAY_IN,
+    );
+    let (three, four) = (side + INLAY_IN, far_side - INLAY_IN);
+    let mut out = Vec::new();
+
+    // four runs that abut rather than cross. Run to their full length each
+    // way and the two meet twice over at every corner, which is two
+    // undersides in one plane four times round the room.
+    let (from, to) = (three + INLAY * 0.5, four - INLAY * 0.5);
+
+    for (at_, size) in [
+        (
+            vec3((one + two) * 0.5, hung, three),
+            vec3(two - one, RIB_DOWN, INLAY),
+        ),
+        (
+            vec3((one + two) * 0.5, hung, four),
+            vec3(two - one, RIB_DOWN, INLAY),
+        ),
+        (
+            vec3(one, hung, (from + to) * 0.5),
+            vec3(INLAY, RIB_DOWN, to - from),
+        ),
+        (
+            vec3(two, hung, (from + to) * 0.5),
+            vec3(INLAY, RIB_DOWN, to - from),
+        ),
+    ] {
+        out.push((Aabb::from_center_size(at_, size), Made::Inlay));
+    }
+
+    // and the ribs between the two long runs of it, evenly over what the
+    // border frames rather than over the room: the frame is what they land
+    // on, so it is the frame they divide
+    let run = two - one;
+    let bays = (run / RIB_STEP).round().max(2.0);
+
+    for n in 1..(bays as usize) {
+        let on = one + run * n as f32 / bays;
+
+        out.push((
+            Aabb::from_center_size(
+                vec3(on, hung, (from + to) * 0.5),
+                vec3(RIB, RIB_DOWN, to - from),
+            ),
+            Made::Band,
+        ));
+    }
+
+    out
+}
+
 /// The basin's inner faces, each as a middle, how far it reaches across and
 /// down, and which way it looks.
 ///
@@ -1502,6 +1596,11 @@ pub fn fittings(reaches: f32) -> Vec<(Aabb, Made)> {
         foot - INLAY_IN,
     );
     let (three, four) = (side + INLAY_IN, far_side - INLAY_IN);
+    // the runs across stop between the runs along rather than crossing them.
+    // Crossing, the border meets itself twice over at every corner and lays
+    // two tops in one plane four times round the room, which is the same
+    // fault the ceiling's own border was caught with by test.
+    let (ends, far_end) = (three + INLAY * 0.5, four - INLAY * 0.5);
     for (at, size) in [
         (
             vec3((one + two) * 0.5, laid, three),
@@ -1512,12 +1611,12 @@ pub fn fittings(reaches: f32) -> Vec<(Aabb, Made)> {
             vec3(two - one, 0.02, INLAY),
         ),
         (
-            vec3(one, laid, (three + four) * 0.5),
-            vec3(INLAY, 0.02, four - three),
+            vec3(one, laid, (ends + far_end) * 0.5),
+            vec3(INLAY, 0.02, far_end - ends),
         ),
         (
-            vec3(two, laid, (three + four) * 0.5),
-            vec3(INLAY, 0.02, four - three),
+            vec3(two, laid, (ends + far_end) * 0.5),
+            vec3(INLAY, 0.02, far_end - ends),
         ),
     ] {
         out.push((Aabb::from_center_size(at, size), Made::Inlay));
@@ -1630,6 +1729,39 @@ mod tests {
             && other.min.y < one.max.y - 1e-4
             && one.min.z < other.max.z - 1e-4
             && other.min.z < one.max.z - 1e-4
+    }
+
+    /// Spec 0012: nothing hung from the ceiling runs into anything else.
+    ///
+    /// Three ways it could. A rib crossing the border it lands on overlaps
+    /// it, and two overlapping boxes put their undersides in one plane,
+    /// which is the fault this building has fought seven times. A rib over
+    /// the sauna meets its roof, which stands a hand's breadth under this
+    /// ceiling. And a border course a hand in from the wall meets a sconce
+    /// if a sconce reaches that far out.
+    #[test]
+    fn nothing_hung_from_the_ceiling_runs_into_anything() {
+        let hung = ceiling(REACHES);
+
+        for (n, (one, made)) in hung.iter().enumerate() {
+            for (other, too) in hung.iter().skip(n + 1) {
+                assert!(
+                    !overlap(one, other),
+                    "a {made:?} of the ceiling at {:?} runs into a {too:?} at {:?}",
+                    one.center(),
+                    other.center()
+                );
+            }
+
+            for (other, too) in built(REACHES).into_iter().chain(fittings(REACHES)) {
+                assert!(
+                    !overlap(one, &other),
+                    "a {made:?} of the ceiling at {:?} runs into a {too:?} at {:?}",
+                    one.center(),
+                    other.center()
+                );
+            }
+        }
     }
 
     /// The whole room, as one box, floor to ceiling.

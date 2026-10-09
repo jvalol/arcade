@@ -495,6 +495,15 @@ pub const PLINTH: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
 /// does not reach.
 pub const CEILING: Vec4 = vec4(0.09, 0.08, 0.10, 1.0);
 
+/// The grid hung under it: the bars, and the tile behind them. Spec 0012.
+///
+/// The bar is darker than the tile and the tile is lighter than the lid, so
+/// what you see is a lattice of dark lines running away down the aisle. Both
+/// a shade off the lid itself, which is still what shows through where a
+/// tile is missing.
+pub const CEIL_BAR: Vec4 = vec4(0.055, 0.050, 0.065, 1.0);
+pub const CEIL_TILE: Vec4 = vec4(0.150, 0.145, 0.165, 1.0);
+
 /// How tight a highlight a matte surface gets.
 ///
 /// Shininess is the power the half vector is raised to, so a small number is a
