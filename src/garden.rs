@@ -94,6 +94,19 @@ pub fn way(reaches: f32) -> (f32, f32) {
     (to - WAY_WIDE, to)
 }
 
+/// The band over the hall's wall: the metre between the hall's ceiling and
+/// the top of the garden's own walls, as a bottom and a top.
+///
+/// Named because it was written twice and the two came apart. The parapet
+/// was in two pieces either side of the way in, one of them sprung from
+/// `(TALL + HIGH) * 0.5` and the other from `HIGH * 0.55`, which is 2.31
+/// against 3.70. The low one sat inside the wall and left the strip over it
+/// open, and from the garden you were looking at a slot of sky over the way
+/// in.
+pub fn parapet() -> (f32, f32) {
+    (crate::room::TALL, HIGH)
+}
+
 /// Everything solid in the garden: its three new walls, and the ground.
 ///
 /// Three and not four. The hall's left wall is the garden's east side and the
@@ -135,25 +148,20 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         // way in the moment the lintel came out of it. From the garden that
         // beam's underside was a ledge hanging over the entrance, which is the
         // same dark slab wearing a different hat.
+        //
+        // In one piece and not two. Two is what the way in asked for, since a
+        // parapet across the opening was a beam over the entrance while the
+        // opening still had a lintel in it. The lintel is gone and the
+        // opening stops at the hall's own ceiling, so the band over it is the
+        // head of the doorway and not a beam. Left out, it was a notch of sky
+        // over the way in, which is what Jake saw from the garden.
         Aabb::from_center_size(
             vec3(
                 wall_at(),
-                HIGH * 0.55,
-                (near(reaches) + way(reaches).0) * 0.5,
+                (parapet().0 + parapet().1) * 0.5,
+                (near(reaches) + reaches) * 0.5,
             ),
-            vec3(
-                THICK,
-                HIGH - crate::room::TALL,
-                way(reaches).0 - near(reaches),
-            ),
-        ),
-        Aabb::from_center_size(
-            vec3(
-                wall_at(),
-                (crate::room::TALL + HIGH) * 0.5,
-                (way(reaches).1 + reaches) * 0.5,
-            ),
-            vec3(THICK, HIGH - crate::room::TALL, reaches - way(reaches).1),
+            vec3(THICK, parapet().1 - parapet().0, reaches - near(reaches)),
         ),
         // and a parapet over the rest of it, where the nook's end wall closes
         // the garden. That wall stops at the nook's ceiling and the garden is a
@@ -1066,6 +1074,29 @@ pub fn facing(reaches: f32) -> Vec<(Vec3, Vec3)> {
                 (way(reaches).1 + middle.z + half.y) * 0.5,
             ),
             vec3(proud * 2.0, HIGH, middle.z + half.y - way(reaches).1),
+        ),
+        // and the band over the way in itself, which the two pieces either
+        // side of it leave open. The opening stops at the hall's ceiling and
+        // the garden's wall is a metre taller, so without this you look at a
+        // notch of sky over the doorway.
+        //
+        // The whole thickness of the wall and not a skin on the face of it,
+        // which every other piece here is. Above the hall's head there is no
+        // hall wall to be a skin on: a skin alone left a hand's breadth of
+        // open channel behind it, and from the garden, at the angle you look
+        // up at a doorway from, you could see sky through the slot. It was
+        // four pixels and it was the same fault as the metre.
+        (
+            vec3(
+                wall_at(),
+                (parapet().0 + parapet().1) * 0.5,
+                (way(reaches).0 + way(reaches).1) * 0.5,
+            ),
+            vec3(
+                THICK + proud * 2.0,
+                parapet().1 - parapet().0,
+                way(reaches).1 - way(reaches).0,
+            ),
         ),
         // south, the nook's end wall and the garden's own beside it
         (
@@ -2787,6 +2818,45 @@ mod tests {
         }
     }
 
+    /// Spec 0010: the head of the way in is drawn through the wall, not skinned.
+    ///
+    /// Every other face of this garden is a skin a hair proud of a wall that
+    /// is already there. Over the way in there is no wall above the hall's
+    /// head to be a skin on, so a skin left the wall's own thickness open
+    /// behind it: a hand's breadth of channel, and from the garden, at the
+    /// angle you look up at a doorway from, a line of sky through the slot.
+    ///
+    /// It was four pixels. The metre of open wall under it was found the same
+    /// way, by somebody standing in the garden and looking at the door.
+    #[test]
+    fn the_head_of_the_way_in_is_drawn_through_the_wall() {
+        let reaches = room().reaches;
+        let (from, to) = way(reaches);
+        let (low, high) = parapet();
+        let faces = facing(reaches);
+
+        for step in 0..=20 {
+            let at_ = vec3(
+                wall_at() - THICK * 0.5 + THICK * step as f32 / 20.0,
+                (low + high) * 0.5,
+                (from + to) * 0.5,
+            );
+
+            let drawn = faces.iter().any(|(mid, size)| {
+                (mid.x - at_.x).abs() <= size.x * 0.5 + 1e-4
+                    && (mid.y - at_.y).abs() <= size.y * 0.5 + 1e-4
+                    && (mid.z - at_.z).abs() <= size.z * 0.5 + 1e-4
+            });
+
+            assert!(
+                drawn,
+                "nothing is drawn over the way in at {:?}, so the channel \
+                 behind its face is open to the sky",
+                at_
+            );
+        }
+    }
+
     /// Spec 0010: the garden is closed all the way up, on every side.
     ///
     /// Two of its walls are borrowed from rooms a metre shorter than it, and
@@ -2829,14 +2899,28 @@ mod tests {
                         vec3(middle.x + half.x, up, middle.z - half.y + on * half.y * 2.0),
                     ),
                 ] {
-                    // the way in is a hole on purpose
-                    if what == "the east wall" && at_.z > from_z - 0.2 && at_.z < to_z + 0.2 {
+                    // the way in is a hole on purpose, and only below the
+                    // hall's own ceiling. Above that it is wall like the rest
+                    // of the stretch, and skipping it at every height is why
+                    // this test watched the parapet drop a metre and said
+                    // nothing.
+                    let through = what == "the east wall"
+                        && at_.z > from_z - 0.2
+                        && at_.z < to_z + 0.2
+                        && up < crate::room::TALL;
+
+                    if through {
                         continue;
                     }
 
+                    // and within a hand of a box rather than within a fifth
+                    // of a metre. At 0.2, with the sweep stepping 0.13, every
+                    // sample in the hole over the way in was either inside
+                    // that reach of the nook's parapet or inside the margin
+                    // above, and a metre of open wall passed.
                     let shut = solid
                         .iter()
-                        .any(|box_| box_.contains_point(at_) || near(box_, at_) < 0.2);
+                        .any(|box_| box_.contains_point(at_) || near(box_, at_) < 0.06);
 
                     assert!(shut, "{} is open at {:?}", what, at_);
                 }

@@ -303,12 +303,31 @@ up. That one was never what you could see, which a build with the sky drawn
 in flat colour settled, and it is still wrong.
 
 **The hall's wall is a metre shorter than the garden's**, so the garden carries
-a parapet over it, in two pieces with the way in between them. In one piece it
-crossed the opening, which put a beam back over the entrance the moment the
-lintel came out of it, and from the garden that beam's underside was a ledge
-hanging over the way in. Without one there was a metre of nothing above that wall and
+a parapet over it. Without one there was a metre of nothing above that wall and
 over it you were looking at the roof of the hall from outside: a dark slab
 hanging in the garden's sky with the lanterns catching its underside.
+
+**In one piece and not two, which this spec had the wrong way round.** It was
+two, either side of the way in, because a parapet across the opening was a
+beam over the entrance while that opening still had a lintel in it. The lintel
+came out and the two pieces stayed, so the band stopped at the doorway and
+started again past it, and over the way in there was a notch of sky. The
+opening runs to the hall's own ceiling now, so the band over it is the head of
+the doorway and nothing is hanging.
+
+Both pieces were sprung from a height written out twice, one from the midpoint
+of the two ceilings and the other from `HIGH * 0.55`, which is 3.70 against
+2.31. The low one sat inside the wall and left the whole metre open behind it.
+Two accounts of one number, which is the fault under most of the others in
+this building, and the height is named once now.
+
+**The head of the way in is drawn through the wall and not skinned.** Every
+other face of this garden is a skin a hair proud of a wall that already
+exists. Above the hall's head there is no wall to be a skin on, so a skin left
+the wall's own thickness open behind it: a hand's breadth of channel, and from
+the garden, at the angle you look up at a doorway from, a line of sky through
+the slot. Four pixels, found the same way the metre was, by standing in the
+garden and looking at the door.
 
 **The hall's lid and its carpet are the shape of the hall.** Both were one
 rectangle, wide enough to take in the nook and as long as the hall. The hall's
@@ -376,6 +395,7 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - The lip is set stones and not a run of coping. — `garden::tests::the_lip_is_set_stones_and_not_a_kerb`
 - The garden stands on the roof of the baths and neither is inside the other. — `garden::tests::the_garden_sits_on_the_roof_of_the_baths`
 - The garden is closed all the way up, on every side. — `garden::tests::the_garden_is_closed_all_the_way_up`
+- And the head of the way in is drawn through the wall. — `garden::tests::the_head_of_the_way_in_is_drawn_through_the_wall`
 - No part of the sky is inside the building. — `garden::tests::no_part_of_the_sky_is_inside_the_building`
 - The sky's picture is not wedged into a point anywhere. — `garden::tests::the_sky_has_no_point_where_its_picture_is_wedged`
 - And it faces inward everywhere, its apex included. — `garden::tests::the_sky_faces_inward_everywhere_including_its_apex`
