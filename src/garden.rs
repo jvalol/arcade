@@ -216,7 +216,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 /// inside lands on cloud. Sprung level with the wall tops and only as wide as
 /// the room, there was a wedge of black over one corner where the sky ran out
 /// and the roof of the hall showed behind it.
-pub const SKY: u32 = 320;
+pub const SKY: u32 = 512;
 pub const DOME: f32 = 19.0;
 pub const DOME_UP: f32 = 12.0;
 
@@ -246,7 +246,7 @@ pub fn storm(seed: u32) -> blitzkit::texture::TextureData {
 
     // the grid each octave is smoothed from, wrapping in u so the two edges of
     // the picture meet round the back of the dome
-    let octaves: Vec<(usize, Vec<f32>)> = [6usize, 12, 24, 48]
+    let octaves: Vec<(usize, Vec<f32>)> = [12usize, 24, 48, 96]
         .iter()
         .map(|side| {
             let side = *side;
@@ -284,12 +284,17 @@ pub fn storm(seed: u32) -> blitzkit::texture::TextureData {
             }
             cloud /= weight;
 
-            // v nought is the dome's rim and v one is its apex, so this is the
-            // way up it reads on the mesh and not the way up the picture
-            // looks. Taken the other way the heaviest cloud was round the
-            // horizon and the darkest slate was directly overhead, which is a
-            // storm seen from above.
-            let overhead = v;
+            // The picture goes on the dome as a disc seen from below, so the
+            // apex is the middle of it and the rim is the circle round the
+            // edge. This is how far up the dome a pixel lands, which is not
+            // the way up the picture looks.
+            //
+            // Taken the other way the heaviest cloud was round the horizon
+            // and the darkest slate was directly overhead, which is a storm
+            // seen from above.
+            let from_middle =
+                (((u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5)).sqrt() / 0.5).min(1.0);
+            let overhead = 1.0 - from_middle;
             let heavy = (cloud * 1.6 - 0.25 + overhead * 0.18).clamp(0.0, 1.0);
             // hard, so there are cloud edges rather than a wash
             let shaped = heavy * heavy * (3.0 - 2.0 * heavy);
@@ -338,7 +343,53 @@ pub fn dome_mesh() -> blitzkit::mesh::MeshData {
             round.sin() * DOME * out,
         )
     });
-    mesh.compute_normals();
+
+    // The normals off the shape itself rather than averaged off the faces.
+    //
+    // The forty-nine vertices at the apex are all in one place, so the
+    // triangles between them have no area and every normal there came out of
+    // a cross product made of rounding. Forty-eight of them pointed down and
+    // the one at the seam pointed up, which drew a dark spoke out of the top
+    // of the sky.
+    //
+    // A half ellipsoid of DOME by DOME_UP by DOME has its outward normal at
+    // a point along that point over the square of each axis, and this is the
+    // one surface here only ever seen from within, so it is the other way
+    // about. At the apex that is straight down, with no special case for it
+    // and nothing left to round.
+    for vertex in mesh.vertices.iter_mut() {
+        let [x, y, z] = vertex.position;
+        let out = vec3(
+            x / (DOME * DOME),
+            y / (DOME_UP * DOME_UP),
+            z / (DOME * DOME),
+        );
+
+        vertex.normal = (-out).normalize_or_zero().to_array();
+
+        // and the picture laid on as a disc seen from below rather than
+        // wrapped round like a map of the world.
+        //
+        // Wrapped, every one of the forty-eight columns ran into the apex and
+        // the whole top edge of the picture was wedged into one point: it
+        // drew a dark star over the middle of the sky, which is the part of
+        // it you lie in the garden and look at. The middle of a disc is a
+        // point to begin with, so there is nothing there to pinch, and the
+        // seam goes with it: the two sides of the picture that used to meet
+        // round the back now fall on the same line of texels.
+        //
+        // The angle down from the apex gives the radius, so the scale is even
+        // from the middle out. Only the circle inside the picture is used and
+        // the four corners are not, which is a fifth of it spent on having no
+        // pole.
+        let round = z.atan2(x);
+        let from_top = (y / DOME_UP).clamp(-1.0, 1.0).acos() / std::f32::consts::FRAC_PI_2;
+
+        vertex.uv = [
+            0.5 + from_top * 0.5 * round.cos(),
+            0.5 + from_top * 0.5 * round.sin(),
+        ];
+    }
 
     mesh
 }
@@ -2802,6 +2853,92 @@ mod tests {
         );
 
         on.distance(at_)
+    }
+
+    /// The sky's picture is not wedged into a point anywhere.
+    ///
+    /// Forty-nine of the dome's vertices stand at the apex in one place. Laid
+    /// on like a map of the world, each of them carried a different place in
+    /// the picture, so the whole top edge of it was pulled into that one
+    /// point and the sky had a dark star over the middle of the garden.
+    ///
+    /// Asked of any two vertices that share a place, so it holds the seam as
+    /// well: the two edges of the picture used to meet round the back of the
+    /// dome, and now they fall on the same texels.
+    #[test]
+    fn the_sky_has_no_point_where_its_picture_is_wedged() {
+        let mesh = dome_mesh();
+
+        for (n, one) in mesh.vertices.iter().enumerate() {
+            for other in mesh.vertices.iter().skip(n + 1) {
+                let together =
+                    (Vec3::from(one.position) - Vec3::from(other.position)).length() < 1e-3;
+
+                if !together {
+                    continue;
+                }
+
+                let apart = (Vec2::from(one.uv) - Vec2::from(other.uv)).length();
+                assert!(
+                    apart < 1e-3,
+                    "the sky at {:?} is {:?} of its picture and also {:?}, \
+                     {:.3} away, so the picture is wedged there",
+                    one.position,
+                    one.uv,
+                    other.uv,
+                    apart
+                );
+            }
+        }
+    }
+
+    /// The sky is lit the same all the way to its apex.
+    ///
+    /// Forty-nine of its vertices sit at the apex in one place, so the
+    /// triangles between them have no area. Averaged off those faces, every
+    /// normal up there came out of rounding, and the one at the seam came out
+    /// inverted: a dark spoke running out of the top of the sky, which is
+    /// what you look at lying in the garden.
+    ///
+    /// Checked against the position rather than against the formula the
+    /// normals are built from, so this is asking the surface a question and
+    /// not reading its answer back.
+    #[test]
+    fn the_sky_faces_inward_everywhere_including_its_apex() {
+        let mesh = dome_mesh();
+
+        for vertex in mesh.vertices.iter() {
+            let at = Vec3::from(vertex.position);
+            let normal = Vec3::from(vertex.normal);
+
+            // the dome is convex about its own middle, so anything facing in
+            // leans against the way out
+            assert!(
+                normal.dot(at) < 0.0,
+                "the sky at {:?} faces {:?}, which is outwards",
+                at,
+                normal
+            );
+        }
+
+        // and the apex is one point, so the sky must not change across it
+        let apex: Vec<Vec3> = mesh
+            .vertices
+            .iter()
+            .filter(|vertex| vertex.position[1] > DOME_UP - 1e-3)
+            .map(|vertex| Vec3::from(vertex.normal))
+            .collect();
+
+        assert!(apex.len() > 2, "no apex to speak of");
+        for normal in apex.iter() {
+            assert!(
+                normal.dot(apex[0]) > 0.999,
+                "two of the sky's apex face {:?} and {:?}, so it is lit in \
+                 wedges",
+                normal,
+                apex[0]
+            );
+        }
     }
 
     /// Spec 0010: no part of the sky is inside the building.

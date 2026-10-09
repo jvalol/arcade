@@ -282,6 +282,26 @@ away facing the other way, and the sky came out in patches of cloud and patches
 of unlit dark: two surfaces in one plane, which is the fault this building has
 now fought five times.
 
+**The picture goes on as a disc seen from below**, not wrapped round like a
+map of the world. Wrapped, all forty-eight columns of the dome ran into its
+apex and the whole top edge of the picture was pulled into that one point: a
+dark star hanging over the middle of the garden, which is the part of the sky
+you lie in it and look at. The middle of a disc is a point already, so there
+is nothing left there to pinch. The seam goes with it, since the two sides of
+the picture that used to meet round the back now fall on the same texels.
+
+The angle down from the apex gives the radius, so the scale is even from the
+middle out. Only the circle inside the picture is used and its four corners
+are not, which is a fifth of it spent on having no pole, and the cloud cells
+are half the size they were to land the same size on the dome.
+
+Its normals come off the shape rather than averaged off the faces, for the
+same reason in a different place. The forty-nine vertices at the apex are all
+in one spot, so the triangles between them have no area and every normal there
+came out of rounding: forty-eight pointed down and the one at the seam pointed
+up. That one was never what you could see, which a build with the sky drawn
+in flat colour settled, and it is still wrong.
+
 **The hall's wall is a metre shorter than the garden's**, so the garden carries
 a parapet over it, in two pieces with the way in between them. In one piece it
 crossed the opening, which put a beam back over the entrance the moment the
@@ -357,6 +377,8 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - The garden stands on the roof of the baths and neither is inside the other. — `garden::tests::the_garden_sits_on_the_roof_of_the_baths`
 - The garden is closed all the way up, on every side. — `garden::tests::the_garden_is_closed_all_the_way_up`
 - No part of the sky is inside the building. — `garden::tests::no_part_of_the_sky_is_inside_the_building`
+- The sky's picture is not wedged into a point anywhere. — `garden::tests::the_sky_has_no_point_where_its_picture_is_wedged`
+- And it faces inward everywhere, its apex included. — `garden::tests::the_sky_faces_inward_everywhere_including_its_apex`
 - Every tree leans over the water, and bends rather than slopes. — `garden::tests::every_tree_leans_over_the_water`
 - Its foliage is pads going round it, not a stack of plates. — `garden::tests::a_tree_is_pads_and_not_a_stack_of_plates`
 - Every pad hangs off a limb that starts on the trunk. — `garden::tests::every_pad_hangs_off_the_trunk`
