@@ -182,7 +182,11 @@ struct Arcade {
     paced: f32,
     stepped: usize,
     splashes: Vec<Samples>,
-    airs: Vec<(Vec3, Samples)>,
+    /// Each room's note, several of each. Spec 0009: one played two and a
+    /// half times a second is a loop.
+    airs: Vec<(Vec3, Vec<Samples>)>,
+    /// How many notes have gone, which is what picks and bends the next.
+    noted: usize,
     /// How long the note playing now has left.
     aired: f32,
     /// Whether you were in the water last frame, so going in can be heard.
@@ -312,6 +316,7 @@ impl Arcade {
             stepped: 0,
             splashes: Vec::new(),
             airs: Vec::new(),
+            noted: 0,
             aired: 0.0,
             was_wading: false,
             knock: None,
@@ -1072,12 +1077,22 @@ impl Game for Arcade {
         let (spout, _) = spa::stream(self.room.reaches);
         let sauna = spa::sauna(self.room.reaches).center();
 
+        // several of each, off a seed apiece. Spec 0009: one note queued
+        // again the moment it runs out is the same four tenths of a second
+        // two and a half times a second, and that is a loop whatever is in
+        // it. These all took a seed already, so this costs a few kilobytes.
+        let several = |seed: u32, make: &dyn Fn(u32) -> Samples| -> Vec<Samples> {
+            (0..noise::AIRS)
+                .map(|n| make(seed.wrapping_add(n as u32 * 7919)))
+                .collect()
+        };
+
         self.airs = vec![
-            (fire, noise::fire(0xF12E)),
-            (spout, noise::trickle(0x7121)),
-            (tub, noise::bubble(0xB0B1)),
-            (sauna, noise::steam(0x57EA)),
-            (vec3(0.0, crate::EYE, 0.0), noise::hum(0x4040)),
+            (fire, several(0xF12E, &noise::fire)),
+            (spout, several(0x7121, &noise::trickle)),
+            (tub, several(0xB0B1, &noise::bubble)),
+            (sauna, several(0x57EA, &noise::steam)),
+            (vec3(0.0, crate::EYE, 0.0), several(0x4040, &noise::hum)),
         ];
         self.aired = 0.0;
         self.knock = Some(noise::clack(0xC1AC));
@@ -1262,11 +1277,25 @@ impl Game for Arcade {
             let places: Vec<Vec3> = self.airs.iter().map(|(at, _)| *at).collect();
 
             let heard = noise::nearest(ear, &places);
+            // picked and bent the way a footstep is, or five notes in a fixed
+            // order is a bar of five beats. Spec 0009.
+            self.noted = self.noted.wrapping_add(1);
+            let noted = self.noted;
+
             self.aired = match heard.and_then(|n| self.airs.get(n)) {
                 Some((at, air)) => {
-                    sound.play_at(air, at.to_array());
+                    let (which, pitch, quieter) = noise::adrift(noted, air.len());
 
-                    air.seconds()
+                    match air.get(which) {
+                        Some(note) => {
+                            let bent = note.pitched(pitch).gain(quieter);
+                            let runs = bent.seconds();
+                            sound.play_at(&bent, at.to_array());
+
+                            runs
+                        }
+                        None => noise::NOTE,
+                    }
                 }
                 // nothing within earshot, so ask again shortly rather than
                 // every frame

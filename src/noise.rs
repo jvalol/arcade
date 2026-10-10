@@ -265,6 +265,45 @@ pub fn bend(step: usize, many: usize) -> (usize, f32, f32) {
     )
 }
 
+/// How many of each room's note there are. Spec 0009.
+///
+/// One was not enough and the reason is the rate. A note is four tenths of a
+/// second and is queued again the moment it runs out, so the same four tenths
+/// played two and a half times a second: that is a loop, and a loop is heard
+/// as a loop whatever is in it. Every one of these comes off a seed already,
+/// so more of them costs a few kilobytes and nothing else.
+pub const AIRS: usize = 5;
+
+/// Which of a room's notes to play next, and how to bend it.
+///
+/// Like [`bend`], which the floors use, except that it picks rather than
+/// cycling. A floor's steps cycle because you do not take two steps from the
+/// same place and the room moves between them. A room's note comes from one
+/// place at a fixed rate, so a cycle of five is a bar of five beats and you
+/// hear it by the second time round.
+///
+/// Picked and not shuffled, so the same note does come up twice in a row now
+/// and then. That is fine and a cycle is not: two of the same four tenths of
+/// a second running is a slightly longer sound, while five in a fixed order
+/// is a bar of five beats, and it is the order a listener catches rather than
+/// the repeat. The first version of this tried to rule out the back to back
+/// case and compared against a previous pick it had not worked out.
+pub fn adrift(note: usize, many: usize) -> (usize, f32, f32) {
+    let many = many.max(1);
+    let mut state = (note as u32).wrapping_mul(2_246_822_519) ^ 0x85EB_CA6B;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        (state >> 8) as f32 / ((1u32 << 24) as f32) * 2.0 - 1.0
+    };
+
+    let picked = ((((next() + 1.0) * 0.5) * many as f32) as usize).min(many - 1);
+
+    (picked, 1.0 + next() * PITCHED, 1.0 - next().abs() * QUIETER)
+}
+
 /// How far a room's own sound carries. The cellar's fire is not something you
 /// hear from the hall.
 pub const CARRIES: f32 = 14.0;
@@ -487,6 +526,118 @@ pub fn steam(seed: u32) -> Samples {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0009: a room's note is picked rather than cycled.
+    ///
+    /// A cycle of five at two and a half notes a second is a bar of five
+    /// beats, and a listener catches the order long before they catch the
+    /// sample. `bend`, which the floors use, cycles on purpose: you do not
+    /// take two steps from the same place and the room moves between them.
+    #[test]
+    fn a_rooms_note_does_not_come_round_in_a_bar() {
+        let many = AIRS;
+        let picks: Vec<usize> = (0..600).map(|n| adrift(n, many).0).collect();
+
+        for which in picks.iter() {
+            assert!(*which < many, "picked note {} of {}", which, many);
+        }
+
+        // a cycle would have every note the same as the one `many` before it
+        let same = picks
+            .iter()
+            .skip(many)
+            .zip(picks.iter())
+            .filter(|(now, before)| now == before)
+            .count();
+
+        assert!(
+            same * 3 < picks.len(),
+            "{} of {} notes repeat a bar later, which is a bar",
+            same,
+            picks.len()
+        );
+
+        // and every one of them gets used
+        for which in 0..many {
+            assert!(
+                picks.contains(&which),
+                "note {} of {} never comes up",
+                which,
+                many
+            );
+        }
+    }
+
+    /// Spec 0009: and it is bent, within the same bounds a step is.
+    #[test]
+    fn a_rooms_note_is_bent_like_a_step() {
+        let (mut moved, mut quietened) = (false, false);
+
+        for n in 0..200 {
+            let (_, pitch, quieter) = adrift(n, AIRS);
+
+            assert!(
+                (1.0 - PITCHED..=1.0 + PITCHED).contains(&pitch),
+                "a note was pitched by {}",
+                pitch
+            );
+            assert!(
+                (1.0 - QUIETER..=1.0).contains(&quieter),
+                "a note was taken to {}",
+                quieter
+            );
+
+            moved |= (pitch - 1.0).abs() > PITCHED * 0.5;
+            quietened |= quieter < 1.0 - QUIETER * 0.5;
+        }
+
+        assert!(moved, "no note was pitched much");
+        assert!(quietened, "no note was quietened much");
+    }
+
+    /// Spec 0009: each room's notes differ from one another.
+    ///
+    /// Five of a note is only worth having if they are five sounds. Every one
+    /// of these comes off a seed, so what this really asks is that the seed
+    /// reaches the sound: a generator that took one and ignored it would give
+    /// a room five copies of one note and look exactly like variety from the
+    /// outside.
+    ///
+    /// A `Samples` is an `Iterator<Item = f32>`, so this is how you look
+    /// inside one. It is not in the method list and I concluded it could not
+    /// be done, deleted this test, and went off to add three accessors to the
+    /// engine that already existed. Written down because the next person will
+    /// read the same method list.
+    #[test]
+    fn a_rooms_notes_are_not_all_one_note() {
+        for (what, make) in [
+            ("the fire", fire as fn(u32) -> Samples),
+            ("the spout", trickle),
+            ("the tub", bubble),
+            ("the sauna", steam),
+            ("the hall", hum),
+        ] {
+            let built: Vec<Vec<f32>> = (0..AIRS)
+                .map(|n| make(0x1234u32.wrapping_add(n as u32 * 7919)).collect())
+                .collect();
+
+            for (n, one) in built.iter().enumerate() {
+                assert!(
+                    one.iter().any(|sample| sample.abs() > 1e-4),
+                    "one of {} notes is silence",
+                    what
+                );
+
+                for other in built.iter().skip(n + 1) {
+                    assert!(
+                        one != other,
+                        "two of {}'s five notes are the same sound",
+                        what
+                    );
+                }
+            }
+        }
+    }
 
     /// Spec 0009: each room sounds like what it is floored with.
     ///

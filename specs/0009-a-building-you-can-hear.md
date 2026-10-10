@@ -124,6 +124,21 @@ a queue growing by three seconds every second: left running for two hours it was
 a gigabyte of audio waiting its turn and a machine with nothing left to draw
 with, which is what the pool looking like a wall of streaks turned out to be.
 
+**Several of each note, picked and bent.** One note queued again the moment
+it runs out is the same four tenths of a second played two and a half times a
+second, which is a loop and is heard as one whatever is in it. Each room has
+`noise::AIRS` of its note, each off its own seed, and the one to play is
+picked by `noise::adrift` and bent in pitch and level the way a footstep is.
+
+Picked and not cycled. The floors cycle, on purpose, because you do not take
+two steps from the same place and the room moves between them. A room's note
+comes from one place at a fixed rate, so five in a fixed order is a bar of
+five beats and a listener catches the order long before the sample.
+
+A pick does come up twice in a row now and then, and that is fine: two of the
+same four tenths running is a slightly longer sound. It is the order that
+gives a loop away rather than the repeat.
+
 So the building plays the note of the room you are in, which is the nearest one
 within earshot, and nothing else until it has finished. The notes are short for
 the same reason: anything else from somewhere in the world waits behind one, and
@@ -143,6 +158,8 @@ the engine's and stays available.
 ## Acceptance criteria
 
 - Every sound the building makes has samples in it and ends. — `noise::tests::every_sound_is_a_sound`
+- A room's note does not come round in a bar. — `noise::tests::a_rooms_note_does_not_come_round_in_a_bar`
+- And it is bent within the bounds a step is. — `noise::tests::a_rooms_note_is_bent_like_a_step`
 - The pool sounds like water and its edge like tile. — `noise::tests::each_room_sounds_like_its_own_floor`
 - No floor's steps outlast the gap between them, water included. — `noise::tests::walking_does_not_run_the_queue_behind`
 - None of them clips: no sample past one. — `noise::tests::nothing_is_louder_than_one`
