@@ -445,6 +445,24 @@ pub fn sconce_runs(reaches: f32) -> [(f32, f32, f32, f32); 2] {
     ]
 }
 
+/// The nook's end wall: where it stands and how big it is.
+///
+/// Named because it is two rooms' wall. It closes the nook, and for the width
+/// of the nook it is the garden's south side as well, so the garden carries a
+/// parapet over it. A parapet worked out from the garden's own box rather
+/// than from this lands a sixth of a metre off, overhanging into the garden
+/// on two sides and stopping short on the other two, which from below is a
+/// ledge. That is what it was doing until somebody outlined the colliders and
+/// looked at the corner.
+pub fn nook_end(reaches: f32) -> (Vec3, Vec3) {
+    let side = WALL + CABINET.x;
+
+    (
+        vec3(-side - NOOK_DEEP * 0.5, TALL * 0.5, -reaches + NOOK_SPAN),
+        vec3(NOOK_DEEP, TALL, THICK),
+    )
+}
+
 /// The nook's own floor: the whole of it, wall to wall.
 ///
 /// Boards under a rug rather than the arcade's carpet under a rug. The arcade's
@@ -575,7 +593,6 @@ impl Room {
         let hole = cellar::opening(reaches);
         // where the way in ends, and the nook's other end
         let door = -reaches + NOOK_DOOR;
-        let shut = -reaches + NOOK_SPAN;
 
         let walls = vec![
             // the right wall, whole
@@ -627,10 +644,10 @@ impl Room {
                 vec3(-side - NOOK_DEEP, (cellar::HIGH + TALL) * 0.5, hole),
                 vec3(thick, TALL - cellar::HIGH, cellar::WIDE),
             ),
-            Aabb::from_center_size(
-                vec3(-side - NOOK_DEEP * 0.5, TALL * 0.5, shut),
-                vec3(NOOK_DEEP, TALL, thick),
-            ),
+            {
+                let (at, size) = nook_end(reaches);
+                Aabb::from_center_size(at, size)
+            },
             // the near end is not here. It is two boxes with a gap between
             // them, in `behind::near_wall`, and what is drawn is one wall
             // across the whole of it. That is the one place in this building

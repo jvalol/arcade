@@ -321,6 +321,22 @@ of the two ceilings and the other from `HIGH * 0.55`, which is 3.70 against
 Two accounts of one number, which is the fault under most of the others in
 this building, and the height is named once now.
 
+**The parapet over the nook sits on the nook's wall**, which is not the same
+plane as the garden's own south side. The nook's end wall is at
+`-reaches + NOOK_SPAN` and the garden's south side is half a wall further out,
+a sixth of a metre apart. Sprung from the garden's, the parapet overhung into
+the garden along two of its sides and stopped short on the other two, which
+from underneath is a ledge running the width of the nook. It comes off
+`room::nook_end` now, which is the one place that says where that wall is.
+
+It is wider than that wall by the same sixth of a metre, because it has to
+reach the garden's own south wall as well, and that wall stops where the
+nook's begins rather than where it ends. Moved onto the nook's wall and left
+at the nook's width, it left a hole of exactly that width where the two meet.
+The sweep in `the_garden_is_closed_all_the_way_up` steps thirteen centimetres
+and allows six, so a fifteen centimetre hole went straight through it; the
+sweep that caught it steps one.
+
 **The head of the way in is drawn through the wall and not skinned.** Every
 other face of this garden is a skin a hair proud of a wall that already
 exists. Above the hall's head there is no wall to be a skin on, so a skin left
@@ -396,6 +412,8 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - The garden stands on the roof of the baths and neither is inside the other. — `garden::tests::the_garden_sits_on_the_roof_of_the_baths`
 - The garden is closed all the way up, on every side. — `garden::tests::the_garden_is_closed_all_the_way_up`
 - And the head of the way in is drawn through the wall. — `garden::tests::the_head_of_the_way_in_is_drawn_through_the_wall`
+- The parapet sits on the wall it tops. — `garden::tests::the_parapet_sits_on_the_wall_it_tops`
+- And the south side is closed at parapet height, all the way. — `garden::tests::the_south_side_is_closed_at_parapet_height`
 - No part of the sky is inside the building. — `garden::tests::no_part_of_the_sky_is_inside_the_building`
 - The sky's picture is not wedged into a point anywhere. — `garden::tests::the_sky_has_no_point_where_its_picture_is_wedged`
 - And it faces inward everywhere, its apex included. — `garden::tests::the_sky_faces_inward_everywhere_including_its_apex`

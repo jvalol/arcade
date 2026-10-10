@@ -171,14 +171,33 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         //
         // The same fault as the parapet over the hall's wall, on the other
         // borrowed wall. Both were borrowed and only one was topped.
-        Aabb::from_center_size(
-            vec3(
-                west + DEEP - NOOK_DEEP * 0.5,
-                (crate::room::TALL + HIGH) * 0.5,
-                south,
-            ),
-            vec3(NOOK_DEEP, HIGH - crate::room::TALL, THICK),
-        ),
+        {
+            // on the wall it tops, and not on the garden's own south plane.
+            //
+            // Those are a sixth of a metre apart: the nook's end wall is at
+            // `-reaches + NOOK_SPAN` and the garden's south side is half a
+            // wall further out. Sprung from the garden's, the parapet
+            // overhung into the garden along two sides and stopped short on
+            // the other two, which from underneath is a ledge running the
+            // width of the nook. Found by outlining the colliders and
+            // looking at the corner, which is spec 0013.
+            let (wall, size) = crate::room::nook_end(reaches);
+            let (low, high) = parapet();
+
+            // and it runs from where the garden's own south wall stops to
+            // where the nook's end wall does, which is a sixth of a metre
+            // wider than that wall. Stopped at the wall instead, there was a
+            // hole of exactly that width where the two meet: the garden's own
+            // wall ends at `west + DEEP - NOOK_DEEP` and the nook's begins a
+            // sixth of a metre east of it.
+            let from = west + DEEP - NOOK_DEEP;
+            let to = wall.x + size.x * 0.5;
+
+            Aabb::from_center_size(
+                vec3((from + to) * 0.5, (low + high) * 0.5, wall.z),
+                vec3(to - from, high - low, size.z),
+            )
+        },
         // the east wall past the hall, where the hall's own wall has run out
         Aabb::from_center_size(
             vec3(wall_at(), HIGH * 0.5, (reaches + north + THICK) * 0.5),
@@ -2814,6 +2833,93 @@ mod tests {
                     from.y < pad.at.y - 1e-3,
                     "a limb goes down to its pad rather than up to it",
                 );
+            }
+        }
+    }
+
+    /// Spec 0010: the parapet sits on the wall it tops.
+    ///
+    /// The nook's end wall is the garden's south side for the width of the
+    /// nook, and the garden carries a parapet over it. Sprung from the
+    /// garden's own south plane rather than from that wall, the two are a
+    /// sixth of a metre apart: it overhung into the garden along two sides
+    /// and stopped short on the other two, which from underneath is a ledge
+    /// running the width of the nook.
+    ///
+    /// Found by outlining the colliders and looking at the corner, which is
+    /// what spec 0013 is for.
+    #[test]
+    fn the_parapet_sits_on_the_wall_it_tops() {
+        let reaches = room().reaches;
+        let (wall, size) = crate::room::nook_end(reaches);
+        let (low, high) = parapet();
+
+        let over = solid(reaches)
+            .into_iter()
+            .find(|box_| {
+                (box_.min.y - low).abs() < 1e-3
+                    && (box_.max.y - high).abs() < 1e-3
+                    && box_.min.x < wall.x
+                    && box_.max.x > wall.x
+            })
+            .expect("a parapet over the nook's end wall");
+
+        assert!(
+            (over.min.z - (wall.z - size.z * 0.5)).abs() < 1e-3
+                && (over.max.z - (wall.z + size.z * 0.5)).abs() < 1e-3,
+            "the parapet stands at z {:.3}..{:.3} over a wall at {:.3}..{:.3}",
+            over.min.z,
+            over.max.z,
+            wall.z - size.z * 0.5,
+            wall.z + size.z * 0.5
+        );
+
+        assert!(
+            (over.min.y - (wall.y + size.y * 0.5)).abs() < 1e-3,
+            "the parapet starts at {:.3} and the wall tops out at {:.3}",
+            over.min.y,
+            wall.y + size.y * 0.5
+        );
+    }
+
+    /// Spec 0010: the south side is closed at parapet height, all the way.
+    ///
+    /// The garden's own south wall runs to full height, and east of it the
+    /// nook's end wall stops at the nook's ceiling with a parapet over it.
+    /// Where those two meet is the place to get wrong, and the sweep in
+    /// `the_garden_is_closed_all_the_way_up` steps 13 centimetres and allows
+    /// 6, so a gap narrower than that goes through it. This one steps a
+    /// centimetre and allows nothing.
+    #[test]
+    fn the_south_side_is_closed_at_parapet_height() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let half = half();
+        let solid = solid(reaches);
+        let (low, high) = parapet();
+
+        for up in [low + 0.02, (low + high) * 0.5, high - 0.02] {
+            for step in 0..=1600 {
+                let at_ = vec3(
+                    middle.x - half.x + step as f32 * half.x * 2.0 / 1600.0,
+                    up,
+                    middle.z - half.y,
+                );
+
+                // somewhere within a wall's thickness of the boundary there
+                // is a wall. Asked of the boundary plane itself it is a
+                // knife edge, because a wall whose face is exactly the
+                // boundary answers yes or no by rounding.
+                let shut = solid.iter().any(|box_| {
+                    box_.min.x <= at_.x
+                        && box_.max.x >= at_.x
+                        && box_.min.y <= at_.y
+                        && box_.max.y >= at_.y
+                        && box_.min.z <= at_.z + THICK
+                        && box_.max.z >= at_.z - THICK
+                });
+
+                assert!(shut, "the south side is open at {:?}", at_);
             }
         }
     }
