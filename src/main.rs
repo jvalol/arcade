@@ -1056,7 +1056,7 @@ impl Game for Arcade {
                     // one of those is a backlog that grows for as long as you
                     // walk; a floor that has gone quiet is the better fault,
                     // and `noise::tests` is what says it has not.
-                    .filter(|got| got.seconds() <= noise::longest())
+                    .filter(|got| got.seconds() <= noise::longest(on))
                     .collect();
 
                 (on, heard)

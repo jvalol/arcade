@@ -31,6 +31,13 @@ pub const RATE: u32 = 44_100;
 pub enum Underfoot {
     /// The hall, which is carpet.
     Carpet,
+    /// The pool in the baths, when you are standing in it.
+    ///
+    /// Not a floor so much as a thing between you and one: the tile is still
+    /// under your feet, and what you hear is the water you are pushing
+    /// through. It takes the place of the tile rather than sounding over it,
+    /// because the engine queues sounds and does not mix them.
+    Water,
     /// The nook, the cellar and the stair, all of which are boards.
     ///
     /// Three rooms on one floor, which is not a shortcut: the cellar's floor is
@@ -60,6 +67,13 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
         // the baths and the cellar are both down here, and the baths are the
         // far side of the cellar's own wall
         if at.z > crate::cellar::opening(reaches) + crate::cellar::SPAN * 0.5 {
+            // and in the pool it is the water you hear and not the tile it
+            // is standing on. Asked of the same function that slows you down
+            // in it, so what you hear and what you can do cannot disagree.
+            if crate::spa::wading(reaches, at) {
+                return Underfoot::Water;
+            }
+
             return Underfoot::Tile;
         }
 
@@ -109,10 +123,28 @@ pub const STRIDE: f32 = 1.6;
 ///
 /// So this comes off the stride and the walking speed rather than being chosen,
 /// with enough under the gap that a step has finished before the next lands.
+///
+/// Per floor, because the gap is not the same on all of them. You wade at
+/// `spa::WADE` of your walking pace, so in the pool a step is nine tenths of
+/// a second apart rather than four, and a splash wants that tail. One number
+/// for every floor would either cut the water off at a third of a second or
+/// let every other floor run long enough to fall behind.
 pub const SPARE: f32 = 0.06;
 
-pub fn longest() -> f32 {
-    (STRIDE / crate::SPEED - SPARE).max(0.05)
+/// How fast you cross a floor, which is what sets the gap between steps on
+/// it.
+///
+/// The same `spa::WADE` the pool slows you by, so the sound and the walking
+/// cannot disagree about how fast you are getting through the water.
+pub fn pace(on: Underfoot) -> f32 {
+    match on {
+        Underfoot::Water => crate::SPEED * crate::spa::WADE,
+        _ => crate::SPEED,
+    }
+}
+
+pub fn longest(on: Underfoot) -> f32 {
+    (STRIDE / pace(on) - SPARE).max(0.05)
 }
 
 /// The recordings, per the engine's spec 0045 and `res/steps/README.md`.
@@ -146,6 +178,15 @@ pub fn steps(on: Underfoot) -> &'static [&'static [u8]] {
             include_bytes!("../res/steps/boards5.wav"),
             include_bytes!("../res/steps/boards6.wav"),
         ],
+        // six, and longer than any other floor: see `longest`
+        Underfoot::Water => &[
+            include_bytes!("../res/steps/water1.wav"),
+            include_bytes!("../res/steps/water2.wav"),
+            include_bytes!("../res/steps/water3.wav"),
+            include_bytes!("../res/steps/water4.wav"),
+            include_bytes!("../res/steps/water5.wav"),
+            include_bytes!("../res/steps/water6.wav"),
+        ],
         Underfoot::Tile => &[
             include_bytes!("../res/steps/tile1.wav"),
             include_bytes!("../res/steps/tile2.wav"),
@@ -164,8 +205,9 @@ pub fn steps(on: Underfoot) -> &'static [&'static [u8]] {
 }
 
 /// Every floor there is, so the one list of them is this one.
-pub const FLOORS: [Underfoot; 4] = [
+pub const FLOORS: [Underfoot; 5] = [
     Underfoot::Carpet,
+    Underfoot::Water,
     Underfoot::Boards,
     Underfoot::Tile,
     Underfoot::Gravel,
@@ -180,6 +222,7 @@ pub const FLOORS: [Underfoot; 4] = [
 pub fn loudness(on: Underfoot) -> f32 {
     match on {
         Underfoot::Carpet => 0.34,
+        Underfoot::Water => 0.52,
         Underfoot::Boards => 0.48,
         Underfoot::Tile => 0.58,
         Underfoot::Gravel => 0.5,
@@ -506,6 +549,29 @@ mod tests {
                 vec3(cellar.x, -crate::cellar::DOWN * 0.5, cellar.z),
                 Underfoot::Boards,
             ),
+            // in the pool, where it is the water you hear and not the tile
+            // it stands on. Spec 0009.
+            (
+                "the pool",
+                {
+                    let (middle, _, deep) = crate::spa::pool(reaches);
+                    vec3(middle.x, middle.y - deep * 0.5, middle.z)
+                },
+                Underfoot::Water,
+            ),
+            // and a stride from its coping, where it is the tile again
+            (
+                "the poolside",
+                {
+                    let (middle, size, _) = crate::spa::pool(reaches);
+                    vec3(
+                        middle.x,
+                        -crate::cellar::DOWN,
+                        middle.z + size.y * 0.5 + 0.6,
+                    )
+                },
+                Underfoot::Tile,
+            ),
         ] {
             assert_eq!(
                 underfoot(reaches, at),
@@ -544,12 +610,12 @@ mod tests {
                 // grows for as long as you keep walking, and footsteps that go
                 // on after you stop.
                 assert!(
-                    got.seconds() <= longest(),
+                    got.seconds() <= longest(on),
                     "{:?} step {} lasts {:.3}s and there is {:.3}s between steps",
                     on,
                     n,
                     got.seconds(),
-                    longest()
+                    longest(on)
                 );
                 assert!(
                     got.seconds() > 0.08,
@@ -575,25 +641,29 @@ mod tests {
     /// walking left a minute and a half of footsteps still to come.
     #[test]
     fn walking_does_not_run_the_queue_behind() {
-        let gap = STRIDE / crate::SPEED;
-
-        assert!(
-            longest() < gap,
-            "a step lasts {:.3}s and lands every {:.3}s",
-            longest(),
-            gap
-        );
-
-        for seconds in [1.0f32, 10.0, 60.0, 600.0] {
-            let taken = (seconds * crate::SPEED / STRIDE).floor();
-            let queued = taken * longest();
+        for on in FLOORS {
+            let gap = STRIDE / pace(on);
 
             assert!(
-                queued < seconds,
-                "{}s of walking queues {:.1}s of footsteps",
-                seconds,
-                queued
+                longest(on) < gap,
+                "a step on {:?} lasts {:.3}s and lands every {:.3}s",
+                on,
+                longest(on),
+                gap
             );
+
+            for seconds in [1.0f32, 10.0, 60.0, 600.0] {
+                let taken = (seconds * pace(on) / STRIDE).floor();
+                let queued = taken * longest(on);
+
+                assert!(
+                    queued < seconds,
+                    "{}s of walking on {:?} queues {:.1}s of footsteps",
+                    seconds,
+                    on,
+                    queued
+                );
+            }
         }
 
         // and the cadence is a cadence and not a drum roll

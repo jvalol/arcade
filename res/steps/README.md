@@ -5,7 +5,7 @@ code that plays it until these, and the footsteps were the one thing that could
 not be: they were the best measured and worst sounding thing in here, and they
 were taken out in `e187000` until they sounded like footsteps.
 
-All three sources are **CC0**, which asks for nothing. The credit below is
+All four sources are **CC0**, which asks for nothing. The credit below is
 courtesy and not a condition.
 
 | Surface | Variants | From |
@@ -14,6 +14,7 @@ courtesy and not a condition.
 | `boards` | 6 | [Different steps on wood, stone, leaves, gravel and mud](https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud) by TinyWorlds, `wood01`–`03`, and Owlish Media's `step1`, `step3`, `step4` |
 | `tile` | 4 | Owlish Media again, the four reverberant ones |
 | `gravel` | 6 | Fantozzi's Footsteps, the sand half |
+| `water` | 6 | [Slow Water Footsteps](https://freesound.org/people/Adielees9/sounds/369580/) by Adielees9 on Freesound |
 
 ## What was done to them
 
@@ -31,6 +32,11 @@ of the processing is:
   speed and stride there is 0.38 of a second between steps. `noise::longest`
   works the cap out from those two rather than having it written down, and the
   tests hold every file to it
+
+  Water is the exception and gets 0.85. You wade at `spa::WADE` of your walking
+  pace, so a step in the pool lands every nine tenths of a second rather than
+  every four, and a splash wants that tail. `noise::pace` is where the two
+  speeds are named, which is the same `spa::WADE` the pool slows you by
 - the peak brought to −3 dBFS, so the code can set how loud a floor is and not
   have that undone by which file it reached for
 
@@ -39,12 +45,18 @@ is not is halfway back to arithmetic, and arithmetic is what this replaced. The
 pitch and level that vary from step to step are applied at run time by
 `Samples::pitched` and `Samples::gain`, per the engine's spec 0045.
 
-## What is missing
+## Where the water came from
 
-**Water.** The pool in the baths has no wading sound, and none of these three
-packs has one. Spec 0009 says what it should be. Fantozzi's sand is standing in
-for the garden's gravel, which is close enough to be right; nothing in here is
-close enough to be water.
+Freesound rather than OpenGameArt, because none of the other three packs had
+anything wet in it and OpenGameArt's water is splashes rather than steps. It
+is Freesound's preview mp3 and not the original wav, which needs an account to
+download. At 198 kbps mono 44.1 kHz that is one generation of mp3 on eight
+tenths of a second of splash, and the pipeline above converts everything to
+mono 44.1 kHz anyway. CC0 covers the preview as fully as the original.
+
+Eight usable steps were in the recording and six are here: one had another
+step 0.34 of a second behind it and one was too near the end to keep its
+tail.
 
 **Boards carries three rooms**, which is why it has six where the others have
 four: the nook, the cellar and the stair. There was a `stone` set, and it is

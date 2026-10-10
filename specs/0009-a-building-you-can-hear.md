@@ -96,9 +96,27 @@ nothing in them is close enough to stand in for one. Going in still splashes;
 walking about in it does not.
 
 **Water** answers what you do to it. Going in is a splash, and its size comes
-from how fast you went in. Wading on is a wash. The fountain
-runs for as long as there is a fountain, which is always, so that one is a
-sound the room has rather than one anything causes.
+from how fast you went in. Wading on is a recording like any other floor's.
+The fountain runs for as long as there is a fountain, which is always, so that
+one is a sound the room has rather than one anything causes.
+
+**The pool is a floor.** Standing in it, what you hear is the water you are
+pushing through and not the tile under your feet, so it takes the tile's place
+rather than sounding over it. The engine queues and does not mix, so two at
+once is not available and would be wrong anyway: you do not hear your shoe on
+the bottom of a pool.
+
+Which floor you are on is read off where you are, and the pool asks the same
+`spa::wading` that slows you down in it. A second account of being in the
+water is a second thing to come apart.
+
+**A step in water is allowed to be longer.** The cap on a footstep is the gap
+to the next one, and that gap is not the same on every floor: you wade at
+`spa::WADE` of your walking pace, so a step in the pool lands every nine
+tenths of a second rather than every four. One cap for every floor would
+either cut the splash off at a third of a second or let the dry floors run
+long enough to put the queue behind. `noise::pace` names the two speeds and
+`noise::longest` works the cap out from whichever applies.
 
 **One at a time.** The engine plays what it is given one after another, per
 spec 0044, and that is not a mixer. Four notes a second, each a second long, is
@@ -125,6 +143,8 @@ the engine's and stays available.
 ## Acceptance criteria
 
 - Every sound the building makes has samples in it and ends. — `noise::tests::every_sound_is_a_sound`
+- The pool sounds like water and its edge like tile. — `noise::tests::each_room_sounds_like_its_own_floor`
+- No floor's steps outlast the gap between them, water included. — `noise::tests::walking_does_not_run_the_queue_behind`
 - None of them clips: no sample past one. — `noise::tests::nothing_is_louder_than_one`
 - None of them starts or ends with a jump, which is a click. — `noise::tests::nothing_begins_or_ends_with_a_click`
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
