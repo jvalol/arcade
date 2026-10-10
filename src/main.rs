@@ -252,6 +252,9 @@ struct Arcade {
     eye: f32,
     yaw: f32,
     pitch: f32,
+    /// Whether every collider is outlined over the scene, per spec 0013 and
+    /// spec 0046 of the engine. Off until somebody asks.
+    showing_solid: bool,
     walking: [bool; 4],
     /// Whether a shift key is down, which is what turns the arrows from hauling
     /// a toy about into working its one other control.
@@ -408,6 +411,7 @@ impl Arcade {
             // (sin yaw, 0, -cos yaw), so nought faces -z
             yaw: if staged() { POSED_YAW } else { 0.0 },
             pitch: if staged() { POSED_PITCH } else { 0.0 },
+            showing_solid: false,
             walking: [false; 4],
             shifted: false,
             leaning: [false; 4],
@@ -2075,6 +2079,17 @@ impl Game for Arcade {
                 cellar::Made::Stone => {
                     scene.push_colored(cube, &laid, aim::CELLAR);
                 }
+            }
+        }
+
+        // and every collider over the top of it, when somebody has asked.
+        //
+        // `room.solid()` itself rather than a list gathered for the purpose:
+        // a second list is two accounts of one thing, which is the fault
+        // this is here to find. Spec 0013.
+        if self.showing_solid {
+            for box_ in self.room.solid() {
+                scene.outline(box_, aim::SOLID);
             }
         }
 
@@ -4206,6 +4221,13 @@ impl Game for Arcade {
             KeyboardKey::Return if held => {
                 self.use_what_i_see();
             }
+            // what is solid, outlined over what is drawn. A toggle and not a
+            // hold: you walk to the thing you are suspicious of and look at
+            // it from two or three places, and a key held down for that is a
+            // key you are fighting. Spec 0013.
+            KeyboardKey::O if held && !input.repeat => {
+                self.showing_solid = !self.showing_solid;
+            }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
         }
@@ -4263,6 +4285,85 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A key going down, then coming back up, which is what a press is.
+    fn press(arcade: &mut Arcade, key: KeyboardKey) {
+        for state in [KeyboardKeyState::Pressed, KeyboardKeyState::Released] {
+            arcade.process_keyboard(KeyboardInput {
+                key,
+                state,
+                repeat: false,
+            });
+        }
+    }
+
+    /// Spec 0013: it is off when the building opens.
+    #[test]
+    fn what_is_solid_starts_hidden() {
+        assert!(
+            !Arcade::new().showing_solid,
+            "the building opened with its colliders showing"
+        );
+    }
+
+    /// Spec 0013: O turns it on, and off again.
+    #[test]
+    fn o_toggles_what_is_solid() {
+        let mut one = Arcade::new();
+
+        press(&mut one, KeyboardKey::O);
+        assert!(one.showing_solid, "O did not show what is solid");
+
+        press(&mut one, KeyboardKey::O);
+        assert!(!one.showing_solid, "O did not put it away again");
+    }
+
+    /// Spec 0013: holding it does not flicker it.
+    ///
+    /// The key repeats while it is down, and a toggle taken off every one of
+    /// those turns over at the repeat rate. An even number of them, so a
+    /// handler that counts repeats comes back off rather than passing on the
+    /// parity: the first version of this test sent five and passed for that
+    /// reason alone.
+    #[test]
+    fn holding_o_shows_it_once() {
+        let mut one = Arcade::new();
+
+        // the way a held key arrives: down once, then repeating
+        for repeat in [false, true, true, true, true, true] {
+            one.process_keyboard(KeyboardInput {
+                key: KeyboardKey::O,
+                state: KeyboardKeyState::Pressed,
+                repeat,
+            });
+        }
+        one.process_keyboard(KeyboardInput {
+            key: KeyboardKey::O,
+            state: KeyboardKeyState::Released,
+            repeat: false,
+        });
+
+        assert!(one.showing_solid, "holding O put what is solid away");
+    }
+
+    /// Spec 0013: nothing else turns it on.
+    #[test]
+    fn no_other_key_shows_what_is_solid() {
+        for key in [
+            KeyboardKey::W,
+            KeyboardKey::S,
+            KeyboardKey::A,
+            KeyboardKey::D,
+            KeyboardKey::Return,
+            KeyboardKey::Up,
+            KeyboardKey::P,
+        ] {
+            let mut one = Arcade::new();
+            press(&mut one, key);
+
+            assert!(!one.showing_solid, "{:?} showed what is solid", key);
+        }
+    }
 
     /// Spec 0006: the wall offers a rebuild only when there is one to rebuild.
     ///

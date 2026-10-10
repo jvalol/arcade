@@ -501,6 +501,12 @@ pub const CEILING: Vec4 = vec4(0.09, 0.08, 0.10, 1.0);
 /// what you see is a lattice of dark lines running away down the aisle. Both
 /// a shade off the lid itself, which is still what shows through where a
 /// tile is missing.
+/// What a collider is outlined in, per spec 0013.
+///
+/// Cool and past white, against a building lit warm by everything in it, so
+/// an outline is never mistaken for a thing that is actually there.
+pub const SOLID: Vec4 = vec4(0.0, 1.6, 0.9, 1.0);
+
 pub const CEIL_BAR: Vec4 = vec4(0.055, 0.050, 0.065, 1.0);
 pub const CEIL_TILE: Vec4 = vec4(0.150, 0.145, 0.165, 1.0);
 
