@@ -195,6 +195,8 @@ struct Arcade {
     /// own count of tiles on it. Spec 0008.
     tiled: Option<TextureId>,
     lining: Vec<MeshId>,
+    /// A picture of each of `study::TITLES`, for the spines. Spec 0006.
+    titles: Vec<(TextureId, f32)>,
     afghan_mesh: Option<MeshId>,
     cellar_floor: Option<MeshId>,
     wall_grain: Option<TextureId>,
@@ -385,6 +387,7 @@ impl Arcade {
             skins: Vec::new(),
             tiled: None,
             lining: Vec::new(),
+            titles: Vec::new(),
             afghan_mesh: None,
             cellar_floor: None,
             wall_grain: None,
@@ -947,6 +950,22 @@ impl Game for Arcade {
         // a quad per face of the basin, each with its own count of tiles, so a
         // tile is the same size everywhere. One mesh for all of them makes the
         // tiles on the sides as tall as the sides are.
+        // the spines, one picture a title rather than one a book: there are
+        // four hundred books and fifty-six titles, and a picture of a word is
+        // the same picture wherever it is hung
+        self.titles = study::TITLES
+            .iter()
+            .map(|title| {
+                // stencilled and not drawn: a spine is a colour and the black
+                // ground behind a title would cover it. Spec 0047.
+                let drawn = blitzkit::text::stencilled(title, study::TITLE_TEXELS);
+                // how long the words are against how tall, which is what
+                // decides how far down a spine they reach
+                let shape = drawn.width() as f32 / drawn.height().max(1) as f32;
+
+                (renderer.add_texture(&drawn), shape)
+            })
+            .collect();
         self.lining = spa::lining(self.room.reaches)
             .into_iter()
             .map(|(_, size, _)| renderer.add_mesh(&room::tiled_plane(size / spa::TILE)))
@@ -3450,6 +3469,40 @@ impl Game for Arcade {
                             vec4(book.spine[0], book.spine[1], book.spine[2], 1.0)
                         },
                     );
+
+                    // and the title down the spine. One picture a title,
+                    // scaled to fit the book it is on, which is what a
+                    // binder does: a short title is set large and a long one
+                    // small. Spec 0006.
+                    if let (Some(hung), Some((words, shape))) =
+                        (self.hung, self.titles.get(book.title).copied())
+                    {
+                        // as far down the book as it is allowed, unless that
+                        // makes the lettering taller than the spine is wide
+                        let long = (book.tall * study::TITLE_LONG)
+                            .min(book.thick * 0.9 * study::TITLE_ACROSS * shape);
+
+                        scene.push_textured(
+                            hung,
+                            words,
+                            &Transform::at(put(vec3(
+                                along,
+                                up + book.tall * 0.5,
+                                -case.y * 0.5 + study::BOOK_BACK + book.tall * 0.44 + 0.002,
+                            )))
+                            .with_rotation(
+                                turn * glam::Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)
+                                    * glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2),
+                            )
+                            .with_scale(vec3(
+                                0.004,
+                                long / shape,
+                                long,
+                            )),
+                            aim::SPINE_LETTERS,
+                            8.0,
+                        );
+                    }
                 }
             }
         }

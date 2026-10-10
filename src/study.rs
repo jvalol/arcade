@@ -146,12 +146,101 @@ const SPINES: [[f32; 3]; 7] = [
     [0.24, 0.13, 0.16],
 ];
 
+/// What is on the spines.
+///
+/// Real books, all of them long out of copyright, which is the only kind a
+/// room can be filled with four hundred of. Nothing invented: a shelf of
+/// plausible-sounding titles is a shelf you read twice and stop believing,
+/// and the whole point of this room is that it is the one place in the
+/// building not pretending at you.
+///
+/// Short ones, mostly. A spine is three centimetres across and the title is
+/// scaled to fit it, so `Emma` is legible from where you stand and
+/// `The Life and Opinions of Tristram Shandy, Gentleman` would be a grey
+/// smear however it was set. Real spines solve this the same way, by being
+/// chosen or abbreviated, so the long ones here are the ones a binder would
+/// actually have fitted.
+///
+/// ASCII only. The font is the engine's and an accent it has no glyph for
+/// comes out as a hole, so `Les Miserables` is not here rather than being
+/// here wrongly.
+pub const TITLES: [&str; 56] = [
+    "Moby-Dick",
+    "Walden",
+    "Emma",
+    "Persuasion",
+    "Middlemarch",
+    "Bleak House",
+    "Hard Times",
+    "Jane Eyre",
+    "Villette",
+    "Dracula",
+    "Frankenstein",
+    "Kidnapped",
+    "Treasure Island",
+    "The Time Machine",
+    "Heart of Darkness",
+    "Lord Jim",
+    "Silas Marner",
+    "Adam Bede",
+    "Cranford",
+    "North and South",
+    "Agnes Grey",
+    "Shirley",
+    "Tom Jones",
+    "Moll Flanders",
+    "Robinson Crusoe",
+    "Paradise Lost",
+    "The Odyssey",
+    "The Iliad",
+    "The Aeneid",
+    "Metamorphoses",
+    "On Liberty",
+    "Leviathan",
+    "The Prince",
+    "Utopia",
+    "Leaves of Grass",
+    "The Scarlet Letter",
+    "Great Expectations",
+    "Oliver Twist",
+    "David Copperfield",
+    "Wuthering Heights",
+    "Vanity Fair",
+    "The Moonstone",
+    "The Woman in White",
+    "Sense and Sensibility",
+    "Pride and Prejudice",
+    "Mansfield Park",
+    "Northanger Abbey",
+    "The Warden",
+    "Barchester Towers",
+    "Daniel Deronda",
+    "The Mill on the Floss",
+    "Anna Karenina",
+    "War and Peace",
+    "Dead Souls",
+    "Don Quixote",
+    "Candide",
+];
+
+/// How tall the lettering on a spine is drawn, in texels.
+///
+/// The picture is made once a title and stretched onto every copy of it, so
+/// this is about how it reads from a pace away rather than about memory.
+pub const TITLE_TEXELS: f32 = 48.0;
+
+/// How much of a spine the title is allowed: along the book, and across it.
+pub const TITLE_LONG: f32 = 0.74;
+pub const TITLE_ACROSS: f32 = 0.62;
+
 /// One book: how thick it is, how tall it stands, and what its spine is.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Book {
     pub thick: f32,
     pub tall: f32,
     pub spine: [f32; 3],
+    /// Which of [`TITLES`] is on it.
+    pub title: usize,
 }
 
 /// Where a shelf's boards sit above the bookcase's foot.
@@ -189,6 +278,10 @@ pub fn stock(case: u32, shelf: usize) -> Vec<Book> {
             thick,
             tall: tall.min(headroom() - 0.01),
             spine: SPINES[((roll >> 20) as usize) % SPINES.len()],
+            // off a different part of the roll from the colour, or every
+            // copy of a title would be bound the same and the shelf would
+            // read as a pattern
+            title: (roll.wrapping_mul(2_654_435_761) >> 7) as usize % TITLES.len(),
         });
         used += thick;
     }
@@ -213,6 +306,77 @@ pub fn along(books: &[Book], n: usize) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0006: every book carries a title, and a shelf is not one title.
+    #[test]
+    fn a_shelf_is_a_library_and_not_a_pattern() {
+        let books = stock(3, 2);
+        assert!(books.len() > 6, "only {} books on a shelf", books.len());
+
+        for book in books.iter() {
+            assert!(
+                book.title < TITLES.len(),
+                "a book asks for title {} of {}",
+                book.title,
+                TITLES.len()
+            );
+        }
+
+        let apart = books
+            .iter()
+            .map(|book| book.title)
+            .collect::<std::collections::HashSet<_>>();
+
+        assert!(
+            apart.len() * 2 > books.len(),
+            "{} books on a shelf and only {} titles between them",
+            books.len(),
+            apart.len()
+        );
+    }
+
+    /// Spec 0006: and the title is not tied to the binding.
+    ///
+    /// Off the same part of the roll as the colour, every copy of a title
+    /// comes out bound alike, and a shelf of that reads as a pattern rather
+    /// than as a room where somebody bought books one at a time.
+    #[test]
+    fn a_title_is_not_always_bound_the_same() {
+        let mut bindings: std::collections::HashMap<usize, std::collections::HashSet<[u32; 3]>> =
+            std::collections::HashMap::new();
+
+        for case in 0..12u32 {
+            for shelf in 0..SHELVES {
+                for book in stock(case, shelf) {
+                    bindings
+                        .entry(book.title)
+                        .or_default()
+                        .insert(book.spine.map(|n| n.to_bits()));
+                }
+            }
+        }
+
+        let twice = bindings.values().filter(|bound| bound.len() > 1).count();
+
+        assert!(
+            twice * 2 > bindings.len(),
+            "only {} of {} titles turn up in more than one binding",
+            twice,
+            bindings.len()
+        );
+    }
+
+    /// Spec 0006: the titles are ASCII, because the font has no accents.
+    #[test]
+    fn every_title_is_one_the_font_can_set() {
+        for title in TITLES.iter() {
+            assert!(
+                title.is_ascii() && !title.is_empty(),
+                "{:?} is not a title this font can set",
+                title
+            );
+        }
+    }
 
     /// Spec 0006: a shelf is stocked, and the books fit on it.
     #[test]

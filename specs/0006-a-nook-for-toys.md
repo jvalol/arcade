@@ -138,6 +138,26 @@ the last bench stands. The books are generated and stocked from a seed, so a
 shelf holds the same books every time it is drawn. A bookcase restocked every
 frame is a bookcase that boils.
 
+**Every spine carries a real title.** Fifty-six of them, all long out of
+copyright, down the spine the way an English binding reads. Nothing invented:
+a shelf of plausible-sounding titles is one you read twice and stop believing,
+and this room is the one place in the building not pretending at you.
+
+Short ones mostly, because a spine is three centimetres across. The title is
+scaled to fit the book it is on, which is what a binder does, so `Emma` is set
+large and `The Mill on the Floss` small. ASCII only: the engine's font has no
+glyph for an accent and would leave a hole where one went.
+
+The title comes off a different part of the same roll as the binding colour,
+or every copy of a title would be bound alike and the shelf would read as a
+pattern rather than as a library.
+
+It is `text::stencilled` and not `text::drawn`, per the engine's spec 0047. A
+drawn word carries a black ground, which on a dark panel is a plate behind the
+letters at no cost and on four hundred coloured spines is four hundred black
+labels: readable with your nose against the shelf and a wall of dashes from
+where you stand, which is worse than no titles at all.
+
 **Sconces** down both long walls are what the room is lit by. There were candles
 on the shelves first and they were the wrong thing twice over. There is no
 lavishly furnished room in the world with an open flame two inches from four

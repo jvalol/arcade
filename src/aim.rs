@@ -178,6 +178,12 @@ pub const GIMBAL: Vec4 = vec4(0.78, 0.79, 0.84, 1.0);
 /// with no light on it, the way a cabinet's band does.
 pub const BOOKCASE: Vec4 = vec4(0.26, 0.15, 0.09, 1.0);
 pub const SHELF: Vec4 = vec4(0.32, 0.19, 0.11, 1.0);
+
+/// The lettering on a book's spine, per spec 0006.
+///
+/// Gilt, and dimmer than it looks written down: these are small enough that
+/// bright lettering reads as a row of white dashes rather than as words.
+pub const SPINE_LETTERS: Vec4 = vec4(0.86, 0.74, 0.44, 1.0);
 /// The panelling: the panels themselves, and the skirting, rail and cornice
 /// that frame them.
 ///
