@@ -178,9 +178,24 @@ could count. The walls are flat now with boarding laid on their faces as tiled
 quads, a board's width each, standing a hair proud so that nothing shares a
 plane with anything.
 
+**The fireplace is solid.** It had no collider and the wall behind it was
+doing the work, which very nearly held: a body walked at the fire came to rest
+nine millimetres from the stone. The camera's near plane is a hundred
+millimetres, so standing at the fire put the near plane nine centimetres
+inside the mantel and you looked straight through it into the dark.
+
+One box over the whole surround rather than one each for the jambs, the lintel
+and the shelf. The gaps between those three are the inside of a fireplace, and
+a fireplace is not a thing to be able to stand in.
+
+The surround is named once now and both drawn and walked into from there. It
+was written out where it was drawn and nowhere else, which is how it came to
+have no collider at all.
+
 ## Acceptance criteria
 
 - You can walk up a step, and the shallowest is not the hardest. — `walk::tests::it_climbs_a_step`
+- You stop far enough from the fire to see it. — `cellar::tests::you_stop_far_enough_from_the_fire_to_see_it`
 - And one taller than a step is a wall. — `walk::tests::it_does_not_climb_a_wall`
 - You come to rest on the floor rather than sinking or hovering. — `walk::tests::it_puts_you_on_the_floor`
 - Walking off a step takes you down it. — `walk::tests::it_walks_you_back_down`

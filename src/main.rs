@@ -3014,43 +3014,10 @@ impl Game for Arcade {
             let at = cellar::hearth(self.room.reaches);
             let wide = cellar::FIRE_WIDE;
             let high = cellar::FIRE_HIGH;
-            let round = cellar::FIRE_ROUND;
-            let out = room::THICK;
 
-            // the surround: two jambs and a lintel, standing out of the wall
-            for (middle, size) in [
-                (
-                    vec3(
-                        at.x + out * 0.5,
-                        at.y + high * 0.5,
-                        at.z - (wide + round) * 0.5,
-                    ),
-                    vec3(out, high + round, round),
-                ),
-                (
-                    vec3(
-                        at.x + out * 0.5,
-                        at.y + high * 0.5,
-                        at.z + (wide + round) * 0.5,
-                    ),
-                    vec3(out, high + round, round),
-                ),
-                (
-                    vec3(at.x + out * 0.5, at.y + high + round * 0.5, at.z),
-                    vec3(out, round, wide + round * 2.0),
-                ),
-                // and a mantel over the lot, placed from the same function
-                // that the things standing on it are, so the shelf and what is
-                // on it cannot disagree about where it is
-                (
-                    cellar::mantel_top(self.room.reaches) - Vec3::Y * cellar::MANTEL * 0.3,
-                    vec3(
-                        out + cellar::MANTEL,
-                        cellar::MANTEL * 0.6,
-                        wide + round * 3.0,
-                    ),
-                ),
-            ] {
+            // the surround, from the one place that says where it is. Spec
+            // 0007: it is walked into as well as drawn.
+            for (middle, size) in cellar::surround(self.room.reaches) {
                 // built of blocks rather than coloured like stone. The
                 // joints are what says stone: courses that do not line up,
                 // blocks of different lengths in each one, and no two the same

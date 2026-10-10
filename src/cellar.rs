@@ -740,6 +740,67 @@ pub fn flicker(since: f32) -> f32 {
 }
 
 /// Where the fire is: the middle of the far wall, at the floor.
+/// The surround standing out of the wall: two jambs, a lintel, and the mantel
+/// over the lot, each as a middle and a size.
+///
+/// Named here rather than written out where it is drawn, because it is both
+/// drawn and walked into, and those are the two lists this building keeps
+/// letting drift.
+pub fn surround(reaches: f32) -> Vec<(Vec3, Vec3)> {
+    let at = hearth(reaches);
+    let out = crate::room::THICK;
+    let (wide, high, round) = (FIRE_WIDE, FIRE_HIGH, FIRE_ROUND);
+
+    vec![
+        (
+            vec3(
+                at.x + out * 0.5,
+                at.y + high * 0.5,
+                at.z - (wide + round) * 0.5,
+            ),
+            vec3(out, high + round, round),
+        ),
+        (
+            vec3(
+                at.x + out * 0.5,
+                at.y + high * 0.5,
+                at.z + (wide + round) * 0.5,
+            ),
+            vec3(out, high + round, round),
+        ),
+        (
+            vec3(at.x + out * 0.5, at.y + high + round * 0.5, at.z),
+            vec3(out, round, wide + round * 2.0),
+        ),
+        (
+            mantel_top(reaches) - Vec3::Y * MANTEL * 0.3,
+            vec3(out + MANTEL, MANTEL * 0.6, wide + round * 3.0),
+        ),
+    ]
+}
+
+/// The fireplace as the one box you walk into.
+///
+/// It had no collider at all and the wall behind it was doing the work, which
+/// very nearly held: a body walked at the fire stopped at x -22.949 and the
+/// stone reaches out to -22.940. Nine millimetres. The camera's near plane is
+/// a hundred, so standing at the fire put the near plane nine centimetres
+/// inside the mantel and you saw through it into the dark.
+///
+/// One box and not four, because the gaps between a jamb, a lintel and a
+/// mantel are the inside of a fireplace.
+pub fn fireplace(reaches: f32) -> Aabb {
+    let at = hearth(reaches);
+    let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+
+    for (middle, size) in surround(reaches) {
+        lo = lo.min(middle - size * 0.5);
+        hi = hi.max(middle + size * 0.5);
+    }
+
+    Aabb::new(vec3(lo.x, at.y, lo.z), hi)
+}
+
 pub fn hearth(reaches: f32) -> Vec3 {
     let foot = stair_foot();
 
@@ -1119,6 +1180,9 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let mut out = shell(reaches);
 
+    // the fireplace, which the wall behind it was all but doing for
+    out.push(fireplace(reaches));
+
     // the racks and the barrels, which are things you walk into rather than
     // through. A cellar you can stand inside the furniture of is a cellar with
     // pictures of furniture in it.
@@ -1289,6 +1353,65 @@ fn shell(reaches: f32) -> Vec<Aabb> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0007: you stop far enough from the fire to see it.
+    ///
+    /// The wall behind the fireplace was all that stopped you, and it very
+    /// nearly worked: a body walked at the fire came to rest nine
+    /// millimetres from the stone. The camera's near plane is a hundred, so
+    /// the near plane sat nine centimetres inside the mantel and you looked
+    /// straight through it.
+    ///
+    /// Asked of the eye and not of the body. The body is a sphere at your
+    /// feet and it never reaches the mantel's height at all, so a test on
+    /// the body passes with no collider there, which is what the first one
+    /// written for this did.
+    #[test]
+    fn you_stop_far_enough_from_the_fire_to_see_it() {
+        let room = crate::room::Room::of(
+            (0..12)
+                .map(|n| {
+                    crate::cabinet::Cabinet::found(
+                        &format!("game{}", n),
+                        std::path::Path::new("/nowhere"),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
+        let solid = room.solid();
+        let fire = hearth(room.reaches);
+        let step = 1.0 / 60.0;
+        let (mut at, mut falling) = (vec3(fire.x + 3.0, fire.y + 0.2, fire.z), 0.0);
+
+        for _ in 0..300 {
+            let way = vec3(fire.x - at.x, 0.0, fire.z - at.z);
+            let wish = if way.length_squared() > 1e-4 {
+                way.normalize() * crate::SPEED
+            } else {
+                Vec3::ZERO
+            };
+            let (next, fell) =
+                crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
+            at = next;
+            falling = fell;
+        }
+
+        // the near plane, which the engine leaves at a tenth of a metre
+        const NEAR: f32 = 0.1;
+        let eye = at + Vec3::Y * crate::EYE;
+
+        for (middle, size) in surround(room.reaches) {
+            let past = ((eye - middle).abs() - size * 0.5).max(Vec3::ZERO);
+
+            assert!(
+                past.length() > NEAR,
+                "a body walked at the fire leaves its eye {:.3} from a piece \
+                 of the surround at {:?}, and the near plane is {NEAR}",
+                past.length(),
+                middle
+            );
+        }
+    }
 
     /// Spec 0007: every bottle a cellar holds can be asked which glass it is.
     ///
