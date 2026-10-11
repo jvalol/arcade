@@ -1,7 +1,7 @@
 # 0009 A building you can hear
 
 **Status:** implemented
-**Date:** 2026-10-06
+**Date:** 2026-10-06, amended 2026-10-11
 
 ## What it is
 
@@ -57,22 +57,44 @@ the wall you are on is not enough on its own.
 **One is played every stride**, paced by how far you have actually walked rather
 than by a clock, so slowing down slows them and standing still is silence.
 
-**A stride and not a pace**, and a step shorter than the gap between steps.
-These two go together and they are arithmetic rather than taste. The stride was
-0.85 of a unit, which is a pace, and at the speed this building walks you that
-is nearly five steps a second: a sprint cadence under a body that is plainly not
-sprinting. And the engine appends to a player that runs one sound after another
-and is not a mixer, so a step that outlasts the gap to the next one never
-finishes before the next is due. The recordings ran to most of a second against
-a gap of a fifth of one, so ten seconds of walking left half a minute of
-footsteps still to play, which is why they went on after you had stopped.
+**A stride and not a pace.** The stride was 0.85 of a unit, which is a pace,
+and at the speed this building walks you that is nearly five steps a second: a
+sprint cadence under a body that is plainly not sprinting. It is 1.6 now, which
+is a jog's stride at a jog's speed and about two and a half steps a second.
 
-The stride is 1.6 now, which is a jog's stride at a jog's speed and about two
-and a half steps a second. `noise::longest` takes the gap from that and the
-walking speed and leaves a margin under it, so the cap on a recording is worked
-out rather than written down, and a file that breaks it is dropped at load as
-well as failing a test. A floor gone quiet is a better fault than a floor that
-runs behind.
+**Footsteps are allowed to overlap, and the engine is why.** This was the
+reverse until 2026-10-11, and it was wrong twice over.
+
+A player in rodio is a queue, so a step handed to it while one is still
+playing waits its turn. A step that outlasts the gap to the next one therefore
+never finishes before the next is due, and the backlog grows for as long as you
+walk. At the old 0.85 stride the recordings ran to most of a second against a
+gap of a fifth of one, so ten seconds of walking left half a minute of
+footsteps still to play: they went on after you had stopped. The answer then
+was `noise::longest`, a cap taken from the stride and the walking speed, with
+any file over it dropped at load.
+
+That cap broke the day shift was added, in the way a derived number does. It
+came off `noise::pace`, which is the walking speed, so running halved the real
+gap and left the cap measured against a walk. The recordings are 0.320s and
+the gap at a run is 0.190s, and the fault came back exactly as before. The
+test that was supposed to hold this took both sides of its comparison from
+`pace`, so it was an identity and passed throughout.
+
+The fix is in the engine rather than here. `SoundSystem::play` hands the sound
+to the sink's mixer instead of appending it to a player, per spec 0004 of the
+engine, so two steps that overlap are two steps overlapping and nothing
+accumulates. Spec 0044 already promised this in as many words, that a sound
+"can be played again before the first has finished", and `play` was the one
+path where it was not true.
+
+`noise::longest` stays, with a different job and an honest derivation. It is
+`noise::OVERLAP` strides at `noise::fastest`, the quickest that floor can be
+crossed, so a step is over before the step after next lands. Three shoes going
+at once is a smear whatever is playing them. `fastest` is named apart from
+`pace` because that is the pair that came apart: everything wanting the
+shortest gap asked `pace` for it, and `pace` quietly stopped being the shortest
+gap.
 
 **No step is the one before it.** The repetition is what gives a footstep away,
 not the recording, so the file walks the list in order and both the pitch and
@@ -102,27 +124,30 @@ one is a sound the room has rather than one anything causes.
 
 **The pool is a floor.** Standing in it, what you hear is the water you are
 pushing through and not the tile under your feet, so it takes the tile's place
-rather than sounding over it. The engine queues and does not mix, so two at
-once is not available and would be wrong anyway: you do not hear your shoe on
-the bottom of a pool.
+rather than sounding over it. A floor and its water sounding together would be
+available now that `play` mixes, and would still be wrong: you do not hear your
+shoe on the bottom of a pool.
 
 Which floor you are on is read off where you are, and the pool asks the same
 `spa::wading` that slows you down in it. A second account of being in the
 water is a second thing to come apart.
 
-**A step in water is allowed to be longer.** The cap on a footstep is the gap
-to the next one, and that gap is not the same on every floor: you wade at
-`spa::WADE` of your walking pace, so a step in the pool lands every nine
-tenths of a second rather than every four. One cap for every floor would
-either cut the splash off at a third of a second or let the dry floors run
-long enough to put the queue behind. `noise::pace` names the two speeds and
-`noise::longest` works the cap out from whichever applies.
+**A step in water is allowed to be longer.** The gap between steps is not the
+same on every floor: you wade at `spa::WADE` of your walking pace and shift
+does nothing in the water at all, so a step in the pool lands every nine
+tenths of a second against a fifth of one on a dry floor at a run. One cap for
+every floor would either cut the splash off short or hold every dry floor to a
+splash's length. `noise::fastest` names the speeds and `noise::longest` works
+the cap out from whichever applies.
 
-**One at a time.** The engine plays what it is given one after another, per
-spec 0044, and that is not a mixer. Four notes a second, each a second long, is
-a queue growing by three seconds every second: left running for two hours it was
-a gigabyte of audio waiting its turn and a machine with nothing left to draw
-with, which is what the pool looking like a wall of streaks turned out to be.
+**One note at a time.** The room notes go out through `play_at`, which still
+appends to a player and runs them one after another. Four notes a second, each
+a second long, is a queue growing by three seconds every second: left running
+for two hours it was a gigabyte of audio waiting its turn and a machine with
+nothing left to draw with, which is what the pool looking like a wall of
+streaks turned out to be. The notes are paced to start as the last one ends and
+rely on the queue to hold that, so moving them to the mixer would change what a
+room sounds like and is not part of this.
 
 **Several of each note, picked and bent.** One note queued again the moment
 it runs out is the same four tenths of a second played two and a half times a
@@ -161,7 +186,7 @@ the engine's and stays available.
 - A room's note does not come round in a bar. — `noise::tests::a_rooms_note_does_not_come_round_in_a_bar`
 - And it is bent within the bounds a step is. — `noise::tests::a_rooms_note_is_bent_like_a_step`
 - The pool sounds like water and its edge like tile. — `noise::tests::each_room_sounds_like_its_own_floor`
-- No floor's steps outlast the gap between them, water included. — `noise::tests::walking_does_not_run_the_queue_behind`
+- No more than two footsteps sound at once, at a run and in the water. — `noise::tests::no_more_than_two_steps_sound_at_once`
 - None of them clips: no sample past one. — `noise::tests::nothing_is_louder_than_one`
 - None of them starts or ends with a jump, which is a click. — `noise::tests::nothing_begins_or_ends_with_a_click`
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
@@ -171,7 +196,7 @@ the engine's and stays available.
 - Each room sounds like what it is floored with. — `noise::tests::each_room_sounds_like_its_own_floor`
 - No step is the file, the pitch or the level of the one before it. — `noise::tests::no_step_is_the_one_before_it`
 - A step is bent and not mangled. — `noise::tests::a_step_is_bent_and_not_mangled`
-- Walking never queues more footsteps than there is time to play them. — `noise::tests::walking_does_not_run_the_queue_behind`
+- A step is over before the step after next lands, read off the files. — `noise::tests::no_more_than_two_steps_sound_at_once`
 - Carpet is the quiet floor and tile the loud one. — `noise::tests::carpet_is_the_quiet_floor_and_tile_the_loud_one`
 
 ### Verified by hand
@@ -182,6 +207,11 @@ Run the arcade and walk from the hall to the baths.
 - The fire, the fountain and the tub come from where they are and swing as you
   turn, which is spec 0019 of the engine doing its job through this.
 - Going into the pool is a splash and walking in it is a wash.
+- Running across the hall and stopping stops the footsteps with you, rather
+  than leaving them to run on. This is the one that was wrong on 2026-10-11 and
+  it cannot be heard in a test.
+- A sprint sounds like a sprint rather than a smear, with two steps' worth of
+  overlap in it.
 
 ## Out of scope
 

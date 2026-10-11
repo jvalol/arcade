@@ -112,27 +112,27 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
 /// a second is a jog's stride.
 pub const STRIDE: f32 = 1.6;
 
-/// How long a footstep may last.
+/// How many steps may be sounding at once.
 ///
-/// Not a taste. The engine plays what it is given one after another and is not
-/// a mixer, so a step longer than the gap to the next one never finishes before
-/// the next is due and the queue falls behind for ever. At the old stride the
-/// gap was a fifth of a second and the recordings ran to most of a second: ten
-/// seconds of walking left half a minute of footsteps still to play, which is
-/// why they went on after you stopped.
+/// Two, so a step is over before the step after next lands. Three shoes going
+/// at the same time is not a run, it is a smear, and whichever way the engine
+/// plays them there is a limit past which more overlap is less footstep.
 ///
-/// So this comes off the stride and the walking speed rather than being chosen,
-/// with enough under the gap that a step has finished before the next lands.
-///
-/// Per floor, because the gap is not the same on all of them. You wade at
-/// `spa::WADE` of your walking pace, so in the pool a step is nine tenths of
-/// a second apart rather than four, and a splash wants that tail. One number
-/// for every floor would either cut the water off at a third of a second or
-/// let every other floor run long enough to fall behind.
-pub const SPARE: f32 = 0.06;
+/// This used to be a cap under the gap itself, because the engine queued what
+/// it was given and a step that outlasted the gap put the queue a little
+/// further behind on every stride. That was the fault Jake heard twice: the
+/// first time at the old 0.85 stride, where ten seconds of walking left half a
+/// minute of footsteps still to play, and the second time the day shift was
+/// added, because the cap was worked out from a walk and running halved the
+/// gap it was measured against. `SoundSystem::play` mixes now, per spec 0004
+/// of the engine, so steps that overlap are steps overlapping and nothing
+/// accumulates. The cap stays because a smear is still worth not having, but
+/// it is a cap on how much overlap sounds like a footstep rather than the
+/// thing standing between the building and a runaway queue.
+pub const OVERLAP: f32 = 2.0;
 
-/// How fast you cross a floor, which is what sets the gap between steps on
-/// it.
+/// How fast you cross a floor at a walk, which is what sets the gap between
+/// steps on it.
 ///
 /// The same `spa::WADE` the pool slows you by, so the sound and the walking
 /// cannot disagree about how fast you are getting through the water.
@@ -143,8 +143,33 @@ pub fn pace(on: Underfoot) -> f32 {
     }
 }
 
+/// The fastest you can cross it, which is what sets the shortest gap.
+///
+/// `crate::RUNS` of the walking pace on anything dry, and the walking pace
+/// itself in the water, because shift does nothing in there: wading is the
+/// whole of what tells you that you are in the pool rather than beside it, per
+/// spec 0008.
+///
+/// Named apart from `pace` because the two came apart once. Everything that
+/// wanted the shortest gap asked `pace` for it, and the day shift arrived
+/// `pace` stopped being the shortest gap and no test said so.
+pub fn fastest(on: Underfoot) -> f32 {
+    match on {
+        Underfoot::Water => pace(on),
+        _ => pace(on) * crate::RUNS,
+    }
+}
+
+/// How long a footstep may last: `OVERLAP` strides at the fastest you can
+/// cover them.
+///
+/// Per floor, because the gap is not the same on all of them. You wade at
+/// `spa::WADE` of your walking pace and cannot run in it at all, so a step in
+/// the pool lands every nine tenths of a second rather than every fifth of
+/// one, and a splash wants that tail. One number for every floor would either
+/// cut the water off short or hold every dry floor to a splash's length.
 pub fn longest(on: Underfoot) -> f32 {
-    (STRIDE / pace(on) - SPARE).max(0.05)
+    (OVERLAP * STRIDE / fastest(on)).max(0.05)
 }
 
 /// The recordings, per the engine's spec 0045 and `res/steps/README.md`.
@@ -752,17 +777,14 @@ mod tests {
                     .unwrap_or_else(|why| panic!("{:?} step {}: {}", on, n, why));
 
                 assert!(!got.is_empty(), "{:?} step {} is silence", on, n);
-                // short enough that one does not still be playing when the next
-                // is due. The engine plays what it is given one after another
-                // rather than mixing, so a tail longer than a stride is a queue
-                // that grows for as long as you keep walking.
-                // the one that matters. The engine queues rather than mixes,
-                // so a step longer than the gap to the next one is a queue that
-                // grows for as long as you keep walking, and footsteps that go
-                // on after you stop.
+                // and short enough that no more than `OVERLAP` of them are
+                // sounding at once at the fastest this floor can be crossed.
+                // Two comments stood here saying this twice, one of them left
+                // over from when the cap was there to keep a queue from
+                // falling behind.
                 assert!(
                     got.seconds() <= longest(on),
-                    "{:?} step {} lasts {:.3}s and there is {:.3}s between steps",
+                    "{:?} step {} lasts {:.3}s against {:.3}s a step may last",
                     on,
                     n,
                     got.seconds(),
@@ -779,50 +801,57 @@ mod tests {
         }
     }
 
-    /// Spec 0009: walking never queues more footsteps than there is time to
-    /// play them.
+    /// Spec 0009: no more than two footsteps are ever sounding at once.
     ///
-    /// This is the fault the lengths are cut to, stated as the thing that was
-    /// wrong rather than as the number that fixes it. The engine appends to a
-    /// player that runs one sound after another, so a step that outlasts the
-    /// gap to the next one is a backlog that grows for as long as you keep
-    /// walking and goes on playing after you stop.
+    /// Read off the files rather than off `longest`, which is where this test
+    /// earns its keep. The version before it asked whether `longest` was under
+    /// the gap and both sides of that came out of `pace`, so it was an
+    /// arithmetic identity dressed as an invariant: it passed on the day
+    /// running was added and halved the real gap, and it would have passed
+    /// whatever `RUNS` was set to.
     ///
-    /// At the stride and lengths this shipped with first, half a minute of
-    /// walking left a minute and a half of footsteps still to come.
+    /// This one takes a recording's actual length, divides it by the shortest
+    /// gap the building can produce on that floor, and counts the shoes. Turn
+    /// `RUNS` up to three and it fails, which is the whole point.
     #[test]
-    fn walking_does_not_run_the_queue_behind() {
+    fn no_more_than_two_steps_sound_at_once() {
         for on in FLOORS {
-            let gap = STRIDE / pace(on);
+            let gap = STRIDE / fastest(on);
 
-            assert!(
-                longest(on) < gap,
-                "a step on {:?} lasts {:.3}s and lands every {:.3}s",
-                on,
-                longest(on),
-                gap
-            );
-
-            for seconds in [1.0f32, 10.0, 60.0, 600.0] {
-                let taken = (seconds * pace(on) / STRIDE).floor();
-                let queued = taken * longest(on);
+            for (n, bytes) in steps(on).iter().enumerate() {
+                let got = Samples::from_wav(bytes).expect("a step that reads");
+                let shoes = (got.seconds() / gap).ceil();
 
                 assert!(
-                    queued < seconds,
-                    "{}s of walking on {:?} queues {:.1}s of footsteps",
-                    seconds,
+                    shoes <= OVERLAP,
+                    "{:?} step {} lasts {:.3}s, lands every {:.3}s, so {} go at once",
                     on,
-                    queued
+                    n,
+                    got.seconds(),
+                    gap,
+                    shoes
                 );
             }
         }
 
         // and the cadence is a cadence and not a drum roll
-        let a_second = crate::SPEED / STRIDE;
+        let walked = crate::SPEED / STRIDE;
         assert!(
-            (1.5..=3.5).contains(&a_second),
+            (1.5..=3.5).contains(&walked),
             "{:.1} steps a second is not a person walking",
-            a_second
+            walked
+        );
+
+        // At a run it is 5.3 a second, which is fast for a sprint and is the
+        // one number here nobody has decided: the stride does not lengthen
+        // when you run, so the whole of `RUNS` goes into the cadence. Left as
+        // it is and bounded rather than tuned, because how a run should sound
+        // is Jake's to say.
+        let run = crate::SPEED * crate::RUNS / STRIDE;
+        assert!(
+            (3.5..=6.0).contains(&run),
+            "{:.1} steps a second is not a person running",
+            run
         );
     }
 

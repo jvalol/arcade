@@ -1452,11 +1452,12 @@ impl Game for Arcade {
                 let heard = noise::steps(on)
                     .iter()
                     .filter_map(|bytes| Samples::from_wav(bytes).ok())
-                    // and anything that outlasts the gap to the next step is
-                    // dropped as well. The engine queues rather than mixes, so
-                    // one of those is a backlog that grows for as long as you
-                    // walk; a floor that has gone quiet is the better fault,
-                    // and `noise::tests` is what says it has not.
+                    // and anything long enough to have three of itself going
+                    // at once is dropped as well, per `noise::longest`. That
+                    // used to be the thing standing between this and a queue
+                    // that grew for as long as you walked; the engine mixes
+                    // now, so it is only a smear being kept out, and
+                    // `noise::tests` is what says no floor has gone quiet.
                     .filter(|got| got.seconds() <= noise::longest(on))
                     .collect();
 
