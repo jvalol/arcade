@@ -586,6 +586,15 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 pub const SYSTEM_NOTE: &str =
     "The sun is drawn at two fifths of its size. Any bigger and Mercury would be inside it.";
 
+/// The way out of the solar system, and the housing it sits in.
+///
+/// Green, which is what an exit sign is everywhere, and past white so it
+/// carries itself across ninety seven metres of dark room without a lamp of
+/// its own. The housing is nearly black, so what you see from the far end is
+/// the word and not a panel.
+pub const EXIT: Vec4 = vec4(0.3, 4.4, 1.1, 1.0);
+pub const EXIT_HOUSING: Vec4 = vec4(0.04, 0.07, 0.05, 1.0);
+
 pub const SUN_FACE: Vec4 = vec4(9.0, 6.4, 3.2, 1.0);
 
 /// The tightest highlight in the building, for the surfaces of the room

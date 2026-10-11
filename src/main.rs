@@ -240,6 +240,9 @@ struct Arcade {
     /// laid on. Spec 0010.
     plaster: Vec<TextureId>,
     plaster_mesh: Vec<MeshId>,
+    /// The way out of the solar system, named. See `orrery::exit_sign`.
+    way_out: Option<TextureId>,
+    way_out_mesh: Option<MeshId>,
     /// The solar system behind the wall, per spec 0015: a ball, a ring, one
     /// picture per body in `orrery::every_body` order, and how far the swing
     /// between lined up and in orbit has got.
@@ -460,6 +463,8 @@ impl Arcade {
             lining: Vec::new(),
             plaster: Vec::new(),
             plaster_mesh: Vec::new(),
+            way_out: None,
+            way_out_mesh: None,
             planet_mesh: None,
             ring_mesh: None,
             worlds: Vec::new(),
@@ -833,7 +838,7 @@ impl Arcade {
     }
 
     /// The sun, the planets, their moons and Saturn's rings. Spec 0015.
-    fn draw_the_system(&self, scene: &mut Scene) {
+    fn draw_the_system(&self, scene: &mut Scene, cube: MeshId) {
         let (Some(ball), Some(rings)) = (self.planet_mesh, self.ring_mesh) else {
             return;
         };
@@ -865,6 +870,34 @@ impl Arcade {
                 // degree along a floor you are looking down is metres.
                 aim::VOID,
             );
+        }
+
+        // the way out, named, because the way out is a slot in a black wall
+        // ninety seven metres from the far corner. Spec 0015.
+        {
+            let (at, looks) = orrery::exit_sign(self.room.reaches);
+
+            scene.push_colored(
+                cube,
+                &Transform::at(at + looks * orrery::SIGN_THICK * 0.5).with_scale(vec3(
+                    orrery::SIGN_WIDE + orrery::SIGN_BORDER * 2.0,
+                    orrery::SIGN_TALL + orrery::SIGN_BORDER * 2.0,
+                    orrery::SIGN_THICK,
+                )),
+                aim::EXIT_HOUSING,
+            );
+
+            if let (Some(said), Some(mesh)) = (self.way_out, self.way_out_mesh) {
+                scene.push_textured(
+                    mesh,
+                    said,
+                    &Transform::at(at + looks * (orrery::SIGN_THICK + 0.004))
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(vec3(orrery::SIGN_WIDE, 1.0, orrery::SIGN_TALL)),
+                    aim::EXIT,
+                    aim::VOID,
+                );
+            }
         }
 
         let (sun, toward) = self.the_sun();
@@ -1310,6 +1343,10 @@ impl Game for Arcade {
             .map(|body| renderer.add_texture(&orrery::picture(body)))
             .collect();
         self.rings = Some(renderer.add_texture(&orrery::ringed(orrery::STAR_SEED ^ 0x1D)));
+        self.way_out = Some(
+            renderer.add_texture(&blitzkit::text::drawn(orrery::WAY_OUT, orrery::SIGN_TEXELS)),
+        );
+        self.way_out_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.stars = orrery::walls(self.room.reaches)
             .into_iter()
             .enumerate()
@@ -2044,7 +2081,7 @@ impl Game for Arcade {
         }
 
         // the solar system in it, per spec 0015
-        self.draw_the_system(scene);
+        self.draw_the_system(scene, cube);
 
         for wall in self.room.walls.iter() {
             let stood = Transform::at(wall.center()).with_scale(wall.size());
@@ -5151,6 +5188,57 @@ mod tests {
         assert!(
             one.saying().contains('L'),
             "the line in there does not say the one key that room has"
+        );
+    }
+
+    /// Spec 0015: the sign stands beside the way out, not across it, and
+    /// faces into the room.
+    ///
+    /// Beside and not over, because the way out is a slot the full height of
+    /// the wall and there is nothing above it to hang from. Across it and the
+    /// sign is the thing you walk into on the way out.
+    #[test]
+    fn the_sign_stands_beside_the_way_out_and_faces_in() {
+        let one = Arcade::new();
+        let reaches = one.room.reaches;
+        let (at, looks) = orrery::exit_sign(reaches);
+        let (from, to) = behind::way();
+        let half = orrery::SIGN_WIDE * 0.5 + orrery::SIGN_BORDER;
+
+        assert!(
+            at.x - half > to || at.x + half < from,
+            "the sign spans {:.2} to {:.2} and the way out is {:.2} to {:.2}",
+            at.x - half,
+            at.x + half,
+            from,
+            to
+        );
+
+        // on the wall and not floating in the room
+        let side = room::WALL + room::CABINET.x;
+
+        assert!(
+            at.x.abs() + half < side,
+            "the sign reaches {:.2} and the wall stops at {:.2}",
+            at.x.abs() + half,
+            side
+        );
+
+        // facing the room, which is the side the solar system is on
+        assert!(
+            looks.z > 0.5 && at.z > reaches,
+            "the sign is at z {:.2} looking {:?} and the room starts at {:.2}",
+            at.z,
+            looks,
+            reaches
+        );
+
+        // and over your head rather than in front of your face
+        assert!(
+            at.y - orrery::SIGN_TALL * 0.5 > EYE,
+            "the sign hangs at {:.2} and an eye is at {:.2}",
+            at.y,
+            EYE
         );
     }
 

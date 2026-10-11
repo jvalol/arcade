@@ -830,6 +830,59 @@ pub fn starred(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
 }
 
+/// The way out, named on a sign beside it.
+///
+/// The room is ninety seven metres square and black, the way out is a slot
+/// the width of a door in one wall of it, and spec 0011 spent its whole
+/// design making that slot hard to find. Hard to find from the hall is the
+/// point. Hard to find from in here, with your back to it and a planet in
+/// front of you, is a room you are stuck in.
+///
+/// So: a lit sign, which is what every hall this size has. It carries its own
+/// light rather than standing under a lamp, because the building is already
+/// pushing more lamps at the engine than it will take.
+///
+/// "WAY OUT" and not "EXIT", because that is what the rest of this building
+/// calls it: the way in, the way out, in the code and in spec 0011.
+pub const WAY_OUT: &str = "WAY OUT";
+pub const SIGN_TEXELS: f32 = 64.0;
+
+/// How big the lettering is, how far the housing stands round it, how thick
+/// it is, how high it hangs, and how far it sits from the edge of the way
+/// out.
+///
+/// A metre across was plenty to read standing under it and a green smudge
+/// from forty metres, lost among stars that are brighter than it. Half again
+/// as wide and the word is a word from the far end, which is the only
+/// distance that matters: under it you already know where the door is.
+pub const SIGN_WIDE: f32 = 1.5;
+pub const SIGN_TALL: f32 = 0.42;
+pub const SIGN_BORDER: f32 = 0.06;
+pub const SIGN_THICK: f32 = 0.06;
+pub const SIGN_UP: f32 = 2.4;
+pub const SIGN_BESIDE: f32 = 0.45;
+
+/// Where the sign hangs: its middle, and which way it faces.
+///
+/// Beside the way out rather than over it, because the way out is a slot the
+/// full height of the wall and there is nothing above it to hang from. On the
+/// wider side of the two, which is the side with wall enough to carry it.
+pub fn exit_sign(reaches: f32) -> (Vec3, Vec3) {
+    let (from, to) = crate::behind::way();
+    let side = crate::room::WALL + crate::room::CABINET.x;
+    let wider = (side - to) > (from + side);
+    let x = if wider {
+        to + SIGN_BESIDE + SIGN_WIDE * 0.5
+    } else {
+        from - SIGN_BESIDE - SIGN_WIDE * 0.5
+    };
+
+    (
+        vec3(x, SIGN_UP, reaches + crate::room::THICK * 0.5),
+        Vec3::Z,
+    )
+}
+
 /// How high off the floor the whole model sits.
 ///
 /// Eye height, so you look the planets in the face rather than down at them.
