@@ -245,6 +245,14 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 /// and the roof of the hall showed behind it.
 pub const SKY: u32 = 512;
 pub const DOME: f32 = 19.0;
+/// How high the vault goes at its middle.
+///
+/// Twelve, which is what it has always been. It went to twenty four for an
+/// afternoon, to clear an eight metre room next door, and that did not work
+/// and could not: a vault's edge is at no height at all, so anything standing
+/// outside the rim and taller than the springing pokes past the sky whatever
+/// the middle of it does. The room next door came down instead. See
+/// `the_sky_clears_the_room_next_door`.
 pub const DOME_UP: f32 = 12.0;
 
 /// How fast the weather goes over, in radians a second.
@@ -355,7 +363,42 @@ pub fn storm(seed: u32) -> blitzkit::texture::TextureData {
 /// triangle had a twin a hair away facing the other way, the depth test picked
 /// between them by rounding, and the sky came out in patches of cloud and
 /// patches of unlit dark.
-pub fn dome_mesh() -> blitzkit::mesh::MeshData {
+/// How far out the vault's rim is at a given angle round.
+///
+/// The square the garden is, and not a circle round it: a round dome over a
+/// square garden has to overhang the sides to reach the corners.
+///
+/// Named because the mesh is built from it and the tests measure against it,
+/// and a test that works the shape out for itself is a second account of the
+/// shape.
+pub fn vault_rim(round: f32) -> f32 {
+    (DEEP * 0.5 / round.cos().abs().max(1e-3)).min(SPAN * 0.5 / round.sin().abs().max(1e-3))
+}
+
+/// How high the vault is at a given distance out, along a given angle.
+///
+/// Only the tests ask this. It is here rather than in them because a test
+/// that works the shape out for itself passes when the shape changes.
+#[cfg(test)]
+pub fn vault_at(round: f32, out: f32) -> f32 {
+    let lean = (out / vault_rim(round)).clamp(0.0, 1.0).acos();
+
+    springs() + DOME_UP * lean.sin()
+}
+
+/// The sky, turned `by` radians.
+///
+/// The turn is in the picture and not in the transform, which it was until
+/// the rim became a square. A circle does not care how far round it is
+/// turned; a square swings its corners out, and this one swung them eleven
+/// metres into the room behind the wall, where a pale blue panel hung in the
+/// middle of the solar system. The test for the rim passed throughout,
+/// because it measured the mesh and the rotation was not in the mesh.
+///
+/// So the mesh stands still and the clouds go round it. Spec 0042 is what
+/// makes that cheap: the water next door is written over every frame and this
+/// is a thousand vertices against its six thousand.
+pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
     let mut mesh = blitzkit::mesh::MeshData::surface(48, 24, |u, v| {
         let round = u * std::f32::consts::TAU;
         // v nought is the rim and v one is the top. Taken the other way round
@@ -363,11 +406,19 @@ pub fn dome_mesh() -> blitzkit::mesh::MeshData {
         // over the garden with black between it and the walls.
         let up = (v * std::f32::consts::FRAC_PI_2).sin();
         let out = (v * std::f32::consts::FRAC_PI_2).cos();
+        // and the rim traces the garden's own square rather than a circle
+        // round it, because a round dome over a square garden has to overhang
+        // the sides to reach the corners. Nineteen across against a garden of
+        // sixteen, it reached eleven metres east, which was invisible while
+        // the room through there had a ceiling at 2.7 and was a sail hanging
+        // in the middle of the solar system the day that ceiling went to
+        // eight. Spec 0015 did not break this; it uncovered it.
+        let wide = vault_rim(round);
 
         vec3(
-            round.cos() * DOME * out,
+            round.cos() * wide * out,
             DOME_UP * up,
-            round.sin() * DOME * out,
+            round.sin() * wide * out,
         )
     });
 
@@ -416,6 +467,14 @@ pub fn dome_mesh() -> blitzkit::mesh::MeshData {
             0.5 + from_top * 0.5 * round.cos(),
             0.5 + from_top * 0.5 * round.sin(),
         ];
+    }
+
+    // and the weather goes round by moving the picture over it, since u is
+    // the angle round and nothing else uses it
+    let round = by / std::f32::consts::TAU;
+
+    for vertex in mesh.vertices.iter_mut() {
+        vertex.uv[0] += round;
     }
 
     mesh
@@ -1089,6 +1148,15 @@ pub struct Face {
     pub size: Vec3,
     pub looks: Vec3,
     pub solid: bool,
+    /// Whether a cope goes along the top of it.
+    ///
+    /// A cope caps a free standing wall. The garden's east side is not one:
+    /// it is the flank of the room behind the wall, which spec 0015 raised to
+    /// eight metres, and a garden cope part way up a building is a ledge
+    /// nobody built. So that face is plastered to the building's full height
+    /// and left uncapped, which is what a courtyard beside a tall hall looks
+    /// like anywhere this garden is pretending to be.
+    pub caps: bool,
 }
 
 impl Face {
@@ -1135,6 +1203,7 @@ pub fn facing(reaches: f32) -> Vec<Face> {
         size,
         looks,
         solid: false,
+        caps: true,
     };
 
     vec![
@@ -1190,6 +1259,7 @@ pub fn facing(reaches: f32) -> Vec<Face> {
             size: vec3(THICK + proud * 2.0, high - low, way_to - way_from),
             looks: -Vec3::X,
             solid: true,
+            caps: false,
         },
         // south, the nook's end wall and the garden's own beside it
         lining(
@@ -1233,8 +1303,9 @@ pub fn coping(reaches: f32) -> Vec<(Vec3, Vec3)> {
     let mut out = Vec::new();
 
     for face in facing(reaches) {
-        if face.solid {
-            // the band over the way in is a lintel, not the top of a wall
+        if face.solid || !face.caps {
+            // the band over the way in is a lintel, not the top of a wall,
+            // and the solar system room's flank is not the garden's to cap
             continue;
         }
 
@@ -3433,8 +3504,11 @@ mod tests {
         }
     }
 
-    /// Spec 0010: every wall is capped, end to end, and the cap oversails
-    /// both faces of the wall it caps.
+    /// Spec 0010: every wall of the garden's own is capped, end to end, and
+    /// the cap oversails both faces of the wall it caps.
+    ///
+    /// Its own, which since spec 0015 is three of the four: the east side is
+    /// the flank of the solar system room and belongs to that room.
     ///
     /// A cap short of the end leaves a notch of sky at the corner, and a cap
     /// that oversails one face and not the other is a cap put on the lining
@@ -3447,7 +3521,7 @@ mod tests {
         assert!(!cope.is_empty(), "nothing caps the garden's walls");
 
         for face in facing(reaches) {
-            if face.solid {
+            if face.solid || !face.caps {
                 continue;
             }
 
@@ -3522,6 +3596,180 @@ mod tests {
                 POLE
             );
         }
+    }
+    /// Spec 0010 and 0015: the room next door is not taller than the sky.
+    ///
+    /// This is the rule the last three faults all broke, each its own way,
+    /// and the only one of the three tests worth keeping.
+    ///
+    /// A vault's edge is at no height at all. Its rim sits at the garden's
+    /// inside face and springs from 3.70, so anything standing outside that
+    /// face and taller than 3.70 stands past the edge of the sky, whatever
+    /// the middle of the vault does. Raising the vault does not help, and
+    /// was tried: the middle went to twenty four metres and the wall still
+    /// poked, because the wall was beyond the rim rather than under it.
+    ///
+    /// The room behind the wall went to eight metres and four and a half of
+    /// them came up through the clouds. It is 3.2 now.
+    #[test]
+    fn the_sky_clears_the_room_next_door() {
+        let reaches = room().reaches;
+        let at_ = dome_at(reaches);
+
+        // the garden's own walls, with the cope on top of them
+        let mine = facing(reaches)
+            .into_iter()
+            .map(|face| face.at.y + face.size.y * 0.5)
+            .fold(0.0f32, f32::max)
+            + COPE_DEEP
+            + COPE_ROLL;
+
+        assert!(
+            mine > at_.y,
+            "the garden's own walls reach {:.2} and the sky springs at {:.2}, \
+             so the rim shows over them",
+            mine,
+            at_.y
+        );
+
+        // and the neighbour's, which is the one that caught us out. What
+        // stands outside the garden has to be under the springing, because
+        // out there the sky has already ended.
+        let theirs = crate::behind::HIGH + THICK;
+
+        assert!(
+            theirs < at_.y,
+            "the room behind the wall stands {:.2} and the sky springs at \
+             {:.2}, so {:.2} m of it is above the edge of the sky",
+            theirs,
+            at_.y,
+            theirs - at_.y
+        );
+    }
+
+    /// Spec 0010: the weather goes round and the sky does not move.
+    ///
+    /// The dome used to turn, which is how the clouds moved, and that was
+    /// fine for as long as its rim was a circle. A circle does not care how
+    /// far round it is turned. The square rim does: turned forty five
+    /// degrees it swings its corners eleven metres past the garden, and one
+    /// of them hung in the middle of the solar system next door as a pale
+    /// blue panel.
+    ///
+    /// `the_sky_stays_over_the_garden` passed the whole time, because it
+    /// measured the mesh and the turn was in the transform. So the turn is in
+    /// the picture now, and this is the test that says so.
+    #[test]
+    fn the_weather_turns_without_the_sky_moving() {
+        let still = dome_mesh(0.0);
+
+        for by in [0.4f32, std::f32::consts::FRAC_PI_4, 2.0, 5.5]
+            .iter()
+            .copied()
+        {
+            let turned = dome_mesh(by);
+
+            for (one, two) in still.vertices.iter().zip(turned.vertices.iter()) {
+                assert_eq!(
+                    one.position, two.position,
+                    "the sky moved when the weather turned by {:.2}",
+                    by
+                );
+            }
+
+            // and the control: the picture on it did move, or the weather has
+            // simply stopped
+            let moved = still
+                .vertices
+                .iter()
+                .zip(turned.vertices.iter())
+                .any(|(one, two)| (one.uv[0] - two.uv[0]).abs() > 1e-6);
+
+            assert!(
+                moved,
+                "nothing on the sky moved when the weather turned by {:.2}",
+                by
+            );
+        }
+    }
+
+    /// Spec 0010: and it clears everything standing round the garden.
+    ///
+    /// A vault curves down to its rim, so the sky is lowest exactly where the
+    /// walls are. At the old height it was 6.25 up where the east wall
+    /// stands, and spec 0015 made that wall eight: the wall went through the
+    /// sky and the sky cut a grey curve across the wall.
+    #[test]
+    fn the_sky_clears_every_wall_round_the_garden() {
+        let reaches = room().reaches;
+        let at_ = dome_at(reaches);
+
+        for face in facing(reaches) {
+            let (surface, size, _) = face.plane();
+            let (dx, dz) = (surface.x - at_.x, surface.z - at_.z);
+            let sky = vault_at(dz.atan2(dx), vec2(dx, dz).length());
+            let top = face.at.y + size.y * 0.5;
+
+            assert!(
+                sky > top + 0.3,
+                "the sky is {:.2} up where a wall {:.2} tall stands, {:.2} out",
+                sky,
+                top,
+                vec2(surface.x - at_.x, surface.z - at_.z).length()
+            );
+        }
+    }
+
+    /// Spec 0010: the sky stays over the garden's own footprint.
+    ///
+    /// `no_part_of_the_sky_is_inside_the_building` checks the rooms that
+    /// existed when it was written, and the dome overhung eleven metres east
+    /// of them into unbuilt ground, which was fine until spec 0015 built
+    /// there and raised its ceiling to eight. Then it was a pale sail hanging
+    /// in the middle of the solar system.
+    ///
+    /// So the claim is not "not in the rooms I know about" but "not outside
+    /// this garden", which cannot go stale when somebody builds next door.
+    #[test]
+    fn the_sky_stays_over_the_garden() {
+        let reaches = room().reaches;
+        let at_ = dome_at(reaches);
+        let middle = at(reaches);
+        let half = half();
+        let mesh = dome_mesh(0.0);
+
+        for vertex in mesh.vertices.iter() {
+            let on = vec3(at_.x + vertex.position[0], 0.0, at_.z + vertex.position[2]);
+
+            assert!(
+                on.x >= middle.x - half.x - THICK && on.x <= middle.x + half.x + THICK,
+                "the sky reaches x {:.2} and the garden runs {:.2} to {:.2}",
+                on.x,
+                middle.x - half.x,
+                middle.x + half.x
+            );
+            assert!(
+                on.z >= middle.z - half.y - THICK && on.z <= middle.z + half.y + THICK,
+                "the sky reaches z {:.2} and the garden runs {:.2} to {:.2}",
+                on.z,
+                middle.z - half.y,
+                middle.z + half.y
+            );
+        }
+
+        // and it still covers the corners, which is what a round dome was for
+        let corner = vec3(middle.x + half.x, 0.0, middle.z + half.y);
+        let reach_there = mesh
+            .vertices
+            .iter()
+            .map(|v| vec3(at_.x + v.position[0], 0.0, at_.z + v.position[2]).distance(corner))
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            reach_there < 0.5,
+            "the nearest the sky comes to a corner of the garden is {:.2} m",
+            reach_there
+        );
     }
 
     /// Spec 0010: the garden is closed all the way up, on every side.
@@ -3618,7 +3866,7 @@ mod tests {
     /// dome, and now they fall on the same texels.
     #[test]
     fn the_sky_has_no_point_where_its_picture_is_wedged() {
-        let mesh = dome_mesh();
+        let mesh = dome_mesh(0.0);
 
         for (n, one) in mesh.vertices.iter().enumerate() {
             for other in mesh.vertices.iter().skip(n + 1) {
@@ -3656,7 +3904,7 @@ mod tests {
     /// not reading its answer back.
     #[test]
     fn the_sky_faces_inward_everywhere_including_its_apex() {
-        let mesh = dome_mesh();
+        let mesh = dome_mesh(0.0);
 
         for vertex in mesh.vertices.iter() {
             let at = Vec3::from(vertex.position);
@@ -3711,7 +3959,7 @@ mod tests {
         // the rim is the lowest of it, and the whole of the dome is at that
         // height or above
         let mut lowest = f32::MAX;
-        for vertex in dome_mesh().vertices.iter() {
+        for vertex in dome_mesh(0.0).vertices.iter() {
             lowest = lowest.min(vertex.position[1]);
         }
         let rim = stands.y + lowest;

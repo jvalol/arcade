@@ -550,6 +550,39 @@ pub const SKY: Vec4 = vec4(1.35, 1.40, 1.52, 1.0);
 /// The gravel, which is pale stone, and the wall behind it, which is the
 /// weathered plaster of a garden wall rather than the hall's.
 pub const GRAVEL: Vec4 = vec4(0.78, 0.76, 0.70, 1.0);
+/// The sun's own face, per spec 0015.
+///
+/// Past white on every channel, so the ball glows with no light on it. A sun
+/// lit by its own lamp from the inside is a grey ball with a bright room
+/// round it, which is the wrong way round.
+pub const SUN_FACE: Vec4 = vec4(9.0, 6.4, 3.2, 1.0);
+
+/// The tightest highlight in the building, for the surfaces of the room
+/// behind the wall.
+///
+/// The shader adds the highlight on top of the surface rather than
+/// multiplying it in, so a floor as near black as that one still takes a full
+/// white hot spot. At `DULL` the sun laid a flame down the floor under every
+/// planet, and at six thousand it still laid a thin one: the lobe is about a
+/// degree across there, and a degree on a floor you are looking along is
+/// metres. A quarter of a million is a few thousandths of a degree, which
+/// among stars is a star.
+pub const VOID: f32 = 250_000.0;
+
+/// What the star pictures are multiplied by, per spec 0015.
+///
+/// Past one, so a star carries its own light. A star lit by the sun at the
+/// middle of the room would be brightest near the sun and dark at the far
+/// wall, which is the opposite of a sky.
+pub const STARS: Vec4 = vec4(1.6, 1.6, 1.7, 1.0);
+
+/// What a world's picture is multiplied by, and what Saturn's rings are.
+///
+/// Near white: the pictures carry the colour, and the one thing a planet must
+/// not have is a tint that is not its own.
+pub const WORLD: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+pub const RING: Vec4 = vec4(1.0, 0.98, 0.94, 1.0);
+
 pub const GARDEN_WALL: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
 
 /// What the garden's plaster is multiplied by.
@@ -726,9 +759,9 @@ pub fn plate_round(lines: &[(Vec2, &str, f32)], centred: bool) -> Option<Plate> 
     })
 }
 
-pub const BEHIND_FLOOR: Vec4 = vec4(0.013, 0.013, 0.016, 1.0);
-pub const BEHIND_WALL: Vec4 = vec4(0.065, 0.065, 0.072, 1.0);
-pub const BEHIND_COLUMN: Vec4 = vec4(0.085, 0.085, 0.092, 1.0);
+pub const BEHIND_FLOOR: Vec4 = vec4(0.018, 0.018, 0.024, 1.0);
+pub const BEHIND_WALL: Vec4 = vec4(0.022, 0.022, 0.030, 1.0);
+pub const BEHIND_COLUMN: Vec4 = vec4(0.045, 0.045, 0.055, 1.0);
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// What burns in a stone lantern: a candle behind paper, which is warm against

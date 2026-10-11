@@ -31,15 +31,27 @@ use crate::room::{CABINET, THICK, WALL};
 /// camera's far plane is a hundred and a point light falls off long before
 /// that, so what you see is dark in every direction and the far wall is a
 /// thing you find rather than a thing you see.
-pub const SPAN: f32 = 44.0;
-pub const DEEP: f32 = 52.0;
+/// Ninety seven, which is not a round number and is not a choice either: the
+/// orbits of spec 0015 are 96.4 across and the room has to hold them.
+pub const SPAN: f32 = 97.0;
+pub const DEEP: f32 = 97.0;
 
 /// How high the ceiling is.
 ///
-/// Lower than the hall's, which is 3.2. Low and vast is uneasy in a way that
-/// tall and vast is not: tall and vast is a cathedral, and a cathedral is a
-/// thing somebody built on purpose and is proud of.
-pub const HIGH: f32 = 2.7;
+/// It was 2.7, lower than the hall's, on the reasoning that low and vast is
+/// uneasy in a way that tall and vast is not: tall and vast is a cathedral,
+/// and a cathedral is a thing somebody built on purpose and is proud of.
+///
+/// Three and a fifth now, which is the hall's. Spec 0015 put the solar system
+/// in here and eight metres was the right height for it, and eight metres
+/// does not fit: this room's west wall stands fifteen centimetres outside the
+/// garden's, the garden's sky springs at 3.70, and a wall taller than that
+/// pokes past the edge of the sky. Four and a half metres of it stood up
+/// through the clouds.
+///
+/// The vastness of this room is ninety seven metres of floor, not its
+/// ceiling. The sun is one metre across.
+pub const HIGH: f32 = 3.2;
 
 /// How far this floor runs back under the hall's.
 ///
@@ -264,6 +276,20 @@ pub fn columns(reaches: f32) -> Vec<Vec3> {
             // nothing in the way in. One column there and the whole thing is a
             // wall you walked into twice.
             if at_.distance(door) < CLEAR {
+                continue;
+            }
+
+            // and nothing standing on an orbit, per spec 0015. The grid stays,
+            // because a regular grid in a vast dark room is what says nobody
+            // is meant to be here, and a column between two orbits is better
+            // than no column at all. A column *on* an orbit is a planet
+            // flying through a pillar twice a year.
+            let from_the_sun = at_.distance(vec2(middle.x, middle.z));
+
+            if crate::orrery::PLANETS
+                .iter()
+                .any(|planet| (from_the_sun - planet.far()).abs() < CLEAR)
+            {
                 continue;
             }
 

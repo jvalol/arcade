@@ -14,6 +14,7 @@ mod gyro;
 mod metronome;
 mod neon;
 mod noise;
+mod orrery;
 mod room;
 mod sign;
 mod spa;
@@ -226,6 +227,18 @@ struct Arcade {
     /// laid on. Spec 0010.
     plaster: Vec<TextureId>,
     plaster_mesh: Vec<MeshId>,
+    /// The solar system behind the wall, per spec 0015: a ball, a ring, one
+    /// picture per body in `orrery::every_body` order, and how far the swing
+    /// between lined up and in orbit has got.
+    planet_mesh: Option<MeshId>,
+    ring_mesh: Option<MeshId>,
+    worlds: Vec<TextureId>,
+    rings: Option<TextureId>,
+    /// Stars on all six surfaces of the room, and the quads they are laid on.
+    stars: Vec<TextureId>,
+    star_mesh: Vec<MeshId>,
+    swung: f32,
+    swinging_out: bool,
     /// One length of bamboo, stood up a few hundred times along one wall.
     pole: Option<MeshId>,
     /// The moss at the foot of the garden's walls, and the quads it is cut
@@ -434,6 +447,14 @@ impl Arcade {
             lining: Vec::new(),
             plaster: Vec::new(),
             plaster_mesh: Vec::new(),
+            planet_mesh: None,
+            ring_mesh: None,
+            worlds: Vec::new(),
+            rings: None,
+            stars: Vec::new(),
+            star_mesh: Vec::new(),
+            swung: 0.0,
+            swinging_out: false,
             pole: None,
             moss: None,
             moss_mesh: Vec::new(),
@@ -742,6 +763,126 @@ impl Arcade {
     /// here for the tests, which ask whether a room can be got to at all, and
     /// that is the same question in either list: both have the floors, the
     /// walls and the doorways.
+    /// Where the sun stands, and which way the line of planets points.
+    ///
+    /// The middle of the room, because the orbits have to go round something,
+    /// and the line points at the door, because that is where you come from.
+    /// It means you meet Neptune first and walk in toward the light, which is
+    /// the right way round for this.
+    fn the_sun(&self) -> (Vec3, Vec3) {
+        let middle = behind::at(self.room.reaches);
+        let sun = vec3(middle.x, orrery::PLANE, middle.z);
+        let (from, to) = behind::way();
+        let door = vec3((from + to) * 0.5, orrery::PLANE, self.room.reaches);
+
+        (sun, (door - sun).normalize_or_zero())
+    }
+
+    /// The sun, the planets, their moons and Saturn's rings. Spec 0015.
+    fn draw_the_system(&self, scene: &mut Scene) {
+        let (Some(ball), Some(rings)) = (self.planet_mesh, self.ring_mesh) else {
+            return;
+        };
+        if self.worlds.is_empty() {
+            return;
+        }
+
+        // the stars, on all six surfaces, before anything in the room so the
+        // room is a sky by the time a planet is drawn against it
+        for (((at, size, looks), mesh), stars) in orrery::walls(self.room.reaches)
+            .into_iter()
+            .zip(&self.star_mesh)
+            .zip(&self.stars)
+        {
+            scene.push_textured(
+                *mesh,
+                *stars,
+                &Transform::at(at)
+                    .with_rotation(room::laid_on(looks))
+                    .with_scale(vec3(size.x, 1.0, size.y)),
+                aim::STARS,
+                // the tightest highlight there is. The shader adds the
+                // highlight on top of the surface rather than multiplying it
+                // in, so a floor as near black as this one still takes a full
+                // white one: at `DULL` the sun's lamp laid a spindle of light
+                // down the floor and another up the ceiling, and with a
+                // planet in front of its waist it read as a flame standing in
+                // the room. `DULL` is a lobe about a degree across, and a
+                // degree along a floor you are looking down is metres.
+                aim::VOID,
+            );
+        }
+
+        let (sun, toward) = self.the_sun();
+        let turned = |body: &orrery::Body, since: f32| {
+            let spin = orrery::spin_seconds(body);
+            let lean = glam::Quat::from_rotation_z(body.tilt.to_radians());
+
+            lean * glam::Quat::from_rotation_y(since / spin * std::f32::consts::TAU)
+        };
+
+        // the sun. Past white, so it carries its own light the way the neon
+        // does: a lit ball at the middle of a dark room is a grey ball.
+        scene.push_material(
+            ball,
+            &Transform::at(sun)
+                .with_rotation(turned(&orrery::SUN, self.since))
+                .with_scale(Vec3::splat(orrery::SUN.drawn())),
+            aim::SUN_FACE,
+            aim::DULL,
+        );
+
+        let mut skin = 1;
+
+        for planet in orrery::PLANETS.iter() {
+            let at = sun + orrery::stands(planet, toward, self.swung, self.since);
+
+            if let Some(worn) = self.worlds.get(skin) {
+                scene.push_textured(
+                    ball,
+                    *worn,
+                    &Transform::at(at)
+                        .with_rotation(turned(&planet.body, self.since))
+                        .with_scale(Vec3::splat(planet.body.drawn())),
+                    aim::WORLD,
+                    aim::MATTE,
+                );
+            }
+            skin += 1;
+
+            // the rings, leaning with the planet they belong to
+            if planet.body.name == "Saturn" {
+                scene.push_textured(
+                    rings,
+                    self.rings.unwrap_or(TextureId::WHITE),
+                    &Transform::at(at)
+                        .with_rotation(glam::Quat::from_rotation_z(planet.body.tilt.to_radians()))
+                        .with_scale(Vec3::ONE),
+                    aim::RING,
+                    aim::MATTE,
+                );
+            }
+
+            for moon in planet.moons.iter() {
+                let round = orrery::moon_angle_at(moon, self.since);
+                let out = vec3(round.cos(), 0.0, round.sin()) * moon.far();
+
+                if let Some(worn) = self.worlds.get(skin) {
+                    scene.push_textured(
+                        ball,
+                        *worn,
+                        &Transform::at(at + out)
+                            .with_rotation(turned(&moon.body, self.since))
+                            .with_scale(Vec3::splat(moon.body.drawn())),
+                        aim::WORLD,
+                        aim::MATTE,
+                    );
+                }
+                skin += 1;
+            }
+        }
+    }
+
     #[cfg(test)]
     fn reachable(&self) -> reach::Reach {
         reach::Reach::found(
@@ -909,6 +1050,12 @@ impl Game for Arcade {
             renderer.update_mesh(mesh, &spa::stream_mesh(self.since));
         }
 
+        // and the sky, whose weather goes round by its picture moving rather
+        // than by the dome turning. See `garden::dome_mesh`.
+        if let Some(mesh) = self.dome {
+            renderer.update_mesh(mesh, &garden::dome_mesh(self.since * garden::WEATHER));
+        }
+
         // the coplanar check, per spec 0048 of the engine. Asked here because
         // this is where a game has the renderer, and read back here too: the
         // answer lands during the frame that was asked for, so the press turns
@@ -1012,7 +1159,7 @@ impl Game for Arcade {
             .collect();
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
-        self.dome = Some(renderer.add_mesh(&garden::dome_mesh()));
+        self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
         // one picture per bed rather than one tile repeated over all of them:
         // the raking runs in rings round the stones, and a tile cannot know
         // where a stone is
@@ -1098,6 +1245,29 @@ impl Game for Arcade {
             .map(|_| renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)))
             .collect();
         self.pole = Some(renderer.add_mesh(&garden::pole_mesh()));
+        // the solar system. One ball for every world, scaled: a sphere is the
+        // one shape in this building that is the same shape at every size.
+        self.planet_mesh = Some(renderer.add_mesh(&MeshData::sphere(64, 32)));
+        self.ring_mesh = Some(renderer.add_mesh(&orrery::ring_mesh()));
+        self.worlds = orrery::every_body()
+            .iter()
+            .map(|body| renderer.add_texture(&orrery::picture(body)))
+            .collect();
+        self.rings = Some(renderer.add_texture(&orrery::ringed(orrery::STAR_SEED ^ 0x1D)));
+        self.stars = orrery::walls(self.room.reaches)
+            .into_iter()
+            .enumerate()
+            .map(|(n, (_, size, _))| {
+                renderer.add_texture(&orrery::starred(
+                    orrery::STAR_SEED.wrapping_add(n as u32 * 7919),
+                    size,
+                ))
+            })
+            .collect();
+        self.star_mesh = orrery::walls(self.room.reaches)
+            .into_iter()
+            .map(|_| renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)))
+            .collect();
         // one picture of moss for all of it, counted off the biggest piece so
         // the clumps are the same size wherever they are, and a quad apiece
         let widest = garden::moss(self.room.reaches)
@@ -1493,6 +1663,18 @@ impl Game for Arcade {
         }
         self.pool_in_the_garden.step(dt);
 
+        // the swing between lined up and in orbit, per spec 0015. Three
+        // seconds, and it runs from wherever it has got to: caught halfway
+        // and sent back, it goes back from halfway. A toggle that jumps here
+        // breaks the one illusion the whole room rests on.
+        let by = dt / orrery::SWINGS;
+
+        self.swung = if self.swinging_out {
+            (self.swung + by).min(1.0)
+        } else {
+            (self.swung - by).max(0.0)
+        };
+
         // the eye catching up with the feet. Nothing while you are on the
         // level, because then they are the same number.
         let behind = self.at.y - self.eye;
@@ -1764,7 +1946,8 @@ impl Game for Arcade {
         }
 
         // and the space it hides: its floor and lid, its walls, and the
-        // columns. Nothing else is in here and nothing else is going to be.
+        // columns. Spec 0015 puts the solar system in it; this draws the room
+        // it stands in.
         {
             for (box_, made) in behind::built(self.room.reaches) {
                 let colour = match made {
@@ -1777,10 +1960,13 @@ impl Game for Arcade {
                     cube,
                     &Transform::at(box_.center()).with_scale(box_.size()),
                     colour,
-                    aim::DULL,
+                    aim::VOID,
                 );
             }
         }
+
+        // the solar system in it, per spec 0015
+        self.draw_the_system(scene);
 
         for wall in self.room.walls.iter() {
             let stood = Transform::at(wall.center()).with_scale(wall.size());
@@ -2321,8 +2507,7 @@ impl Game for Arcade {
                 scene.push_textured(
                     dome,
                     storm,
-                    &Transform::at(garden::dome_at(self.room.reaches))
-                        .with_rotation(glam::Quat::from_rotation_y(self.since * garden::WEATHER)),
+                    &Transform::at(garden::dome_at(self.room.reaches)),
                     aim::SKY,
                     900.0,
                 );
@@ -4304,6 +4489,19 @@ impl Game for Arcade {
             ));
         }
 
+        // the sun, which is the only lamp in the room behind the wall. Spec
+        // 0015. Neptune really does get one nine hundredth of the Earth's
+        // sunlight, so an outer planet that is barely lit is right; the room
+        // carries a little starlight so nothing is ever flat black.
+        let (sun, _) = self.the_sun();
+        shades.push((
+            eye.distance_squared(sun),
+            sun,
+            orrery::SUNLIGHT,
+            orrery::SUN_LIT,
+            orrery::sun_range(),
+        ));
+
         let stove = spa::stove_lamp(self.room.reaches);
         shades.push((
             eye.distance_squared(stove),
@@ -4480,6 +4678,10 @@ impl Game for Arcade {
             // key you are fighting. Spec 0013.
             KeyboardKey::O if held && !input.repeat => {
                 self.showing_solid = !self.showing_solid;
+            }
+            // the solar system, between lined up and in orbit. Spec 0015.
+            KeyboardKey::L if held && !input.repeat => {
+                self.swinging_out = !self.swinging_out;
             }
             // and the drawn faces that share a plane, per spec 0048 of the
             // engine. A press and not a toggle: the check costs every drawn
@@ -4717,6 +4919,89 @@ mod tests {
                 at.z
             );
         }
+    }
+
+    /// Spec 0015: L swings the system out and back.
+    #[test]
+    fn l_swings_the_system_out_and_back() {
+        let mut one = Arcade::new();
+
+        assert!(
+            !one.swinging_out && one.swung == 0.0,
+            "the system did not open lined up"
+        );
+
+        press(&mut one, KeyboardKey::L);
+        assert!(one.swinging_out, "L did not send it out");
+
+        press(&mut one, KeyboardKey::L);
+        assert!(!one.swinging_out, "L did not bring it back");
+    }
+
+    /// Spec 0015: and the swing is a swing, not a jump.
+    ///
+    /// Sent out, caught a third of the way and sent back, it goes back from a
+    /// third of the way. This is the whole of what makes the two arrangements
+    /// read as one model rather than two.
+    #[test]
+    fn the_swing_turned_round_partway_does_not_jump() {
+        let mut one = Arcade::new();
+
+        one.swinging_out = true;
+        one.swung = (one.swung + (orrery::SWINGS / 3.0) / orrery::SWINGS).min(1.0);
+        let caught = one.swung;
+
+        assert!(
+            caught > 0.3 && caught < 0.4,
+            "a third of the way out came to {:.2}",
+            caught
+        );
+
+        one.swinging_out = false;
+        one.swung = (one.swung - (orrery::SWINGS / 3.0) / orrery::SWINGS).max(0.0);
+
+        assert!(
+            one.swung < caught && one.swung >= 0.0,
+            "turned round it went to {:.2} from {:.2}",
+            one.swung,
+            caught
+        );
+    }
+
+    /// Spec 0015: you can walk from past Neptune to the sun.
+    ///
+    /// The columns stand on a regular grid and the planets stand on circles,
+    /// and the two were laid out on different days. A column on the line is a
+    /// pillar you walk into on the way in.
+    #[test]
+    fn you_can_walk_from_past_neptune_to_the_sun() {
+        let one = Arcade::new();
+        let (sun, toward) = one.the_sun();
+        let solid = one.room.solid();
+        let step = 1.0 / 60.0;
+        let mut at = sun + toward * (orrery::reach() + 4.0);
+        at.y = 0.0;
+        let mut falling = 0.0;
+
+        for _ in 0..(45.0 / step) as u32 {
+            let way = vec3(sun.x - at.x, 0.0, sun.z - at.z);
+            let wish = if way.length_squared() > 1e-4 {
+                way.normalize() * SPEED
+            } else {
+                Vec3::ZERO
+            };
+            let (next, fell) = walk::walk(at, wish, falling, RADIUS, step, &solid, true);
+            at = next;
+            falling = fell;
+        }
+
+        let left = glam::vec2(at.x, at.z).distance(glam::vec2(sun.x, sun.z));
+
+        assert!(
+            left < 2.0,
+            "forty five seconds of walking stopped {:.1} m short of the sun",
+            left
+        );
     }
 
     /// Spec 0048 of the engine: nothing else asks for it.

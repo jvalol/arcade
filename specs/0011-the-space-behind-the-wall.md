@@ -117,8 +117,15 @@ stand on.
 
 ## Out of scope
 
-**Nothing to do in here.** No toy, no cabinet, no key. It is a place and not a
-room, and the moment it has a thing in it to work it is another nook.
+**Nothing to do in here.** ~~No toy, no cabinet, no key. It is a place and not
+a room, and the moment it has a thing in it to work it is another nook.~~
+
+Struck 2026-10-11. Spec 0015 puts the solar system in here, at true
+proportion, forty eight metres from the sun to the door. The reasoning above
+was sound and the conclusion was wrong: what makes this room worth finding is
+not that it is empty but that it is enormous, and there is exactly one thing
+worth building that needs somewhere enormous and dark. A hidden empty space is
+worth one moment. A hidden solar system is worth the walk back.
 
 **No way of telling you it exists.** No mark on the wall, no draught, no sound
 through it. Somebody who never walks into that wall never finds it, and that is

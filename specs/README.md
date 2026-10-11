@@ -22,6 +22,8 @@ not a priority, and it never changes once a spec exists.
 | [0012](0012-two-ceilings-worth-looking-up-at.md) | A grid over the hall and tile over the baths, so two more rooms are worth looking up in |
 | [0013](0013-showing-what-is-solid.md) | A key that outlines every collider, because a collider that disagrees with what is drawn is this building's commonest fault |
 | [0014](0014-two-faces-in-one-plane.md) | A key that finds two drawn faces sharing a plane, which is the other fault this building keeps hitting |
+| [0015](0015-a-solar-system-behind-the-wall.md) | The sun, the planets and their moons at true proportion in the hidden room, lined up to walk or swung out into their orbits |
+| [0016](0016-lightning-and-thunder.md) | Parked: a storm that breaks, with the thunder arriving as late as the distance says |
 
 ---
 
