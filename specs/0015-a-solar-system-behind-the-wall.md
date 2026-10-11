@@ -33,15 +33,30 @@ So two scales, each exactly proportional inside itself:
 
 | | one metre is | |
 | --- | --- | --- |
-| **bodies and their moons** | 1,392,700 km | the sun is 1.00 m across |
+| **bodies and their moons** | 557,080 km | the Earth is 2.3 cm across |
 | **planets from the sun** | 93,498,669 km | one AU is 1.60 m |
 
-The orbit scale is **67.1 times** the body scale. That ratio is the one lie in
-the model and it is written here rather than hidden: every size is true
+The orbit scale is **167.8 times** the body scale. That ratio is the first lie
+in the model and it is written here rather than hidden: every size is true
 against every other size, every distance is true against every other distance,
 and sizes are not true against distances.
 
-### Why the sun is one metre and not two
+The body scale was the sun's own diameter at first, which made the sun exactly
+a metre and the Earth a nine millimetre pea. A pea in a room this size is a
+thing you walk past without seeing, so the bodies went up two and a half
+times. The ratio above went up with them, which is what that decision cost.
+
+**Two and a half and no further, and the Moon says so.** At three times, the
+Moon's orbit is as wide as the gap between the Earth's orbit and Mars's.
+Callisto gives out at 5.2 times and Saturn's rings at 71, so the Moon is the
+whole of the limit.
+
+**And the sun is drawn at 40 per cent of true**, which is the second lie. Its
+true size on the body scale is 2.50 m, and 2.50 m does not fit: Mercury has to
+clear it at 0.387 AU, and that wants a disc two hundred and forty metres
+across. Every planet walk in the world tells this lie for the same reason.
+
+### Why the sun is drawn at one metre
 
 In the orbiting arrangement, Mercury has to clear the sun's own ball. Mercury
 sits at 0.387 AU, so the orbit scale cannot be less than about 1.3 times the
@@ -73,15 +88,15 @@ Diameters, distances, tilts. Spin and year are given on the two clocks below.
 
 | | ball | from the sun | tilt |
 | --- | --- | --- | --- |
-| Sun | 100.00 cm | the middle | 7.2° |
-| Mercury | 0.35 cm | 0.62 m | 0.0° |
-| Venus | 0.87 cm | 1.16 m | 177.4° |
-| Earth | 0.92 cm | 1.60 m | 23.4° |
-| Mars | 0.49 cm | 2.44 m | 25.2° |
-| Jupiter | 10.27 cm | 8.32 m | 3.1° |
-| Saturn | 8.65 cm | 15.29 m | 26.7° |
-| Uranus | 3.67 cm | 30.75 m | 97.8° |
-| Neptune | 3.56 cm | 48.18 m | 28.3° |
+| Sun | 100.00 cm drawn, 250.00 true | the middle | 7.2° |
+| Mercury | 0.88 cm | 0.62 m | 0.0° |
+| Venus | 2.17 cm | 1.16 m | 177.4° |
+| Earth | 2.29 cm | 1.60 m | 23.4° |
+| Mars | 1.22 cm | 2.44 m | 25.2° |
+| Jupiter | 25.67 cm | 8.32 m | 3.1° |
+| Saturn | 21.64 cm | 15.29 m | 26.7° |
+| Uranus | 9.18 cm | 30.75 m | 97.8° |
+| Neptune | 8.89 cm | 48.18 m | 28.3° |
 
 Venus and Uranus carry their real tilts, which are the two that look like
 mistakes: Venus is upside down and Uranus lies on its side. Both are true and
@@ -95,13 +110,13 @@ four millimetres from the Earth, which is inside it. On the body scale it is
 
 | | of | ball | out |
 | --- | --- | --- | --- |
-| Moon | Earth | 0.25 cm | 27.6 cm |
-| Io | Jupiter | 0.26 cm | 30.3 cm |
-| Europa | Jupiter | 0.22 cm | 48.2 cm |
-| Ganymede | Jupiter | 0.38 cm | 76.9 cm |
-| Callisto | Jupiter | 0.35 cm | 135.2 cm |
-| Titan | Saturn | 0.37 cm | 87.7 cm |
-| Triton | Neptune | 0.19 cm | 25.5 cm |
+| Moon | Earth | 0.62 cm | 69.0 cm |
+| Io | Jupiter | 0.65 cm | 75.7 cm |
+| Europa | Jupiter | 0.56 cm | 120.5 cm |
+| Ganymede | Jupiter | 0.95 cm | 192.1 cm |
+| Callisto | Jupiter | 0.87 cm | 338.0 cm |
+| Titan | Saturn | 0.92 cm | 219.3 cm |
+| Triton | Neptune | 0.49 cm | 63.7 cm |
 
 Saturn's rings run from 5.36 cm to 9.82 cm in radius with the Cassini division
 at 8.44 cm, against a planet 4.33 cm in radius. Those four numbers are what

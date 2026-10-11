@@ -8,8 +8,8 @@
 //! work: put Neptune fifty metres out at true proportion and the Earth is
 //! fourteen hundredths of a millimetre. So bodies are measured against bodies
 //! and distances against distances, each exactly true inside itself, and the
-//! orbit scale is sixty seven times the body scale. Said out loud here rather
-//! than buried.
+//! orbit scale is a hundred and sixty eight times the body scale. Said out
+//! loud here rather than buried.
 //!
 //! **Why the sun is a metre.** In the orbiting arrangement Mercury has to
 //! clear the sun's own ball, and Mercury is at 0.387 AU against Neptune's
@@ -21,12 +21,46 @@ use glam::{vec3, Vec3};
 
 /// How many kilometres a metre is, for a ball.
 pub const SUN_ACROSS_KM: f32 = 1_392_700.0;
-/// The sun is drawn one metre across, which sets the scale for every body.
-pub const SUN_DRAWN: f32 = 1.0;
+
 /// How many metres one astronomical unit is drawn as.
 pub const AU: f32 = 1.6;
+
 /// A kilometre, in metres, on the body scale.
-pub const BODY: f32 = SUN_DRAWN / SUN_ACROSS_KM;
+///
+/// One metre to 557,080 km. It was one metre to the sun's own diameter, which
+/// made the sun exactly a metre and the Earth a nine millimetre pea, and a
+/// pea in a room this size is a thing you walk past without seeing. This is
+/// two and a half times that, so the Earth is 2.3 cm and Jupiter is 26.
+///
+/// **Two and a half and no more, and the Moon is what says so.** At three
+/// times, the Moon's orbit round the Earth is exactly as wide as the gap
+/// between the Earth's orbit and Mars's, and the model starts telling lies
+/// about which things are near which. Callisto gives out at 5.2 times and
+/// Saturn's rings at 71, so the Moon is the whole of the limit. See
+/// `the_moon_is_what_stops_the_bodies_growing`.
+pub const BODY: f32 = 2.5 / SUN_ACROSS_KM;
+
+/// What fraction of its true size the sun is drawn at, and it is the second
+/// lie in this model after the ratio between the two scales.
+///
+/// Two fifths. Its true size on the body scale is two and a half metres, and
+/// two and a half metres does not fit: the orbit scale has to clear it with
+/// Mercury at 0.387 AU, and that wants a disc two hundred and forty metres
+/// across.
+///
+/// The fraction is the constant and the size is worked out from it, so that
+/// growing the bodies keeps the sun the same fraction of them rather than
+/// quietly making it a different lie.
+///
+/// It is the lie every planet walk in the world tells, for the same reason,
+/// and it is the one that buys the planets their size. Said here and said in
+/// the room: see `aim::SYSTEM_NOTE`.
+pub const SUN_SHRUNK: f32 = 0.4;
+
+/// How big the sun is drawn: two fifths of what the body scale says.
+pub fn sun_drawn() -> f32 {
+    SUN_ACROSS_KM * BODY * SUN_SHRUNK
+}
 
 /// How far the planets reach, and so how big the room has to be.
 pub fn reach() -> f32 {
@@ -937,10 +971,52 @@ mod tests {
             jupiter / earth,
             142984.0 / 12756.0
         );
+        // and the sun is the one body that is not true against them, which
+        // is a decision and not a slip
         assert!(
-            (SUN.drawn() - 1.0).abs() < 1e-6,
-            "the sun is drawn {:.4} metres across, not one",
+            (SUN.drawn() - 2.5).abs() < 1e-3,
+            "the sun's true size on the body scale is {:.3} m, not 2.50",
             SUN.drawn()
+        );
+        assert!(
+            (sun_drawn() - 1.0).abs() < 1e-3,
+            "two fifths of its true size is {:.3} m, not one",
+            sun_drawn()
+        );
+        // and the room says the same fraction the constant does
+        assert!(
+            crate::aim::SYSTEM_NOTE.contains("two fifths") && (SUN_SHRUNK - 0.4).abs() < 1e-6,
+            "the line in the room and the constant disagree about the sun"
+        );
+    }
+
+    /// Spec 0015: the Moon is what stops the bodies growing.
+    ///
+    /// At three times this scale its orbit is as wide as the gap between the
+    /// Earth's orbit and Mars's, and a model where the Moon reaches the next
+    /// planet is a model lying about the one proportion everybody has. Every
+    /// other body has room to spare: Callisto gives out at 5.2 times and
+    /// Saturn's rings at 71.
+    #[test]
+    fn the_moon_is_what_stops_the_bodies_growing() {
+        let earth = planet("Earth");
+        let mars = planet("Mars");
+        let moon = earth.moons[0];
+        let gap = mars.far() - earth.far();
+
+        assert!(
+            moon.far() < gap * 0.9,
+            "the Moon reaches {:.2} m from the Earth and Mars is {:.2} m away",
+            moon.far(),
+            gap
+        );
+        // and there is not much left: a fifth again and it is touching
+        assert!(
+            moon.far() * 1.25 > gap * 0.9,
+            "the Moon reaches {:.2} m of a {:.2} m gap, so the scale has room \
+             to grow and the note in this module saying it does not is wrong",
+            moon.far(),
+            gap
         );
     }
 
@@ -957,19 +1033,24 @@ mod tests {
         );
     }
 
-    /// Spec 0015: the one lie, pinned.
+    /// Spec 0015: the first lie, pinned.
+    ///
+    /// It was 67.1 when the sun's own diameter set the body scale. Growing
+    /// the bodies two and a half times to make them worth looking at grew
+    /// the disparity with them, which is the cost of that decision and is
+    /// why it is written down rather than left to be worked out.
     ///
     /// If this number ever drifts it will be because somebody changed one
     /// scale and not the other, and the model will still look fine.
     #[test]
-    fn the_orbit_scale_is_sixty_seven_times_the_body_scale() {
+    fn the_orbit_scale_is_a_hundred_and_sixty_eight_times_the_body_scale() {
         let orbit_km_per_metre = 149_597_871.0 / AU;
         let body_km_per_metre = 1.0 / BODY;
         let times = orbit_km_per_metre / body_km_per_metre;
 
         assert!(
-            (times - 67.1).abs() < 0.1,
-            "the orbit scale is {:.2} times the body scale, not 67.1",
+            (times - 167.8).abs() < 0.2,
+            "the orbit scale is {:.2} times the body scale, not 167.8",
             times
         );
     }
@@ -981,7 +1062,7 @@ mod tests {
     #[test]
     fn mercury_clears_the_sun_and_would_not_with_a_bigger_one() {
         let mercury = planet("Mercury");
-        let gap = mercury.far() - SUN.drawn() * 0.5 - mercury.body.drawn() * 0.5;
+        let gap = mercury.far() - sun_drawn() * 0.5 - mercury.body.drawn() * 0.5;
 
         assert!(
             gap > 0.05,
@@ -989,13 +1070,15 @@ mod tests {
             gap
         );
 
-        let swollen = mercury.far() - SUN.drawn() - mercury.body.drawn() * 0.5;
+        // and the sun at its true size on the body scale would swallow it,
+        // which is why it is not drawn at its true size
+        let honest = mercury.far() - SUN.drawn() * 0.5 - mercury.body.drawn() * 0.5;
 
         assert!(
-            swollen < 0.0,
-            "a sun two metres across would still leave Mercury {:.3} m clear, \
-             so this test is not holding up the thing it says it is",
-            swollen
+            honest < 0.0,
+            "a sun at its true size would still leave Mercury {:.3} m clear, \
+             so the reason given for shrinking it is wrong",
+            honest
         );
     }
 

@@ -555,6 +555,37 @@ pub const GRAVEL: Vec4 = vec4(0.78, 0.76, 0.70, 1.0);
 /// Past white on every channel, so the ball glows with no light on it. A sun
 /// lit by its own lamp from the inside is a grey ball with a bright room
 /// round it, which is the wrong way round.
+/// The line in the corner, and the wink under the sight.
+///
+/// Here rather than in `main`, because the test that checks they fit on their
+/// plates was holding its own copy of both and the two would have come apart
+/// the first time either changed.
+///
+/// Two lines and not one. The building's line offers to work the toy you are
+/// looking at, and in the room behind the wall there are no toys: it was
+/// describing somewhere else to somebody standing in a solar system, and not
+/// saying the one key that room has. A line about a room should be true in
+/// the room you are in.
+///
+/// Verb first, every clause. The line used to name the key and leave you to
+/// work out what to do with it: "WASD and the mouse to get about", "Arrow
+/// keys look around". Told what to press and then what it does, a line reads
+/// as instructions; told the other way round it reads as a description of a
+/// machine.
+pub const HELP: &str =
+    "Use WASD and the mouse to get about. Hold Shift to run. Press the arrow keys to look around, or to work the toy you are looking at. Press Escape to quit.";
+pub const SYSTEM_HELP: &str =
+    "Use WASD and the mouse to get about. Hold Shift to run. Press L to switch modes. Press Escape to quit.";
+pub const WINK: &str = "If you know, you know. If you don't, play with one.";
+
+/// What the solar system owns up to, under its help line.
+///
+/// Not an instruction, so not verb first. A model this size cannot be honest
+/// about sizes and distances at once, and a model that is dishonest without
+/// saying so is a lie rather than a scale.
+pub const SYSTEM_NOTE: &str =
+    "The sun is drawn at two fifths of its size. Any bigger and Mercury would be inside it.";
+
 pub const SUN_FACE: Vec4 = vec4(9.0, 6.4, 3.2, 1.0);
 
 /// The tightest highlight in the building, for the surfaces of the room
@@ -928,10 +959,7 @@ mod tests {
     /// for this only went under the corner.
     #[test]
     fn every_line_of_text_sits_on_its_plate() {
-        let help = [
-            "WASD and the mouse to get about. Arrow keys look around, and work the toy you are looking at. Escape quits.",
-            "If you know, you know. If you don't, play with one.",
-        ];
+        let help = [HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE];
         let window = (1600.0f32, 1200.0f32);
 
         for many in 1..=help.len() {

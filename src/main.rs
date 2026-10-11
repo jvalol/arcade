@@ -71,6 +71,19 @@ const EYE: f32 = 1.55;
 /// unit drops a second into going down a slope.
 const EYE_LAGS: f32 = 0.09;
 pub const SPEED: f32 = 4.2;
+
+/// How much faster you go with a shift key down.
+///
+/// Twice, which at 4.2 is a sprint rather than a jog, and that is the right
+/// number because of what the building became: the room behind the wall is
+/// ninety seven metres across and the walk from the door to the sun is forty
+/// eight of them. Walked it is eleven seconds each way, which is a corridor.
+/// Run it is five, which is a distance.
+///
+/// Not in the water. Wading is the whole of what tells you that you are in
+/// the pool rather than beside it, per spec 0008, and a sprint through it
+/// takes that away. Shift does nothing in there.
+pub const RUNS: f32 = 2.0;
 const LOOK: f32 = 0.0022;
 const PITCH_LIMIT: f32 = 1.3;
 
@@ -649,6 +662,43 @@ impl Arcade {
         spa::wading(self.room.reaches, self.at)
     }
 
+    /// Which line the corner says, which is the one true where you are
+    /// standing.
+    ///
+    /// The building's line offers to work the toy you are looking at, and the
+    /// room behind the wall has no toys in it and one key of its own.
+    fn saying(&self) -> &'static str {
+        if self.in_the_system() {
+            aim::SYSTEM_HELP
+        } else {
+            aim::HELP
+        }
+    }
+
+    /// Whether you are in the room behind the wall, per spec 0015.
+    fn in_the_system(&self) -> bool {
+        let middle = behind::at(self.room.reaches);
+        let half = behind::half();
+
+        (self.at.x - middle.x).abs() < half.x && (self.at.z - middle.z).abs() < half.y
+    }
+
+    /// How fast you are getting about: walking, running, or wading.
+    ///
+    /// A method rather than three lines in `update`, so a test can ask it.
+    /// Shift does nothing in the water: wading is most of what tells you that
+    /// you are in the pool rather than beside it, per spec 0008, and a sprint
+    /// through it takes that away.
+    fn pace(&self) -> f32 {
+        let running = self.shifted && !self.wading();
+
+        spa::pace(
+            self.room.reaches,
+            self.at,
+            if running { SPEED * RUNS } else { SPEED },
+        )
+    }
+
     /// What the line under the sight says about a toy.
     fn about(&self, toy: &str) -> String {
         match toy {
@@ -668,10 +718,14 @@ impl Arcade {
                 ),
             },
             globe::NAME => {
+                // verb first, like every other line under the sight. These two
+                // named the key and left you to work out what to do with it,
+                // which reads as a description of the toy rather than as an
+                // offer to work it.
                 if self.globe.going() {
-                    String::from("Spinning. Arrows spin it faster, click or enter stops it.")
+                    String::from("Spinning. Press the arrows to spin it faster, or click to stop it.")
                 } else {
-                    String::from("Left and right arrows spin it.")
+                    String::from("Press left or right to spin it.")
                 }
             }
             gyro::NAME => {
@@ -827,7 +881,9 @@ impl Arcade {
             ball,
             &Transform::at(sun)
                 .with_rotation(turned(&orrery::SUN, self.since))
-                .with_scale(Vec3::splat(orrery::SUN.drawn())),
+                // not `SUN.drawn()`, which is its true size on the body
+                // scale and does not fit. See `orrery::SUN_DRAWN`.
+                .with_scale(Vec3::splat(orrery::sun_drawn())),
             aim::SUN_FACE,
             aim::DULL,
         );
@@ -1472,7 +1528,7 @@ impl Game for Arcade {
         // in the water you are slower, which is most of what says you are in it
         // rather than beside it. Spec 0008.
         let wading = self.wading();
-        let pace = spa::pace(self.room.reaches, self.at, SPEED);
+        let pace = self.pace();
 
         // the arrows turn and tilt you. Yaw nought faces -z and grows toward
         // +x, which is your right, so the right arrow adds.
@@ -1766,9 +1822,7 @@ impl Game for Arcade {
 
         // the corner says how to move, and nothing else. What to press is under
         // the sight, and saying it here as well is saying it twice.
-        const HELP: &str =
-            "WASD and the mouse to get about. Arrow keys look around, and work the toy you are looking at. Escape quits.";
-        const WINK: &str = "If you know, you know. If you don't, play with one.";
+
         let winking =
             matches!(self.seen, Some(room::Seen::Display(_))) || self.spin.holding().is_some();
 
@@ -1776,9 +1830,11 @@ impl Game for Arcade {
         // was under every shape, five times, which is five times too many for
         // a joke.
         let lines: Vec<&str> = if winking {
-            vec![HELP, WINK]
+            vec![self.saying(), aim::WINK]
+        } else if self.in_the_system() {
+            vec![self.saying(), aim::SYSTEM_NOTE]
         } else {
-            vec![HELP]
+            vec![self.saying()]
         };
 
         // a plate under them first, because the text is drawn straight over
@@ -1930,18 +1986,40 @@ impl Game for Arcade {
             }
         }
 
-        // the hall's near end wall, drawn in one piece over the gap its
-        // collider has in it. Spec 0011: this is the one place in the building
-        // where what you can walk through and what you can see disagree, and
-        // the disagreement is the room.
+        // the hall's near end wall. From the hall it is one piece across the
+        // gap its collider has in it, which is the whole of spec 0011: the
+        // one place in this building where what you can walk through and what
+        // you can see disagree, and the disagreement is the room.
+        //
+        // From the other side it is the two pieces, so the way out is a lit
+        // rectangle rather than a wall you have to remember the position of.
+        // That half of the trick was free while the room behind was empty and
+        // fifty metres across. Spec 0015 made it ninety seven and dark and
+        // gave you something to look at, and a secret door you cannot find
+        // from the inside is not a secret, it is a trap.
+        //
+        // Which side you are on and not a second account of the geometry: the
+        // same wall, drawn whole or drawn in its own collider's pieces.
         {
+            let in_the_hall = self.at.z < self.room.reaches;
             let side = room::WALL + room::CABINET.x;
-            let whole = Transform::at(vec3(0.0, room::TALL * 0.5, self.room.reaches))
-                .with_scale(vec3(side * 2.0, room::TALL, room::THICK));
+            let whole = vec![
+                Transform::at(vec3(0.0, room::TALL * 0.5, self.room.reaches)).with_scale(vec3(
+                    side * 2.0,
+                    room::TALL,
+                    room::THICK,
+                )),
+            ];
+            let pieces: Vec<Transform> = behind::near_wall(self.room.reaches)
+                .into_iter()
+                .map(|box_| Transform::at(box_.center()).with_scale(box_.size()))
+                .collect();
 
-            match self.wall_grain {
-                Some(grain) => scene.push_textured(cube, grain, &whole, aim::WALL, aim::MATTE),
-                None => scene.push_colored(cube, &whole, aim::WALL),
+            for stood in if in_the_hall { whole } else { pieces } {
+                match self.wall_grain {
+                    Some(grain) => scene.push_textured(cube, grain, &stood, aim::WALL, aim::MATTE),
+                    None => scene.push_colored(cube, &stood, aim::WALL),
+                }
             }
         }
 
@@ -4919,6 +4997,203 @@ mod tests {
                 at.z
             );
         }
+    }
+
+    /// Running: shift makes you faster, and only on dry ground.
+    ///
+    /// Walked and run over the same second from the same spot, down the one
+    /// room long enough to tell.
+    #[test]
+    fn shift_makes_you_faster_and_the_water_does_not_care() {
+        let one = Arcade::new();
+        let solid = one.room.solid();
+        let (sun, toward) = one.the_sun();
+        let step = 1.0 / 60.0;
+
+        let gone = |speed: f32, from: Vec3| {
+            let mut at = from;
+            let mut falling = 0.0;
+
+            for _ in 0..60 {
+                let (next, fell) =
+                    walk::walk(at, toward * speed, falling, RADIUS, step, &solid, true);
+                at = next;
+                falling = fell;
+            }
+
+            glam::vec2(at.x, at.z).distance(glam::vec2(from.x, from.z))
+        };
+
+        // out past Neptune, where there is nothing to walk into
+        let open = vec3(sun.x + toward.x * 60.0, 0.0, sun.z + toward.z * 60.0);
+        let walked = gone(SPEED, open);
+        let run = gone(SPEED * RUNS, open);
+
+        assert!(
+            walked > 3.5 && walked < 4.5,
+            "a second of walking went {:.2} m and should be about {:.2}",
+            walked,
+            SPEED
+        );
+        assert!(
+            (run / walked - RUNS).abs() < 0.05,
+            "running went {:.2} times as far as walking, not {:.2}",
+            run / walked,
+            RUNS
+        );
+
+        // and in the water shift does nothing, because wading is what tells
+        // you that you are in the pool
+        let mut wet = Arcade::new();
+        let (pool, _, deep) = spa::pool(wet.room.reaches);
+
+        wet.at = vec3(pool.x, pool.y - deep, pool.z);
+        assert!(wet.wading(), "the test did not get into the pool");
+
+        let waded = wet.pace();
+        wet.shifted = true;
+
+        assert_eq!(
+            wet.pace(),
+            waded,
+            "shift made a difference in the water, and it should not"
+        );
+
+        // the control: out of the water it does
+        let mut dry = Arcade::new();
+        dry.at = open;
+        let walking = dry.pace();
+        dry.shifted = true;
+
+        assert!(
+            (dry.pace() / walking - RUNS).abs() < 1e-4,
+            "on dry ground shift gave {:.2} times walking, not {:.2}",
+            dry.pace() / walking,
+            RUNS
+        );
+    }
+
+    /// Running does not put you through a wall, at the worst frame the engine
+    /// will hand the game.
+    ///
+    /// Twenty frames a second is as slow as `MAX_DELTA_TIME` allows, and at
+    /// twice walking pace that is forty two centimetres in one step against a
+    /// wall thirty thick.
+    ///
+    /// **This one has no control and cannot be given one from here.** The
+    /// obvious way to break it is to go faster, and going faster does not
+    /// break it: at two hundred times walking pace, forty two metres in a
+    /// single step, the body still stops at the wall. `walk` sweeps rather
+    /// than steps, so speed is not what tunnelling depends on.
+    ///
+    /// Which makes this a guard on the engine and not on the speed. It is
+    /// worth keeping for that, and it is worth saying that a test nobody can
+    /// make fail is not evidence of the thing its name claims.
+    #[test]
+    fn running_does_not_put_you_through_a_wall() {
+        let one = Arcade::new();
+        let solid = one.room.solid();
+        let step = blitzkit::MAX_DELTA_TIME;
+        // straight at the hall's far end wall, from well back
+        let wall = one.room.reaches;
+        let mut at = vec3(0.0, 0.0, wall - 12.0);
+        let mut falling = 0.0;
+
+        for _ in 0..(6.0 / step) as u32 {
+            let (next, fell) = walk::walk(
+                at,
+                vec3(0.0, 0.0, 1.0) * SPEED * RUNS,
+                falling,
+                RADIUS,
+                step,
+                &solid,
+                true,
+            );
+            at = next;
+            falling = fell;
+        }
+
+        assert!(
+            at.z < wall,
+            "six seconds of running at a wall at {:.2} ended up at {:.2}",
+            wall,
+            at.z
+        );
+    }
+
+    /// Spec 0015: the corner says the line that is true where you stand.
+    ///
+    /// It offered to work the toy you are looking at while you stood in a
+    /// solar system with no toys in it, and said nothing about the one key
+    /// that room has.
+    #[test]
+    fn the_corner_says_the_room_you_are_in() {
+        let mut one = Arcade::new();
+
+        assert!(
+            !one.in_the_system(),
+            "the building opened in the hidden room"
+        );
+        assert_eq!(one.saying(), aim::HELP, "the hall got the wrong line");
+
+        let (sun, _) = one.the_sun();
+        one.at = vec3(sun.x, 0.0, sun.z);
+
+        assert!(
+            one.in_the_system(),
+            "standing at the sun is not in the room"
+        );
+        assert_eq!(
+            one.saying(),
+            aim::SYSTEM_HELP,
+            "the solar system got the building's line"
+        );
+        assert!(
+            one.saying().contains('L'),
+            "the line in there does not say the one key that room has"
+        );
+    }
+
+    /// Spec 0011 and 0015: the way out is a wall from the hall and an opening
+    /// from inside.
+    #[test]
+    fn the_secret_door_is_solid_one_way_and_open_the_other() {
+        let one = Arcade::new();
+        let reaches = one.room.reaches;
+        let (from, to) = behind::way();
+        let middle = (from + to) * 0.5;
+        let pieces = behind::near_wall(reaches);
+
+        // nothing of the two pieces stands in the way in
+        for box_ in pieces.iter() {
+            assert!(
+                box_.min.x > middle || box_.max.x < middle,
+                "a piece of the near wall spans the way in at {:.2}",
+                middle
+            );
+        }
+
+        // and between them there is a gap a body fits through
+        let widest = pieces
+            .iter()
+            .map(|box_| box_.max.x)
+            .fold(f32::MIN, f32::max);
+        let narrowest = pieces
+            .iter()
+            .map(|box_| box_.min.x)
+            .fold(f32::MAX, f32::min);
+        let gap = to - from;
+
+        assert!(
+            gap > RADIUS * 2.0,
+            "the way out is {:.2} across and a body is {:.2}",
+            gap,
+            RADIUS * 2.0
+        );
+        assert!(
+            widest > middle && narrowest < middle,
+            "the two pieces are both on one side of the way in"
+        );
     }
 
     /// Spec 0015: L swings the system out and back.
