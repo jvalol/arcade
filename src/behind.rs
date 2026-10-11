@@ -655,6 +655,31 @@ mod tests {
             "what ships draws no lap and the check found one anyway: {:?}",
             in_the_halls_floor(&ships)
         );
+
+        // and it survives the filter, which is the half that can go wrong
+        // without anybody noticing. Spec 0049 of the engine throws out every
+        // pair nobody can get in front of, and this patch is the floor you
+        // wake up standing on: if the filter loses that, it loses anything.
+        let reach = blitzkit::reach::Reach::found(
+            vec3(0.0, crate::EYE, 0.0),
+            blitzkit::reach::Body {
+                radius: crate::RADIUS,
+                rise: 0.25,
+                tall: 4.0,
+            },
+            &caught.boxes,
+            room.outline().expanded(Vec3::ONE),
+            blitzkit::reach::STEP,
+        );
+
+        assert!(
+            !reach.is_empty(),
+            "the fill reached nothing, so the next assertion proves nothing"
+        );
+        assert!(
+            in_the_halls_floor(&caught.only_seen_from(&reach)).is_some(),
+            "the filter threw away the floor you wake up standing on"
+        );
     }
 
     /// Spec 0011: no column stands in the way in.

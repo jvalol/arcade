@@ -33,18 +33,30 @@ you lean on a key.
 **Off when the building opens**, like spec 0013's, and not mentioned in the
 line at the top of the screen.
 
-**It reports 221 pairs over 5214 boxes**, with 139 instances turned off the
-axes and 770 whose shape is not a box, neither measured. That is not a list to
-read, and it is not meant to be: the patches you cannot get to never come on
-screen, so what you see when you press it is the ones in the room you are
-standing in.
+**It hands the engine a body**, and the engine fills out from where you are
+standing to find where that body could be, per spec 0049 of the engine. Then it
+throws out every pair nobody can get in front of. The body is this game's own:
+the radius `walk` slides, a step of a quarter metre, and four metres of air over
+a place to stand.
+
+**It reports 2 pairs out of 221**, over 5215 drawn boxes, with 138 instances
+turned off the axes and 814 whose shape is not a box, neither measured, and
+66348 cells of a quarter metre a body can be in. Both of the two are at the
+hall's ceiling, which is somewhere you can stand and look up.
+
+**Shut doors mean rooms it says nothing about.** The way down is a secret door
+and the way into the baths is another, so when the building opens the cellar and
+the baths are not places a body can be and nothing in them is reported. Press
+the key down there instead. This is right rather than a flaw, and it is a thing
+to know before reading a short report as good news.
 
 ## Acceptance criteria
 
 - P asks for a check, and the building opens not asking. — `tests::p_asks_for_one_coplanar_check`
 - The repeats of a held P ask for nothing. — `tests::the_repeats_of_a_held_p_ask_for_nothing`
 - Nothing else asks for it. — `tests::no_other_key_asks_for_the_check`
-- The check catches this building's own worst case, the hall's floor and the room behind it in one plane over 5.40 by 3.00, and passes the version that ships. — `behind::tests::the_engines_check_catches_the_lap_and_passes_what_ships`
+- The check catches this building's own worst case, the hall's floor and the room behind it in one plane over 5.40 by 3.00, passes the version that ships, and the filter does not throw the catch away. — `behind::tests::the_engines_check_catches_the_lap_and_passes_what_ships`
+- The fill gets to the cellar and the baths once their doors are open, and to neither while they are shut. — `tests::the_fill_gets_to_the_rooms_that_are_open`
 
 ### Verified by hand
 
@@ -55,10 +67,9 @@ standing in.
 
 ## Out of scope
 
-**Deciding which of them matter.** The check knows whether a face looks into a
-room or out at the weather. It does not know whether anybody can stand
-anywhere that sees it, so the ceiling's ribs are in the list. Spec 0048 says
-what answering that would take.
+**Deciding which of them matter.** The fill says a body can be in front of a
+face. It does not say anything is looking that way, or that a bookcase is not
+in between. Walking up to the two it reports is still the last step.
 
 **Anything that is not a box.** Three quarters of what this building draws is
 refused, because a barrel's box is not a barrel's faces. Two turned things

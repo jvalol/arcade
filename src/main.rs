@@ -27,6 +27,7 @@ use blitzkit::geometry::Geometry;
 use blitzkit::keyboard::{KeyboardInput, KeyboardKey, KeyboardKeyState};
 use blitzkit::mesh::{MeshData, Transform};
 use blitzkit::mouse::{MouseButton, MouseInput};
+use blitzkit::reach;
 use blitzkit::renderer::render_text::{RenderText, TextRenderer};
 use blitzkit::renderer::scene::{MeshId, Scene, TextureId};
 use blitzkit::renderer::Renderer;
@@ -39,6 +40,27 @@ use room::Room;
 
 /// Where you stand, how fast, and how far you see.
 const RADIUS: f32 = 0.45;
+/// How far past the building the fill is given to work in, per spec 0049 of
+/// the engine.
+///
+/// Enough that the outside of a wall has air on it, so a face looking out of
+/// the building is told apart from one looking into a slab. Not more, because
+/// every metre of it is cells.
+#[cfg(test)]
+const REACH_PAST: f32 = 1.0;
+/// The tallest step the fill will walk up, per spec 0049 of the engine.
+///
+/// A quarter of a metre, which is a cell. The stairs down to the cellar are
+/// shallower than that and every ledge in the building is deeper, so it is the
+/// line between a way down and a wall.
+const STEPS_UP: f32 = 0.25;
+/// How far over a place to stand the air still counts, per spec 0049 of the
+/// engine.
+///
+/// Not the eye's height: a surface near the ceiling is looked at from an eye
+/// well below it, so this has to clear the tallest room in the building. The
+/// hall is 3.2 and the garden has no top at all.
+const ROOM_TALL: f32 = 4.0;
 const EYE: f32 = 1.55;
 
 /// How long the eye takes to catch the feet up, in seconds.
@@ -697,6 +719,29 @@ impl Arcade {
     }
 
     /// Where you are looking from, which is your eye and not your feet.
+    /// Where a body can get to from where you are standing, over the
+    /// colliders, per spec 0049 of the engine.
+    ///
+    /// The tool itself fills over the frame's drawn boxes, inside the renderer,
+    /// because the ceilings are drawn and not all of them are solid. This is
+    /// here for the tests, which ask whether a room can be got to at all, and
+    /// that is the same question in either list: both have the floors, the
+    /// walls and the doorways.
+    #[cfg(test)]
+    fn reachable(&self) -> reach::Reach {
+        reach::Reach::found(
+            self.looking_from(),
+            reach::Body {
+                radius: RADIUS,
+                rise: STEPS_UP,
+                tall: ROOM_TALL,
+            },
+            &self.room.solid(),
+            self.room.outline().expanded(Vec3::splat(REACH_PAST)),
+            reach::STEP,
+        )
+    }
+
     fn looking_from(&self) -> Vec3 {
         vec3(self.at.x, self.eye + EYE, self.at.z)
     }
@@ -857,7 +902,18 @@ impl Game for Arcade {
         // the drawn list.
         if self.wants_planes {
             self.wants_planes = false;
-            renderer.check_fighting_faces();
+
+            // where a body can get to, filled out from where you are standing,
+            // per spec 0049 of the engine. Without it the report is mostly the
+            // tops of ceilings: faces that are flush with their neighbours and
+            // that nobody will ever be above to see. The engine cannot work it
+            // out itself, because it takes the colliders and the colliders are
+            // ours.
+            renderer.check_fighting_faces(Some(reach::Body {
+                radius: RADIUS,
+                rise: STEPS_UP,
+                tall: ROOM_TALL,
+            }));
         }
 
         let found: Vec<Aabb> = renderer
@@ -4494,6 +4550,64 @@ mod tests {
         }
 
         assert!(!one.wants_planes, "a repeat on its own asked for a check");
+    }
+
+    /// Spec 0049 of the engine: the fill gets to the rooms that are open, and
+    /// not through a door that is shut.
+    ///
+    /// This is the half of the filter that can go wrong quietly. A fill that
+    /// cannot find a room throws out every fault in it, and the report comes
+    /// back shorter and looks better for it.
+    ///
+    /// The shut bookcase is the control and it is not a contrivance: the way
+    /// down is a secret door, so when the building opens the cellar and the
+    /// baths are not places a body can be. Press the key down there and they
+    /// are. A fill that reached them through a shut wall would be a fill that
+    /// reaches everything.
+    ///
+    /// Each place is taken from the thing that stands in it rather than typed,
+    /// so a room that moves takes its own anchor with it.
+    #[test]
+    fn the_fill_gets_to_the_rooms_that_are_open() {
+        let mut one = Arcade::new();
+        let reaches = one.room.reaches;
+        // eye height over the cellar's floor, which is where the pool table
+        // stands. Beside it rather than over it: the table is 0.78 tall and an
+        // eye is 1.55, so this is the air above it either way.
+        let table = cellar::table(reaches);
+        let in_the_cellar = vec3(table.at.x, table.at.y + EYE, table.at.z);
+        let (tub, wide, _) = spa::tub(reaches);
+        let in_the_baths = vec3(tub.x, spa::at(reaches).y + EYE, tub.z - wide * 0.5 - 1.2);
+
+        let shut = one.reachable();
+
+        assert!(!shut.is_empty(), "the fill reached nothing at all");
+        assert!(
+            shut.holds(one.looking_from()),
+            "the fill did not reach where you are standing"
+        );
+        assert!(
+            !shut.holds(in_the_cellar),
+            "the fill got into the cellar through a shut bookcase"
+        );
+
+        // and with both doors open: the bookcase that the one book swings, and
+        // the door off the cellar into the baths
+        one.room.swing = 1.0;
+        one.room.baths_swing = 1.0;
+        let open = one.reachable();
+
+        for (what, at) in [("the cellar", in_the_cellar), ("the baths", in_the_baths)] {
+            assert!(
+                open.holds(at),
+                "with the wall open the fill still did not get to {} at {:.2} \
+                 {:.2} {:.2}, so nothing there would ever be reported",
+                what,
+                at.x,
+                at.y,
+                at.z
+            );
+        }
     }
 
     /// Spec 0048 of the engine: nothing else asks for it.
