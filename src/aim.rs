@@ -552,6 +552,30 @@ pub const SKY: Vec4 = vec4(1.35, 1.40, 1.52, 1.0);
 pub const GRAVEL: Vec4 = vec4(0.78, 0.76, 0.70, 1.0);
 pub const GARDEN_WALL: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
 
+/// What the garden's plaster is multiplied by.
+///
+/// Near white, because the picture carries the colour and this is a tint on
+/// it. A colour of its own here and the stains come back as one stain in two
+/// shades.
+pub const GARDEN_PLASTER: Vec4 = vec4(0.96, 0.95, 0.93, 1.0);
+
+/// The clay tiles capping the garden's walls.
+///
+/// Dark and barely warm, so the cap reads as a line against the sky rather
+/// than as more wall. A temple wall's tiles are nearly black when they are
+/// wet and this garden's sky is a weather sky.
+pub const GARDEN_COPE: Vec4 = vec4(0.15, 0.145, 0.155, 1.0);
+
+/// What the moss picture is multiplied by.
+///
+/// Near white, like the plaster's: the picture carries the colour and the
+/// ragged edge, and a colour of its own here flattens both.
+pub const GARDEN_MOSS: Vec4 = vec4(0.95, 1.0, 0.92, 1.0);
+
+/// The bamboo of the screen along the west wall, and the rope that lashes it.
+pub const BAMBOO: Vec4 = vec4(0.52, 0.49, 0.26, 1.0);
+pub const BAMBOO_ROPE: Vec4 = vec4(0.14, 0.13, 0.12, 1.0);
+
 /// The pond, the stone round it, and what grows in the garden.
 ///
 /// The water is darker than the baths', which is a lit pool with a tiled

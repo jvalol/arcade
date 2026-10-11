@@ -222,6 +222,16 @@ struct Arcade {
     /// own count of tiles on it. Spec 0008.
     tiled: Option<TextureId>,
     lining: Vec<MeshId>,
+    /// One picture of plaster per wall of the garden, and the quad each is
+    /// laid on. Spec 0010.
+    plaster: Vec<TextureId>,
+    plaster_mesh: Vec<MeshId>,
+    /// One length of bamboo, stood up a few hundred times along one wall.
+    pole: Option<MeshId>,
+    /// The moss at the foot of the garden's walls, and the quads it is cut
+    /// out on.
+    moss: Option<TextureId>,
+    moss_mesh: Vec<MeshId>,
     /// A picture of each of `study::TITLES`, for the spines. Spec 0006.
     titles: Vec<(TextureId, f32)>,
     afghan_mesh: Option<MeshId>,
@@ -422,6 +432,11 @@ impl Arcade {
             skins: Vec::new(),
             tiled: None,
             lining: Vec::new(),
+            plaster: Vec::new(),
+            plaster_mesh: Vec::new(),
+            pole: None,
+            moss: None,
+            moss_mesh: Vec::new(),
             titles: Vec::new(),
             afghan_mesh: None,
             cellar_floor: None,
@@ -1062,6 +1077,36 @@ impl Game for Arcade {
         self.lining = spa::lining(self.room.reaches)
             .into_iter()
             .map(|(_, size, _)| renderer.add_mesh(&room::tiled_plane(size / spa::TILE)))
+            .collect();
+        // one picture per wall and one quad to lay it on, both counted off the
+        // wall itself. A seed apiece, so no two walls in the garden wear the
+        // same stains.
+        self.plaster = garden::facing(self.room.reaches)
+            .into_iter()
+            .enumerate()
+            .map(|(n, face)| {
+                let (_, size, _) = face.plane();
+
+                renderer.add_texture(&garden::plastered(
+                    garden::PLASTER_SEED.wrapping_add(n as u32 * 7919),
+                    size,
+                ))
+            })
+            .collect();
+        self.plaster_mesh = garden::facing(self.room.reaches)
+            .into_iter()
+            .map(|_| renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)))
+            .collect();
+        self.pole = Some(renderer.add_mesh(&garden::pole_mesh()));
+        // one picture of moss for all of it, counted off the biggest piece so
+        // the clumps are the same size wherever they are, and a quad apiece
+        let widest = garden::moss(self.room.reaches)
+            .into_iter()
+            .fold(glam::Vec2::ZERO, |most, (_, size, _)| most.max(size));
+        self.moss = Some(renderer.add_texture(&garden::mossed(garden::MOSS_SEED, widest)));
+        self.moss_mesh = garden::moss(self.room.reaches)
+            .into_iter()
+            .map(|(_, size, _)| renderer.add_mesh(&room::tiled_plane(size / widest)))
             .collect();
         self.stave =
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
@@ -2335,8 +2380,72 @@ impl Game for Arcade {
                 }
             }
 
-            for (at, size) in garden::facing(self.room.reaches) {
-                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::GARDEN_WALL);
+            // the walls: a lining of plaster on each, as a quad with its own
+            // texture count rather than a cube wearing one enormous tile.
+            // Only the band over the way in is drawn as a box as well, because
+            // there is no wall behind that one for a lining to be a lining on.
+            for ((face, mesh), plaster) in garden::facing(self.room.reaches)
+                .into_iter()
+                .zip(&self.plaster_mesh)
+                .zip(&self.plaster)
+            {
+                if face.solid {
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(face.at).with_scale(face.size),
+                        aim::GARDEN_WALL,
+                    );
+                }
+
+                let (middle, size, looks) = face.plane();
+
+                scene.push_textured(
+                    *mesh,
+                    *plaster,
+                    &Transform::at(middle)
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(vec3(size.x, 1.0, size.y)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+
+            // the tiled cap along the top of them, which is what makes a wall
+            // read as built rather than as a box with a flat top
+            for (at, size) in garden::coping(self.room.reaches) {
+                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::GARDEN_COPE);
+            }
+
+            // and the moss along their feet, where the ground keeps them damp:
+            // a picture with a ragged edge cut out of it rather than a green
+            // box, which is a skirting board
+            for ((at, size, turn), mesh) in garden::moss(self.room.reaches)
+                .into_iter()
+                .zip(&self.moss_mesh)
+            {
+                if let Some(moss) = self.moss {
+                    scene.push_textured(
+                        mesh.to_owned(),
+                        moss,
+                        &Transform::at(at)
+                            .with_rotation(turn)
+                            .with_scale(vec3(size.x, 1.0, size.y)),
+                        aim::GARDEN_MOSS,
+                        aim::MATTE,
+                    );
+                }
+            }
+
+            // the bamboo screen on the wall you face coming in, which is the
+            // one wall here meant to look different from the others
+            if let Some(pole) = self.pole {
+                for at in garden::screen(self.room.reaches) {
+                    scene.push_colored(pole, &Transform::at(at), aim::BAMBOO);
+                }
+            }
+
+            for (at, size) in garden::rails(self.room.reaches) {
+                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::BAMBOO_ROPE);
             }
 
             // the bank round the water, and the bed under it, which are not

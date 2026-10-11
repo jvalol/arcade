@@ -1068,31 +1068,111 @@ pub fn raked(
 /// Which also finishes them. The baths borrowed the cellar's wall and had a
 /// mahogany wall down one side of a tiled room until somebody looked, and from
 /// in here the nook's end wall is the back of a bookcase.
-pub fn facing(reaches: f32) -> Vec<(Vec3, Vec3)> {
+/// How far the plaster stands off the thing it lines.
+///
+/// Eight millimetres, and the number is not free. The depth buffer stops
+/// separating two surfaces once they are closer than it can resolve at the
+/// distance they are seen from, which across this building is about three
+/// millimetres at the far end. Under that and the lining fights with what it
+/// is lining. See spec 0048 of the engine.
+pub const PROUD: f32 = 0.008;
+
+/// One face of the garden's walls: where it is, how big the piece is, which
+/// way the garden sees it from, and whether its thickness has to be drawn.
+///
+/// `solid` is true in one place only, over the way in, where there is no wall
+/// behind the face to be a skin on. Everywhere else the wall behind is already
+/// there and this is a lining on it.
+#[derive(Clone, Copy, Debug)]
+pub struct Face {
+    pub at: Vec3,
+    pub size: Vec3,
+    pub looks: Vec3,
+    pub solid: bool,
+}
+
+impl Face {
+    /// The plane to lay on it: where its middle is, how far across and up it
+    /// runs, and which way it looks.
+    ///
+    /// Stood [`PROUD`] off the box rather than in its face. Laid in the face,
+    /// the lining over the way in and the box behind it were two surfaces at
+    /// one depth over a metre by one and seven tenths, which spec 0048 of the
+    /// engine reported the first time it was asked.
+    ///
+    /// Taken from the box rather than written beside it. The lining used to be
+    /// the box, drawn in one flat colour, and a cube wears a texture nought to
+    /// one on every face however big the face is, so sixteen metres of wall
+    /// got one enormous tile. A quad with its own count is what spec 0011 is
+    /// for.
+    pub fn plane(&self) -> (Vec3, Vec2, Vec3) {
+        let half = self.size * 0.5;
+        let out = self.looks * half;
+        let across = if self.looks.x.abs() > 0.5 {
+            vec2(self.size.z, self.size.y)
+        } else if self.looks.y.abs() > 0.5 {
+            vec2(self.size.x, self.size.z)
+        } else {
+            vec2(self.size.x, self.size.y)
+        };
+
+        (self.at + out + self.looks * PROUD, across, self.looks)
+    }
+}
+
+pub fn facing(reaches: f32) -> Vec<Face> {
     let middle = at(reaches);
     let half = half();
     let proud = 0.01;
     let up = HIGH * 0.5;
+    let (way_from, way_to) = way(reaches);
+    let (low, high) = parapet();
+
+    // the garden looks west at the east wall, north at the south wall, and so
+    // on, so each face looks back at the middle of the room
+    let lining = |at_: Vec3, size: Vec3, looks: Vec3| Face {
+        at: at_,
+        size,
+        looks,
+        solid: false,
+    };
 
     vec![
         // east, in two pieces with the way in between them. In one it ran
         // across the opening, so from the hall you looked through the gap at a
         // panel a hair behind it and the passage read as an alcove.
-        (
+        lining(
             vec3(
                 wall_at() - THICK * 0.5 - proud,
                 up,
-                (middle.z - half.y + way(reaches).0) * 0.5,
+                (middle.z - half.y + way_from) * 0.5,
             ),
-            vec3(proud * 2.0, HIGH, way(reaches).0 - (middle.z - half.y)),
+            vec3(proud * 2.0, HIGH, way_from - (middle.z - half.y)),
+            -Vec3::X,
         ),
-        (
+        // and this one a whole wall's thickness further out than the piece
+        // below it, which is not symmetry gone wrong.
+        //
+        // The garden's east side is two different walls end to end. For the
+        // first half metre it is the hall's, which straddles `wall_at`. For
+        // the rest it is the west wall of the room behind the wall, which
+        // hangs entirely on the garden's side of that line and so stands
+        // fifteen centimetres further in. Lined up with the hall's, this piece
+        // was buried inside the other one and never drawn: from the garden you
+        // were looking at the back of spec 0011's hidden room, in its own dark
+        // colour, which is the fault the baths had when they borrowed the
+        // cellar's wall and left it mahogany down one side of a tiled room.
+        //
+        // Three times somebody said that wall was the wrong colour and twice I
+        // said it was the light.
+        lining(
             vec3(
-                wall_at() - THICK * 0.5 - proud,
+                wall_at() - THICK - proud,
                 up,
-                (way(reaches).1 + middle.z + half.y) * 0.5,
+                (way_to + middle.z + half.y) * 0.5,
             ),
-            vec3(proud * 2.0, HIGH, middle.z + half.y - way(reaches).1),
+            vec3(proud * 2.0, HIGH, middle.z + half.y - way_to),
+            -Vec3::X,
         ),
         // and the band over the way in itself, which the two pieces either
         // side of it leave open. The opening stops at the hall's ceiling and
@@ -1105,34 +1185,424 @@ pub fn facing(reaches: f32) -> Vec<(Vec3, Vec3)> {
         // open channel behind it, and from the garden, at the angle you look
         // up at a doorway from, you could see sky through the slot. It was
         // four pixels and it was the same fault as the metre.
-        (
-            vec3(
-                wall_at(),
-                (parapet().0 + parapet().1) * 0.5,
-                (way(reaches).0 + way(reaches).1) * 0.5,
-            ),
-            vec3(
-                THICK + proud * 2.0,
-                parapet().1 - parapet().0,
-                way(reaches).1 - way(reaches).0,
-            ),
-        ),
+        Face {
+            at: vec3(wall_at(), (low + high) * 0.5, (way_from + way_to) * 0.5),
+            size: vec3(THICK + proud * 2.0, high - low, way_to - way_from),
+            looks: -Vec3::X,
+            solid: true,
+        },
         // south, the nook's end wall and the garden's own beside it
-        (
+        lining(
             vec3(middle.x, up, middle.z - half.y + proud),
             vec3(DEEP, HIGH, proud * 2.0),
+            Vec3::Z,
         ),
         // west
-        (
+        lining(
             vec3(middle.x - half.x + proud, up, middle.z),
             vec3(proud * 2.0, HIGH, SPAN),
+            Vec3::X,
         ),
         // north
-        (
+        lining(
             vec3(middle.x, up, middle.z + half.y - proud),
             vec3(DEEP, HIGH, proud * 2.0),
+            -Vec3::Z,
         ),
     ]
+}
+
+/// The coping along the top of the walls: how thick the course of tiles is,
+/// how far it oversails each face, and the roll along its crown.
+///
+/// A wall with a cap on it reads as a wall somebody built. Without one it is a
+/// box with a flat top, and at the angle you see these from, which is from
+/// below and at a distance, the silhouette does more than the surface does.
+/// The oversail is what throws the shadow line under it.
+pub const COPE_DEEP: f32 = 0.13;
+pub const COPE_OUT: f32 = 0.11;
+pub const COPE_ROLL: f32 = 0.07;
+
+/// The tiled cap along the top of every wall round the garden, as boxes.
+///
+/// Taken from the same faces the plaster is laid on, so a wall that moves
+/// takes its cap with it. Two courses: the tiles, oversailing both ways, and a
+/// roll along the crown a little narrower, which is what a ridge of them looks
+/// like end on.
+pub fn coping(reaches: f32) -> Vec<(Vec3, Vec3)> {
+    let mut out = Vec::new();
+
+    for face in facing(reaches) {
+        if face.solid {
+            // the band over the way in is a lintel, not the top of a wall
+            continue;
+        }
+
+        let along = face.looks.x.abs() > 0.5;
+        let run = if along { face.size.z } else { face.size.x };
+        let wide = THICK + COPE_OUT * 2.0;
+        // centred on the wall it caps and not on the lining, which is a
+        // hand's breadth off it: taken from the lining the cope sat proud on
+        // one side and short on the other
+        let (surface, _, _) = face.plane();
+        let middle =
+            surface - face.looks * THICK * 0.5 + Vec3::Y * (HIGH + COPE_DEEP * 0.5 - surface.y);
+        let size = if along {
+            vec3(wide, COPE_DEEP, run)
+        } else {
+            vec3(run, COPE_DEEP, wide)
+        };
+
+        out.push((middle, size));
+        // and the roll along the crown, set in from the tiles so the course
+        // under it still shows
+        let roll = if along {
+            vec3(wide - COPE_OUT * 1.4, COPE_ROLL, run)
+        } else {
+            vec3(run, COPE_ROLL, wide - COPE_OUT * 1.4)
+        };
+
+        out.push((
+            vec3(middle.x, HIGH + COPE_DEEP + COPE_ROLL * 0.5, middle.z),
+            roll,
+        ));
+    }
+
+    out
+}
+
+/// The moss at the foot of the walls: how far up it creeps and how far out
+/// into the gravel it reaches.
+///
+/// Moss and not ivy. A wall of this kind gets green at the bottom, where the
+/// ground keeps it damp and the sun does not reach, and stays bare above. Ivy
+/// over the face of it is an English courtyard.
+pub const MOSS_UP: f32 = 0.34;
+pub const MOSS_OUT: f32 = 0.30;
+/// How far the moss stands off the plaster, how high the ground piece is laid,
+/// how far up its picture the moss comes on average, and how fine the picture
+/// is.
+pub const MOSS_PROUD: f32 = 0.006;
+pub const MOSS_LAID: f32 = 0.012;
+pub const MOSS_REACH: f32 = 0.42;
+pub const MOSS_PER_UNIT: f32 = 90.0;
+pub const MOSS_SEED: u32 = 0x3A17_9C20;
+
+/// The moss along the foot of each wall: a piece up the wall and a piece out
+/// over the gravel, as planes to lay a cut out picture on.
+///
+/// Planes and not boxes. A box of moss colour is a green skirting board, which
+/// is what the first one looked like: the thing that says moss is the edge of
+/// it, which is ragged and has islands past it, and an edge like that is a
+/// hole in a picture rather than a shape.
+pub fn moss(reaches: f32) -> Vec<(Vec3, Vec2, glam::Quat)> {
+    let mut out = Vec::new();
+
+    for face in facing(reaches) {
+        if face.solid {
+            continue;
+        }
+
+        let (surface, size, looks) = face.plane();
+        let run = size.x;
+        let along = surface + looks * MOSS_PROUD;
+
+        // up the wall, with v running up it
+        out.push((
+            vec3(along.x, MOSS_UP * 0.5, along.z),
+            vec2(run, MOSS_UP),
+            crate::room::laid_on(looks),
+        ));
+
+        // and out over the gravel, turned so v runs away from the wall and
+        // the moss is thickest where the two meet
+        out.push((
+            vec3(
+                surface.x + looks.x * MOSS_OUT * 0.5,
+                MOSS_LAID,
+                surface.z + looks.z * MOSS_OUT * 0.5,
+            ),
+            vec2(run, MOSS_OUT),
+            glam::Quat::from_rotation_y(looks.x.atan2(looks.z)),
+        ));
+    }
+
+    out
+}
+
+/// Moss, as a picture with a ragged edge cut out of it.
+///
+/// Yellow green rather than blue green: what grows on a wall of this kind is
+/// the colour of old brass, and a cool green reads as algae on concrete. It is
+/// thickest where the wall meets the ground and gives out upward in clumps,
+/// with a few islands past the edge, because an edge that is one wavy line is
+/// still a line.
+pub fn mossed(seed: u32, size: Vec2) -> blitzkit::texture::TextureData {
+    let across = ((size.x * MOSS_PER_UNIT).round() as u32).clamp(8, 2048);
+    let up = ((size.y * MOSS_PER_UNIT).round() as u32).clamp(8, 1024);
+
+    let hash = move |x: i32, y: i32| {
+        let mut n =
+            (x as u32).wrapping_mul(0x85EB_CA6B) ^ (y as u32).wrapping_mul(0xC2B2_AE35) ^ seed;
+        n ^= n >> 13;
+        n = n.wrapping_mul(0x27D4_EB2D);
+        n ^= n >> 16;
+        (n >> 8) as f32 / ((1u32 << 24) as f32)
+    };
+    let smooth = |t: f32| t * t * (3.0 - 2.0 * t);
+    let noise = move |x: f32, y: f32| {
+        let (fx, fy) = (x.floor(), y.floor());
+        let (ix, iy) = (fx as i32, fy as i32);
+        let (tx, ty) = (smooth(x - fx), smooth(y - fy));
+        let a = hash(ix, iy);
+        let b = hash(ix + 1, iy);
+        let c = hash(ix, iy + 1);
+        let d = hash(ix + 1, iy + 1);
+        let low = a + (b - a) * tx;
+        let high = c + (d - c) * tx;
+
+        low + (high - low) * ty
+    };
+
+    let mut pixels = Vec::with_capacity((across * up * 4) as usize);
+
+    for j in 0..up {
+        let v = j as f32 / (up - 1).max(1) as f32;
+
+        for i in 0..across {
+            let u = i as f32 / (across - 1).max(1) as f32;
+            let wide = u * size.x;
+
+            // how far up this column the moss comes, as a fraction. Two sizes
+            // of wobble, so it is neither a straight line nor a sine wave.
+            let edge = MOSS_REACH
+                + (noise(wide * 1.3, 11.0) - 0.5) * 0.46
+                + (noise(wide * 4.7, 23.0) - 0.5) * 0.20;
+            // and the islands past it, which is what stops the edge reading as
+            // an edge at all
+            let island = noise(wide * 6.0, v * 9.0);
+            let there = v < edge || (v < edge + 0.30 && island > 0.74);
+
+            if !there {
+                pixels.extend_from_slice(&[0, 0, 0, 0]);
+                continue;
+            }
+
+            // thick and dark at the foot, thin and dry near the edge
+            let depth = (1.0 - (v / edge.max(0.05)).min(1.0)).powf(0.7);
+            let clump = noise(wide * 3.4, v * 7.0) * 0.6 + noise(wide * 9.0, v * 18.0) * 0.4;
+            let tone = 0.52 + clump * 0.55 + depth * 0.18;
+            let dry = (1.0 - depth) * 0.45;
+
+            pixels.extend_from_slice(&[
+                (tone * (68.0 + dry * 60.0)).min(255.0) as u8,
+                (tone * (104.0 + dry * 22.0)).min(255.0) as u8,
+                (tone * (44.0 + dry * 14.0)).min(255.0) as u8,
+                255,
+            ]);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(across, up, pixels)
+}
+
+/// The bamboo screen along one wall:/// The bamboo screen along one wall: how thick a pole is, how far apart they
+/// stand, how tall the screen is, and how far it stands off the plaster.
+///
+/// One wall and not four. A garden walled in bamboo on every side is a
+/// stockade; a screen on the wall you face coming in is a thing somebody put
+/// there. The west wall is the one opposite the way in, so it is the first
+/// surface you look at.
+pub const POLE: f32 = 0.055;
+pub const POLE_GAP: f32 = 0.012;
+pub const SCREEN_UP: f32 = 2.05;
+pub const SCREEN_OFF: f32 = 0.08;
+/// Where the two rails cross the poles, as a fraction of the screen's height.
+pub const RAILS: [f32; 2] = [0.22, 0.86];
+pub const RAIL: f32 = 0.05;
+
+/// A length of bamboo, as the wheel turns it.
+///
+/// Nearly a cylinder: a pole swells a little at each node and is straight
+/// between them, and that swelling is the whole of what tells you it is
+/// bamboo rather than dowel.
+pub fn pole_mesh() -> blitzkit::mesh::MeshData {
+    let nodes = 5.0;
+
+    crate::cellar::turned(10, 48, move |v| {
+        let node = (v * nodes * std::f32::consts::PI).sin().abs();
+
+        (v * SCREEN_UP, POLE * (1.0 + node.powf(14.0) * 0.14))
+    })
+}
+
+/// Where every pole of the screen stands, along the wall it is fixed to.
+pub fn screen(reaches: f32) -> Vec<Vec3> {
+    let Some(face) = screened(reaches) else {
+        return Vec::new();
+    };
+    let (middle, size, looks) = face.plane();
+    let step = POLE + POLE_GAP;
+    let many = ((size.x - POLE) / step).floor().max(0.0) as usize;
+    // centred on the wall, so the half pole left over is split between the two
+    // ends rather than all at one
+    let run = many as f32 * step;
+    let start = -run * 0.5 + step * 0.5;
+    let out = looks * SCREEN_OFF;
+
+    (0..many)
+        .map(|n| {
+            let along = start + n as f32 * step;
+
+            vec3(
+                middle.x + out.x + if looks.x.abs() > 0.5 { 0.0 } else { along },
+                0.0,
+                middle.z + out.z + if looks.x.abs() > 0.5 { along } else { 0.0 },
+            )
+        })
+        .collect()
+}
+
+/// The two rails that hold the screen together, as boxes.
+pub fn rails(reaches: f32) -> Vec<(Vec3, Vec3)> {
+    let Some(face) = screened(reaches) else {
+        return Vec::new();
+    };
+    let (middle, size, looks) = face.plane();
+    let along = looks.x.abs() > 0.5;
+    let out = looks * (SCREEN_OFF + POLE * 0.5);
+
+    RAILS
+        .iter()
+        .copied()
+        .map(|up| {
+            let at_ = vec3(middle.x + out.x, up * SCREEN_UP, middle.z + out.z);
+            let size = if along {
+                vec3(RAIL, RAIL, size.x)
+            } else {
+                vec3(size.x, RAIL, RAIL)
+            };
+
+            (at_, size)
+        })
+        .collect()
+}
+
+/// The wall the screen is fixed to, which is the west one.
+fn screened(reaches: f32) -> Option<Face> {
+    facing(reaches)
+        .into_iter()
+        .find(|face| face.looks.x > 0.5 && !face.solid)
+}
+
+/// How many texels to a metre the plaster gets, and the seed its pictures are
+/// counted from.
+///
+/// One picture per wall rather than one tile repeated. A tile two metres
+/// across repeated eight times down a sixteen metre wall is a wall with eight
+/// of the same stain on it, and the stains are the whole of what this is.
+pub const PLASTER_PER_UNIT: f32 = 40.0;
+pub const PLASTER_SEED: u32 = 0x5EED_B4A1;
+
+/// Earthen plaster, oil stained and weathered, for the garden's walls.
+///
+/// The wall this is after is the one round a temple garden: lime and earth
+/// over a core, ochre through brown, darker where a century of rain has run
+/// down it and darker again at the foot where the ground splashes it. The
+/// stains are low and soft and the grain is high and fine, and it is having
+/// both at once that stops it reading as a painted surface.
+pub fn plastered(seed: u32, size: Vec2) -> blitzkit::texture::TextureData {
+    let across = ((size.x * PLASTER_PER_UNIT).round() as u32).clamp(8, 2048);
+    let up = ((size.y * PLASTER_PER_UNIT).round() as u32).clamp(8, 2048);
+
+    // value noise: a hash on the lattice and a smooth step between, which is
+    // the cheapest thing that gives blotches rather than static
+    let hash = move |x: i32, y: i32| {
+        let mut n =
+            (x as u32).wrapping_mul(0x27D4_EB2D) ^ (y as u32).wrapping_mul(0x1656_67B1) ^ seed;
+        n ^= n >> 15;
+        n = n.wrapping_mul(0x2C1B_3C6D);
+        n ^= n >> 12;
+        (n >> 8) as f32 / ((1u32 << 24) as f32)
+    };
+    let smooth = |t: f32| t * t * (3.0 - 2.0 * t);
+    let noise = move |x: f32, y: f32| {
+        let (fx, fy) = (x.floor(), y.floor());
+        let (ix, iy) = (fx as i32, fy as i32);
+        let (tx, ty) = (smooth(x - fx), smooth(y - fy));
+        let a = hash(ix, iy);
+        let b = hash(ix + 1, iy);
+        let c = hash(ix, iy + 1);
+        let d = hash(ix + 1, iy + 1);
+
+        (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty
+    };
+
+    let mut grit = seed | 1;
+    let mut next = move || {
+        grit ^= grit << 13;
+        grit ^= grit >> 17;
+        grit ^= grit << 5;
+        (grit >> 8) as f32 / ((1u32 << 24) as f32)
+    };
+
+    let mut pixels = Vec::with_capacity((across * up * 4) as usize);
+
+    for j in 0..up {
+        // nought at the bottom of the wall, one at the top
+        let v = j as f32 / (up - 1).max(1) as f32;
+        let high = v * size.y;
+
+        for i in 0..across {
+            let u = i as f32 / (across - 1).max(1) as f32;
+            let wide = u * size.x;
+
+            // the stains, in two sizes
+            let blotch =
+                noise(wide * 0.5, high * 0.5) * 0.65 + noise(wide * 1.7, high * 1.7) * 0.35;
+            // and the run of rain down it: the same noise stretched so it is
+            // narrow across and long down, with two things done to it.
+            //
+            // The columns wander, because a run of water down a wall is not a
+            // ruled line, and the first version was ruled lines: sixteen
+            // metres of even vertical banding that read as a hanging curtain.
+            //
+            // And only some columns have one. A wall where every hand's
+            // breadth streaks is a wall with a pattern on it rather than a
+            // wall things have run down.
+            let drift = noise(wide * 0.6, high * 0.08) - 0.5;
+            let run = noise(wide * 2.6 + drift * 2.4, high * 0.15);
+            // constant up the wall, so a column either streaks or does not
+            let streaks = noise(wide * 0.4, 7.0);
+            // and they start under the cope and give out before the foot,
+            // because that is where the water comes from and where it stops
+            let from_top = ((size.y - high) / size.y.max(0.1)).clamp(0.0, 1.0);
+            let taper = (1.0 - from_top * 1.25).clamp(0.0, 1.0);
+            let streak = (run - 0.5) * streaks.max(0.22) * taper;
+            // the ground splashes the bottom of a wall and the top of it dries
+            // first, so a wall of this kind is darkest in its lowest half metre
+            let foot = (1.0 - (high / 0.55).min(1.0)) * 0.30;
+            // and the rain runs off the top, so the course just under the cope
+            // keeps its colour
+            let under = ((high - (size.y - 0.35)) / 0.35).clamp(0.0, 1.0) * 0.08;
+
+            let tone = 0.80 + (blotch - 0.5) * 0.32 + streak * 0.40 - foot + under - next() * 0.05;
+            let tone = tone.clamp(0.08, 1.0);
+
+            // ochre: the red runs ahead of the green and the blue trails both,
+            // and the damp at the foot pulls the whole thing green
+            let damp = foot * 0.9;
+
+            pixels.extend_from_slice(&[
+                (tone * 196.0 * (1.0 - damp * 0.5)).min(255.0) as u8,
+                (tone * 178.0 * (1.0 - damp * 0.2)).min(255.0) as u8,
+                (tone * 146.0 * (1.0 - damp * 0.1)).min(255.0) as u8,
+                255,
+            ]);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(across, up, pixels)
 }
 
 /// The pond: how far across, how deep, and where it sits in the garden.
@@ -2948,10 +3418,10 @@ mod tests {
                 (from + to) * 0.5,
             );
 
-            let drawn = faces.iter().any(|(mid, size)| {
-                (mid.x - at_.x).abs() <= size.x * 0.5 + 1e-4
-                    && (mid.y - at_.y).abs() <= size.y * 0.5 + 1e-4
-                    && (mid.z - at_.z).abs() <= size.z * 0.5 + 1e-4
+            let drawn = faces.iter().any(|face| {
+                (face.at.x - at_.x).abs() <= face.size.x * 0.5 + 1e-4
+                    && (face.at.y - at_.y).abs() <= face.size.y * 0.5 + 1e-4
+                    && (face.at.z - at_.z).abs() <= face.size.z * 0.5 + 1e-4
             });
 
             assert!(
@@ -2959,6 +3429,97 @@ mod tests {
                 "nothing is drawn over the way in at {:?}, so the channel \
                  behind its face is open to the sky",
                 at_
+            );
+        }
+    }
+
+    /// Spec 0010: every wall is capped, end to end, and the cap oversails
+    /// both faces of the wall it caps.
+    ///
+    /// A cap short of the end leaves a notch of sky at the corner, and a cap
+    /// that oversails one face and not the other is a cap put on the lining
+    /// rather than on the wall. Both were true of the first one.
+    #[test]
+    fn every_wall_is_capped_end_to_end_and_oversails_it() {
+        let reaches = room().reaches;
+        let cope: Vec<(Vec3, Vec3)> = coping(reaches);
+
+        assert!(!cope.is_empty(), "nothing caps the garden's walls");
+
+        for face in facing(reaches) {
+            if face.solid {
+                continue;
+            }
+
+            let along = face.looks.x.abs() > 0.5;
+            let (surface, size, looks) = face.plane();
+            let run = size.x;
+            // the middle of the wall this face lines
+            let core = surface - looks * THICK * 0.5;
+
+            let caps = cope.iter().any(|(at_, box_)| {
+                let wide = if along { box_.x } else { box_.z };
+                let long = if along { box_.z } else { box_.x };
+                let over = if along {
+                    at_.x - core.x
+                } else {
+                    at_.z - core.z
+                };
+
+                // the oversail is measured against the wall and not against
+                // COPE_OUT, which is the number the cope was built from: the
+                // first version of this compared that constant with itself
+                // and passed with the oversail set to nothing at all
+                (at_.y - HIGH - COPE_DEEP * 0.5).abs() < 1e-3
+                    && long >= run - 1e-3
+                    && wide >= THICK + 0.1
+                    && over.abs() < 1e-3
+            });
+
+            assert!(
+                caps,
+                "the wall {:?} runs {:.2} and nothing caps it end to end, centred on it",
+                looks, run
+            );
+        }
+    }
+
+    /// Spec 0010: no pole of the screen stands past the wall it is fixed to.
+    ///
+    /// A screen wider than its wall is a row of bamboo growing through the
+    /// corner of the garden.
+    #[test]
+    fn the_screen_stays_on_its_wall() {
+        let reaches = room().reaches;
+        let poles = screen(reaches);
+
+        assert!(
+            poles.len() > 20,
+            "the screen came back as {} poles",
+            poles.len()
+        );
+
+        let face = screened(reaches).expect("the west wall");
+        let (surface, size, looks) = face.plane();
+        let half = size.x * 0.5;
+
+        for at_ in poles {
+            let along = at_.z - surface.z;
+
+            assert!(
+                along.abs() <= half - POLE * 0.5 + 1e-3,
+                "a pole stands {:.2} along a wall {:.2} across",
+                along,
+                size.x
+            );
+            // and clear of the plaster rather than in it
+            let off = (at_.x - surface.x) * looks.x;
+
+            assert!(
+                off >= POLE * 0.5,
+                "a pole stands {:.3} off the plaster and is {:.3} thick",
+                off,
+                POLE
             );
         }
     }

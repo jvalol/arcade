@@ -172,6 +172,33 @@ pub fn tiled_plane(tiles: glam::Vec2) -> MeshData {
     )
 }
 
+/// Which way to turn a `tiled_plane` so its face looks the way `looks` does.
+///
+/// The quad is built flat, looking up, so this is the one rotation that takes
+/// it to any wall. Written out in three places before it was named: the pool's
+/// lining, the garden's plaster and the baths' tiling all want it, and three
+/// copies of a rotation is three chances to get a sign wrong.
+pub fn laid_on(looks: Vec3) -> glam::Quat {
+    if looks.y.abs() > 0.5 {
+        if looks.y > 0.0 {
+            glam::Quat::IDENTITY
+        } else {
+            glam::Quat::from_rotation_x(std::f32::consts::PI)
+        }
+    } else if looks.x.abs() > 0.5 {
+        // the quad's normal is its local +Y, and a turn of a quarter about z
+        // takes +Y to -x, so the sign here is the other way round from the way
+        // it reads. The baths' lining has the same two lines with both signs
+        // flipped, because there `looks` is the way the water is rather than
+        // the way the surface faces, and copying them straight over drew every
+        // wall of the garden inside out.
+        glam::Quat::from_rotation_z(-looks.x * std::f32::consts::FRAC_PI_2)
+            * glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
+    } else {
+        glam::Quat::from_rotation_x(looks.z * std::f32::consts::FRAC_PI_2)
+    }
+}
+
 /// Which way to turn a quad so its one face looks the way a cabinet does.
 pub fn turned_to(facing: Vec3) -> glam::Quat {
     glam::Quat::from_rotation_y(if facing.x >= 0.0 {
