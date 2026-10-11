@@ -55,6 +55,10 @@ because this building draws from several dozen calls rather than one list.
 Where the two disagree you see an outline standing off the thing it should be
 tracing, which is what every one of those faults looked like.
 
+Spec 0014 reads the drawn list after all, from inside the renderer, which is
+the only place that has it. It answers a narrower question than this one: not
+whether the two lists agree, but whether two drawn faces share a plane.
+
 **The body you walk around as.** It is a sphere, and spec 0046 draws boxes.
 
 **Anything on the screen saying it is on.** The outlines are the signal that

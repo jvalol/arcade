@@ -513,6 +513,14 @@ pub const CEILING: Vec4 = vec4(0.09, 0.08, 0.10, 1.0);
 /// an outline is never mistaken for a thing that is actually there.
 pub const SOLID: Vec4 = vec4(0.0, 1.6, 0.9, 1.0);
 
+/// What a patch of two fighting faces is outlined in, per spec 0048 of the
+/// engine.
+///
+/// Hot where `SOLID` is cool, so the two debug lists are never read as one.
+/// Both are past white for the same reason: nothing in the building is this
+/// colour, so neither can be mistaken for something that is really there.
+pub const FIGHTING: Vec4 = vec4(1.8, 0.2, 0.9, 1.0);
+
 pub const CEIL_BAR: Vec4 = vec4(0.055, 0.050, 0.065, 1.0);
 pub const CEIL_TILE: Vec4 = vec4(0.150, 0.145, 0.165, 1.0);
 

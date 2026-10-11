@@ -309,6 +309,7 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blitzkit::renderer::coplanar::Fights;
 
     /// The room these tests walk, taken from the room rather than written down.
     fn room() -> crate::room::Room {
@@ -573,6 +574,87 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Spec 0048 of the engine, on the fault that spec was written for.
+    ///
+    /// This room's floor and the hall's were in one plane over five metres by
+    /// three for as long as the lap was drawn, and the carpet came back torn
+    /// into bands. The engine's coplanar check reads boxes and says so, which
+    /// is the point of it: nobody had to walk here.
+    ///
+    /// It is run over the whole building's boxes and not over this room's,
+    /// because the check asks whether a face looks into a room or out at the
+    /// weather, and only the rest of the building can answer that. Over this
+    /// room alone the lap came back as nothing at all, which is the third time
+    /// in one afternoon that handing it a fragment gave a wrong answer.
+    ///
+    /// Its own control, both ways round. The lap is in the colliders, where it
+    /// belongs and where the check finds it at the size it really is; drawn
+    /// without it, which is what ships, there is nothing in the hall's floor
+    /// plane at all.
+    #[test]
+    fn the_engines_check_catches_the_lap_and_passes_what_ships() {
+        let room = room();
+        let middle = at(room.reaches);
+        let hall = room.floors()[0];
+
+        // the whole building, with this room's floor as given. The walked list
+        // laps and the drawn one does not, which is the one difference.
+        let whole = |back: f32| {
+            let lapped = ground(middle, LAPS);
+            let mut boxes: Vec<Aabb> = room
+                .solid()
+                .into_iter()
+                .filter(|box_| *box_ != lapped)
+                .collect();
+
+            boxes.push(ground(middle, back));
+
+            Fights::of(boxes, 0, 0)
+        };
+
+        // a fight in the hall's own floor plane, over the hall's own floor,
+        // which is the patch you wake up standing on
+        let in_the_halls_floor = |report: &Fights| {
+            report
+                .fights
+                .iter()
+                .find(|fight| {
+                    fight.axis == 1
+                        && fight.facing > 0.0
+                        && (fight.patch.min.y - hall.max.y).abs() < 1e-4
+                        && fight.patch.min.x < hall.max.x - 1e-4
+                        && fight.patch.max.x > hall.min.x + 1e-4
+                })
+                .copied()
+        };
+
+        let caught = whole(LAPS);
+
+        let found = in_the_halls_floor(&caught).unwrap_or_else(|| {
+            panic!(
+                "the lap lies in the hall's floor plane and the check missed it; \
+                 the biggest it found was {:?}",
+                caught.fights.first()
+            )
+        });
+
+        assert!(
+            (found.area() - 5.4 * LAPS).abs() < 0.1,
+            "the lap is 5.40 by {:.2} and came back as {:.2} square metres, {}",
+            LAPS,
+            found.area(),
+            found
+        );
+
+        let ships = whole(0.0);
+
+        assert!(
+            in_the_halls_floor(&ships).is_none(),
+            "what ships draws no lap and the check found one anyway: {:?}",
+            in_the_halls_floor(&ships)
+        );
     }
 
     /// Spec 0011: no column stands in the way in.

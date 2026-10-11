@@ -22,6 +22,7 @@ mod walk;
 mod wrecker;
 
 use blitzkit::camera::Camera;
+use blitzkit::collision::Aabb;
 use blitzkit::geometry::Geometry;
 use blitzkit::keyboard::{KeyboardInput, KeyboardKey, KeyboardKeyState};
 use blitzkit::mesh::{MeshData, Transform};
@@ -261,6 +262,13 @@ struct Arcade {
     /// Whether every collider is outlined over the scene, per spec 0013 and
     /// spec 0046 of the engine. Off until somebody asks.
     showing_solid: bool,
+    /// Whether a coplanar check has been asked for, per spec 0048 of the
+    /// engine. One press, one check: it compares every drawn thing with every
+    /// other and the answer does not change between frames.
+    wants_planes: bool,
+    /// The patches the last check found, kept so they can be outlined. A press
+    /// asks, the frame after draws them, and they stay up until the next ask.
+    fighting: Vec<Aabb>,
     walking: [bool; 4],
     /// Whether a shift key is down, which is what turns the arrows from hauling
     /// a toy about into working its one other control.
@@ -420,6 +428,8 @@ impl Arcade {
             yaw: if staged() { POSED_YAW } else { 0.0 },
             pitch: if staged() { POSED_PITCH } else { 0.0 },
             showing_solid: false,
+            wants_planes: false,
+            fighting: Vec::new(),
             walking: [false; 4],
             shifted: false,
             leaning: [false; 4],
@@ -837,6 +847,28 @@ impl Game for Arcade {
         // rather than uploaded again, per spec 0042.
         if let Some(mesh) = self.stream {
             renderer.update_mesh(mesh, &spa::stream_mesh(self.since));
+        }
+
+        // the coplanar check, per spec 0048 of the engine. Asked here because
+        // this is where a game has the renderer, and read back here too: the
+        // answer lands during the frame that was asked for, so the press turns
+        // into outlines on the frame after. That is the only place the patches
+        // can come from, because what fights is drawn and nothing else knows
+        // the drawn list.
+        if self.wants_planes {
+            self.wants_planes = false;
+            renderer.check_fighting_faces();
+        }
+
+        let found: Vec<Aabb> = renderer
+            .fights()
+            .fights
+            .iter()
+            .map(|fight| fight.patch)
+            .collect();
+
+        if !found.is_empty() || self.fighting.is_empty() {
+            self.fighting = found;
         }
     }
 
@@ -2139,6 +2171,13 @@ impl Game for Arcade {
             for box_ in self.room.solid() {
                 scene.outline(box_, aim::SOLID);
             }
+        }
+
+        // and the patches where two drawn faces share a plane, in a colour
+        // nothing else uses, per spec 0048 of the engine. A patch is flat, so
+        // what you see is a rectangle lying exactly where the speckle is.
+        for patch in &self.fighting {
+            scene.outline(*patch, aim::FIGHTING);
         }
 
         // the spa behind the cellar. Spec 0008.
@@ -4277,6 +4316,13 @@ impl Game for Arcade {
             KeyboardKey::O if held && !input.repeat => {
                 self.showing_solid = !self.showing_solid;
             }
+            // and the drawn faces that share a plane, per spec 0048 of the
+            // engine. A press and not a toggle: the check costs every drawn
+            // thing against every other, the answer is the same every frame,
+            // and the patches it found stay outlined until you ask again.
+            KeyboardKey::P if held && !input.repeat => {
+                self.wants_planes = true;
+            }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
         }
@@ -4411,6 +4457,61 @@ mod tests {
             press(&mut one, key);
 
             assert!(!one.showing_solid, "{:?} showed what is solid", key);
+        }
+    }
+
+    /// Spec 0048 of the engine: P asks for one check.
+    ///
+    /// Not a toggle. There is nothing to turn off: the check runs once, the
+    /// patches it found stay outlined, and asking again replaces them.
+    #[test]
+    fn p_asks_for_one_coplanar_check() {
+        let mut one = Arcade::new();
+
+        assert!(
+            !Arcade::new().wants_planes,
+            "the building opened asking for a check"
+        );
+
+        press(&mut one, KeyboardKey::P);
+        assert!(one.wants_planes, "P did not ask for a check");
+    }
+
+    /// Spec 0048 of the engine: the repeats of a held key ask for nothing.
+    ///
+    /// A check over every drawn thing against every other, taken off the
+    /// repeat rate, is a building that stops while you lean on a key.
+    #[test]
+    fn the_repeats_of_a_held_p_ask_for_nothing() {
+        let mut one = Arcade::new();
+
+        for _ in 0..6 {
+            one.process_keyboard(KeyboardInput {
+                key: KeyboardKey::P,
+                state: KeyboardKeyState::Pressed,
+                repeat: true,
+            });
+        }
+
+        assert!(!one.wants_planes, "a repeat on its own asked for a check");
+    }
+
+    /// Spec 0048 of the engine: nothing else asks for it.
+    #[test]
+    fn no_other_key_asks_for_the_check() {
+        for key in [
+            KeyboardKey::W,
+            KeyboardKey::S,
+            KeyboardKey::A,
+            KeyboardKey::D,
+            KeyboardKey::Return,
+            KeyboardKey::Up,
+            KeyboardKey::O,
+        ] {
+            let mut one = Arcade::new();
+            press(&mut one, key);
+
+            assert!(!one.wants_planes, "{:?} asked for a check", key);
         }
     }
 
