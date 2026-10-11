@@ -309,6 +309,7 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blitzkit::camera::Camera;
     use blitzkit::renderer::coplanar::Fights;
 
     /// The room these tests walk, taken from the room rather than written down.
@@ -611,7 +612,12 @@ mod tests {
 
             boxes.push(ground(middle, back));
 
-            Fights::of(boxes, 0, 0)
+            // this game's own camera, which is what decides how fine a gap
+            // the depth buffer still blurs at a given distance. The arcade
+            // leaves the near and far planes as the engine sets them.
+            let looking = blitzkit::renderer::depth::Depth::of(&Camera::default());
+
+            Fights::of(boxes, 0, 0, &looking)
         };
 
         // a fight in the hall's own floor plane, over the hall's own floor,

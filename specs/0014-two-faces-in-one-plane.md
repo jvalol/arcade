@@ -39,10 +39,12 @@ throws out every pair nobody can get in front of. The body is this game's own:
 the radius `walk` slides, a step of a quarter metre, and four metres of air over
 a place to stand.
 
-**It reports 2 pairs out of 221**, over 5215 drawn boxes, with 138 instances
+**It reports 2 pairs out of 236**, over 5215 drawn boxes, with 138 instances
 turned off the axes and 814 whose shape is not a box, neither measured, and
 66348 cells of a quarter metre a body can be in. Both of the two are at the
-hall's ceiling, which is somewhere you can stand and look up.
+hall's ceiling, which is somewhere you can stand and look up, and both are five
+ten thousandths of a millimetre apart, which is what a transform leaves behind
+rather than a gap anybody put there.
 
 **Shut doors mean rooms it says nothing about.** The way down is a secret door
 and the way into the baths is another, so when the building opens the cellar and
