@@ -688,19 +688,25 @@ impl Arcade {
         (self.at.x - middle.x).abs() < half.x && (self.at.z - middle.z).abs() < half.y
     }
 
+    /// Whether you are actually running, which is shift down somewhere you
+    /// can use it.
+    ///
+    /// Said once, because the pace and the footsteps both need it and had
+    /// their own copies of the test for a while. Which floors shift works on
+    /// is `noise::can_run`, so the one account of it is over there with the
+    /// floors.
+    fn running(&self) -> bool {
+        self.shifted && noise::can_run(self.underfoot())
+    }
+
     /// How fast you are getting about: walking, running, or wading.
     ///
     /// A method rather than three lines in `update`, so a test can ask it.
-    /// Shift does nothing in the water: wading is most of what tells you that
-    /// you are in the pool rather than beside it, per spec 0008, and a sprint
-    /// through it takes that away.
     fn pace(&self) -> f32 {
-        let running = self.shifted && !self.wading();
-
         spa::pace(
             self.room.reaches,
             self.at,
-            if running { SPEED * RUNS } else { SPEED },
+            if self.running() { SPEED * RUNS } else { SPEED },
         )
     }
 
@@ -1613,9 +1619,17 @@ impl Game for Arcade {
         // a footstep every stride, paced by how far you have actually walked
         // rather than by a clock, so slowing down slows them and standing still
         // is silence. Spec 0009.
+        //
+        // The stride is the one for how you are going, and it is longer at a
+        // run: a sprinter covers more ground per step rather than taking the
+        // same step twice as often. Held in a local and subtracted again
+        // below, because taking it twice would let the two readings disagree
+        // across a frame where shift went down.
+        let stride = noise::stride(self.running());
+
         self.paced += went * dt;
-        if self.paced >= noise::STRIDE {
-            self.paced -= noise::STRIDE;
+        if self.paced >= stride {
+            self.paced -= stride;
 
             let on = self.underfoot();
             self.stepped = self.stepped.wrapping_add(1);

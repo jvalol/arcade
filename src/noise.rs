@@ -112,6 +112,23 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
 /// a second is a jog's stride.
 pub const STRIDE: f32 = 1.6;
 
+/// How far you cover between steps at a run.
+///
+/// A unit is a metre here: a body is 0.9 across and your eye is at 1.55. So
+/// `crate::SPEED` times `crate::RUNS` is 8.4 metres a second, which is a
+/// sprint, and a sprinter at that speed is not taking the same step twice as
+/// often. They are taking a longer one: about two metres, four times a second.
+///
+/// This came out of the footstep work. `RUNS` doubled the speed and the stride
+/// stayed where it was, so the whole of it went into the cadence and a run was
+/// 5.3 steps a second, which is a buzz rather than a sprint. 2.1 at 8.4 is
+/// four a second, against two and a half at a walk.
+///
+/// Longer and not shorter, which is the half of this that is easy to get
+/// backwards: a faster thing sounds like more of it, and the reason a sprint
+/// does not sound like a drum roll is that each step covers more ground.
+pub const RUN_STRIDE: f32 = 2.1;
+
 /// How many steps may be sounding at once.
 ///
 /// Two, so a step is over before the step after next lands. Three shoes going
@@ -131,8 +148,31 @@ pub const STRIDE: f32 = 1.6;
 /// thing standing between the building and a runaway queue.
 pub const OVERLAP: f32 = 2.0;
 
-/// How fast you cross a floor at a walk, which is what sets the gap between
-/// steps on it.
+/// How far you cover between steps, going as you are.
+///
+/// The one place the two strides are chosen between, so nothing else has to
+/// know there are two.
+pub fn stride(running: bool) -> f32 {
+    if running {
+        RUN_STRIDE
+    } else {
+        STRIDE
+    }
+}
+
+/// Whether shift does anything on a floor.
+///
+/// Not in the water. Wading is the whole of what tells you that you are in the
+/// pool rather than beside it, per spec 0008, and a sprint through it takes
+/// that away. Said once here, because `crate::Game::pace` and everything that
+/// works out the gap between steps both need it and two accounts of it is two
+/// things to come apart.
+pub fn can_run(on: Underfoot) -> bool {
+    !matches!(on, Underfoot::Water)
+}
+
+/// How fast you cross a floor at a walk, which is half of what sets the gap
+/// between steps on it.
 ///
 /// The same `spa::WADE` the pool slows you by, so the sound and the walking
 /// cannot disagree about how fast you are getting through the water.
@@ -143,33 +183,41 @@ pub fn pace(on: Underfoot) -> f32 {
     }
 }
 
-/// The fastest you can cross it, which is what sets the shortest gap.
-///
-/// `crate::RUNS` of the walking pace on anything dry, and the walking pace
-/// itself in the water, because shift does nothing in there: wading is the
-/// whole of what tells you that you are in the pool rather than beside it, per
-/// spec 0008.
+/// The fastest you can cross it.
 ///
 /// Named apart from `pace` because the two came apart once. Everything that
 /// wanted the shortest gap asked `pace` for it, and the day shift arrived
-/// `pace` stopped being the shortest gap and no test said so.
+/// `pace` stopped being the fastest and no test said so.
 pub fn fastest(on: Underfoot) -> f32 {
-    match on {
-        Underfoot::Water => pace(on),
-        _ => pace(on) * crate::RUNS,
+    if can_run(on) {
+        pace(on) * crate::RUNS
+    } else {
+        pace(on)
     }
 }
 
-/// How long a footstep may last: `OVERLAP` strides at the fastest you can
-/// cover them.
+/// The shortest the gap between steps can get on a floor.
+///
+/// Both halves at once, which is the point of it being one function: going
+/// faster shortens the gap and the longer stride at a run gives some of that
+/// back. On a dry floor it is 2.1 over 8.4, a quarter of a second, where the
+/// speed alone would have said a fifth.
+///
+/// The stride asked for is the one you would use at the fastest you can go
+/// here, so in the water it is the walking stride: you cannot run in there.
+pub fn shortest_gap(on: Underfoot) -> f32 {
+    stride(can_run(on)) / fastest(on)
+}
+
+/// How long a footstep may last: `OVERLAP` of the shortest gap.
 ///
 /// Per floor, because the gap is not the same on all of them. You wade at
 /// `spa::WADE` of your walking pace and cannot run in it at all, so a step in
-/// the pool lands every nine tenths of a second rather than every fifth of
+/// the pool lands every nine tenths of a second rather than every quarter of
 /// one, and a splash wants that tail. One number for every floor would either
 /// cut the water off short or hold every dry floor to a splash's length.
 pub fn longest(on: Underfoot) -> f32 {
-    (OVERLAP * STRIDE / fastest(on)).max(0.05)
+    (OVERLAP * shortest_gap(on)).max(0.05)
 }
 
 /// The recordings, per the engine's spec 0045 and `res/steps/README.md`.
@@ -816,7 +864,7 @@ mod tests {
     #[test]
     fn no_more_than_two_steps_sound_at_once() {
         for on in FLOORS {
-            let gap = STRIDE / fastest(on);
+            let gap = shortest_gap(on);
 
             for (n, bytes) in steps(on).iter().enumerate() {
                 let got = Samples::from_wav(bytes).expect("a step that reads");
@@ -834,24 +882,61 @@ mod tests {
             }
         }
 
-        // and the cadence is a cadence and not a drum roll
-        let walked = crate::SPEED / STRIDE;
+        // and the cadence is a cadence and not a drum roll, at either speed
+        let walked = crate::SPEED / stride(false);
         assert!(
             (1.5..=3.5).contains(&walked),
             "{:.1} steps a second is not a person walking",
             walked
         );
 
-        // At a run it is 5.3 a second, which is fast for a sprint and is the
-        // one number here nobody has decided: the stride does not lengthen
-        // when you run, so the whole of `RUNS` goes into the cadence. Left as
-        // it is and bounded rather than tuned, because how a run should sound
-        // is Jake's to say.
-        let run = crate::SPEED * crate::RUNS / STRIDE;
+        let run = crate::SPEED * crate::RUNS / stride(true);
         assert!(
-            (3.5..=6.0).contains(&run),
+            (3.0..=4.5).contains(&run),
             "{:.1} steps a second is not a person running",
             run
+        );
+    }
+
+    /// Spec 0009: the stride lengthens when you run, so the cadence rises by
+    /// less than the speed does.
+    ///
+    /// A sprinter covers more ground per step rather than taking the same step
+    /// twice as often, and this is the half of it that is easy to get
+    /// backwards. Running arrived with the stride left alone, so the whole of
+    /// `crate::RUNS` went into the cadence and a sprint across the hall was
+    /// 5.3 steps a second: a buzz, and not what anybody has ever heard a
+    /// person do.
+    ///
+    /// The control is `RUN_STRIDE` set back to `STRIDE`: the second assertion
+    /// then reads a cadence doubled against a speed doubled and fails.
+    #[test]
+    fn a_run_is_a_longer_step_and_not_just_a_faster_one() {
+        assert!(
+            stride(true) > stride(false),
+            "a running stride of {:.2} against a walking {:.2}",
+            stride(true),
+            stride(false)
+        );
+
+        let faster = crate::RUNS;
+        let more_often =
+            (crate::SPEED * crate::RUNS / stride(true)) / (crate::SPEED / stride(false));
+
+        assert!(
+            more_often < faster * 0.85,
+            "running is {:.2} times as fast and {:.2} times as many steps, so              nearly all of it went into the cadence",
+            faster,
+            more_often
+        );
+
+        // and the longer stride is not so long that a step at a run is rarer
+        // than one at a walk, which would be a stride growing faster than the
+        // speed
+        assert!(
+            more_often > 1.0,
+            "running takes {:.2} times as many steps, which is fewer",
+            more_often
         );
     }
 

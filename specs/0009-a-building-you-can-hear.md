@@ -62,6 +62,25 @@ and at the speed this building walks you that is nearly five steps a second: a
 sprint cadence under a body that is plainly not sprinting. It is 1.6 now, which
 is a jog's stride at a jog's speed and about two and a half steps a second.
 
+**The stride lengthens when you run.** A unit is a metre in this building: a
+body is 0.9 across and your eye is at 1.55. `RUNS` doubles the speed to 8.4
+metres a second, which is a sprint, and a sprinter at that speed is not taking
+the same step twice as often. They are taking a longer one.
+
+Running shipped with the stride left alone, so the whole of `RUNS` went into
+the cadence and a sprint across the hall was 5.3 steps a second. That is a buzz
+and not a person. `noise::RUN_STRIDE` is 2.1, which at 8.4 is four steps a
+second, against two and a half at a walk. Four a second at a two metre step is
+roughly what a sprinter does.
+
+`noise::stride` is the one place the two are chosen between, asked once a frame
+off `Game::running` and held in a local for the frame, because reading it twice
+would let the two readings disagree across the frame shift goes down in. The
+pace and the footsteps ask the same `Game::running`, which asks
+`noise::can_run`, which is where the rule that shift does nothing in the water
+lives: three copies of that test is three things to come apart, and two of them
+already had.
+
 **Footsteps are allowed to overlap, and the engine is why.** This was the
 reverse until 2026-10-11, and it was wrong twice over.
 
@@ -89,12 +108,13 @@ accumulates. Spec 0044 already promised this in as many words, that a sound
 path where it was not true.
 
 `noise::longest` stays, with a different job and an honest derivation. It is
-`noise::OVERLAP` strides at `noise::fastest`, the quickest that floor can be
-crossed, so a step is over before the step after next lands. Three shoes going
-at once is a smear whatever is playing them. `fastest` is named apart from
-`pace` because that is the pair that came apart: everything wanting the
-shortest gap asked `pace` for it, and `pace` quietly stopped being the shortest
-gap.
+`noise::OVERLAP` of `noise::shortest_gap`, so a step is over before the step
+after next lands. Three shoes going at once is a smear whatever is playing
+them. `shortest_gap` takes both halves at once, the fastest that floor can be
+crossed and the stride you would be using to do it, which on a dry floor is
+2.1 over 8.4 or a quarter of a second. `fastest` is named apart from `pace`
+because that is the pair that came apart: everything wanting the shortest gap
+asked `pace` for it, and `pace` quietly stopped being the fastest.
 
 **No step is the one before it.** The repetition is what gives a footstep away,
 not the recording, so the file walks the list in order and both the pitch and
@@ -135,10 +155,10 @@ water is a second thing to come apart.
 **A step in water is allowed to be longer.** The gap between steps is not the
 same on every floor: you wade at `spa::WADE` of your walking pace and shift
 does nothing in the water at all, so a step in the pool lands every nine
-tenths of a second against a fifth of one on a dry floor at a run. One cap for
-every floor would either cut the splash off short or hold every dry floor to a
-splash's length. `noise::fastest` names the speeds and `noise::longest` works
-the cap out from whichever applies.
+tenths of a second against a quarter of one on a dry floor at a run. One cap
+for every floor would either cut the splash off short or hold every dry floor
+to a splash's length. `noise::shortest_gap` works it out per floor and
+`noise::longest` takes the cap off that.
 
 **One note at a time.** The room notes go out through `play_at`, which still
 appends to a player and runs them one after another. Four notes a second, each
@@ -187,6 +207,7 @@ the engine's and stays available.
 - And it is bent within the bounds a step is. — `noise::tests::a_rooms_note_is_bent_like_a_step`
 - The pool sounds like water and its edge like tile. — `noise::tests::each_room_sounds_like_its_own_floor`
 - No more than two footsteps sound at once, at a run and in the water. — `noise::tests::no_more_than_two_steps_sound_at_once`
+- The stride lengthens at a run, so the cadence rises by less than the speed. — `noise::tests::a_run_is_a_longer_step_and_not_just_a_faster_one`
 - None of them clips: no sample past one. — `noise::tests::nothing_is_louder_than_one`
 - None of them starts or ends with a jump, which is a click. — `noise::tests::nothing_begins_or_ends_with_a_click`
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
@@ -211,7 +232,7 @@ Run the arcade and walk from the hall to the baths.
   than leaving them to run on. This is the one that was wrong on 2026-10-11 and
   it cannot be heard in a test.
 - A sprint sounds like a sprint rather than a smear, with two steps' worth of
-  overlap in it.
+  overlap in it, and like a longer step rather than a faster one.
 
 ## Out of scope
 
