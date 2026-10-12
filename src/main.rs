@@ -293,6 +293,10 @@ struct Arcade {
     /// twice is a name stretched.
     names: Vec<(TextureId, f32)>,
     name_mesh: Option<MeshId>,
+    /// Which names were drawn last frame, so `orrery::laid_out` can hold them
+    /// up against a smaller gap than it asks of a name coming in. Without it
+    /// the two rows flicker. See `orrery::STICKS`.
+    named_last: Vec<usize>,
     rings: Option<TextureId>,
     /// Stars on all six surfaces of the room, and the quads they are laid on.
     stars: Vec<TextureId>,
@@ -514,6 +518,7 @@ impl Arcade {
             worlds: Vec::new(),
             names: Vec::new(),
             name_mesh: None,
+            named_last: Vec::new(),
             rings: None,
             stars: Vec::new(),
             star_mesh: Vec::new(),
@@ -891,31 +896,23 @@ impl Arcade {
 
     /// One body's name, over the body, facing you.
     ///
-    /// `which` is its place in `orrery::every_body`, which is the order the
-    /// pictures are in as well, and `across` is what the body is drawn as.
-    /// Planets hang theirs over and moons hang theirs under, per
-    /// `orrery::Hangs`.
+    /// Which names get drawn is `orrery::laid_out`'s to say, and this draws
+    /// one it has already chosen.
     ///
     /// Written over every frame, because where it stands, how big it is and
     /// which way it faces all come off where your eye is. A name is three
     /// numbers and a quad, and sixteen of them is the cheapest thing in this
     /// room by a long way.
-    fn draw_a_name(
-        &self,
-        scene: &mut Scene,
-        which: usize,
-        at: Vec3,
-        across: f32,
-        hangs: orrery::Hangs,
-    ) {
-        let (Some(mesh), Some((said, wide))) = (self.name_mesh, self.names.get(which).copied())
+    fn draw_a_name(&self, scene: &mut Scene, name: &orrery::Named) {
+        let (Some(mesh), Some((said, wide))) =
+            (self.name_mesh, self.names.get(name.which).copied())
         else {
             return;
         };
 
         let eye = self.looking_from();
-        let tall = orrery::label_tall((at - eye).length());
-        let stands = orrery::label_at(at, across, eye, hangs);
+        let tall = orrery::label_tall((name.at - eye).length());
+        let stands = orrery::label_at(name.at, name.across, eye, name.hangs);
 
         scene.push_textured(
             mesh,
@@ -933,7 +930,7 @@ impl Arcade {
 
     /// The sun, the planets, their moons, Saturn's rings and every one of them
     /// named. Spec 0015.
-    fn draw_the_system(&self, scene: &mut Scene, cube: MeshId) {
+    fn draw_the_system(&mut self, scene: &mut Scene, cube: MeshId, camera: &Camera) {
         let (Some(ball), Some(rings)) = (self.planet_mesh, self.ring_mesh) else {
             return;
         };
@@ -1015,7 +1012,15 @@ impl Arcade {
             aim::SUN_FACE,
             aim::DULL,
         );
-        self.draw_a_name(scene, 0, sun, orrery::sun_drawn(), orrery::Hangs::Over);
+        // the names are gathered and not drawn here: which of them fit is
+        // worked out on the glass once every body is placed, below.
+        let mut names = vec![orrery::Named {
+            which: 0,
+            at: sun,
+            across: orrery::sun_drawn(),
+            hangs: orrery::Hangs::Over,
+            wide: self.names.first().map(|(_, wide)| *wide).unwrap_or(1.0),
+        }];
 
         let mut skin = 1;
 
@@ -1033,7 +1038,13 @@ impl Arcade {
                     aim::MATTE,
                 );
             }
-            self.draw_a_name(scene, skin, at, planet.body.drawn(), orrery::Hangs::Over);
+            names.push(orrery::Named {
+                which: skin,
+                at,
+                across: planet.body.drawn(),
+                hangs: orrery::Hangs::Over,
+                wide: self.names.get(skin).map(|(_, wide)| *wide).unwrap_or(1.0),
+            });
             skin += 1;
 
             // the rings, leaning with the planet they belong to
@@ -1064,15 +1075,35 @@ impl Arcade {
                         aim::MATTE,
                     );
                 }
-                self.draw_a_name(
-                    scene,
-                    skin,
-                    at + out,
-                    moon.body.drawn(),
-                    orrery::Hangs::Under,
-                );
+                names.push(orrery::Named {
+                    which: skin,
+                    at: at + out,
+                    across: moon.body.drawn(),
+                    hangs: orrery::Hangs::Under,
+                    wide: self.names.get(skin).map(|(_, wide)| *wide).unwrap_or(1.0),
+                });
                 skin += 1;
             }
+        }
+
+        // and the names, as many of them as fit without landing on each
+        // other. Nearest first, per `orrery::laid_out`.
+        let eye = self.looking_from();
+        let want = orrery::laid_out(
+            &names,
+            eye,
+            camera.view_projection(),
+            camera.fov_y,
+            &self.named_last,
+        );
+
+        let fits = want;
+
+        self.named_last.clear();
+        self.named_last.extend_from_slice(&fits);
+
+        for name in names.iter().filter(|name| fits.contains(&name.which)) {
+            self.draw_a_name(scene, name);
         }
     }
 
@@ -2206,7 +2237,7 @@ impl Game for Arcade {
         }
 
         // the solar system in it, per spec 0015
-        self.draw_the_system(scene, cube);
+        self.draw_the_system(scene, cube, camera);
 
         for wall in self.room.walls.iter() {
             let stood = Transform::at(wall.center()).with_scale(wall.size());

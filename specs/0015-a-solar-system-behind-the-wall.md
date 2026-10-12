@@ -314,12 +314,63 @@ stride of its planet and is the pair most likely to collide, so hanging the
 moons underneath pulls the worst of it apart and says which body belongs to
 which at the same time.
 
-It does not fix the rest. Standing a metre from Earth, the names of Mercury,
-Venus and Earth still stack, because the three bodies are within a metre of
-each other and the names are the same size whatever they are naming. That is
-the lined up arrangement being what it is, and in orbit the same three are
-spread round the sun. A layout pass that pushed overlapping names apart is a
-different and much larger piece of work.
+It does not fix the rest on its own, and the swing showed how little it
+fixed. Every name is the same size on the glass and every body sits at eye
+height, so the names lie on two rows and slide through each other as you
+move; swinging into the orbits they cross wholesale and the rows become one
+band of letters, "ars EarVenMercury" and "Ga.medeCalli". Jake watched a
+recording of the swing and called it chaotic, and the planets whirling was
+only half of what he was looking at.
+
+**The moons run on their own clock, and that was the janky one.** The moons
+were on the planets' clock, which put the Moon round the Earth thirteen times
+an Earth year and was written down here as the one fact about the Moon that
+everybody has. The arithmetic was right and what it bought was a blur: a year
+is sixty seconds, a month is a three hundred and sixty fifth of a year, and
+Io went round Jupiter three and a half times a second.
+
+`orrery::MOONS_DAWDLE` is twenty four, the third lie in this model after the
+two scales and the sun's size. What it costs is the fact it was written for:
+the Moon now goes round the Earth about half an Earth year. What it keeps is
+the better one. Io, Europa and Ganymede come out at 7, 14 and 28 seconds,
+which is the 1:2:4 those three are really in, and at those rates you can
+stand and watch it happen. A resonance you can see beats a ratio you cannot.
+
+**So the names are laid out on the glass, nearest first.**
+`orrery::laid_out` projects each one, takes them in order of distance, and
+drops any that would land on one already kept. Nearest wins because the near
+body is the one you are looking at and the one whose name you can check
+against a ball you can see. A name dropped is a name you get by taking a
+step, which is how a planetarium behaves and is better than a smear that
+names nothing.
+
+It is cheap because `LABEL_SUBTENDS` already made every name the same size on
+the glass: the distance cancels out of the height, so the layout needs only
+where each name is and not how far off. Rectangles and not circles, because a
+name is long and thin and a circle round one would reserve a square of sky it
+does not use, and the width comes off each name's own picture so "the moon"
+keeps more room than "Io".
+
+Behind you and wholly off the glass are both thrown out before anything is
+compared. The first of those is not tidiness: a point behind the eye comes
+back through the projection mirrored into the middle of the glass, where it
+would take the place of a name that is actually there.
+
+Two things steady it, and the measurement is what says they are worth having.
+Standing still and touching nothing, the chosen set changed this many times a
+second: 2.2 plain, 1.5 with `STICKS`, the hysteresis that lets a name already
+up hold its place on a smaller gap, and 1.0 with `worth` as well, which ranks
+the sun first, then planets, then moons, so nothing a moon does can take a
+planet's name.
+
+A dwell time was tried on top of those and is not here. It was put in while
+the moons were still whipping round, took 36 changes a second down to 7, and
+looked like a fix; the gaps between the remaining changes then sat at exactly
+the dwell, which is a strobe slowed rather than a strobe stopped. Once
+`MOONS_DAWDLE` was found it bought nothing at all over the other two, and it
+cost a name overlapping for four tenths of a second before giving way. The
+order the three were tried in is the wrong order, and the numbers above are
+the record of it.
 
 **A name is the same size on the glass from wherever it is read.** This is the
 whole of why it works. Triton is five millimetres across and sixty four metres
@@ -425,6 +476,10 @@ The names are written, and these are theirs:
 - Lined up, the way from the doorway to every body runs through no column. — `behind::tests::every_body_is_in_view_from_the_doorway`
 - The sun outranks a spent ceiling lamp from anywhere in the room, so the engine keeps it. — `tests::the_sun_outranks_a_ceiling_lamp_from_anywhere`
 - Every body has a name, no two share one, and every one draws something. — `orrery::tests::every_body_is_named_once`
+- Two names that would land on each other are cut to the nearer one. — `orrery::tests::two_names_on_one_another_are_cut_to_one`
+- And names with room to spare are all kept. — `orrery::tests::names_that_clear_each_other_are_all_kept`
+- A name behind you cannot take the place of one in front. — `orrery::tests::a_name_behind_you_is_not_laid_out`
+- A moon goes round slowly enough to watch, and the Galileans keep their 1:2:4. — `orrery::tests::a_moon_can_be_watched_and_the_galileans_keep_their_resonance`
 
 ### Verified by hand
 
@@ -432,8 +487,10 @@ The names are written, and these are theirs:
   was the complaint this answers.
 - No name is upside down, mirrored, or rolled, from anywhere in the room.
 - Nothing reads as a hole in the stars where a name is.
-- Standing on the line in the lined up arrangement, the names of bodies near
-  each other overlap. Known, and the pictures from 2026-10-11 show it.
+- Swinging between the two arrangements, the names stay readable: fewer of
+  them as bodies cross, and no two on top of each other.
+- A name that goes, goes because something crossed it, and not every few
+  frames. The churn is measured above; whether it reads as steady is not.
 - From the doorway you can see down the line to the sun, with no pillar in
   the way.
 - The planets are lit from the doorway, not only once you are among them.

@@ -408,12 +408,34 @@ pub fn year_seconds(planet: &Planet) -> f32 {
     planet.year * YEAR
 }
 
-/// How long a moon takes to go round its planet, on the orbit clock.
+/// How much slower the moons run than the planets' own clock would have
+/// them, and it is the third lie in this model after the two scales and the
+/// sun's size.
 ///
-/// The same clock as the planets, so the Moon goes round the Earth twelve
-/// times a year, which is the one fact about the Moon that everybody has.
+/// Twenty four. The moons were on the planets' clock, which put the Moon
+/// round the Earth thirteen times an Earth year and was written down here as
+/// the one fact about the Moon that everybody has. The arithmetic was right
+/// and what it bought was a blur: a year is sixty seconds, a month is a
+/// three hundred and sixty fifth of a year, and Io went round Jupiter three
+/// and a half times a second. Jake watched it and said it looked janky.
+///
+/// It was also wrecking the names. The layout on the glass has to choose
+/// between names that cross, and with the moons whipping round it was
+/// choosing again thirty six times a second. Slowing them took that to two,
+/// and two more things I had already added to damp it turned out to have
+/// been damping this.
+///
+/// What it costs is the fact it was written for: the Moon now goes round the
+/// Earth about half an Earth year. What it keeps is the better one. Io,
+/// Europa and Ganymede come out at 7, 14 and 28 seconds, which is the 1:2:4
+/// those three are actually in, and at those rates you can stand and watch
+/// it happen. A resonance you can see beats a ratio you cannot.
+pub const MOONS_DAWDLE: f32 = 24.0;
+
+/// How long a moon takes to go round its planet, on the orbit clock slowed
+/// by `MOONS_DAWDLE`.
 pub fn month_seconds(moon: &Moon) -> f32 {
-    moon.month / 365.256 * YEAR
+    moon.month / 365.256 * YEAR * MOONS_DAWDLE
 }
 
 /// Where a planet stands, as an angle round the sun, at `since` seconds.
@@ -1106,6 +1128,165 @@ pub fn label_turn(from: Vec3, eye: Vec3) -> glam::Quat {
     glam::Quat::from_mat3(&glam::Mat3::from_cols(along, looks, -up))
 }
 
+/// One body's name, waiting to be laid out: where its body is, how big that
+/// body is drawn, and which side the name hangs on.
+#[derive(Clone, Copy, Debug)]
+pub struct Named {
+    /// Its place in `every_body`, which is the order the pictures are in.
+    pub which: usize,
+    pub at: Vec3,
+    pub across: f32,
+    pub hangs: Hangs,
+    /// How many times wider than tall the name's picture came out.
+    pub wide: f32,
+}
+
+/// Which names get the room when two want it: the sun, then the planets,
+/// then the moons, and distance only inside each.
+///
+/// A moon sweeping past is nearer than a planet for a moment, so on distance
+/// alone it took the planet's name away and gave it back. The sun's own name
+/// was among the ones going: it cannot move, so what was happening to it was
+/// being walked over.
+///
+/// Ordering by what a name is worth puts the fast thing last, so the name
+/// that goes is a moon's, which is the one worth least: its planet is right
+/// beside it and named. Nothing a moon does can take a planet's name now.
+///
+/// Worth 1.0 changes a second against 1.5 with `STICKS` alone, measured
+/// standing still.
+fn worth(name: &Named) -> u8 {
+    match (name.which, name.hangs) {
+        (0, _) => 0,
+        (_, Hangs::Over) => 1,
+        (_, Hangs::Under) => 2,
+    }
+}
+
+/// How much less room a name already up asks for than one trying to come up.
+///
+/// A quarter either way, so a pair has to close to three quarters of
+/// touching before the one behind goes, and open to a quarter clear before
+/// it comes back. Between those the answer is whatever it was last frame.
+///
+/// Worth 1.5 changes a second against 2.2 without it, measured standing
+/// still. It was put in to fix a flicker of thirty six a second and did
+/// almost nothing, because that flicker was `MOONS_DAWDLE` and not this; a
+/// dwell time was added on top, got the same number down to 1.0, and was
+/// taken out again once the clock was fixed, because it then bought nothing
+/// and cost a name overlapping for four tenths of a second before giving
+/// way. This and `worth` stayed because they each still earn their line.
+pub const STICKS: f32 = 0.25;
+
+/// How tall a name is on the glass, as a fraction of half the screen.
+///
+/// Constant, and that is the gift `LABEL_SUBTENDS` gives this: a name is
+/// `LABEL_SUBTENDS` of its own distance tall, and the screen is
+/// `2·d·tan(fov/2)` tall at that distance, so the distance cancels. Every
+/// name in the room is the same size on the glass, so the layout below needs
+/// only where each one is and not how far off.
+pub fn label_on_the_glass(fov_y: f32) -> f32 {
+    LABEL_SUBTENDS / (fov_y * 0.5).tan()
+}
+
+/// Which names to draw, nearest first, dropping any that would land on one
+/// already kept.
+///
+/// **Why there is a layout at all.** Every name is the same size on the glass
+/// and every body sits at eye height, so the names land on two rows and slide
+/// through each other as you move. Lined up they are already touching;
+/// swinging into the orbits they cross wholesale and the rows turn into one
+/// band of letters: "ars EarVenMercury", "Ga.medeCalli". Jake watched the
+/// swing and called it chaotic, and the planets whirling was only half of it.
+///
+/// Nearest wins, because the near body is the one you are looking at and the
+/// one whose name you can check against a ball you can see. A name dropped is
+/// a name you get by taking a step, which is how a planetarium behaves and is
+/// better than a smear that names nothing.
+///
+/// Rectangles and not circles, because a name is a long thin thing and a
+/// circle round one would reserve a square of sky it does not use. The width
+/// comes off each name's own picture, so "the moon" keeps more room than
+/// "Io".
+///
+/// Behind you and off the glass are both dropped before anything is
+/// compared, so a name at your back cannot take the place of one in front.
+///
+/// `shown` is what was drawn last frame: a name already up keeps its place on
+/// a smaller gap than a name trying to come up needs, by `STICKS` either
+/// way, so a pair hovering at the edge of overlapping holds whatever it was
+/// doing.
+///
+/// **It was not the flicker, though it was blamed for it.** Standing still
+/// and touching nothing, this set changed thirty six times a second, and
+/// hysteresis took that to twenty three and a ranking took it to twenty one.
+/// None of it was the layout: it was `MOONS_DAWDLE`, with Io going round
+/// Jupiter three and a half times a second. Fixing the clock took the same
+/// number to two, from which these two together buy the last one.
+pub fn laid_out(
+    names: &[Named],
+    eye: Vec3,
+    seen_through: glam::Mat4,
+    fov_y: f32,
+    shown: &[usize],
+) -> Vec<usize> {
+    let tall = label_on_the_glass(fov_y);
+    let mut want: Vec<(u8, f32, usize, glam::Vec2, f32)> = Vec::new();
+
+    for name in names {
+        let stands = label_at(name.at, name.across, eye, name.hangs);
+        let clip = seen_through * stands.extend(1.0);
+
+        // behind the eye, where a divide by w turns the picture inside out
+        if clip.w <= 1e-4 {
+            continue;
+        }
+
+        let on_glass = glam::vec2(clip.x / clip.w, clip.y / clip.w);
+        let half = glam::vec2(tall * name.wide * 0.5, tall * 0.5);
+
+        // and wholly off the glass, which is not worth comparing against
+        if on_glass.x.abs() - half.x > 1.0 || on_glass.y.abs() - half.y > 1.0 {
+            continue;
+        }
+
+        want.push((
+            worth(name),
+            (name.at - eye).length_squared(),
+            name.which,
+            on_glass,
+            half.x,
+        ));
+    }
+
+    want.sort_by(|one, other| one.0.cmp(&other.0).then(one.1.total_cmp(&other.1)));
+
+    let mut kept: Vec<(glam::Vec2, f32)> = Vec::new();
+    let mut out = Vec::new();
+
+    for (_, _, which, on_glass, half_wide) in want {
+        // a name that is already up is harder to push off than a name that
+        // is not is to let up
+        let asks = if shown.contains(&which) {
+            1.0 - STICKS
+        } else {
+            1.0 + STICKS
+        };
+
+        let clear = kept.iter().all(|(other, other_wide)| {
+            (on_glass.x - other.x).abs() >= (half_wide + other_wide) * asks
+                || (on_glass.y - other.y).abs() >= tall * asks
+        });
+
+        if clear {
+            kept.push((on_glass, half_wide));
+            out.push(which);
+        }
+    }
+
+    out
+}
+
 /// A body's name, on its own black ground.
 ///
 /// Drawn and not stencilled, and the first try was the other way round on the
@@ -1257,6 +1438,219 @@ mod tests {
             .iter()
             .find(|planet| planet.body.name == name)
             .expect("a planet by that name")
+    }
+
+    /// Spec 0015: a moon goes round slowly enough to watch, and the
+    /// Galileans keep their 1:2:4.
+    ///
+    /// The moons were on the planets' own clock, which is right arithmetic
+    /// and was a blur: a year is sixty seconds and a month is a three
+    /// hundred and sixty fifth of a year, so Io went round Jupiter three and
+    /// a half times a second. Jake watched it and said it looked janky. It
+    /// was also what made the names on the glass choose again thirty six
+    /// times a second.
+    ///
+    /// Two halves, and the second is the one that matters. A ceiling on how
+    /// fast the quickest moon may go is a number somebody picked. The 1:2:4
+    /// is not: Io, Europa and Ganymede are really in that resonance, it is
+    /// the famous thing about them, and `MOONS_DAWDLE` has to leave it
+    /// alone. Turn `MOONS_DAWDLE` into something that is not a plain
+    /// multiplier and the second half fails.
+    #[test]
+    fn a_moon_can_be_watched_and_the_galileans_keep_their_resonance() {
+        // how long, not which way: Triton goes round Neptune backwards and
+        // carries a negative month to say so, which this test found by
+        // reporting the quickest moon as minus twenty three seconds
+        let round: Vec<f32> = PLANETS
+            .iter()
+            .flat_map(|planet| planet.moons.iter())
+            .map(|moon| month_seconds(moon).abs())
+            .collect();
+        let slowest = round.iter().copied().fold(0.0f32, f32::max);
+        let quickest = round.iter().copied().fold(f32::MAX, f32::min);
+
+        assert!(
+            (4.0..=20.0).contains(&quickest),
+            "the quickest moon goes round in {:.2}s, which is not a thing to              stand and watch",
+            quickest
+        );
+        assert!(
+            slowest < 60.0 * 5.0,
+            "the slowest moon takes {:.0}s, which is a moon that does not move",
+            slowest
+        );
+
+        // and the resonance, read off the model rather than off the table
+        let of = |name: &str| {
+            month_seconds(
+                PLANETS
+                    .iter()
+                    .flat_map(|planet| planet.moons.iter())
+                    .find(|moon| moon.body.name == name)
+                    .expect("a moon by that name"),
+            )
+            .abs()
+        };
+
+        let io = of("Io");
+
+        for (name, times) in [("Europa", 2.0), ("Ganymede", 4.0)] {
+            let got = of(name) / io;
+
+            assert!(
+                (got - times).abs() < 0.05,
+                "{} goes round {:.3} times for Io's one, not {:.0}",
+                name,
+                got,
+                times
+            );
+        }
+    }
+
+    /// Spec 0015: two names that would land on each other, do not.
+    ///
+    /// The fault this is for: every name is the same size on the glass and
+    /// every body sits at eye height, so the names lie on two rows and slide
+    /// through each other as you move. Swinging into the orbits they cross
+    /// wholesale and the rows become one band of letters.
+    ///
+    /// Built here rather than taken from the room, so the overlap is a thing
+    /// this test chose and not a thing the model happened to do: two bodies
+    /// a hand apart, dead ahead, at the same height. Their names are five
+    /// times as wide as they are tall and the glass is the camera's own 60
+    /// degrees, so they cannot both fit.
+    ///
+    /// The control is the rule itself: drop the overlap test in `laid_out`
+    /// and the first assertion goes.
+    #[test]
+    fn two_names_on_one_another_are_cut_to_one() {
+        let eye = vec3(0.0, 0.0, 0.0);
+        let seen_through = seen_from(eye);
+        // not index 0, which `every_body` makes the sun and `worth` puts
+        // first whatever its distance. A first draft used it and the swap
+        // below came back with the far name, correctly.
+        let names = vec![
+            Named {
+                which: 1,
+                at: vec3(0.0, 0.0, -10.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide: 5.0,
+            },
+            Named {
+                which: 2,
+                at: vec3(0.1, 0.0, -11.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide: 5.0,
+            },
+        ];
+
+        let fits = laid_out(&names, eye, seen_through, 60f32.to_radians(), &[]);
+
+        assert_eq!(fits, vec![1], "both names were kept, or the wrong one");
+
+        // and the near one is the one kept. Swap the distances and the
+        // answer swaps with them, which is the half of this that says it is
+        // nearest-first and not first-in-the-list.
+        let swapped = vec![
+            Named {
+                at: vec3(0.0, 0.0, -11.0),
+                ..names[0]
+            },
+            Named {
+                at: vec3(0.1, 0.0, -10.0),
+                ..names[1]
+            },
+        ];
+
+        assert_eq!(
+            laid_out(&swapped, eye, seen_through, 60f32.to_radians(), &[]),
+            vec![2]
+        );
+    }
+
+    /// Spec 0015: names far enough apart are all kept.
+    ///
+    /// The other half, and the one that stops the rule from being "draw one
+    /// name". Four bodies spread across the glass, no two within a name's
+    /// width of each other.
+    ///
+    /// The camera is 1:1 here, which is `Camera::new`'s own viewport and is
+    /// what makes these numbers checkable by hand: at ten metres with a
+    /// sixty degree glass, a body four metres off the middle lands at 0.69
+    /// of the way out and a name is 0.05 tall. A first draft put them at six
+    /// metres, which is 1.04 and off the glass, and the off-glass guard
+    /// threw them out exactly as it should.
+    #[test]
+    fn names_that_clear_each_other_are_all_kept() {
+        let eye = Vec3::ZERO;
+        let seen_through = seen_from(eye);
+        let names: Vec<Named> = [-4.0f32, -1.4, 1.4, 4.0]
+            .iter()
+            .enumerate()
+            .map(|(n, across)| Named {
+                which: n,
+                at: vec3(*across, 0.0, -10.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide: 1.0,
+            })
+            .collect();
+
+        let mut fits = laid_out(&names, eye, seen_through, 60f32.to_radians(), &[]);
+        fits.sort_unstable();
+
+        assert_eq!(
+            fits,
+            vec![0, 1, 2, 3],
+            "a name was dropped with room to spare"
+        );
+    }
+
+    /// Spec 0015: a name behind you cannot take the place of one in front.
+    ///
+    /// The one that bites if the divide by w goes unguarded: a point behind
+    /// the eye comes back through the projection mirrored into the middle of
+    /// the glass, where it would sit on top of whatever is actually there.
+    #[test]
+    fn a_name_behind_you_is_not_laid_out() {
+        let eye = Vec3::ZERO;
+        let seen_through = seen_from(eye);
+        let names = vec![
+            // dead ahead, and further off than the one behind
+            Named {
+                which: 0,
+                at: vec3(0.0, 0.0, -20.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide: 5.0,
+            },
+            // at your back, and nearer, so nearest-first would take it first
+            Named {
+                which: 1,
+                at: vec3(0.0, 0.0, 3.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide: 5.0,
+            },
+        ];
+
+        assert_eq!(
+            laid_out(&names, eye, seen_through, 60f32.to_radians(), &[]),
+            vec![0],
+            "the name at your back was laid out"
+        );
+    }
+
+    /// A camera at `eye` looking down -z, the way the tests above want it.
+    fn seen_from(eye: Vec3) -> glam::Mat4 {
+        let mut camera = blitzkit::camera::Camera::new();
+        camera.position = eye;
+        camera.target = eye - Vec3::Z;
+        camera.fov_y = 60f32.to_radians();
+
+        camera.view_projection()
     }
 
     /// Spec 0015: a name turned at a wall is the turn that wall already uses.
@@ -1478,6 +1872,11 @@ mod tests {
             1 + PLANETS.len() + 7,
             "{} bodies",
             bodies.len()
+        );
+
+        assert_eq!(
+            bodies[0].name, SUN.name,
+            "the sun is not the first body, and `worth` ranks it by being so"
         );
 
         let mut seen = Vec::new();
