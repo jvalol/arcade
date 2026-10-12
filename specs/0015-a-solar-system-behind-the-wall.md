@@ -351,10 +351,23 @@ name is long and thin and a circle round one would reserve a square of sky it
 does not use, and the width comes off each name's own picture so "the moon"
 keeps more room than "Io".
 
-Behind you and wholly off the glass are both thrown out before anything is
+Behind you and not wholly on the glass are both thrown out before anything is
 compared. The first of those is not tidiness: a point behind the eye comes
 back through the projection mirrored into the middle of the glass, where it
 would take the place of a name that is actually there.
+
+Wholly on, and not merely touching. The test threw out only a name that was
+entirely off, so one straddling the frame was kept and drawn sliced:
+"Ganymede" cut at the right edge reads as "anymede", which is worse than no
+name because it looks like a name. Gone, it comes back the moment you turn a
+few degrees.
+
+A name's half width is divided by the aspect, which it was not. `tall` is a
+fraction of the glass's *height* and the half width is across its width, so
+on a window a third wider than it is tall every name was reserving a third
+more room than it used and the layout was throwing out names that fitted.
+Invisible in every test here before this, because they all run at 1:1, which
+is `Camera::new`'s own viewport and the one aspect where it does nothing.
 
 Two things steady it, and the measurement is what says they are worth having.
 Standing still and touching nothing, the chosen set changed this many times a
@@ -480,6 +493,8 @@ The names are written, and these are theirs:
 - And names with room to spare are all kept. — `orrery::tests::names_that_clear_each_other_are_all_kept`
 - A name behind you cannot take the place of one in front. — `orrery::tests::a_name_behind_you_is_not_laid_out`
 - A moon goes round slowly enough to watch, and the Galileans keep their 1:2:4. — `orrery::tests::a_moon_can_be_watched_and_the_galileans_keep_their_resonance`
+- A name hanging off the edge is not drawn at all. — `orrery::tests::a_name_half_off_the_glass_is_not_drawn`
+- A wider window fits more names, not fewer. — `orrery::tests::a_wider_window_fits_more_names`
 
 ### Verified by hand
 

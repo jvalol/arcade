@@ -1209,8 +1209,9 @@ pub fn label_on_the_glass(fov_y: f32) -> f32 {
 /// comes off each name's own picture, so "the moon" keeps more room than
 /// "Io".
 ///
-/// Behind you and off the glass are both dropped before anything is
-/// compared, so a name at your back cannot take the place of one in front.
+/// Behind you and not wholly on the glass are both dropped before anything
+/// is compared, so a name at your back cannot take the place of one in
+/// front, and a name is never drawn with its end cut off by the frame.
 ///
 /// `shown` is what was drawn last frame: a name already up keeps its place on
 /// a smaller gap than a name trying to come up needs, by `STICKS` either
@@ -1228,6 +1229,7 @@ pub fn laid_out(
     eye: Vec3,
     seen_through: glam::Mat4,
     fov_y: f32,
+    aspect: f32,
     shown: &[usize],
 ) -> Vec<usize> {
     let tall = label_on_the_glass(fov_y);
@@ -1243,10 +1245,19 @@ pub fn laid_out(
         }
 
         let on_glass = glam::vec2(clip.x / clip.w, clip.y / clip.w);
-        let half = glam::vec2(tall * name.wide * 0.5, tall * 0.5);
 
-        // and wholly off the glass, which is not worth comparing against
-        if on_glass.x.abs() - half.x > 1.0 || on_glass.y.abs() - half.y > 1.0 {
+        // over `aspect`, because `tall` is a fraction of the glass's height
+        // and this is across its width. Without it a name reserves a third
+        // more room than it uses on a window a third wider than it is tall,
+        // and the test below throws out names that would have fitted.
+        let half = glam::vec2(tall * name.wide * 0.5 / aspect.max(1e-3), tall * 0.5);
+
+        // and anything not wholly on the glass. Wholly, and not merely
+        // touching it: a name hanging off the edge is drawn sliced, and
+        // "Ganymede" cut at the frame reads as "anymede", which is worse
+        // than no name at all because it looks like a name. Gone, it comes
+        // back the moment you turn a few degrees.
+        if on_glass.x.abs() + half.x > 1.0 || on_glass.y.abs() + half.y > 1.0 {
             continue;
         }
 
@@ -1546,7 +1557,7 @@ mod tests {
             },
         ];
 
-        let fits = laid_out(&names, eye, seen_through, 60f32.to_radians(), &[]);
+        let fits = laid_out(&names, eye, seen_through, 60f32.to_radians(), 1.0, &[]);
 
         assert_eq!(fits, vec![1], "both names were kept, or the wrong one");
 
@@ -1565,7 +1576,7 @@ mod tests {
         ];
 
         assert_eq!(
-            laid_out(&swapped, eye, seen_through, 60f32.to_radians(), &[]),
+            laid_out(&swapped, eye, seen_through, 60f32.to_radians(), 1.0, &[]),
             vec![2]
         );
     }
@@ -1598,13 +1609,120 @@ mod tests {
             })
             .collect();
 
-        let mut fits = laid_out(&names, eye, seen_through, 60f32.to_radians(), &[]);
+        let mut fits = laid_out(&names, eye, seen_through, 60f32.to_radians(), 1.0, &[]);
         fits.sort_unstable();
 
         assert_eq!(
             fits,
             vec![0, 1, 2, 3],
             "a name was dropped with room to spare"
+        );
+    }
+
+    /// Spec 0015: a name hanging off the edge is not drawn at all.
+    ///
+    /// The guard used to throw out only a name that was wholly off the
+    /// glass, so one straddling the frame was kept and drawn sliced.
+    /// "Ganymede" cut at the right edge reads as "anymede", which is worse
+    /// than no name because it looks like a name. Jake's screenshot of
+    /// 2026-10-12 has that and "Titan" halved in the same frame.
+    ///
+    /// Walks a name out from the middle. There is a place where it stops
+    /// being drawn, and it is before any part of it leaves, not after all of
+    /// it has.
+    #[test]
+    fn a_name_half_off_the_glass_is_not_drawn() {
+        let eye = Vec3::ZERO;
+        let seen_through = seen_from(eye);
+        let wide = 5.0;
+        let at = |across: f32| {
+            vec![Named {
+                which: 1,
+                at: vec3(across, 0.0, -10.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide,
+            }]
+        };
+        let fits = |across: f32| {
+            !laid_out(&at(across), eye, seen_through, 60f32.to_radians(), 1.0, &[]).is_empty()
+        };
+
+        assert!(fits(0.0), "a name in the middle was dropped");
+
+        // the last place it is still drawn, to a centimetre
+        let mut last = 0.0f32;
+        let mut across = 0.0f32;
+
+        while across < 12.0 {
+            if fits(across) {
+                last = across;
+            }
+            across += 0.01;
+        }
+
+        assert!(
+            last > 1.0,
+            "a name only reaches {:.2} m off the middle",
+            last
+        );
+
+        // and at that place the whole of it is on the glass: its far edge
+        // has not crossed the frame. Worked out here rather than taken from
+        // `laid_out`, so the two have to agree.
+        let tall = label_on_the_glass(60f32.to_radians());
+        let edge = {
+            let stands = label_at(vec3(last, 0.0, -10.0), 0.0, eye, Hangs::Over);
+            let clip = seen_through * stands.extend(1.0);
+
+            (clip.x / clip.w).abs() + tall * wide * 0.5
+        };
+
+        assert!(
+            edge <= 1.0,
+            "the last name drawn reaches {:.3} of the way out, which is past              the frame",
+            edge
+        );
+
+        // and a centimetre further it is gone, so the edge is where it says
+        assert!(
+            !fits(last + 0.02),
+            "it is still drawn past its own last place"
+        );
+    }
+
+    /// Spec 0015: a wider window fits more names, not fewer.
+    ///
+    /// The half width of a name is a fraction of the glass's *height*
+    /// scaled across its width, so it has to be divided by the aspect. It
+    /// was not, which made every name reserve a third more room than it uses
+    /// on an ordinary window and threw out names that would have fitted.
+    ///
+    /// Found while fixing the edge above, and invisible in every other test
+    /// here because they all run at 1:1, which is `Camera::new`'s own
+    /// viewport and the one aspect where the bug does nothing.
+    #[test]
+    fn a_wider_window_fits_more_names() {
+        let eye = Vec3::ZERO;
+        let seen_through = seen_from(eye);
+        let names: Vec<Named> = (0..9)
+            .map(|n| Named {
+                which: n + 1,
+                at: vec3(-4.0 + n as f32, 0.0, -10.0),
+                across: 0.0,
+                hangs: Hangs::Over,
+                wide: 5.0,
+            })
+            .collect();
+
+        let square = laid_out(&names, eye, seen_through, 60f32.to_radians(), 1.0, &[]).len();
+        let wide = laid_out(&names, eye, seen_through, 60f32.to_radians(), 1.8, &[]).len();
+
+        assert!(
+            wide > square,
+            "a 1.8 window fits {} names and a square one {}",
+            wide,
+            square
         );
     }
 
@@ -1637,7 +1755,7 @@ mod tests {
         ];
 
         assert_eq!(
-            laid_out(&names, eye, seen_through, 60f32.to_radians(), &[]),
+            laid_out(&names, eye, seen_through, 60f32.to_radians(), 1.0, &[]),
             vec![0],
             "the name at your back was laid out"
         );

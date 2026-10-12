@@ -1094,6 +1094,7 @@ impl Arcade {
             eye,
             camera.view_projection(),
             camera.fov_y,
+            camera.aspect(),
             &self.named_last,
         );
 
