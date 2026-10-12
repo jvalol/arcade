@@ -328,6 +328,47 @@ residue at the poles: a body a thousandth off straight overhead came out rolled
 by a ten-thousandth, which is nothing to look at and is still a quad whose
 letters are not level.
 
+**The sun is ranked by reach and not by distance, or the engine drops it.**
+The building pushes every fitting it has and the engine carries 64 of them,
+per its spec 0020, so the arcade sorts them and the engine keeps the front of
+the list. That sort was plain distance from the eye.
+
+Growing this room to 159 m took its ceiling grid from 36 lamps to 100. The sun
+stands 111 m from the way in and every one of those lamps is nearer, so the
+sun came out 76th of 133 and the engine dropped it: the one light this room
+exists for, and the only thing lighting sixteen bodies, thrown away for a
+ceiling lamp in the far corner.
+
+A point light gives exactly nothing past its range, per the engine's
+`PointLight::falloff`, so how far off a lamp is means nothing on its own. What
+means something is how far off it is against how far it throws.
+`inside_its_reach` is that ratio. The sun reaches 83 m and is 111 away, which
+is 1.34 of its reach; a ceiling lamp reaches 9.5 and is 40 away, which is 4.2.
+
+Measured after the change, with the sun's rank out of 133 pushed:
+
+| standing at | how far off | the sun's rank |
+| --- | --- | --- |
+| the hall, outside the room | 114 m | 4 |
+| the way in | 111 m | 3 |
+| Neptune | 80 m | 1 |
+| Uranus | 51 m | 0 |
+| Saturn | 25 m | 0 |
+| Earth | 4 m | 0 |
+
+What the ratio does not do is promise the sun first place from everywhere, and
+it should not. Past its own 83 m the sun gives nothing where you are standing,
+whatever it is doing to the planets you are looking at, and a lamp spent by
+exactly as much ranks level with it. The table is why that is survivable here:
+the real lamps are far worse than level. A metric that read what a light gives
+to *what you can see* rather than to where you stand would be the honest one
+and is a different piece of work.
+
+**Still over the cap.** 133 pushed against 64 means 69 dropped every frame,
+and the engine says so once per dropped light: about 8,600 lines a second.
+They are the right 69 now, but the log is unreadable and the formatting is
+work done every frame. Not fixed here.
+
 ## Acceptance criteria
 
 To be written with the code. Each of these is arithmetic and belongs in a test:
@@ -356,6 +397,7 @@ The names are written, and these are theirs:
 - No column stands on the line the bodies are strung along. — `behind::tests::nothing_stands_on_the_line`
 - And the width that clears it has room to move in, without gutting the grid. — `behind::tests::the_line_is_cleared_by_a_wide_margin`
 - Lined up, the way from the doorway to every body runs through no column. — `behind::tests::every_body_is_in_view_from_the_doorway`
+- The sun outranks a spent ceiling lamp from anywhere in the room, so the engine keeps it. — `tests::the_sun_outranks_a_ceiling_lamp_from_anywhere`
 - Every body has a name, no two share one, and every one draws something. — `orrery::tests::every_body_is_named_once`
 
 ### Verified by hand
@@ -367,7 +409,9 @@ The names are written, and these are theirs:
 - Standing on the line in the lined up arrangement, the names of bodies near
   each other overlap. Known, and the pictures from 2026-10-11 show it.
 - From the doorway you can see down the line to the sun, with no pillar in
-  the way. This is what the clearing above bought and it is the one thing in
+  the way.
+- The planets are lit from the doorway, not only once you are among them.
+  This is what dropping the sun took away and no test sees it. This is what the clearing above bought and it is the one thing in
   this spec that a picture settles and a test cannot.
 
 **The columns keep off the line the bodies stand on.** Found while

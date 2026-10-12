@@ -110,6 +110,38 @@ const GIMBAL_WIDE: f32 = 0.022;
 
 /// Whether this run is only here to be photographed, for `refresh-screenshots`
 /// in the project above.
+/// How far a light is from you against how far it throws, for ranking which
+/// lamps the engine gets when the building has more of them than it carries.
+///
+/// `how_far` is squared and so is the answer, because the caller already
+/// holds a squared distance and a square root here would be for the reader
+/// rather than for the sort.
+///
+/// **Reach and not distance, and the sun is what says so.** The ranking was
+/// plain distance until the room behind the wall grew to a hundred and fifty
+/// nine metres, which took its ceiling grid from thirty six lamps to a
+/// hundred. The sun stands a hundred and eleven metres from the way in and
+/// every one of those lamps is nearer, so the sun came out seventy sixth of
+/// a hundred and thirty three against a cap of sixty four and the engine
+/// dropped it: the one light that room exists for, and the only thing
+/// lighting sixteen bodies, thrown away for a ceiling lamp in the far corner.
+///
+/// A point light gives exactly nothing past its range, per
+/// `blitzkit::lighting::PointLight::falloff`, so how far off a lamp is means
+/// nothing on its own. What means something is how far off it is against how
+/// far it throws. The sun reaches 83 m and is 111 away, which is 1.34 of its
+/// reach. A ceiling lamp reaches 9.5 and is 40 away, which is 4.2.
+///
+/// This reads what a light can give *where you stand*, which is not quite
+/// the question. A lamp behind you lighting a wall you can see still counts
+/// for nothing here, and the sun out past its own reach gives you nothing
+/// whatever it is doing to the planets you are looking at. Reading it
+/// against what is in view would be the honest version and is a bigger piece
+/// of work; the measurement in spec 0015 is why this is enough for now.
+fn inside_its_reach(how_far: f32, reach: f32) -> f32 {
+    how_far / (reach * reach).max(1e-6)
+}
+
 fn staged() -> bool {
     std::env::args().any(|arg| arg == "--screenshot")
 }
@@ -4769,13 +4801,15 @@ impl Game for Arcade {
             ));
         }
 
-        // nearest first, because what the engine drops when a building outgrows
-        // it should be the lamp in the furthest room and not whichever was
-        // pushed last. Not a ration any more: every fitting in the building is
-        // pushed and the engine carries sixty four of them, where it carried
-        // eight and the nook's walls took six of those whether or not you were
-        // standing in the nook. Spec 0020 of the engine.
-        shades.sort_by(|one, other| one.0.total_cmp(&other.0));
+        // deepest inside its own reach first, so what the engine drops when a
+        // building outgrows it is the lamp that could not have lit you
+        // anyway. Not a ration: every fitting in the building is pushed and
+        // the engine carries sixty four of them, where it carried eight and
+        // the nook's walls took six of those whether or not you were standing
+        // in the nook. Spec 0020 of the engine.
+        shades.sort_by(|one, other| {
+            inside_its_reach(one.0, one.4).total_cmp(&inside_its_reach(other.0, other.4))
+        });
 
         for (_, at, colour, lit, range) in shades {
             scene.push_light(blitzkit::lighting::PointLight::new(at, colour, lit, range));
@@ -5079,6 +5113,79 @@ mod tests {
     /// back shorter and looks better for it.
     ///
     /// The shut bookcase is the control and it is not a contrivance: the way
+    /// Spec 0015: the sun outranks a spent ceiling lamp from anywhere in the
+    /// room, so the engine never drops it.
+    ///
+    /// It did. Growing that room to a hundred and fifty nine metres took its
+    /// ceiling grid from thirty six lamps to a hundred, and the ranking was
+    /// plain distance: the sun came out seventy sixth of a hundred and
+    /// thirty three against a cap of sixty four. The only light in the room,
+    /// and the only thing lighting sixteen bodies, dropped for a ceiling
+    /// lamp in the far corner.
+    ///
+    /// Real numbers on both sides, out of `orrery` and `behind`, over the
+    /// whole walk from the sun to the way in. The control is the key this
+    /// replaced: take the reach out of `inside_its_reach` and this fails at
+    /// seventeen metres from the sun.
+    ///
+    /// It does not claim the sun beats everything, and it should not. Past
+    /// its own 83 m the sun gives nothing where you are standing, and a lamp
+    /// spent by exactly as much ranks level with it; a first draft asserted
+    /// otherwise and failed at 83.6 m, which was the test being wrong rather
+    /// than the sort. Nor does the walk go past the door: out in the hall
+    /// the sun is 134 m off and the lamp below does beat it. What saves it
+    /// there is that the real lamps are far worse than this one, which is
+    /// measured in spec 0015 and is not something this test can show.
+    #[test]
+    fn the_sun_outranks_a_ceiling_lamp_from_anywhere() {
+        let reaches = Room::of(games()).reaches;
+        let middle = behind::at(reaches);
+        let sun = vec3(middle.x, orrery::PLANE, middle.z);
+        let (from, to) = behind::way();
+        let door = vec3((from + to) * 0.5, orrery::PLANE, reaches);
+
+        for step in 0..=20 {
+            let eye = sun + (door - sun) * (step as f32 / 20.0);
+            let to_sun = eye.distance_squared(sun);
+            let ours = inside_its_reach(to_sun, orrery::sun_range());
+
+            // a lamp you are standing under beats the sun, and it should: it
+            // is the one actually lighting the floor you are on
+            assert!(inside_its_reach(0.0, behind::LAMP_RANGE) <= ours);
+
+            // a lamp half again past its own reach does not. The grid is 15 m
+            // across a room of 159, so nearly all hundred of them are at
+            // least that far outside their reach, and they are what pushed
+            // the sun off the end.
+            let spent = inside_its_reach((behind::LAMP_RANGE * 1.5).powi(2), behind::LAMP_RANGE);
+
+            assert!(
+                ours < spent,
+                "from {:.1} m the sun ranks {:.2} against a lamp 14 m off at {:.2}",
+                to_sun.sqrt(),
+                ours,
+                spent
+            );
+        }
+
+        // and the fault itself, stated: at the way in the sun really is
+        // further off than a lamp that cannot reach you, so plain distance
+        // put it behind one, and reach does not.
+        let far_lamp = (behind::LAMP_RANGE * 4.0).powi(2);
+        let to_sun = door.distance_squared(sun);
+
+        assert!(
+            far_lamp < to_sun,
+            "a lamp 38 m off is nearer than the sun at {:.0} m",
+            to_sun.sqrt()
+        );
+        assert!(
+            inside_its_reach(far_lamp, behind::LAMP_RANGE)
+                > inside_its_reach(to_sun, orrery::sun_range()),
+            "and by reach it is still ahead of the sun"
+        );
+    }
+
     /// down is a secret door, so when the building opens the cellar and the
     /// baths are not places a body can be. Press the key down there and they
     /// are. A fill that reached them through a shut wall would be a fill that
