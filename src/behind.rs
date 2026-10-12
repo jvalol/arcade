@@ -596,6 +596,51 @@ mod tests {
         assert!(got.z > reaches + THICK, "it did not get through: {:?}", got);
     }
 
+    /// Spec 0015: you can walk from the way in to the sun, and round it.
+    ///
+    /// A hundred and eleven metres of it, which is what the room became when
+    /// the Moon took over setting the orbit scale. Walked rather than
+    /// measured, with the game's own `walk` against the whole building's
+    /// boxes, because the thing being checked is that the corridor
+    /// `columns` clears is actually walkable and not merely clear on paper.
+    ///
+    /// Then round the sun, which has no collider: it is a metre of light
+    /// that swallows you on the way past, and that is the right thing to
+    /// happen. A body that stopped at it would be a body that had hit the
+    /// sun.
+    ///
+    /// Thirty seconds of walking for a twenty seven second walk, so a body
+    /// that arrives has a little to spare and one that is being held up
+    /// anywhere plainly does not.
+    #[test]
+    fn you_can_walk_from_the_way_in_to_the_sun_and_round_it() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let sun = vec3(middle.x, 0.0, middle.z);
+        let (from, to) = way();
+        let door = vec3((from + to) * 0.5, 0.0, reaches + 2.0);
+
+        let got = walked(door, sun, 30.0);
+        let left = vec2(got.x - sun.x, got.z - sun.z).length();
+
+        assert!(
+            left < 2.0,
+            "it got {:.1} m from the sun, with {:.1} m to walk",
+            left,
+            (sun - door).length()
+        );
+
+        // and out the far side, which is through where the sun is drawn
+        let past = sun + (sun - door).normalize() * 6.0;
+        let went = walked(got, past, 8.0);
+
+        assert!(
+            vec2(went.x - past.x, went.z - past.z).length() < 2.0,
+            "it stopped at {:?} rather than going on past the sun",
+            went
+        );
+    }
+
     /// Spec 0011: and not where it is not, which is most of the wall.
     ///
     /// Swept across the whole of it, because a wall with one hole in it is a

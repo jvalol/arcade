@@ -1,6 +1,6 @@
 # 0015 A solar system behind the wall
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-11, labels added the same day
 
 ## Goal
@@ -461,22 +461,35 @@ work done every frame. Not fixed here.
 
 ## Acceptance criteria
 
-To be written with the code. Each of these is arithmetic and belongs in a test:
+The model:
 
-- Every body's ball is its real diameter on the body scale, and every planet's
-  distance is its real distance on the orbit scale.
-- Mercury's surface clears the sun's surface in the orbiting arrangement.
-- Every moon is outside its planet and inside the next planet's distance.
-- Saturn's rings start outside Saturn and the Cassini division falls between
-  the two bright rings.
-- The swing leaves every planet at its own radius at every moment of it.
+- Every body's ball is its real diameter on the body scale. — `orrery::tests::every_ball_is_true_against_every_other`
+- And every distance is its real distance on the orbit scale. — `orrery::tests::every_distance_is_true_against_every_other`
+- The two scales are a hundred times apart, which is the first lie, pinned. — `orrery::tests::the_orbit_scale_is_a_hundred_times_the_body_scale`
+- Mercury's surface clears the sun's, which is what set the sun's size. — `orrery::tests::mercury_clears_the_sun_and_would_not_with_a_bigger_one`
+- Every moon is outside its planet. — `orrery::tests::every_moon_stands_outside_its_planet`
+- And inside the next planet's distance. — `orrery::tests::no_moon_reaches_the_next_planet`
+- The Moon takes half the gap to Mars, which is what sets the orbit scale. — `orrery::tests::the_moon_takes_half_the_gap_to_mars`
+- Saturn's rings start outside Saturn and the Cassini division falls between the two bright rings. — `orrery::tests::saturns_rings_start_outside_it_and_the_gap_falls_between`
+- The planets are in order out from the sun. — `orrery::tests::the_planets_are_in_order`
+- Venus turns slower than it goes round, which looks like a fault and is not. — `orrery::tests::venus_turns_slower_than_it_goes_round`
+- The room holds the disc. — `orrery::tests::the_room_holds_the_disc`
+
+The two arrangements and the swing:
+
+- Lined up is lined up. — `orrery::tests::lined_up_is_lined_up`
+- The swing leaves every planet at its own radius at every moment of it. — `orrery::tests::the_swing_keeps_every_planet_at_its_own_distance`
 - And asks for at most half a turn, however long the building has been open. — `orrery::tests::a_swing_is_never_more_than_half_a_turn`
-- A swing interrupted halfway and sent back does not jump.
-- Nothing in the room is close enough to anything else to fight it, per spec
-  0048 of the engine.
-- You can walk from the door to the sun, and round it.
+- L swings it out and back. — `tests::l_swings_the_system_out_and_back`
+- A swing interrupted halfway and sent back does not jump. — `tests::the_swing_turned_round_partway_does_not_jump`
 
-The names are written, and these are theirs:
+The room:
+
+- You can walk from the way in to the sun, and round it. — `behind::tests::you_can_walk_from_the_way_in_to_the_sun_and_round_it`
+- The way out is signed, beside the slot and facing in. — `tests::the_sign_stands_beside_the_way_out_and_faces_in`
+- The line at the top says which room you are in. — `tests::the_corner_says_the_room_you_are_in`
+
+The names:
 
 - A name turned at a wall is the turn that wall already uses, where that turn
   is upright. — `orrery::tests::a_name_turned_at_a_wall_is_the_wall`
@@ -498,6 +511,14 @@ The names are written, and these are theirs:
 - A wider window fits more names, not fewer. — `orrery::tests::a_wider_window_fits_more_names`
 
 ### Verified by hand
+
+**Nothing in the room is close enough to anything else to fight it**, per
+spec 0048 of the engine. This had a line among the criteria above as though
+it were arithmetic and it is not: 0048's check reads a drawn frame, so it
+runs on the P key while you stand in the room and there is nothing for a test
+to call. `tests::p_asks_for_one_coplanar_check` holds the key and says
+nothing about the answer.
+
 
 - Standing at the door, the names tell you where the planets are. Finding them
   was the complaint this answers.
