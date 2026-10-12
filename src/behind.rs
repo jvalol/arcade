@@ -88,6 +88,52 @@ pub fn way() -> (f32, f32) {
     (WAY_OFF - WAY_WIDE * 0.5, WAY_OFF + WAY_WIDE * 0.5)
 }
 
+/// How wide and how high the door at the far end is, per spec 0017.
+///
+/// 1.5 because `WAY_WIDE` is, and that number was paid for once already: at
+/// 1.15 the walk through the way in wedged half way, because a sweep with an
+/// eighth of a unit either side of a body catches on a shoulder. A door that
+/// walks worse than the hole in the wall would be a joke at its own expense.
+pub const DOOR_WIDE: f32 = WAY_WIDE;
+pub const DOOR_HIGH: f32 = 2.2;
+
+/// How far the frame stands proud of the wall into the room, how thick its
+/// members are, and how far it is sunk into the wall behind.
+///
+/// Sunk, so that its back face is inside the wall rather than in the wall's
+/// own plane. Two faces in one plane fight and this building has lost that
+/// fight five times; a face buried in another solid is hidden and is fine.
+pub const FRAME_PROUD: f32 = 0.12;
+pub const FRAME_THICK: f32 = 0.16;
+pub const FRAME_SUNK: f32 = 0.04;
+
+/// How high the sill across the bottom of it stands.
+///
+/// Three centimetres, laid on the floor and not sunk into it, which is the
+/// way round this building has learnt the hard way: a border sunk into the
+/// floor was two surfaces in one plane and came back as speckle.
+///
+/// Three and not the frame's own 0.16. A member that closes the rectangle is
+/// a member you walk over on your way through, and the one thing a doorway
+/// may not be is something to trip on.
+pub const SILL_HIGH: f32 = 0.03;
+
+/// How big the landing beyond the door is, and how far its floor laps back
+/// under the room's own. See `landing`.
+pub const LANDING: f32 = 24.0;
+
+/// Where the door at the far end is, as the two x it runs between.
+///
+/// On the room's own axis, which puts it dead opposite the sun and 79.5
+/// metres past it. The one account of it: the wall is built round it, the
+/// frame is hung in it, the columns are kept off the way to it, and the tests
+/// read it back.
+pub fn door(reaches: f32) -> (f32, f32) {
+    let middle = at(reaches);
+
+    (middle.x - DOOR_WIDE * 0.5, middle.x + DOOR_WIDE * 0.5)
+}
+
 /// The hall's near end wall, in two pieces with the way in between them.
 ///
 /// Only the collider is in two pieces. What is drawn is one wall across the
@@ -136,6 +182,12 @@ pub enum Made {
     Ground,
     Wall,
     Column,
+    /// The floor of the landing beyond the door, per spec 0017. Its own thing
+    /// and not `Ground`, because `solid` re-derives `Ground` as the room's own
+    /// slab and would put the landing back on top of it.
+    Landing,
+    /// The frame round that door, which glows.
+    Frame,
 }
 
 /// The floor, running `back` past the near wall and under the hall's own.
@@ -161,6 +213,23 @@ fn ground(middle: Vec3, back: f32) -> Aabb {
     )
 }
 
+/// The landing beyond the door, running `back` south under the room's own
+/// floor, per spec 0017.
+///
+/// The same two numbers for the same two reasons as `ground`. Walked, it laps
+/// a good way under, so that neither slab has an end face anywhere near the
+/// seam: two floors at one height that meet edge to edge put a vertical face
+/// at the surface you are walking on, and a body resting on a surface counts
+/// as touching it. Drawn, it stops where the room's floor stops, because two
+/// tops in one plane fight and that patch is the floor you cross on your way
+/// out.
+fn landing(middle: Vec3, north: f32, back: f32) -> Aabb {
+    Aabb::from_center_size(
+        vec3(middle.x, -THICK * 0.5, north + (LANDING - back) * 0.5),
+        vec3(LANDING, THICK, LANDING + back),
+    )
+}
+
 /// Everything solid, and what each of it is: the floor, the lid, the four
 /// walls, and the columns.
 ///
@@ -173,6 +242,7 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     let side = WALL + CABINET.x;
     let (west, east) = (middle.x - half.x, middle.x + half.x);
     let (south, north) = (middle.z - half.y, middle.z + half.y);
+    let gap = door(reaches);
 
     let mut out = vec![
         // the floor, drawn only as far as the hall's own floor reaches and
@@ -205,13 +275,107 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
             ),
             Made::Wall,
         ),
+        // the north wall, in three pieces round the door of spec 0017: the
+        // stretch either side of it, and the head over it
         (
             Aabb::from_center_size(
-                vec3(middle.x, (HIGH + THICK) * 0.5, north + THICK * 0.5),
-                vec3(SPAN, HIGH + THICK, THICK),
+                vec3(
+                    (west + gap.0) * 0.5,
+                    (HIGH + THICK) * 0.5,
+                    north + THICK * 0.5,
+                ),
+                vec3(gap.0 - west, HIGH + THICK, THICK),
             ),
             Made::Wall,
         ),
+        (
+            Aabb::from_center_size(
+                vec3(
+                    (gap.1 + east) * 0.5,
+                    (HIGH + THICK) * 0.5,
+                    north + THICK * 0.5,
+                ),
+                vec3(east - gap.1, HIGH + THICK, THICK),
+            ),
+            Made::Wall,
+        ),
+        (
+            Aabb::from_center_size(
+                vec3(
+                    middle.x,
+                    (DOOR_HIGH + HIGH + THICK) * 0.5,
+                    north + THICK * 0.5,
+                ),
+                vec3(DOOR_WIDE, HIGH + THICK - DOOR_HIGH, THICK),
+            ),
+            Made::Wall,
+        ),
+        // the frame round it, standing proud on the room's side and sunk into
+        // the wall behind, so no face of it shares a plane with the wall's
+        (
+            Aabb::from_center_size(
+                vec3(
+                    gap.0 - FRAME_THICK * 0.5,
+                    (DOOR_HIGH + FRAME_THICK) * 0.5,
+                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
+                ),
+                vec3(
+                    FRAME_THICK,
+                    DOOR_HIGH + FRAME_THICK,
+                    FRAME_PROUD + FRAME_SUNK,
+                ),
+            ),
+            Made::Frame,
+        ),
+        (
+            Aabb::from_center_size(
+                vec3(
+                    gap.1 + FRAME_THICK * 0.5,
+                    (DOOR_HIGH + FRAME_THICK) * 0.5,
+                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
+                ),
+                vec3(
+                    FRAME_THICK,
+                    DOOR_HIGH + FRAME_THICK,
+                    FRAME_PROUD + FRAME_SUNK,
+                ),
+            ),
+            Made::Frame,
+        ),
+        (
+            Aabb::from_center_size(
+                vec3(
+                    middle.x,
+                    DOOR_HIGH + FRAME_THICK * 0.5,
+                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
+                ),
+                vec3(
+                    DOOR_WIDE + FRAME_THICK * 2.0,
+                    FRAME_THICK,
+                    FRAME_PROUD + FRAME_SUNK,
+                ),
+            ),
+            Made::Frame,
+        ),
+        // and a sill across the bottom, so the opening is a closed rectangle
+        // rather than three sides of one
+        (
+            Aabb::from_center_size(
+                vec3(
+                    middle.x,
+                    SILL_HIGH * 0.5,
+                    north + (FRAME_SUNK - FRAME_PROUD) * 0.5,
+                ),
+                vec3(
+                    DOOR_WIDE + FRAME_THICK * 2.0,
+                    SILL_HIGH,
+                    FRAME_PROUD + FRAME_SUNK,
+                ),
+            ),
+            Made::Frame,
+        ),
+        // and the landing through it
+        (landing(middle, north, 0.0), Made::Landing),
         // the south side, which is the hall's near end wall for the width of
         // the hall and this room's own wall for the rest of it
         (
@@ -243,6 +407,8 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         .map(|(box_, made)| match made {
             // the floor, which is the Ground that is not the lid
             Made::Ground if box_.max.y <= 0.0 => ground(middle, LAPS),
+            // and the landing with its own, for the same reason
+            Made::Landing => landing(middle, at(reaches).z + half().y, LAPS),
             _ => box_,
         })
         .collect()
@@ -268,10 +434,31 @@ pub const CLEAR: f32 = 2.2;
 /// `along` runs from nought at the sun to the length of it at the door, and
 /// is negative behind the sun.
 pub fn down_the_line(reaches: f32, point: Vec2) -> (f32, f32) {
-    let middle = at(reaches);
     let (from, to) = way();
+
+    from_the_sun(reaches, vec2((from + to) * 0.5, reaches), point)
+}
+
+/// The same, for the line from the sun to the door at the far end, per spec
+/// 0017.
+///
+/// A second line to keep clear. The grid puts a column 0.75 off the room's
+/// own axis, which is three quarters of a metre from the middle of a doorway
+/// 1.5 wide: without this you walk out of the light, find the door, and the
+/// last thing between you and it is a pillar.
+pub fn down_the_door_line(reaches: f32, point: Vec2) -> (f32, f32) {
+    let middle = at(reaches);
+    let half = half();
+
+    from_the_sun(reaches, vec2(middle.x, middle.z + half.y), point)
+}
+
+/// Both of the above. How far along the line from the sun to `target` a point
+/// lies, and how far off it.
+fn from_the_sun(reaches: f32, target: Vec2, point: Vec2) -> (f32, f32) {
+    let middle = at(reaches);
     let sun = vec2(middle.x, middle.z);
-    let run = vec2((from + to) * 0.5, reaches) - sun;
+    let run = target - sun;
     let length = run.length();
 
     if length < 1e-6 {
@@ -352,6 +539,14 @@ pub fn columns(reaches: f32) -> Vec<Vec3> {
                 continue;
             }
 
+            // and nothing on the way from the sun to the door, per spec 0017,
+            // which is the other line you walk in this room
+            let (down, off) = down_the_door_line(reaches, at_);
+
+            if (0.0..=run_to_the_door()).contains(&down) && off < CLEAR {
+                continue;
+            }
+
             out.push(vec3(at_.x, 0.0, at_.y));
         }
     }
@@ -370,6 +565,19 @@ pub fn run_of_the_line(reaches: f32) -> f32 {
     let (from, to) = way();
 
     (vec2((from + to) * 0.5, reaches) - vec2(middle.x, middle.z)).length()
+}
+
+/// How far the door at the far end is from the sun.
+///
+/// Seventy nine and a half metres, which is half the room. The camera's far
+/// plane is a hundred, so the door is there to be seen from the light and is
+/// not there to be seen from the way in, 177 metres off. See spec 0017.
+///
+/// No `reaches`, unlike `run_of_the_line`. The sun sits at the middle of this
+/// room and the door is in the middle of its north wall, so the run between
+/// them is half the room's depth whatever the hall does.
+pub fn run_to_the_door() -> f32 {
+    half().y
 }
 
 /// How far apart the lamps are, how far each throws and how hard.
@@ -767,10 +975,14 @@ mod tests {
         );
     }
 
-    /// Spec 0011: the space is closed but for that gap.
+    /// Spec 0011: the space is closed but for that gap, and spec 0017's door.
     ///
     /// Walked at every wall from inside, because a room this big with one way
     /// out has a lot of wall to get wrong.
+    ///
+    /// The north wall is walked at twenty metres off the room's axis rather
+    /// than along it. Along it is the door, and walking out of the door is
+    /// `the_door_can_be_walked_through`, which wants the opposite answer.
     #[test]
     fn nothing_else_gets_out() {
         let reaches = room().reaches;
@@ -789,7 +1001,7 @@ mod tests {
             ),
             (
                 "the north wall",
-                vec3(middle.x, 0.0, middle.z + half.y + 6.0),
+                vec3(middle.x + 20.0, 0.0, middle.z + half.y + 6.0),
             ),
             (
                 "the south wall",
@@ -1062,5 +1274,238 @@ mod tests {
         );
 
         assert!(got.z < reaches - THICK, "it could not get out: {:?}", got);
+    }
+
+    /// Where the middle of the door is, at the floor, for the walks below.
+    fn doorstep(reaches: f32) -> Vec3 {
+        let middle = at(reaches);
+
+        vec3(middle.x, 0.0, middle.z + half().y + THICK * 0.5)
+    }
+
+    /// Spec 0017: the far wall is a wall everywhere except the opening.
+    ///
+    /// Walked at head height and at knee height both, because a head that
+    /// passes where a knee does not is a lintel left in, and a knee that
+    /// passes where a head does not is the head of the wall left out.
+    #[test]
+    fn the_far_wall_is_solid_either_side_of_the_door() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let north = middle.z + half().y;
+        let (from, to) = door(reaches);
+
+        for off in [-40.0, -8.0, -2.0, -1.4, 1.4, 2.0, 8.0, 40.0] {
+            let start = vec3(middle.x + off, 0.0, north - 4.0);
+            let got = walked(start, start + Vec3::Z * 12.0, 6.0);
+
+            assert!(
+                got.z < north,
+                "the wall let a body through at {} off the door, which runs {} to {}",
+                off,
+                from,
+                to
+            );
+        }
+    }
+
+    /// Spec 0017: and you can walk through the opening onto the landing.
+    #[test]
+    fn the_door_can_be_walked_through() {
+        let reaches = room().reaches;
+        let step = doorstep(reaches);
+        let out = step + Vec3::Z * 8.0;
+        let got = walked(step - Vec3::Z * 6.0, out, 8.0);
+
+        assert!(
+            got.distance(out) < 0.6,
+            "a body aimed at the landing got to {} rather than {}",
+            got,
+            out
+        );
+    }
+
+    /// Spec 0017: and back in again, which is a different walk.
+    ///
+    /// Different because the seam between the two floors is crossed the other
+    /// way, and because the frame's jambs stand proud on the room's side and
+    /// so are met on the way in and not on the way out.
+    #[test]
+    fn the_landing_leads_back_into_the_room() {
+        let reaches = room().reaches;
+        let step = doorstep(reaches);
+        let back = step - Vec3::Z * 8.0;
+        let got = walked(step + Vec3::Z * 6.0, back, 8.0);
+
+        assert!(
+            got.distance(back) < 0.6,
+            "a body aimed back into the room got to {} rather than {}",
+            got,
+            back
+        );
+    }
+
+    /// Spec 0017: the sun is what shows you the door.
+    ///
+    /// Not a judgment, two distances against the camera's far plane. From the
+    /// way in the door is 177 metres off and is not drawn; from the sun it is
+    /// 79.5 and is.
+    #[test]
+    fn the_sun_is_what_shows_you_the_door() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let far = Camera::new().far;
+        let (from, to) = way();
+        let entrance = vec2((from + to) * 0.5, reaches);
+        let sun = vec2(middle.x, middle.z);
+        let at_ = vec2(middle.x, middle.z + half().y);
+
+        assert!(
+            entrance.distance(at_) > far,
+            "the door is {} from the way in, inside a far plane of {}",
+            entrance.distance(at_),
+            far
+        );
+        assert!(
+            sun.distance(at_) < far,
+            "the door is {} from the sun, outside a far plane of {}",
+            sun.distance(at_),
+            far
+        );
+    }
+
+    /// Spec 0017: and nothing stands between the two.
+    ///
+    /// Cleared to the centre and then again to the box, the way
+    /// `nothing_stands_on_the_line` does, because `CLEAR` is a distance
+    /// between points and a column is 0.72 across.
+    #[test]
+    fn the_way_to_the_door_is_clear_of_columns() {
+        let reaches = room().reaches;
+        let run = run_to_the_door();
+
+        for column in columns(reaches) {
+            let (along, off) = down_the_door_line(reaches, vec2(column.x, column.z));
+
+            if !(0.0..=run).contains(&along) {
+                continue;
+            }
+
+            assert!(
+                off - COLUMN * 0.5 > 1.0,
+                "a column at {} stands {} off the way to the door, {} along it",
+                column,
+                off,
+                along
+            );
+        }
+    }
+
+    /// Spec 0017: the frame gives off light and casts none.
+    ///
+    /// Which in this engine is one fact: a colour past one is a surface
+    /// giving off more than it is given, and `Instance::glows` is what keeps
+    /// such a thing out of the shadow pass.
+    #[test]
+    fn the_frame_gives_off_light_and_casts_none() {
+        let colour = crate::aim::BEHIND_FRAME;
+
+        assert!(
+            colour.x > 1.0 && colour.y > 1.0 && colour.z > 1.0,
+            "the frame's colour is {}, which does not glow",
+            colour
+        );
+        // and it is the lamps' colour and not another one, per spec 0017
+        let lit = LAMP_COLOUR * (colour.x / LAMP_COLOUR.x);
+
+        assert!(
+            (lit - vec3(colour.x, colour.y, colour.z)).length() < 1e-3,
+            "the frame is {} where the lamps are {}",
+            colour,
+            LAMP_COLOUR
+        );
+        assert!(
+            built(room().reaches)
+                .iter()
+                .any(|(_, made)| *made == Made::Frame),
+            "the frame is not built"
+        );
+    }
+
+    /// Spec 0017: the sill is nothing to trip on.
+    ///
+    /// Measured rather than asserted about its height. The same walk, for the
+    /// same time, over open floor and through the door: a sill that cost
+    /// anything would show as the door walk falling behind.
+    #[test]
+    fn the_sill_costs_nothing_to_cross() {
+        let reaches = room().reaches;
+        let step = doorstep(reaches);
+        let open = step - Vec3::X * 30.0;
+        let through = walked(step - Vec3::Z * 4.0, step + Vec3::Z * 4.0, 2.0);
+        let across = walked(open - Vec3::Z * 4.0, open + Vec3::Z * 4.0, 2.0);
+        let (one, other) = (through.z - (step.z - 4.0), across.z - (open.z - 4.0));
+
+        assert!(
+            one > other - 0.02,
+            "two seconds over open floor covers {} and through the door {}",
+            other,
+            one
+        );
+    }
+
+    /// Spec 0017: the landing laps under the room rather than meeting it.
+    ///
+    /// Drawn they meet, walked they lap, and the two are different questions.
+    /// A vertical face at the surface you are walking on stops you dead and
+    /// `walk` reports it as nothing at all, which is what held the walk
+    /// through the way in four centimetres short of the seam.
+    ///
+    /// Read back out of `built` and `solid` rather than worked out again
+    /// here. Worked out again here it passed with the lap taken away, because
+    /// both sides of the assertion were the test's own arithmetic and neither
+    /// was the room.
+    #[test]
+    fn the_landing_laps_under_the_room() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let north = middle.z + half().y;
+        let drawn = built(reaches)
+            .into_iter()
+            .find(|(_, made)| *made == Made::Landing)
+            .expect("the landing is not built")
+            .0;
+
+        assert!(
+            (drawn.min.z - north).abs() < 1e-3,
+            "the drawn landing starts at {} where the room's floor ends at {}",
+            drawn.min.z,
+            north
+        );
+
+        // the two slabs as the walk meets them: both at the floor, told apart
+        // by how wide they are, since the room's runs the whole span and the
+        // landing is 24
+        let floors: Vec<Aabb> = solid(reaches)
+            .into_iter()
+            .filter(|box_| box_.max.y <= 0.0 && box_.min.y < 0.0)
+            .collect();
+        let slab = |wide: f32| {
+            floors
+                .iter()
+                .find(|box_| (box_.size().x - wide).abs() < 1e-3)
+                .copied()
+                .unwrap_or_else(|| panic!("no floor {} across among {:?}", wide, floors))
+        };
+        let room_floor = slab(SPAN);
+        let out = slab(LANDING);
+
+        assert!(
+            room_floor.max.z - out.min.z > 1.0,
+            "the room's floor ends at {} and the landing starts at {}, so there \
+             is an end face at the seam you walk over",
+            room_floor.max.z,
+            out.min.z
+        );
     }
 }

@@ -2311,6 +2311,8 @@ impl Game for Arcade {
                     behind::Made::Ground => aim::BEHIND_FLOOR,
                     behind::Made::Wall => aim::BEHIND_WALL,
                     behind::Made::Column => aim::BEHIND_COLUMN,
+                    behind::Made::Landing => aim::BEHIND_FLOOR,
+                    behind::Made::Frame => aim::BEHIND_FRAME,
                 };
 
                 scene.push_material(

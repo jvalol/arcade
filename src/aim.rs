@@ -814,6 +814,31 @@ pub fn plate_round(lines: &[(Vec2, &str, f32)], centred: bool) -> Option<Plate> 
 pub const BEHIND_FLOOR: Vec4 = vec4(0.018, 0.018, 0.024, 1.0);
 pub const BEHIND_WALL: Vec4 = vec4(0.022, 0.022, 0.030, 1.0);
 pub const BEHIND_COLUMN: Vec4 = vec4(0.045, 0.045, 0.055, 1.0);
+
+/// The frame round the door at the far end, per spec 0017.
+///
+/// `behind::LAMP_COLOUR` at 2.4. Colour is an unclamped multiplier in this
+/// engine, so past one a surface gives off more than it is given: the frame
+/// is the one thing in that room you can see from across it, and it lights
+/// nothing and casts no shadow for the privilege.
+///
+/// The lamps' own colour and not a warmer one. Everything in that room is the
+/// same cold blue-white on the same regular grid, and whoever hung the lamps
+/// put in the door.
+///
+/// **A light was hung in the opening first and it did nothing.** Not a matter
+/// of intensity: at 0.85 over a range of 7.5 the floor two metres away stayed
+/// black, and at 3.0 over 14 it stayed exactly as black. Instrumenting the
+/// list showed that lamp surviving the cull and ranking first of the two that
+/// reach the shader at that end of the room, so it was being carried and
+/// giving nothing.
+///
+/// The reason is the palette. Every surface in that room is between 0.018 and
+/// 0.045, and a hundredth of white is black on a screen whatever shines on
+/// it. What lights the columns in there is the sun, which throws 83 metres
+/// against a ceiling lamp's 9.5. So the door carries its own light in its
+/// colour, which is the one thing that works in a room this dark.
+pub const BEHIND_FRAME: Vec4 = vec4(1.728, 1.872, 2.208, 1.0);
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// What burns in a stone lantern: a candle behind paper, which is warm against
