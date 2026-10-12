@@ -1298,36 +1298,35 @@ pub fn laid_out(
     out
 }
 
-/// A body's name, on its own black ground.
+/// A body's name, cut out of its ground.
 ///
-/// Drawn and not stencilled, and the first try was the other way round on the
-/// reasoning that a plate out here would be a hole punched in the stars. Two
-/// things were wrong with that.
+/// Stencilled, then drawn on a black plate, then stencilled again, and the
+/// round trip is worth writing down because each leg had a reason that was
+/// true when it was given.
 ///
-/// **A cut-out name is gone at a distance.** Thirty metres from Saturn, with
-/// the columns taken out of the build so that nothing could be hiding it and
-/// the multiplier run up to 24 so that nothing could be dimming it, there was
-/// no name over Saturn at all. Changing this one line put it back, bright and
-/// sharp, from the same spot. Walking the sun back, cut-out names are there
-/// at two metres and four, thin at eight, and gone by twenty.
+/// Cut out first, so a name out here would hang in the sky with nothing
+/// behind it. Then on a plate, because:
 ///
-/// **Why is not established.** The engine's spec 0047 says mip levels average
-/// the alpha down until small text dissolves, and the shader drops a fragment
-/// under `CUTOUT`, which is 0.35, so that is the obvious candidate. It does
-/// not fit on its own: these names hold the same size on the glass at every
-/// distance by construction, so the sampler should be reaching the same mip
-/// at two metres as at thirty. Occlusion and brightness are ruled out by the
-/// two runs above. What is left is a measurement nobody has taken. The
-/// study's book spines are the only other cut-out text in the building and
-/// they are read from arm's length, which is why this has never shown.
+/// a cut-out name was gone at any distance, and a plate read against the sun
+/// as well as against the dark. The sky here is black, so a black plate
+/// against it looked free.
+/// And cut out again, because the first of those two was never a property
+/// of cut-out text. A cut-out surface wrote no depth anywhere, so whatever
+/// drew after it painted over it however far behind it that was, and out at
+/// Saturn the thing drawing after it was the star wall. The engine's spec
+/// 0047 has the whole of it. A cut-out word stands up at any distance now,
+/// which was checked at twenty two metres where there had been nothing.
 ///
-/// **And the hole in the stars is not there.** The sky in this room is black,
-/// so a black plate against it is invisible except where it crosses a star.
-/// What it buys is a name that reads against the sun as well as against the
-/// dark, and the sun is a metre of blown-out white that the inner names stand
-/// in front of from anywhere near the middle of the model.
+/// So the plate is back to being the thing it always was: a black rectangle
+/// over whatever it crosses. Invisible against the sky, which is what made
+/// it look free, and a hole punched in Saturn's rings and in the planets.
+/// That is the cost this takes off, and it takes it off by giving up the
+/// second reason above: against the sun's own blown-out metre of white, a
+/// name is now white on white and goes. Trade a name you cannot read in one
+/// place for plates you cannot see anywhere, and the place in question is
+/// the one body in the room nobody needs told the name of.
 pub fn named(name: &str) -> blitzkit::texture::TextureData {
-    blitzkit::text::drawn(name, LABEL_TEXELS)
+    blitzkit::text::stencilled(name, LABEL_TEXELS)
 }
 
 pub const PLANE: f32 = 1.6;

@@ -272,35 +272,36 @@ planets and the seven moons: sixteen names off the same `orrery::every_body`
 the pictures come from, walked with one index for both, so a name and a picture
 cannot end up on two different bodies.
 
-A name is a quad with the name drawn on its own black ground, the same as the
-way out hangs on. It went in cut out of its ground, per the engine's spec
-0047, on the reasoning that a plate out here would be a hole punched in the
-stars. Both halves of that were wrong, and the window said so.
+A name is a quad with the name cut out of its ground, per the engine's spec
+0047. It went in that way, moved to a black plate, and came back, and each
+leg had a reason that was true when it was given.
 
-**A cut-out name is gone at a distance.** Thirty metres from Saturn, with the
-columns taken out of the build so that nothing could be hiding it and the
-multiplier run up to 24 so that nothing could be dimming it, there was no name
-over Saturn at all. Changing the one line put it back, bright and sharp, from
-the same spot. Walking back from the sun, cut-out names are there at two
-metres and four, thin at eight, and gone by twenty.
+**It went to a plate** because a cut-out name was gone at any distance:
+thirty metres from Saturn, with the columns taken out of the build and the
+multiplier run up to 24, there was no name over Saturn at all. And because a
+plate read against the sun as well as against the dark, while being invisible
+against a sky that is black anyway.
 
-Why is not established, and this spec is not going to pretend otherwise. The
-engine's spec 0047 says mip levels average the alpha down until small text
-dissolves, and the shader drops a fragment under `CUTOUT`, which is 0.35, so
-that is the obvious candidate. It does not fit on its own: these names hold
-the same size on the glass at every distance by construction, so the sampler
-should be reaching the same mip at two metres as at thirty. Occlusion and
-brightness are ruled out by the two runs above. What is left is a measurement
-nobody has taken, and it is the engine's to take. The study's book spines are
-the only other cut-out text in the building and they are read from arm's
-length, which is why this has never shown.
+**It came back** because the first of those was never a property of cut-out
+text. A cut-out surface wrote no depth anywhere, so whatever drew after it
+painted over it however far behind it that was, and out at Saturn the thing
+drawing after it was the star wall. The engine's spec 0047 has the whole of
+it, including the note that blamed mip levels and was wrong. A cut-out word
+stands up at any distance now, checked at twenty two metres where there had
+been nothing.
 
-**And the hole in the stars is not there.** The sky in this room is black, so
-a black plate against it is invisible except where it crosses a star. What it
-buys is a name that reads against the sun as well as against the dark, and the
-sun is a metre of blown-out white that the inner names stand in front of from
-anywhere near the middle of the model. It also makes two names that overlap
-read as two cards rather than as one smear.
+So the plate went back to being what it always was: a black rectangle over
+whatever it crosses. Free against the sky, which is what made it look free,
+and a hole punched in Saturn's rings and in the planets. Jake saw the rings
+first and called them clipped, which they were, by a label eleven metres
+behind them.
+
+What giving it up costs is the second reason: against the sun's own
+blown-out metre of white a name is white on white. Milder than it sounds,
+because the name's colour is cool and the sun is warm, so "Earth" over the
+disc reads as pale blue on cream rather than disappearing. Trading a name
+that is weak in one place for plates that are gone everywhere, when the
+place in question is the one body in the room nobody needs told the name of.
 
 A name is multiplied past one so it carries its own light, because a name is a
 thing somebody put there rather than a thing the sun is shining on, and out
@@ -501,7 +502,10 @@ The names are written, and these are theirs:
 - Standing at the door, the names tell you where the planets are. Finding them
   was the complaint this answers.
 - No name is upside down, mirrored, or rolled, from anywhere in the room.
-- Nothing reads as a hole in the stars where a name is.
+- Nothing reads as a hole in the stars where a name is, and nothing reads as
+  a hole in a planet or in Saturn's rings.
+- A name over the sun's disc can still be read, which is the one place the
+  cut-out is weak and the one this spec gave the plate up for.
 - Swinging between the two arrangements, the names stay readable: fewer of
   them as bodies cross, and no two on top of each other.
 - A name that goes, goes because something crossed it, and not every few
