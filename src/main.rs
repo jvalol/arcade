@@ -2091,7 +2091,7 @@ impl Game for Arcade {
         // the wink, once, while the sight is on any of the five. Spec 0004: it
         // was under every shape, five times, which is five times too many for
         // a joke.
-        let lines: Vec<&str> = if winking {
+        let said: Vec<&str> = if winking {
             vec![self.saying(), aim::WINK]
         } else if self.in_the_system() {
             vec![self.saying(), aim::SYSTEM_NOTE]
@@ -2099,14 +2099,31 @@ impl Game for Arcade {
             vec![self.saying()]
         };
 
+        // wrapped to the window, and wrapped here rather than left to the
+        // renderer. The renderer would do it and `text::room_for` would not
+        // know, so the plate underneath would be measured as one long line
+        // and come out the wrong shape. With the breaks in the string both
+        // see the same thing. The arcade's line in the hall ran off the
+        // right of the window until this went in; the one in the room behind
+        // the wall happened to be short enough and did not.
+        let room = (self.window.0 - aim::SAYS_AT.x * 2.0).max(aim::SAYS_SIZE * 8.0);
+        let lines: Vec<String> = said
+            .iter()
+            .flat_map(|words| {
+                blitzkit::text::wrapped(words, aim::SAYS_SIZE, room)
+                    .split('\n')
+                    .map(String::from)
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
         // a plate under them first, because the text is drawn straight over
         // whatever the room is doing and the room is sometimes a neon sign
         // four feet from your face.
         let laid: Vec<(Vec2, &str, f32)> = lines
             .iter()
-            .copied()
             .enumerate()
-            .map(|(n, words)| (aim::says_at(n), words, aim::SAYS_SIZE))
+            .map(|(n, words)| (aim::says_at(n), words.as_str(), aim::SAYS_SIZE))
             .collect();
 
         plate(geometry, aim::plate_round(&laid, false));
