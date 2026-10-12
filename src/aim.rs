@@ -580,16 +580,20 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 
 /// Out past the door of spec 0017, where walking is not how you get about.
 ///
-/// Verb first, like the rest. The line has to carry the two things that are
-/// not like anywhere else in this building: shift rides rather than runs, and
-/// Return steps to the next body. Which way you are facing decides which one,
-/// either way.
+/// Verb first, like the rest, and four clauses like `SYSTEM_HELP` so the two
+/// read as the same line saying different things. It carries the two things
+/// that are not like anywhere else in this building: shift rides rather than
+/// runs, and Return steps to the next body.
 ///
 /// The ride is named first because it is what the space is for. The jump is
-/// the way out of a four minute crossing you have had enough of, and a line
-/// that names it first teaches people to skip the thing they came to see.
+/// the way out of a crossing you have had enough of, and a line that names it
+/// first teaches people to skip the thing they came to see.
+///
+/// It said "turn round to go back" as well, which is true of both and is the
+/// one thing you work out without being told: there is one line and two ways
+/// along it.
 pub const DEEP_HELP: &str =
-    "[COPY - Jake] Use WASD and the mouse to get about. Hold Shift to ride the line, or press Return to step straight to the next body. Turn round to go back. Press Escape to quit.";
+    "Use WASD and the mouse to get about. Hold Shift to ride the line. Press Return to step to the next body. Press Escape to quit.";
 
 /// What the true-scale system owns up to, under its help line.
 ///
@@ -602,7 +606,7 @@ pub const DEEP_HELP: &str =
 /// you can see from Neptune is in the room; a nine hundredth is a number you
 /// have to take on trust.
 pub const DEEP_NOTE: &str =
-    "[COPY - Jake] Everything here is true to scale but the light. Neptune should be as dark as the speck of sun you can see from it.";
+    "Everything here is true to scale but the light. Neptune should be as dark as the speck of sun you can see from it.";
 
 /// What the solar system owns up to, under its help line.
 ///
