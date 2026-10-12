@@ -451,22 +451,19 @@ pub fn moon_angle_at(moon: &Moon, since: f32) -> f32 {
     since / month_seconds(moon) * std::f32::consts::TAU
 }
 
-/// The same place on a circle, said as the shortest turn from the line.
+/// Lined up, said as the nearest whole turn to where the planet is now.
 ///
-/// `angle_at` counts from the moment the building opened and never comes
-/// back, so after five minutes Mercury is twenty one turns along. Wrapped
-/// into a half turn either way it is the same place and a number the swing
-/// can use. See `stands`.
-pub fn shortest_turn(angle: f32) -> f32 {
-    use std::f32::consts::{PI, TAU};
-
-    let round = angle.rem_euclid(TAU);
-
-    if round > PI {
-        round - TAU
-    } else {
-        round
-    }
+/// Every multiple of a full turn is the same place on the circle, so any of
+/// them is a true account of lined up. Which one matters only while the
+/// swing is partway: the planet is between this and its orbit angle, so the
+/// multiple chosen is the end it is coming from.
+///
+/// Taken at the two ends of the swing and nowhere else. At rest the planet
+/// sits exactly here, and a full turn either way is the same place, so
+/// taking it again moves nothing. Swung all the way out this has no weight
+/// at all. In between it is held, which is what keeps the path smooth.
+pub fn resting_near(angle: f32) -> f32 {
+    (angle / std::f32::consts::TAU).round() * std::f32::consts::TAU
 }
 
 /// Where a planet is, between lined up and in orbit.
@@ -478,31 +475,39 @@ pub fn shortest_turn(angle: f32) -> f32 {
 ///
 /// `toward` is the way the line points, which is the way the door is.
 ///
-/// **The shortest way round, and that is not a tidy-up.** This multiplied
-/// `angle_at` by `swung`, and `angle_at` counts from the moment the building
-/// opened and never comes back. So the sweep was however far the planet had
-/// travelled since you walked in, crammed into the three seconds of the
-/// swing: a planet whirling round the sun rather than fanning out to its
-/// place. Half a minute in it was two turns of Mercury, five minutes in it
-/// was twenty one, fifteen minutes in it was sixty two, and it went on
-/// getting worse for as long as the building stayed open. Jake watched it and
-/// said switching modes was a bit chaotic.
+/// `rest` is where lined up is for this planet, from `resting_near`, taken
+/// at whichever end of the swing it last sat at.
 ///
-/// `shortest_turn` lands the planet in the same place and asks for at most
-/// half a turn to get there, whatever the clock says.
+/// **It went through two wrong shapes to get here and both are worth
+/// keeping.** First it multiplied `angle_at` by `swung`, and `angle_at`
+/// counts from the moment the building opened and never comes back, so the
+/// sweep was however far the planet had travelled since you walked in,
+/// crammed into three seconds: two turns of Mercury half a minute in,
+/// twenty one at five minutes, sixty two at fifteen, worse for as long as
+/// the building stayed open. Jake called switching modes chaotic.
 ///
-/// **What is left is a jump once an orbit.** The wrap flips from half a turn
-/// one way to half a turn the other, and while `swung` is between nought and
-/// one that moves the planet. It is the full width of the orbit for a planet
-/// caught exactly at the wrap, and Mercury passes it every fourteen seconds,
-/// so a three second swing has a fair chance of meeting it. Taking it out
-/// means carrying each planet's drawn angle from frame to frame and easing it
-/// rather than working it out fresh, which is a different shape of code and
-/// is not this. See `tests::a_swing_is_never_more_than_half_a_turn`.
-pub fn stands(planet: &Planet, toward: Vec3, swung: f32, since: f32) -> Vec3 {
+/// Then it wrapped that into `shortest_turn`, half a turn either way, which
+/// fixed the whirling and left a jump. The wrap flips from half a turn one
+/// way to half a turn the other, and partway through a swing that moves the
+/// planet by up to the width of its orbit. Mercury passes the wrap every
+/// fourteen seconds, so a three second swing met it often.
+///
+/// The shape that works carries one number per planet instead of working
+/// everything out fresh. Lined up is not an angle, it is every multiple of
+/// a full turn at once, and the jump was this function picking a different
+/// multiple halfway through. So the multiple is picked at the ends of the
+/// swing and held across it. Both ends are safe to pick at: at rest the
+/// planet is exactly on it and a full turn either way is the same place, and
+/// swung fully out it carries no weight. In between nothing may change, and
+/// nothing does.
+///
+/// A swing turned round partway keeps the `rest` it started with, which is
+/// what it should do: it is going back to the end it came from.
+pub fn stands(planet: &Planet, toward: Vec3, swung: f32, since: f32, rest: f32) -> Vec3 {
     let along = toward.normalize_or_zero();
     let side = vec3(-along.z, 0.0, along.x);
-    let turn = shortest_turn(angle_at(planet, since)) * swung.clamp(0.0, 1.0);
+    let swung = swung.clamp(0.0, 1.0);
+    let turn = rest * (1.0 - swung) + angle_at(planet, since) * swung;
 
     (along * turn.cos() + side * turn.sin()) * planet.far()
 }
@@ -2314,66 +2319,88 @@ mod tests {
         );
     }
 
-    /// Spec 0015: a swing asks for at most half a turn, however long the
-    /// building has been open.
+    /// Spec 0015: a swing never jumps, from any clock, including across the
+    /// wrap that used to make it jump.
     ///
-    /// It used to ask for however far the planet had travelled since you
-    /// walked in. `stands` multiplied `angle_at` by `swung`, and `angle_at`
-    /// counts from the moment the building opened and never comes back, so
-    /// the sweep grew all evening: two turns of Mercury half a minute in,
-    /// twenty one at five minutes, sixty two at fifteen. Three seconds of
-    /// that is a planet whirling and not a line fanning open.
+    /// Walks a whole swing the way the game does: `rest` taken once at the
+    /// start, `swung` from nought to one over `SWINGS`, and `since`
+    /// advancing with it. The planet may not move further between two frames
+    /// than it could have travelled in one.
     ///
-    /// `the_swing_keeps_every_planet_at_its_own_distance` passed throughout
-    /// and could not have done otherwise: a planet twenty turns round its
-    /// own circle is still exactly on it. That is the test that looked like
-    /// it covered this and did not.
+    /// The clocks include 6.5 seconds, which is the one that matters.
+    /// Mercury's angle crosses half a turn at 7.2 and every 14.5 after, and
+    /// the shape before this one picked which whole turn was "lined up"
+    /// fresh on every frame: across that crossing it picked a different one
+    /// and the planet moved by up to the width of its orbit, partway through
+    /// a swing, for no reason a viewer could see.
     ///
-    /// The clocks here go well past any sitting anybody will have. The
-    /// control is the line this replaced: put `angle_at` back in place of
-    /// `shortest_turn` in `stands` and the first assertion fails at half a
-    /// minute.
+    /// The control is that shape. Put `shortest_turn(angle_at(planet,
+    /// since)) * swung` back in `stands` and this fails on Mercury at 7.2
+    /// seconds.
+    ///
+    /// The clocks also run to ten hours, because the shape before *that* one
+    /// grew its sweep for as long as the building stayed open.
     #[test]
-    fn a_swing_is_never_more_than_half_a_turn() {
-        use std::f32::consts::PI;
-
+    fn a_swing_never_jumps() {
         let toward = vec3(1.0, 0.0, 0.0);
+        let step = 1.0 / 60.0;
 
-        for since in [0.0f32, 1.0, 30.0, 120.0, 300.0, 900.0, 3_600.0, 36_000.0] {
+        for opened in [0.0f32, 6.5, 7.0, 13.0, 30.0, 300.0, 3_600.0, 36_000.0] {
             for planet in PLANETS.iter() {
-                let turn = shortest_turn(angle_at(planet, since));
+                let rest = resting_near(angle_at(planet, opened));
+                // the furthest it could honestly go in a frame: the swing is
+                // at most half a turn over `SWINGS`, and the orbit carries it
+                // on top of that
+                let most = planet.far()
+                    * (std::f32::consts::PI / SWINGS
+                        + std::f32::consts::TAU / year_seconds(planet))
+                    * step
+                    * 1.5;
 
-                assert!(
-                    turn.abs() <= PI + 1e-4,
-                    "{} asks for {:.1} turns after {:.0}s open",
-                    planet.body.name,
-                    turn.abs() / (PI * 2.0),
-                    since
-                );
+                let mut was = stands(planet, toward, 0.0, opened, rest);
+                let mut swung = 0.0f32;
+                let mut since = opened;
 
-                // and the swing still arrives where the orbit says, which is
-                // the half of this that must not have changed. Worked out
-                // from `angle_at` straight, not from `shortest_turn`, so the
-                // two have to agree rather than agreeing by construction.
+                while swung < 1.0 {
+                    swung = (swung + step / SWINGS).min(1.0);
+                    since += step;
+
+                    let now = stands(planet, toward, swung, since, rest);
+
+                    assert!(
+                        (now - was).length() <= most,
+                        "{} moved {:.3} m in a frame of {:.3}, at swung {:.2}, room {:.0}s open",
+                        planet.body.name,
+                        (now - was).length(),
+                        most,
+                        swung,
+                        opened
+                    );
+
+                    was = now;
+                }
+
+                // and it arrives where the orbit says. Worked out from
+                // `angle_at` straight, so the two have to agree rather than
+                // agreeing by construction.
                 let raw = angle_at(planet, since);
                 let along = toward.normalize();
                 let side = vec3(-along.z, 0.0, along.x);
                 let orbit = (along * raw.cos() + side * raw.sin()) * planet.far();
 
                 assert!(
-                    (stands(planet, toward, 1.0, since) - orbit).length() < 1e-2,
-                    "{} lands {:.3} m off its orbit after {:.0}s open",
+                    (was - orbit).length() < 1e-2,
+                    "{} ended {:.3} m off its orbit",
                     planet.body.name,
-                    (stands(planet, toward, 1.0, since) - orbit).length(),
-                    since
+                    (was - orbit).length()
                 );
 
-                // and lined up is still lined up
-                let lined = stands(planet, toward, 0.0, since);
+                // and lined up was lined up when it set off
+                let lined = stands(planet, toward, 0.0, opened, rest);
 
                 assert!(
                     (lined - toward.normalize() * planet.far()).length() < 1e-3,
-                    "{} is not on the line at rest",
+                    "{} was not on the line at rest",
                     planet.body.name
                 );
             }
@@ -2398,7 +2425,13 @@ mod tests {
                 let swung = step as f32 / 20.0;
 
                 for since in [0.0f32, 7.0, 93.0, 1000.0].iter().copied() {
-                    let at = stands(planet, toward, swung, since);
+                    let at = stands(
+                        planet,
+                        toward,
+                        swung,
+                        since,
+                        resting_near(angle_at(planet, since)),
+                    );
 
                     assert!(
                         (at.length() - planet.far()).abs() < 1e-3,
@@ -2424,7 +2457,13 @@ mod tests {
         let toward = vec3(-1.0, 0.0, -0.4).normalize();
 
         for planet in PLANETS.iter() {
-            let at = stands(planet, toward, 0.0, 4321.0);
+            let at = stands(
+                planet,
+                toward,
+                0.0,
+                4321.0,
+                resting_near(angle_at(planet, 4321.0)),
+            );
             let want = toward * planet.far();
 
             assert!(
@@ -2440,7 +2479,7 @@ mod tests {
         // quarter of the way round, it is not on the line
         let mercury = planet("Mercury");
         let quarter = year_seconds(&mercury) * 0.25;
-        let at = stands(&mercury, toward, 1.0, quarter);
+        let at = stands(&mercury, toward, 1.0, quarter, 0.0);
 
         assert!(
             at.distance(toward * mercury.far()) > mercury.far(),

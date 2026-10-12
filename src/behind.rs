@@ -518,7 +518,7 @@ mod tests {
             .collect();
 
         for planet in crate::orrery::PLANETS.iter() {
-            let body = sun + crate::orrery::stands(planet, toward, 0.0, 0.0);
+            let body = sun + crate::orrery::stands(planet, toward, 0.0, 0.0, 0.0);
 
             // a hundred steps down the way from the door to it, and none of
             // them inside a column

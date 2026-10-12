@@ -303,6 +303,11 @@ struct Arcade {
     star_mesh: Vec<MeshId>,
     swung: f32,
     swinging_out: bool,
+    /// Where lined up is for each planet, held across a swing so the path
+    /// cannot jump. Taken at whichever end the swing last sat at, which is
+    /// the only place it can be taken without moving anything. See
+    /// `orrery::stands`.
+    resting: Vec<f32>,
     /// One length of bamboo, stood up a few hundred times along one wall.
     pole: Option<MeshId>,
     /// The moss at the foot of the garden's walls, and the quads it is cut
@@ -524,6 +529,7 @@ impl Arcade {
             star_mesh: Vec::new(),
             swung: 0.0,
             swinging_out: false,
+            resting: vec![0.0; orrery::PLANETS.len()],
             pole: None,
             moss: None,
             moss_mesh: Vec::new(),
@@ -1025,7 +1031,14 @@ impl Arcade {
         let mut skin = 1;
 
         for planet in orrery::PLANETS.iter() {
-            let at = sun + orrery::stands(planet, toward, self.swung, self.since);
+            let at = sun
+                + orrery::stands(
+                    planet,
+                    toward,
+                    self.swung,
+                    self.since,
+                    self.resting.get(skin - 1).copied().unwrap_or(0.0),
+                );
 
             if let Some(worn) = self.worlds.get(skin) {
                 scene.push_textured(
@@ -1918,6 +1931,17 @@ impl Game for Arcade {
         // and sent back, it goes back from halfway. A toggle that jumps here
         // breaks the one illusion the whole room rests on.
         let by = dt / orrery::SWINGS;
+
+        // at either end of the swing, take each planet's lined up angle
+        // again. Neither end can move anything by it: at rest the planet is
+        // exactly on it and a whole turn either way is the same place, and
+        // swung out it has no weight. Across the swing it is held, which is
+        // what keeps the path smooth. See `orrery::stands`.
+        if self.swung == 0.0 || self.swung == 1.0 {
+            for (rest, planet) in self.resting.iter_mut().zip(orrery::PLANETS.iter()) {
+                *rest = orrery::resting_near(orrery::angle_at(planet, self.since));
+            }
+        }
 
         self.swung = if self.swinging_out {
             (self.swung + by).min(1.0)

@@ -224,13 +224,23 @@ throughout and could not have done otherwise: a planet twenty turns round its
 own circle is still exactly on it. It is the test that looked like it covered
 the sweep.
 
-**What is left is a jump once an orbit.** The wrap flips from half a turn one
-way to half a turn the other, and while the swing is in progress that moves
-the planet, by up to the full width of its orbit for one caught exactly at
-the wrap. Mercury passes it every fourteen seconds, so a three second swing
-has a fair chance of meeting it. Taking it out means carrying each planet's
-drawn angle from frame to frame and easing it rather than working it out
-fresh, which is a different shape of code and is not done.
+**And then the wrap, which was the second wrong shape.** `shortest_turn`
+flips from half a turn one way to half a turn the other, and partway through
+a swing that moved the planet by up to the width of its orbit: 1.4 m of
+Mercury in a frame where it could honestly travel 4 cm. Mercury passes the
+wrap every fourteen seconds, so a three second swing met it often.
+
+The shape that works carries one number per planet. Lined up is not an
+angle, it is every multiple of a full turn at once, and the jump was the
+code picking a different multiple halfway through. So `orrery::resting_near`
+picks one at the ends of the swing and `orrery::stands` holds it across.
+Both ends are safe to pick at, which is what makes this cheap: at rest the
+planet sits exactly on it and a whole turn either way is the same place, and
+swung fully out it carries no weight at all. In between nothing may change,
+and nothing does. A swing turned round partway keeps the number it started
+with, which is right: it is going back to the end it came from.
+
+`shortest_turn` is gone with it.
 
 ### The light
 
@@ -479,7 +489,7 @@ The two arrangements and the swing:
 
 - Lined up is lined up. — `orrery::tests::lined_up_is_lined_up`
 - The swing leaves every planet at its own radius at every moment of it. — `orrery::tests::the_swing_keeps_every_planet_at_its_own_distance`
-- And asks for at most half a turn, however long the building has been open. — `orrery::tests::a_swing_is_never_more_than_half_a_turn`
+- And never jumps, from any clock, including across the wrap that used to make it. — `orrery::tests::a_swing_never_jumps`
 - L swings it out and back. — `tests::l_swings_the_system_out_and_back`
 - A swing interrupted halfway and sent back does not jump. — `tests::the_swing_turned_round_partway_does_not_jump`
 
