@@ -596,6 +596,73 @@ mod tests {
         assert!(got.z > reaches + THICK, "it did not get through: {:?}", got);
     }
 
+    /// Spec 0015: the ceiling grid alone never fills the engine's lamp
+    /// list, from anywhere in the room, looking any way.
+    ///
+    /// A hundred lamps over a hundred and fifty nine metres against an
+    /// engine that carries sixty four. That overflow is what made the sun
+    /// get dropped, and culling by `Camera::frustum` is what ends it: a lamp
+    /// gives nothing past its range, so one whose reach does not meet the
+    /// picture lights nothing you can see.
+    ///
+    /// The grid only, which is the honest limit of this test. The building
+    /// pushes thirty three other fittings and they are not counted here, so
+    /// the headroom below is not the whole story; what covers the rest is
+    /// the engine saying so once a frame when a cap is hit, and the ranking
+    /// that decides what spills.
+    ///
+    /// Sampled over the floor and round the compass, because the worst case
+    /// is a direction and not a place.
+    #[test]
+    fn the_ceiling_grid_stays_under_the_lamps_the_engine_carries() {
+        use blitzkit::lighting::MAX_POINT_LIGHTS;
+
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let half_room = half();
+        let lamps = lamps(reaches);
+        let mut worst = (0usize, Vec3::ZERO, 0.0f32);
+
+        for across in 0..7 {
+            for along in 0..7 {
+                let eye = vec3(
+                    middle.x - half_room.x + SPAN * (across as f32 + 0.5) / 7.0,
+                    crate::EYE,
+                    middle.z - half_room.y + DEEP * (along as f32 + 0.5) / 7.0,
+                );
+
+                for turn in 0..8 {
+                    let yaw = turn as f32 / 8.0 * std::f32::consts::TAU;
+                    let mut camera = blitzkit::camera::Camera::new();
+                    camera.position = eye;
+                    camera.target = eye + vec3(yaw.sin(), 0.0, -yaw.cos());
+                    let seen = camera.frustum();
+                    let kept = lamps
+                        .iter()
+                        .filter(|at_| seen.holds_sphere(**at_, LAMP_RANGE))
+                        .count();
+
+                    if kept > worst.0 {
+                        worst = (kept, eye, yaw);
+                    }
+                }
+            }
+        }
+
+        assert!(
+            worst.0 < MAX_POINT_LIGHTS,
+            "{} of the grid are in view at {:?} looking {:.2}, cap {}",
+            worst.0,
+            worst.1,
+            worst.2,
+            MAX_POINT_LIGHTS
+        );
+
+        // and it is not passing by culling everything: standing in the
+        // middle of the floor you should see a good few
+        assert!(worst.0 > 8, "only {} lamps were ever in view", worst.0);
+    }
+
     /// Spec 0015: you can walk from the way in to the sun, and round it.
     ///
     /// A hundred and eleven metres of it, which is what the room became when

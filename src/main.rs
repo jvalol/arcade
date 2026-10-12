@@ -4857,6 +4857,22 @@ impl Game for Arcade {
             ));
         }
 
+        // and first, throw away every lamp that cannot light anything you
+        // can see. A lamp gives exactly nothing past its range, so all it
+        // lights is inside a sphere of that radius, and a sphere that does
+        // not reach the picture is a lamp whose work is all off screen.
+        // Spec 0050 of the engine.
+        //
+        // This is what takes the building under the engine's cap rather
+        // than merely ordering what spills over it: a hundred and thirty
+        // three lamps become between twelve and fifty three depending on
+        // where you stand and which way you look, against sixty four
+        // carried. The ranking below stays as the fallback, so a corner
+        // nobody has measured still spills in the right order.
+        let seen = camera.frustum();
+
+        shades.retain(|(_, at, _, _, reach)| seen.holds_sphere(*at, *reach));
+
         // deepest inside its own reach first, so what the engine drops when a
         // building outgrows it is the lamp that could not have lit you
         // anyway. Not a ration: every fitting in the building is pushed and

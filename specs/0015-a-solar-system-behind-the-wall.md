@@ -464,10 +464,20 @@ the real lamps are far worse than level. A metric that read what a light gives
 to *what you can see* rather than to where you stand would be the honest one
 and is a different piece of work.
 
-**Still over the cap.** 133 pushed against 64 means 69 dropped every frame,
-and the engine says so once per dropped light: about 8,600 lines a second.
-They are the right 69 now, but the log is unreadable and the formatting is
-work done every frame. Not fixed here.
+**And then not over the cap at all.** Ranking was the right answer to the
+wrong question. The lamps that were spilling could not light anything you
+could see: behind you, in another room, or a hundred metres off with a reach
+of nine and a half. So the building throws those away before it ranks what
+is left, by `Camera::frustum` and the engine's spec 0050, which is exact
+rather than approximate because a lamp gives exactly nothing past its range.
+
+A hundred and thirty three become twelve to fifty three depending on where
+you stand and which way you look, against sixty four carried. Ten seconds of
+the arcade now says nothing at all about lamps, where it was saying 8,600
+lines a second before the counting went in and one line a frame after.
+
+The ranking stays underneath as the fallback, so a corner nobody has
+measured still spills in the right order rather than at random.
 
 ## Acceptance criteria
 
@@ -512,6 +522,7 @@ The names:
 - And the width that clears it has room to move in, without gutting the grid. — `behind::tests::the_line_is_cleared_by_a_wide_margin`
 - Lined up, the way from the doorway to every body runs through no column. — `behind::tests::every_body_is_in_view_from_the_doorway`
 - The sun outranks a spent ceiling lamp from anywhere in the room, so the engine keeps it. — `tests::the_sun_outranks_a_ceiling_lamp_from_anywhere`
+- The ceiling grid alone never fills the engine's lamp list, from anywhere, looking any way. — `behind::tests::the_ceiling_grid_stays_under_the_lamps_the_engine_carries`
 - Every body has a name, no two share one, and every one draws something. — `orrery::tests::every_body_is_named_once`
 - Two names that would land on each other are cut to the nearer one. — `orrery::tests::two_names_on_one_another_are_cut_to_one`
 - And names with room to spare are all kept. — `orrery::tests::names_that_clear_each_other_are_all_kept`
