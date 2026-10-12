@@ -88,26 +88,69 @@ pub fn au() -> f32 {
 
 /// A kilometre, in metres, on the body scale.
 ///
-/// One metre to 557,080 km. It was one metre to the sun's own diameter, which
-/// made the sun exactly a metre and the Earth a nine millimetre pea, and a
-/// pea in a room this size is a thing you walk past without seeing. This is
-/// two and a half times that, so the Earth is 2.3 cm and Jupiter is 26.
+/// One metre to 185,693 km. It was one metre to the sun's own diameter, which
+/// made the sun exactly a metre and the Earth a nine millimetre pea; then two
+/// and a half times that, and the Earth was 2.3 cm.
 ///
-/// **Two and a half and no more, and the Moon is what says so.** At three
-/// times, the Moon's orbit round the Earth is exactly as wide as the gap
-/// between the Earth's orbit and Mars's, and the model starts telling lies
-/// about which things are near which. Callisto gives out at 5.2 times and
-/// Saturn's rings at 71, so the Moon is the whole of the limit. See
-/// `the_moon_is_what_stops_the_bodies_growing`.
-pub const BODY: f32 = 2.5 / SUN_ACROSS_KM;
+/// **Seven and a half, because a planet has to be visible without
+/// squinting.** Jake stood among them and said you only notice one because
+/// of the name over it, which is a model failing at its one job. The Earth
+/// is 6.9 cm now, Jupiter is three quarters of a metre, and Mercury and Mars
+/// have stopped being specks.
+///
+/// **This is the only number that changes how big a planet looks**, which
+/// took a wrong turn to learn. Growing the bodies and the orbits together
+/// was tried first: it doubled every measurement in the room and changed the
+/// picture not at all, because you then stand twice as far from everything
+/// and a planet subtends exactly the angle it did. What a planet looks like
+/// is set by its size against the distances it sits among, and that is this
+/// against `au`, nothing else.
+///
+/// **What pays for it.** The ratio between the two scales, which is the
+/// model's first lie, goes from 102 to 306. The Moon has to come in to three
+/// a third of its true distance on this scale to stay where it is, which is
+/// `MOONS_CLOSER`, so it reads as ten Earths out rather than thirty. The
+/// room, the walk and every proportion among the planets themselves are
+/// untouched: every body is still exactly true against every other body and
+/// every orbit against every other orbit.
+pub const BODY: f32 = 7.5 / SUN_ACROSS_KM;
+
+/// How much of its true distance on the body scale a moon is drawn at.
+///
+/// A third, exactly, and it exists because `BODY` grew and the moons could
+/// not come with it. A moon's orbit is on the body scale, so at three times the
+/// bodies the Moon's orbit would be three times as wide and halfway to Mars,
+/// which is the reading `MOON_SHARE` was written to stop. Held to three
+/// a third, the Moon sits exactly where it sat before, 69 cm from the Earth,
+/// and the room does not have to grow either: `au` comes off the Moon's
+/// orbit, and the Moon's orbit has not moved. A third against three is why
+/// it is a third and not a tenth of anything.
+///
+/// The cost is the fact this model was proudest of. The Moon was thirty
+/// Earths from the Earth, which is true and is the proportion everybody half
+/// knows and nobody quite believes. It is ten now. Ten still reads as a moon
+/// well clear of its planet, which thirty did and a cartoon's two does not,
+/// and it bought every planet in the room being worth looking at.
+///
+/// Within the moons nothing moved: Io against Europa against Ganymede, and
+/// every moon against its own planet's other moons, are all exactly what
+/// they were.
+pub const MOONS_CLOSER: f32 = 1.0 / 3.0;
 
 /// What fraction of its true size the sun is drawn at, and it is the second
 /// lie in this model after the ratio between the two scales.
 ///
-/// Two fifths. Its true size on the body scale is two and a half metres, and
-/// two and a half metres does not fit: the orbit scale has to clear it with
-/// Mercury at 0.387 AU, and that wants a disc two hundred and forty metres
-/// across.
+/// Two fifteenths. Its true size on the body scale is seven and a half
+/// metres, and seven and a half metres does not fit: the orbit scale has to
+/// clear it with Mercury at 0.387 AU, and that wants a disc seven hundred
+/// metres across.
+///
+/// It was two fifths and the sun was a metre. The bodies then grew three
+/// times and this came down by the same three, so the sun is still a metre.
+/// That is deliberate: the sun is already far larger than any planet, and
+/// growing it with them would only crowd the frame and eat Mercury's
+/// clearance, which is 51.6 cm and the thing this fraction exists to
+/// protect.
 ///
 /// The fraction is the constant and the size is worked out from it, so that
 /// growing the bodies keeps the sun the same fraction of them rather than
@@ -116,9 +159,9 @@ pub const BODY: f32 = 2.5 / SUN_ACROSS_KM;
 /// It is the lie every planet walk in the world tells, for the same reason,
 /// and it is the one that buys the planets their size. Said here and said in
 /// the room: see `aim::SYSTEM_NOTE`.
-pub const SUN_SHRUNK: f32 = 0.4;
+pub const SUN_SHRUNK: f32 = 2.0 / 15.0;
 
-/// How big the sun is drawn: two fifths of what the body scale says.
+/// How big the sun is drawn: two fifteenths of what the body scale says.
 pub fn sun_drawn() -> f32 {
     SUN_ACROSS_KM * BODY * SUN_SHRUNK
 }
@@ -185,7 +228,7 @@ pub struct Moon {
 
 impl Moon {
     pub fn far(&self) -> f32 {
-        self.out_km * BODY
+        self.out_km * BODY * MOONS_CLOSER
     }
 }
 
@@ -2045,18 +2088,20 @@ mod tests {
         // and the sun is the one body that is not true against them, which
         // is a decision and not a slip
         assert!(
-            (SUN.drawn() - 2.5).abs() < 1e-3,
-            "the sun's true size on the body scale is {:.3} m, not 2.50",
+            (SUN.drawn() - SUN_ACROSS_KM * BODY).abs() < 1e-3,
+            "the sun's true size on the body scale is {:.3} m, not what the \
+             scale says",
             SUN.drawn()
         );
         assert!(
-            (sun_drawn() - 1.0).abs() < 1e-3,
-            "two fifths of its true size is {:.3} m, not one",
+            (sun_drawn() - 1.0).abs() < 1e-2,
+            "the sun is drawn {:.3} m across, not the metre it has always been",
             sun_drawn()
         );
         // and the room says the same fraction the constant does
         assert!(
-            crate::aim::SYSTEM_NOTE.contains("two fifths") && (SUN_SHRUNK - 0.4).abs() < 1e-6,
+            crate::aim::SYSTEM_NOTE.contains("two fifteenths")
+                && (SUN_SHRUNK - 2.0 / 15.0).abs() < 1e-6,
             "the line in the room and the constant disagree about the sun"
         );
     }
@@ -2120,8 +2165,8 @@ mod tests {
         let earths = moon.far() / earth.body.drawn();
 
         assert!(
-            (earths - 30.1).abs() < 0.2,
-            "the Moon is {:.1} Earths out, not 30.1",
+            (earths - 30.1 * MOONS_CLOSER).abs() < 0.2,
+            "the Moon is {:.1} Earths out, not ten",
             earths
         );
     }
@@ -2157,8 +2202,8 @@ mod tests {
         let times = orbit_km_per_metre / body_km_per_metre;
 
         assert!(
-            (times - 101.9).abs() < 0.2,
-            "the orbit scale is {:.2} times the body scale, not 101.9",
+            (times - 305.7).abs() < 0.5,
+            "the orbit scale is {:.2} times the body scale, not 305.7",
             times
         );
     }

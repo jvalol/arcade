@@ -33,10 +33,10 @@ So two scales, each exactly proportional inside itself:
 
 | | one metre is | |
 | --- | --- | --- |
-| **bodies and their moons** | 557,080 km | the Earth is 2.3 cm across |
+| **bodies and their moons** | 185,693 km | the Earth is 6.9 cm across |
 | **planets from the sun** | 56,769,000 km | one AU is 2.64 m |
 
-The orbit scale is **101.9 times** the body scale. That ratio is the first lie
+The orbit scale is **306 times** the body scale. That ratio is the first lie
 in the model and it is written here rather than hidden: every size is true
 against every other size, every distance is true against every other distance,
 and sizes are not true against distances.
@@ -80,11 +80,12 @@ run. Shift was already there, from the running work earlier the same day, and
 it is the only reason the bigger room is a distance rather than a trudge.
 
 What it bought is every proportion in the model staying exactly what it was.
-The Moon is still thirty Earths out, Callisto is still thirteen Jupiters out,
-Neptune is still thirty times the Earth's distance. Nothing was made less
-true. Two things improved on their own: the ratio between the scales fell
+Callisto is still thirteen Jupiters out and Neptune is still thirty times the
+Earth's distance. Nothing was made less true. (The Moon was thirty Earths out
+too, and is ten now; that was paid for separately, below.) Two things improved on their own: the ratio between the scales fell
 from 167.8 to 101.9, the closest they have been since the bodies grew, and
-Mercury's clearance of the sun went from 11.8 cm to 51.6.
+Mercury's clearance of the sun went from 11.8 cm to 51.6. The ratio went back
+out to 306 the next day; the clearance stayed.
 Callisto gives out at 5.2 times and Saturn's rings at 71, so the Moon is the
 whole of the limit.
 
@@ -102,7 +103,8 @@ therefore **about seventy eight times the sun's diameter across**, and a sun
 twice as wide costs four times the floor.
 
 At one metre, Mercury's surface clears the sun's by 51.6 cm and the disc is
-158.7 m across. At two and a half metres it would be 397 m across.
+158.7 m across. At seven and a half metres, its true size on the body scale,
+it would be seven hundred across.
 
 The cell cap this paragraph used to warn about is real and this room has now
 hit it: the reach fill over a building 190 by 11 by 179 at a quarter-metre
@@ -117,6 +119,39 @@ The price is small planets: Earth is a nine millimetre pea. If that turns out
 to disappoint, drawing the sun alone at a third of its true size and labelling
 it makes every planet two and a half times bigger in the same room. That is
 what planet walks do. It is one constant and it is deliberately not taken here.
+
+**Big enough to notice.** Jake stood among the planets and said you only
+notice one because of the name over it, which is a model failing at its one
+job. The Earth was 2.3 cm.
+
+`BODY` is three times what it was: the Earth is 6.9 cm, Jupiter is 77 cm,
+Mercury is 2.6 cm and Mars is 3.7, and none of them is a speck any more.
+
+**Only this changes how big a planet looks**, which took a wrong turn to
+learn and the wrong turn is worth keeping. Growing the bodies and the orbits
+together was tried first, and it doubled every measurement in the room and
+changed the picture not at all: you then stand twice as far from everything,
+and a planet subtends exactly the angle it did. What a planet looks like is
+its size against the distances it sits among, and that is `BODY` against
+`au`, nothing else. The menu this spec's author put in front of Jake offered
+the uniform scaling as a way to bigger planets. It is not one.
+
+**What it cost.** The ratio between the two scales, the model's first lie,
+goes from 102 to 306. And the Moon: its orbit is on the body scale, so at
+three times the bodies it would be three times as wide and halfway to Mars,
+which is the reading `MOON_SHARE` exists to stop. `orrery::MOONS_CLOSER`
+holds the moons to a third of their true distance on this scale, so the Moon
+sits exactly where it sat, 69 cm from the Earth, and reads as ten Earths out
+rather than thirty. Ten still reads as a moon well clear of its planet, which
+a cartoon's two does not. Within the moons nothing moved: Io against Europa
+against Ganymede is exactly what it was.
+
+**What it did not cost.** The room, the walk, `au`, and the sun. `au` comes
+off the Moon's orbit and the Moon's orbit has not moved, so the room is the
+same 159 m and the run to the sun is the same 13 seconds. `SUN_SHRUNK` came
+down by the same three, from two fifths to two fifteenths, so the sun is
+still a metre across and Mercury still clears it by 51.6 cm. Growing the sun
+with the planets would only have crowded the frame and eaten that clearance.
 
 ### The room
 

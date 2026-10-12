@@ -584,7 +584,7 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 /// about sizes and distances at once, and a model that is dishonest without
 /// saying so is a lie rather than a scale.
 pub const SYSTEM_NOTE: &str =
-    "The sun is drawn at two fifths of its size. Any bigger and Mercury would be inside it.";
+    "The sun is drawn at two fifteenths of its size. Any bigger and Mercury would be inside it.";
 
 /// The way out of the solar system, and the housing it sits in.
 ///
