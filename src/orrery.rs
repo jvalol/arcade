@@ -32,6 +32,13 @@ use glam::{vec3, Vec3};
 /// How many kilometres a metre is, for a ball.
 pub const SUN_ACROSS_KM: f32 = 1_392_700.0;
 
+/// How many kilometres an astronomical unit is.
+///
+/// Nothing in this file needs it: the room's orbit scale comes off the Moon,
+/// per `au`, and never touches a real distance. Spec 0018 does, because out
+/// there a distance in kilometres is the only kind there is.
+pub const AU_KM: f32 = 149_597_870.0;
+
 /// How much of the gap between the Earth's orbit and Mars's the Moon's orbit
 /// is allowed to take up.
 ///

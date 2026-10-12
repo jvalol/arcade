@@ -1,7 +1,7 @@
 # 0017 A door at the far end
 
 **Status:** implemented
-**Date:** 2026-10-12
+**Date:** 2026-10-12, the landing handed to spec 0018 the same day
 
 ## Goal
 
@@ -75,31 +75,36 @@ and somewhere else through there is darker and colder than this, not warmer.
 
 ### What is beyond it
 
-A landing: 24 metres across, 24 deep, floored, walled on neither side and
-roofed not at all. The room's lid stops at the north wall, so through the door
-is open above.
+Spec 0018, which is where this spec stops.
 
-The landing is where this spec stops. What stands on it is spec 0018.
+It was a landing here, 24 by 24, which was this spec saying where it ended.
+Spec 0018 took it out and ran its own floor from this threshold to past
+Neptune. Two floors beyond one door would have been two accounts of one thing,
+and they would have shared a top plane over the whole 24 by 24, which is the
+fault this building has lost to five times.
+
+The room's lid stops at the north wall, so through the door is open above,
+which is what a ten metre sun needs.
 
 ### The seam under your feet
 
-The landing's floor laps three metres back under the room's, the way the
-room's own floor laps under the hall's. Two slabs at one height that meet edge
-to edge put a vertical face at the surface you are walking on, and a body
-resting on a surface counts as touching it: that is what stopped the walk
-through the way in four centimetres short of the seam.
+The floor beyond laps three metres back under the room's, the way the room's
+own floor laps under the hall's. Two slabs at one height that meet edge to edge
+put a vertical face at the surface you are walking on, and a body resting on a
+surface counts as touching it: that is what stopped the walk through the way in
+four centimetres short of the seam. Spec 0018 owns that lap now and
+`beyond::tests::the_floor_laps_under_the_room` is where it is checked.
 
 ## Acceptance criteria
 
 - The far wall is a wall everywhere except the opening. — `behind::tests::the_far_wall_is_solid_either_side_of_the_door`
-- You can walk from the sun through the door and onto the landing. — `behind::tests::the_door_can_be_walked_through`
+- You can walk from the sun through the door and out the other side. — `behind::tests::the_door_can_be_walked_through`
 - And back in again, which is not the same walk. — `behind::tests::the_landing_leads_back_into_the_room`
 - The door is out of sight from the way in and in sight from the sun. — `behind::tests::the_sun_is_what_shows_you_the_door`
 - Nothing stands in the way between the sun and the door. — `behind::tests::the_way_to_the_door_is_clear_of_columns`
 - The frame glows rather than lighting. — `behind::tests::the_frame_gives_off_light_and_casts_none`
 - The sill is nothing to trip on, measured as the same walk over open floor
   and through the door. — `behind::tests::the_sill_costs_nothing_to_cross`
-- The two floors lap rather than meet. — `behind::tests::the_landing_laps_under_the_room`
 
 ### Verified by hand
 
@@ -111,5 +116,5 @@ through the way in four centimetres short of the seam.
 
 ## Out of scope
 
-What stands on the landing, which is spec 0018. Any door in any other wall of
+What is beyond the door, which is spec 0018. Any door in any other wall of
 this room. Opening and closing: it is an opening, not a thing on hinges.

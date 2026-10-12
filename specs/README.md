@@ -24,7 +24,8 @@ not a priority, and it never changes once a spec exists.
 | [0014](0014-two-faces-in-one-plane.md) | A key that finds two drawn faces sharing a plane, which is the other fault this building keeps hitting |
 | [0015](0015-a-solar-system-behind-the-wall.md) | The sun, the planets and their moons at true proportion in the hidden room, lined up to walk or swung out into their orbits |
 | [0016](0016-lightning-and-thunder.md) | Parked: a storm that breaks, with the thunder arriving as late as the distance says |
-| [0017](0017-a-door-at-the-far-end.md) | A lit door in the far wall of the hidden room, out of sight from the way in and in sight from the sun, and the landing through it |
+| [0017](0017-a-door-at-the-far-end.md) | A lit door in the far wall of the hidden room, out of sight from the way in and in sight from the sun |
+| [0018](0018-the-system-at-true-scale.md) | The same system through that door with nothing bent but the light: one scale, a ten metre sun, Neptune 33 kilometres out, and three minutes to ride there |
 
 ---
 

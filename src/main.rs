@@ -2,6 +2,7 @@
 
 mod aim;
 mod behind;
+mod beyond;
 mod cabinet;
 mod carpet;
 mod cascada;
@@ -345,6 +346,10 @@ struct Arcade {
     star_mesh: Vec<MeshId>,
     swung: f32,
     swinging_out: bool,
+    /// Which stop of spec 0018 you are at, which the chain out there steps
+    /// along. Nought is the door, and anywhere inside the building it is
+    /// nought: see `mind_the_threshold`.
+    stop: usize,
     /// Where lined up is for each planet, held across a swing so the path
     /// cannot jump. Taken at whichever end the swing last sat at, which is
     /// the only place it can be taken without moving anything. See
@@ -573,6 +578,7 @@ impl Arcade {
             star_mesh: Vec::new(),
             swung: 0.0,
             swinging_out: false,
+            stop: 0,
             resting: vec![0.0; orrery::PLANETS.len()],
             pole: None,
             moss: None,
@@ -626,6 +632,13 @@ impl Arcade {
     fn use_what_i_see(&mut self) {
         if self.spin.holding().is_some() {
             self.spin.let_go(self.since);
+            return;
+        }
+
+        // past the door of spec 0017 there is nothing to work and 33
+        // kilometres to cross, so out there this key is the jump instead.
+        // Spec 0018.
+        if self.jumped() {
             return;
         }
 
@@ -774,7 +787,9 @@ impl Arcade {
     /// The building's line offers to work the toy you are looking at, and the
     /// room behind the wall has no toys in it and one key of its own.
     fn saying(&self) -> &'static str {
-        if self.in_the_system() {
+        if self.in_the_deep() {
+            aim::DEEP_HELP
+        } else if self.in_the_system() {
             aim::SYSTEM_HELP
         } else {
             aim::HELP
@@ -935,6 +950,109 @@ impl Arcade {
     /// and the line points at the door, because that is where you come from.
     /// It means you meet Neptune first and walk in toward the light, which is
     /// the right way round for this.
+    /// Where the door of spec 0017 stands, at the floor, which is where the
+    /// space of spec 0018 is measured from.
+    ///
+    /// The one account of it on this side. `beyond` takes it as an argument
+    /// rather than working it out, so that the room and the space beyond it
+    /// cannot come apart about where they meet.
+    fn the_door(&self) -> Vec3 {
+        beyond::at(self.room.reaches)
+    }
+
+    /// Whether you are out past the door of spec 0017, which is the one place
+    /// Return jumps rather than works what you are looking at.
+    ///
+    /// By where you stand and not by a flag. A flag is a second account of
+    /// which side of a wall you are on, and the wall already knows.
+    fn in_the_deep(&self) -> bool {
+        self.looking_from().z > self.the_door().z
+    }
+
+    /// Where a step of `dt` puts you, and how fast you are falling after it.
+    ///
+    /// Its own method because it is the one place that chooses between walking
+    /// the building and riding the line of spec 0018, and a test that drives
+    /// the two halves separately does not test the choice: with the ride cut
+    /// out of `update` entirely, one that drove `riding` and `beyond::ridden`
+    /// by hand still passed.
+    fn gone(&self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
+        // out past the door you ride rather than walk. Along the line, no
+        // steering, and no collision to do: that floor is one flat slab with
+        // nothing on it, and a 185 metre a second sweep through `walk` would be
+        // three metres a frame looking for something to catch on.
+        if self.riding() {
+            return (
+                beyond::ridden(self.at, self.facing(), dt, self.the_door()),
+                0.0,
+            );
+        }
+
+        // along the floor, over anything no taller than a step, and down.
+        // Spec 0007: the building has a height in it now, so getting about is
+        // no longer one call that pushes you sideways.
+        walk::walk(
+            self.at,
+            if wish.length_squared() > 1e-6 {
+                wish.normalize() * pace
+            } else {
+                Vec3::ZERO
+            },
+            self.falling,
+            RADIUS,
+            dt,
+            &self.room.solid(),
+            // a step costs its own height out of a budget that fills at
+            // `walk::CLIMBS` a second, and until the budget covers the next
+            // riser you simply walk into it. Nothing paced the stair before
+            // this: a tread is crossed in a fifteenth of a second and the riser
+            // over it went by in the same frame, so the flight out of the
+            // cellar went past at better than three units a second upwards.
+            self.climbs <= 0.0,
+        )
+    }
+
+    /// Whether you are riding the line of spec 0018 rather than walking.
+    ///
+    /// Shift, which everywhere else in this building means go faster, and out
+    /// there going faster is the only way the distances are crossable at all.
+    fn riding(&self) -> bool {
+        self.in_the_deep() && self.shifted
+    }
+
+    /// Puts the chain of spec 0018 back to the door whenever you are not out
+    /// there, so that stepping through it always starts at the beginning.
+    fn mind_the_threshold(&mut self) {
+        if !self.in_the_deep() {
+            self.stop = 0;
+        }
+    }
+
+    /// Steps one body along the chain of spec 0018, and says whether it did.
+    ///
+    /// It is the only thing Return does out there and it does nothing at all
+    /// anywhere else, so the caller can hand it every press.
+    fn jumped(&mut self) -> bool {
+        if !self.in_the_deep() {
+            return false;
+        }
+
+        let stops = beyond::stops(self.the_door());
+        let Some(next) = beyond::next(&stops, self.stop, self.facing()) else {
+            return false;
+        };
+        let (at, along) = beyond::arriving(stops[self.stop].at, &stops[next]);
+
+        self.stop = next;
+
+        self.at = at;
+        // looking the way you travelled, so the next press carries on
+        self.yaw = along.x.atan2(-along.z);
+        self.pitch = 0.0;
+
+        true
+    }
+
     fn the_sun(&self) -> (Vec3, Vec3) {
         let middle = behind::at(self.room.reaches);
         let sun = vec3(middle.x, orrery::PLANE, middle.z);
@@ -1143,8 +1261,137 @@ impl Arcade {
             }
         }
 
+        // and the same system again at true scale, through the door at the
+        // far end. Spec 0018.
+        //
+        // Drawn whether or not you are out there, and its names gathered into
+        // the same list as the room's. Two layouts in one frame would be two
+        // accounts of which labels fit, and the second would overwrite the
+        // first's memory of what it drew last.
+        {
+            let door = self.the_door();
+            let out = beyond::stops(door);
+            let bodies = orrery::every_body();
+
+            for stop in out.iter() {
+                let Some(which) = stop.which else { continue };
+                let body = bodies.get(which).copied().unwrap_or(orrery::SUN);
+
+                if which == 0 {
+                    scene.push_material(
+                        ball,
+                        &Transform::at(stop.at)
+                            .with_rotation(turned(&body, self.since))
+                            .with_scale(Vec3::splat(stop.across)),
+                        aim::SUN_FACE,
+                        aim::DULL,
+                    );
+                } else if let Some(worn) = self.worlds.get(which) {
+                    scene.push_textured(
+                        ball,
+                        *worn,
+                        &Transform::at(stop.at)
+                            .with_rotation(turned(&body, self.since))
+                            .with_scale(Vec3::splat(stop.across)),
+                        aim::WORLD,
+                        aim::MATTE,
+                    );
+                }
+
+                names.push(orrery::Named {
+                    which,
+                    at: stop.at,
+                    across: stop.across,
+                    hangs: if body.name == "Saturn" || which == 0 {
+                        orrery::Hangs::Over
+                    } else {
+                        orrery::Hangs::Under
+                    },
+                    wide: self.names.get(which).map(|(_, wide)| *wide).unwrap_or(1.0),
+                });
+            }
+
+            // Saturn's rings, which are the one body in the tables that is not
+            // a ball
+            if let Some(stop) = out.iter().find(|stop| stop.name == "Saturn") {
+                let tilt = orrery::PLANETS
+                    .iter()
+                    .find(|planet| planet.body.name == "Saturn")
+                    .map(|planet| planet.body.tilt)
+                    .unwrap_or(0.0);
+
+                scene.push_textured(
+                    rings,
+                    self.rings.unwrap_or(TextureId::WHITE),
+                    &Transform::at(stop.at)
+                        .with_rotation(glam::Quat::from_rotation_z(tilt.to_radians()))
+                        // the ring mesh is built for spec 0015's Saturn, so
+                        // it is scaled by how much bigger this one is
+                        .with_scale(Vec3::splat(
+                            stop.across
+                                / orrery::PLANETS
+                                    .iter()
+                                    .find(|planet| planet.body.name == "Saturn")
+                                    .map(|planet| planet.body.drawn())
+                                    .unwrap_or(1.0),
+                        )),
+                    aim::RING,
+                    aim::MATTE,
+                );
+            }
+
+            // the spine down the line and the posts beside it, which are what
+            // the ride is measured against
+            for mark in beyond::marked(door) {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(mark.at).with_scale(mark.size),
+                    if mark.glows {
+                        aim::BEYOND_UNIT
+                    } else {
+                        aim::BEYOND_MARK
+                    },
+                );
+            }
+
+            // and the floor they stand on
+            let (middle, size) = beyond::floor(door);
+
+            scene.push_material(
+                cube,
+                &Transform::at(middle).with_scale(size),
+                aim::BEHIND_FLOOR,
+                // the tightest highlight there is, for the reason the hidden
+                // room's own floor has it: a broad lobe on a floor you are
+                // looking along is metres of it, and from the Earth the sun
+                // laid a searchlight down the whole 1,105 metres back to
+                // itself. The reading here is a sun that has shrunk to a
+                // speck, and a mile of blazing floor is the opposite of it.
+                aim::VOID,
+            );
+        }
+
         // and the names, as many of them as fit without landing on each
         // other. Nearest first, per `orrery::laid_out`.
+        //
+        // Only the ones on your side of the wall. Both systems are drawn every
+        // frame and a wall stands between them, and the layout reads the
+        // frustum and not what is in the way: from the Earth of spec 0018 the
+        // whole room's model is 1,200 metres behind you through a wall, and
+        // its eight names came up stacked on the one speck the sun had become.
+        //
+        // It is also the only thing keeping the two lists apart. A name is
+        // picked by `which`, which is the body it is for, and the same body
+        // stands in both systems: laid out together, choosing the room's Earth
+        // draws this one's as well. Anything that wants both at once has to
+        // give a name an identity of its own first.
+        let deep = self.in_the_deep();
+        let door = self.the_door().z;
+        let names: Vec<orrery::Named> = names
+            .into_iter()
+            .filter(|name| (name.at.z > door) == deep)
+            .collect();
+
         let eye = self.looking_from();
         let want = orrery::laid_out(
             &names,
@@ -1713,6 +1960,7 @@ impl Game for Arcade {
         sound: &SoundSystem,
     ) {
         self.since += dt;
+        self.mind_the_threshold();
 
         // the toy on the bench, stepped at its own rate so a slow frame does
         // not change how it swings. Spec 0006.
@@ -1782,29 +2030,15 @@ impl Game for Arcade {
             self.pitch = (self.pitch + tilt * TILTS * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
         }
 
-        // along the floor, over anything no taller than a step, and down.
-        // Spec 0007: the building has a height in it now, so getting about is
-        // no longer one call that pushes you sideways.
-        let (at, falling) = walk::walk(
-            self.at,
-            if wish.length_squared() > 1e-6 {
-                wish.normalize() * pace
-            } else {
-                Vec3::ZERO
-            },
-            self.falling,
-            RADIUS,
-            dt,
-            &self.room.solid(),
-            // a step costs its own height out of a budget that fills at
-            // `walk::CLIMBS` a second, and until the budget covers the next
-            // riser you simply walk into it. Nothing paced the stair before
-            // this: a tread is crossed in a fifteenth of a second and the riser
-            // over it went by in the same frame, so the flight out of the
-            // cellar went past at better than three units a second upwards.
-            self.climbs <= 0.0,
-        );
-        let went = (at - self.at).length() / dt.max(1e-4);
+        let riding = self.riding();
+        let (at, falling) = self.gone(wish, pace, dt);
+        // the ride is not walking, so it takes no steps. Spec 0004 reads this
+        // for the footfalls and `went` is all it reads.
+        let went = if riding {
+            0.0
+        } else {
+            (at - self.at).length() / dt.max(1e-4)
+        };
         // what the climb cost, and the budget filling back up
         self.climbs = (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0);
         self.at = at;
@@ -2093,8 +2327,15 @@ impl Game for Arcade {
         // a joke.
         let said: Vec<&str> = if winking {
             vec![self.saying(), aim::WINK]
-        } else if self.in_the_system() {
-            vec![self.saying(), aim::SYSTEM_NOTE]
+        } else if self.in_the_system() || self.in_the_deep() {
+            vec![
+                self.saying(),
+                if self.in_the_deep() {
+                    aim::DEEP_NOTE
+                } else {
+                    aim::SYSTEM_NOTE
+                },
+            ]
         } else {
             vec![self.saying()]
         };
@@ -2200,6 +2441,15 @@ impl Game for Arcade {
 
         camera.position = self.looking_from();
         camera.target = camera.position + self.facing();
+        // and how far it sees, which is the building's hundred metres indoors
+        // and the length of the floor out past the door. Spec 0018: a hundred
+        // metres out there culls the sun from everywhere past Mercury, and a
+        // sun you cannot see is the one thing that space is for.
+        camera.far = if self.in_the_deep() {
+            beyond::sees()
+        } else {
+            Camera::new().far
+        };
 
         // dim and overhead, like the room it is: bright enough to walk, dark
         // enough that a lit cabinet is the thing you look at. Warm from above
@@ -2311,7 +2561,6 @@ impl Game for Arcade {
                     behind::Made::Ground => aim::BEHIND_FLOOR,
                     behind::Made::Wall => aim::BEHIND_WALL,
                     behind::Made::Column => aim::BEHIND_COLUMN,
-                    behind::Made::Landing => aim::BEHIND_FLOOR,
                     behind::Made::Frame => aim::BEHIND_FRAME,
                 };
 
@@ -4861,6 +5110,30 @@ impl Game for Arcade {
             orrery::sun_range(),
         ));
 
+        // and the sun of spec 0018, which is a different ball at a different
+        // scale and is the only light out there at all.
+        //
+        // Only while you are out there with it. Its range is a hundred
+        // kilometres, because the model it lights is thirty three long, and a
+        // point light goes through a wall in this engine unless it casts: left
+        // on, it lit every surface in the building from the north at full
+        // strength, and from a thousand metres out the back of the hidden
+        // room's north wall was a grey bar across the sky.
+        //
+        // The cost is a sliver. Its ball glows and so is drawn either way, and
+        // what pops as you cross the threshold is the lit floor behind it, seen
+        // through a doorway 1.5 metres wide.
+        if self.in_the_deep() {
+            let at_ = beyond::sun(self.the_door());
+            shades.push((
+                eye.distance_squared(at_),
+                at_,
+                orrery::SUNLIGHT,
+                beyond::SUN_LIT,
+                beyond::SUN_RANGE,
+            ));
+        }
+
         let stove = spa::stove_lamp(self.room.reaches);
         shades.push((
             eye.distance_squared(stove),
@@ -5699,6 +5972,52 @@ mod tests {
             left < 2.0,
             "forty five seconds of walking stopped {:.1} m short of the sun",
             left
+        );
+    }
+
+    /// Spec 0018: shift rides out past the door and runs everywhere else.
+    ///
+    /// The one key that means two things in this building, and it means them
+    /// in two places that a wall stands between. The ride is 44 times a run,
+    /// which is the difference between three minutes to Neptune and 73.
+    #[test]
+    fn shift_rides_out_there_and_runs_in_here() {
+        let mut one = Arcade::new();
+        one.shifted = true;
+
+        assert!(!one.in_the_deep());
+        assert!(!one.riding(), "shift rides inside the building");
+
+        one.at = beyond::at(one.room.reaches) + Vec3::Z * 500.0;
+
+        assert!(one.in_the_deep());
+        assert!(one.riding(), "shift does not ride past the door");
+
+        one.shifted = false;
+
+        assert!(!one.riding(), "it rides with shift up");
+        one.shifted = true;
+
+        // and a second of it is a second of the ride and not of a run, asked
+        // of the one place that chooses between the two
+        one.shifted = true;
+        one.yaw = std::f32::consts::PI;
+        let (went, _) = one.gone(one.facing(), one.pace(), 1.0);
+
+        assert!(
+            (went.z - one.at.z - beyond::RIDES).abs() < 1e-3,
+            "a second of riding covered {}",
+            went.z - one.at.z
+        );
+
+        // and inside the building the same second is a run
+        one.at = Vec3::ZERO;
+        let (walked, _) = one.gone(one.facing(), one.pace(), 1.0);
+
+        assert!(
+            walked.distance(one.at) < SPEED * RUNS + 0.01,
+            "a second inside the building covered {}",
+            walked.distance(one.at)
         );
     }
 

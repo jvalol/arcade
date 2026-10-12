@@ -118,10 +118,6 @@ pub const FRAME_SUNK: f32 = 0.04;
 /// may not be is something to trip on.
 pub const SILL_HIGH: f32 = 0.03;
 
-/// How big the landing beyond the door is, and how far its floor laps back
-/// under the room's own. See `landing`.
-pub const LANDING: f32 = 24.0;
-
 /// Where the door at the far end is, as the two x it runs between.
 ///
 /// On the room's own axis, which puts it dead opposite the sun and 79.5
@@ -182,11 +178,7 @@ pub enum Made {
     Ground,
     Wall,
     Column,
-    /// The floor of the landing beyond the door, per spec 0017. Its own thing
-    /// and not `Ground`, because `solid` re-derives `Ground` as the room's own
-    /// slab and would put the landing back on top of it.
-    Landing,
-    /// The frame round that door, which glows.
+    /// The frame round the door of spec 0017, which glows.
     Frame,
 }
 
@@ -210,23 +202,6 @@ fn ground(middle: Vec3, back: f32) -> Aabb {
     Aabb::from_center_size(
         vec3(middle.x, -THICK * 0.5, middle.z - back * 0.5),
         vec3(SPAN, THICK, DEEP + back),
-    )
-}
-
-/// The landing beyond the door, running `back` south under the room's own
-/// floor, per spec 0017.
-///
-/// The same two numbers for the same two reasons as `ground`. Walked, it laps
-/// a good way under, so that neither slab has an end face anywhere near the
-/// seam: two floors at one height that meet edge to edge put a vertical face
-/// at the surface you are walking on, and a body resting on a surface counts
-/// as touching it. Drawn, it stops where the room's floor stops, because two
-/// tops in one plane fight and that patch is the floor you cross on your way
-/// out.
-fn landing(middle: Vec3, north: f32, back: f32) -> Aabb {
-    Aabb::from_center_size(
-        vec3(middle.x, -THICK * 0.5, north + (LANDING - back) * 0.5),
-        vec3(LANDING, THICK, LANDING + back),
     )
 }
 
@@ -374,8 +349,6 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
             ),
             Made::Frame,
         ),
-        // and the landing through it
-        (landing(middle, north, 0.0), Made::Landing),
         // the south side, which is the hall's near end wall for the width of
         // the hall and this room's own wall for the rest of it
         (
@@ -407,8 +380,6 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         .map(|(box_, made)| match made {
             // the floor, which is the Ground that is not the lid
             Made::Ground if box_.max.y <= 0.0 => ground(middle, LAPS),
-            // and the landing with its own, for the same reason
-            Made::Landing => landing(middle, at(reaches).z + half().y, LAPS),
             _ => box_,
         })
         .collect()
@@ -1451,61 +1422,6 @@ mod tests {
             "two seconds over open floor covers {} and through the door {}",
             other,
             one
-        );
-    }
-
-    /// Spec 0017: the landing laps under the room rather than meeting it.
-    ///
-    /// Drawn they meet, walked they lap, and the two are different questions.
-    /// A vertical face at the surface you are walking on stops you dead and
-    /// `walk` reports it as nothing at all, which is what held the walk
-    /// through the way in four centimetres short of the seam.
-    ///
-    /// Read back out of `built` and `solid` rather than worked out again
-    /// here. Worked out again here it passed with the lap taken away, because
-    /// both sides of the assertion were the test's own arithmetic and neither
-    /// was the room.
-    #[test]
-    fn the_landing_laps_under_the_room() {
-        let reaches = room().reaches;
-        let middle = at(reaches);
-        let north = middle.z + half().y;
-        let drawn = built(reaches)
-            .into_iter()
-            .find(|(_, made)| *made == Made::Landing)
-            .expect("the landing is not built")
-            .0;
-
-        assert!(
-            (drawn.min.z - north).abs() < 1e-3,
-            "the drawn landing starts at {} where the room's floor ends at {}",
-            drawn.min.z,
-            north
-        );
-
-        // the two slabs as the walk meets them: both at the floor, told apart
-        // by how wide they are, since the room's runs the whole span and the
-        // landing is 24
-        let floors: Vec<Aabb> = solid(reaches)
-            .into_iter()
-            .filter(|box_| box_.max.y <= 0.0 && box_.min.y < 0.0)
-            .collect();
-        let slab = |wide: f32| {
-            floors
-                .iter()
-                .find(|box_| (box_.size().x - wide).abs() < 1e-3)
-                .copied()
-                .unwrap_or_else(|| panic!("no floor {} across among {:?}", wide, floors))
-        };
-        let room_floor = slab(SPAN);
-        let out = slab(LANDING);
-
-        assert!(
-            room_floor.max.z - out.min.z > 1.0,
-            "the room's floor ends at {} and the landing starts at {}, so there \
-             is an end face at the seam you walk over",
-            room_floor.max.z,
-            out.min.z
         );
     }
 }

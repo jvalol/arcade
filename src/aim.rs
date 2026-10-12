@@ -578,6 +578,32 @@ pub const SYSTEM_HELP: &str =
     "Use WASD and the mouse to get about. Hold Shift to run. Press L to switch modes. Press Escape to quit.";
 pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 
+/// Out past the door of spec 0017, where walking is not how you get about.
+///
+/// Verb first, like the rest. The line has to carry the two things that are
+/// not like anywhere else in this building: shift rides rather than runs, and
+/// Return steps to the next body. Which way you are facing decides which one,
+/// either way.
+///
+/// The ride is named first because it is what the space is for. The jump is
+/// the way out of a four minute crossing you have had enough of, and a line
+/// that names it first teaches people to skip the thing they came to see.
+pub const DEEP_HELP: &str =
+    "[COPY - Jake] Use WASD and the mouse to get about. Hold Shift to ride the line, or press Return to step straight to the next body. Turn round to go back. Press Escape to quit.";
+
+/// What the true-scale system owns up to, under its help line.
+///
+/// Not an instruction, so not verb first. It is honest about every size and
+/// every distance and dishonest about the light, and a model that is
+/// dishonest without saying so is a lie rather than a scale.
+///
+/// It ends on something you can go and look at rather than on a figure, the
+/// way `SYSTEM_NOTE` ends on Mercury being inside the sun. The speck of sun
+/// you can see from Neptune is in the room; a nine hundredth is a number you
+/// have to take on trust.
+pub const DEEP_NOTE: &str =
+    "[COPY - Jake] Everything here is true to scale but the light. Neptune should be as dark as the speck of sun you can see from it.";
+
 /// What the solar system owns up to, under its help line.
 ///
 /// Not an instruction, so not verb first. A model this size cannot be honest
@@ -815,6 +841,21 @@ pub const BEHIND_FLOOR: Vec4 = vec4(0.018, 0.018, 0.024, 1.0);
 pub const BEHIND_WALL: Vec4 = vec4(0.022, 0.022, 0.030, 1.0);
 pub const BEHIND_COLUMN: Vec4 = vec4(0.045, 0.045, 0.055, 1.0);
 
+/// The spine down the line of spec 0018 and the marks across it.
+///
+/// Pale against a floor of 0.018, because they are the only thing out there
+/// that moves while you ride and a mark you cannot see is three minutes of an
+/// unchanging black screen.
+pub const BEYOND_MARK: Vec4 = vec4(0.34, 0.35, 0.40, 1.0);
+
+/// And the posts that mark the astronomical unit, which glow.
+///
+/// Past one, so they carry themselves across this space the way the door of
+/// spec 0017 carries itself across the room behind it. A post that only
+/// reflects is a pixel at seven hundred metres, and the gulf between Uranus
+/// and Neptune is twelve thousand.
+pub const BEYOND_UNIT: Vec4 = vec4(1.5, 1.62, 1.95, 1.0);
+
 /// The frame round the door at the far end, per spec 0017.
 ///
 /// `behind::LAMP_COLOUR` at 2.4. Colour is an unclamped multiplier in this
@@ -1005,7 +1046,7 @@ mod tests {
     /// for this only went under the corner.
     #[test]
     fn every_line_of_text_sits_on_its_plate() {
-        let help = [HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE];
+        let help = [HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE, DEEP_HELP, DEEP_NOTE];
         let window = (1600.0f32, 1200.0f32);
 
         for many in 1..=help.len() {

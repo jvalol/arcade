@@ -927,6 +927,17 @@ impl Room {
     /// could walk into the far wall's row and stand inside a Klein bottle,
     /// which is a thing the room says you may pick up and turn.
     pub fn solid(&self) -> Vec<Aabb> {
+        let mut out = self.building();
+        out.push(crate::beyond::solid(self.reaches));
+
+        out
+    }
+
+    /// The same, without the floor of spec 0018.
+    ///
+    /// The building, in other words, which is what `outline` is the outline
+    /// of and what every measurement of the building's own size wants.
+    pub fn building(&self) -> Vec<Aabb> {
         let mut out = self.walls.clone();
         out.extend(self.floors());
         out.extend(crate::cellar::solid(self.reaches));
@@ -1055,11 +1066,18 @@ impl Room {
     /// same to three places. The garden is the one room the sun is for, and
     /// thirty-six millimetres is finer than anything it has to draw the edge
     /// of.
+    /// **The space of spec 0018 is not in here**, which is the one thing this
+    /// box leaves out and the reason it is worth saying so. That floor runs
+    /// 33 kilometres: in the outline it takes the shadow map's texel from
+    /// thirty-six millimetres to seventy metres, which is no shadow anywhere
+    /// in the building, and it takes spec 0049's reach fill past the engine's
+    /// cap of 32 million cells, which is no fill at all and a test that
+    /// quietly proves nothing. The building is what this is the outline of.
     pub fn outline(&self) -> Aabb {
         let mut lo = Vec3::splat(f32::MAX);
         let mut hi = Vec3::splat(f32::MIN);
 
-        for box_ in self.solid() {
+        for box_ in self.building() {
             lo = lo.min(box_.min);
             hi = hi.max(box_.max);
         }
@@ -1560,6 +1578,8 @@ mod tests {
                 + crate::garden::solid(room.reaches).len()
                 + crate::behind::near_wall(room.reaches).len()
                 + crate::behind::solid(room.reaches).len()
+                // and the one slab beyond the door, per spec 0018
+                + 1
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2
@@ -2368,6 +2388,8 @@ mod tests {
                 + crate::garden::solid(room.reaches).len()
                 + crate::behind::near_wall(room.reaches).len()
                 + crate::behind::solid(room.reaches).len()
+                // and the one slab beyond the door, per spec 0018
+                + 1
                 // the sauna's glass door and the baths' own, both solid
                 // wherever they are
                 + 2

@@ -1,0 +1,911 @@
+//! The space beyond the door of spec 0017, where the system stands at true
+//! scale. Spec 0018.
+//!
+//! Spec 0015 bends two numbers to make a solar system that fits in a room: the
+//! bodies are drawn at one scale and their distances at another, 306 times
+//! apart, and the sun is shrunk again on top of that. Both lies are written
+//! down there and both are what make that model worth looking at.
+//!
+//! Here nothing is bent but the light. One scale, every body and every
+//! distance true against every other, and 33 kilometres of floor to put it on.
+//!
+//! Nothing here draws. Where each body stands, how big it is, where you land
+//! when you jump and how far the sun reaches are arithmetic, and arithmetic
+//! can be checked without a window.
+
+use glam::{vec3, Vec3};
+
+use crate::orrery::{Moon, Planet, AU_KM, PLANE, PLANETS, SUN};
+use crate::room::THICK;
+
+/// How big the smallest body in the tables is drawn.
+///
+/// Two centimetres, which is a marble, and it is the only number in this file
+/// that was chosen. Everything else is a consequence of it.
+pub const MARBLE: f32 = 0.02;
+
+/// How far the sun stands north of the door.
+///
+/// Thirty metres. The sun is 10.29 across, so from the doorway it subtends
+/// nineteen and a half degrees, which is about 350 pixels of a 1080 screen:
+/// unmistakably a ball and not a lamp, and eight seconds' walk.
+pub const SUN_OUT: f32 = 30.0;
+
+/// How wide the floor is.
+///
+/// Forty. Callisto stands 13.91 metres off the line and a moon you cannot
+/// walk round is a moon drawn for nobody.
+pub const WIDE: f32 = 40.0;
+
+/// How far the floor laps back under the hidden room's own, and how far it
+/// runs past the last body.
+pub const LAPS: f32 = 3.0;
+pub const SPARE: f32 = 40.0;
+
+/// How far the camera sees out here.
+///
+/// The building's is a hundred metres, which is further than any of it goes
+/// and is what keeps the far wall of the hidden room a thing you find rather
+/// than a thing you see. Out here a hundred metres culls the sun from
+/// everywhere past Mercury, which throws away the one reading this space
+/// exists for.
+///
+/// So it reaches past the far end of the floor, and it does that only out
+/// here: inside, the hundred stands.
+pub fn sees() -> f32 {
+    SUN_OUT + reach() + SPARE * 2.0
+}
+
+/// How far the sun's light throws, and how hard.
+///
+/// A hundred kilometres against a model thirty three long, which is the one
+/// thing bent in this space. A point light gives `(1 - d/range)²`, so this
+/// leaves Mercury at 0.99 and Neptune at 0.45. Real sunlight falls as the
+/// inverse square: Neptune gets a nine hundredth of what the Earth gets, and
+/// drawn honestly everything past Jupiter is black.
+///
+/// What this space is for survives the bend. The reading is the sun
+/// shrinking, 22 pixels from Mercury to a third of one from Neptune, and that
+/// needs the planets lit enough to find rather than lit correctly.
+pub const SUN_RANGE: f32 = 100_000.0;
+pub const SUN_LIT: f32 = 2.6;
+
+/// How big a body is drawn, from its size in kilometres.
+pub fn drawn(across_km: f32) -> f32 {
+    across_km * per_km()
+}
+
+/// How many metres one kilometre is, which is the whole of the scale.
+///
+/// Worked out from the tables and not written down: the smallest body in them
+/// is drawn as a marble, so a smaller moon joining them moves the whole model
+/// rather than quietly breaking the one promise this spec makes.
+///
+/// It comes to one metre for every 135,350 kilometres, because the smallest
+/// body in the tables is Triton at 2,707 km across.
+pub fn per_km() -> f32 {
+    MARBLE / smallest()
+}
+
+/// The smallest body in the tables, across, in kilometres.
+pub fn smallest() -> f32 {
+    crate::orrery::every_body()
+        .into_iter()
+        .fold(f32::INFINITY, |least, body| least.min(body.across))
+}
+
+/// How far out a planet stands, in metres.
+pub fn far(planet: &Planet) -> f32 {
+    planet.out * AU_KM * per_km()
+}
+
+/// How far out a moon stands from its planet, in metres.
+///
+/// Its true distance, where spec 0015 has to hold the moons in to a third to
+/// keep the Moon's orbit out of Mars. Nothing is held in here.
+pub fn moon_far(moon: &Moon) -> f32 {
+    moon.out_km * per_km()
+}
+
+/// How far the whole thing reaches from the sun: Neptune, plus Triton beyond
+/// it.
+pub fn reach() -> f32 {
+    PLANETS.iter().fold(0.0f32, |most, planet| {
+        let moons = planet
+            .moons
+            .iter()
+            .fold(0.0f32, |out, moon| out.max(moon_far(moon)));
+
+        most.max(far(planet) + moons)
+    })
+}
+
+/// One stop on the way out: what it is called, where it stands, and how big
+/// it is drawn. A body, or the door home.
+#[derive(Clone, Copy, Debug)]
+pub struct Stop {
+    pub name: &'static str,
+    pub at: Vec3,
+    pub across: f32,
+    /// Which body this is in `orrery::every_body` order, which is what the
+    /// textures and the name pictures are keyed by. The way home is not a
+    /// body and has none.
+    pub which: Option<usize>,
+}
+
+/// Where the sun stands.
+pub fn sun(door: Vec3) -> Vec3 {
+    vec3(door.x, drawn(SUN.across) * 0.5, door.z + SUN_OUT)
+}
+
+/// Every stop, in the order they come out from the sun, with each planet's
+/// moons after it. The door is the first, so stepping in from the sun is how
+/// you leave.
+///
+/// The one account of where anything in this space is. The drawing reads it,
+/// the jump reads it, and the tests read it.
+pub fn stops(door: Vec3) -> Vec<Stop> {
+    let sun_at = sun(door);
+    let mut out = vec![
+        Stop {
+            name: "the way back",
+            at: door,
+            across: 0.0,
+            which: None,
+        },
+        Stop {
+            name: SUN.name,
+            at: sun_at,
+            across: drawn(SUN.across),
+            which: Some(0),
+        },
+    ];
+    let mut which = 1;
+
+    for planet in PLANETS.iter() {
+        let at = vec3(sun_at.x, PLANE, sun_at.z + far(planet));
+
+        out.push(Stop {
+            name: planet.body.name,
+            at,
+            across: drawn(planet.body.across),
+            which: Some(which),
+        });
+        which += 1;
+
+        // the moons stand off at right angles to the line, so that a planet
+        // and its moons are one picture rather than three bodies in a row you
+        // cannot tell from the next planet out
+        for moon in planet.moons.iter() {
+            out.push(Stop {
+                name: moon.body.name,
+                at: at + Vec3::X * moon_far(moon),
+                across: drawn(moon.body.across),
+                which: Some(which),
+            });
+            which += 1;
+        }
+    }
+
+    out
+}
+
+/// How far short of a body you stand when you arrive at it.
+///
+/// Its own size, two and a half times over, with a floor: a marble is 60 cm
+/// away and the sun is 26 metres. Far enough that the body fills the view and
+/// no further, which is the same question at every scale and so is answered
+/// once.
+pub const STANDOFF: f32 = 2.5;
+pub const NEAREST: f32 = 0.6;
+
+pub fn stands_off(across: f32) -> f32 {
+    (across * STANDOFF).max(NEAREST)
+}
+
+/// Where you stand when you arrive at `stop`, having come from `from`, and
+/// which way you then face.
+///
+/// Short of it on the line you travelled in along, looking at it. So pressing
+/// on carries you the way you were already going and turning round takes you
+/// back, and no key has to mean out or in.
+pub fn arriving(from: Vec3, stop: &Stop) -> (Vec3, Vec3) {
+    let along = (stop.at - from).normalize_or(Vec3::Z);
+    let at = stop.at - along * stands_off(stop.across);
+
+    (vec3(at.x, 0.0, at.z), along)
+}
+
+/// How fast the ride carries you down the line, per spec 0018.
+///
+/// Three minutes from the sun to Neptune, which is 185 metres a second.
+/// Running it is 73 minutes and walking it is two and a quarter hours, and
+/// those are the numbers the jump was written to get round.
+///
+/// Constant, and so the time between two bodies is in the same proportion as
+/// the distance: Mercury at 2.3 seconds, the Earth at 6, Mars at 9, and then
+/// 22 seconds of nothing before Jupiter, 26 more before Saturn, 58 before
+/// Uranus and 65 before Neptune. The emptiness is the subject and this is the
+/// only way the model has of charging you for it.
+///
+/// It would be wrong to ease it. An acceleration would put the inner planets
+/// in slow motion and hurry the gulf, which is the shape of the lie every
+/// diagram of the solar system tells.
+pub const RIDES: f32 = 185.0;
+
+/// Where the ride takes you over `dt`.
+///
+/// Along the line and nothing else. You keep the mouse, which is the whole
+/// point of riding rather than jumping, because the thing to watch is the sun
+/// going small behind you. You do not steer: at 185 metres a second a ten
+/// degree turn crosses the 20 metres to the edge of the floor in under a
+/// second, and over the edge there is no floor at all.
+///
+/// Which way is which way you face, by the same rule the jump uses, and it
+/// stops at the door rather than going through the wall.
+pub fn ridden(at: Vec3, facing: Vec3, dt: f32, door: Vec3) -> Vec3 {
+    let way = if facing.z >= 0.0 { 1.0 } else { -1.0 };
+    let gone = at.z + way * RIDES * dt;
+
+    vec3(at.x, at.y, gone.clamp(door.z + 1.0, runs(door).1))
+}
+
+/// How far apart the posts down the line stand, and how big they are.
+///
+/// A pair every hundred metres, which at the ride's speed is nearly two a
+/// second: fast enough to read as speed and slow enough to count. Without them
+/// the ride is three minutes of an unchanging black screen, which reads as
+/// broken rather than as vast.
+///
+/// **Standing up, and not laid on the floor**, which is what they were first.
+/// A mark on the floor seen from eye height is edge-on past twenty metres: at
+/// ninety the depression angle is one degree, so three tenths of a metre of
+/// mark came to five thousandths of a metre of picture and nothing was drawn
+/// at all. It is the lesson the hall's columns already teach, which spec 0011
+/// puts as the only way to read a distance being to see the same thing at
+/// several of them.
+pub const POSTS: f32 = 100.0;
+pub const POST_OFF: f32 = 2.0;
+pub const POST_WIDE: f32 = 0.1;
+pub const POST_HIGH: f32 = 2.0;
+
+/// And the bigger ones, one to the astronomical unit.
+///
+/// Thirty of them over the whole line. Nothing says what they are and nothing
+/// needs to: the Earth stands on the first.
+///
+/// They glow, which is the only thing that carries across this space. A post
+/// nine tenths of a metre tall is a pixel at seven hundred metres and nothing
+/// at a kilometre, and the gulfs here are measured in tens of kilometres; the
+/// door of spec 0017 reads across seventy nine metres of unlit room on the
+/// same trick, for the same reason.
+pub const MARK_WIDE: f32 = 0.14;
+pub const MARK_HIGH: f32 = 4.0;
+
+/// The spine down the line, flat on the floor.
+pub const SPINE_WIDE: f32 = 0.3;
+pub const SPINE_HIGH: f32 = 0.02;
+
+/// One thing standing by the line: where it is, how big, and whether it gives
+/// off light of its own.
+#[derive(Clone, Copy, Debug)]
+pub struct Marker {
+    pub at: Vec3,
+    pub size: Vec3,
+    pub glows: bool,
+}
+
+/// How far one astronomical unit is out here.
+pub fn au() -> f32 {
+    AU_KM * per_km()
+}
+
+/// How far the line runs: from the door to the far end of the floor.
+pub fn runs(door: Vec3) -> (f32, f32) {
+    let (middle, size) = floor(door);
+
+    (door.z, middle.z + size.z * 0.5 - SPARE)
+}
+
+/// The spine down the line and everything standing beside it.
+///
+/// The spine is laid on the floor and not sunk into it, which is the way round
+/// this building has learnt the hard way: a border sunk into the floor was two
+/// surfaces in one plane and came back as speckle.
+pub fn marked(door: Vec3) -> Vec<Marker> {
+    let sun = sun(door);
+    let (from, to) = runs(door);
+    let mut out = vec![Marker {
+        at: vec3(sun.x, SPINE_HIGH * 0.5, (from + to) * 0.5),
+        size: vec3(SPINE_WIDE, SPINE_HIGH, to - from),
+        glows: false,
+    }];
+
+    let mut pair = |at: f32, wide: f32, high: f32, glows: bool| {
+        for side in [-1.0f32, 1.0] {
+            out.push(Marker {
+                at: vec3(sun.x + side * POST_OFF, high * 0.5, at),
+                size: vec3(wide, high, wide),
+                glows,
+            });
+        }
+    };
+
+    let mut at = sun.z;
+    while at <= to {
+        pair(at, POST_WIDE, POST_HIGH, false);
+        at += POSTS;
+    }
+
+    let mut at = sun.z;
+    while at <= to {
+        pair(at, MARK_WIDE, MARK_HIGH, true);
+        at += au();
+    }
+
+    out
+}
+
+/// Which way the chain was going when it brought you to `here`.
+///
+/// From the stop before it to this one, and for the door, which has nothing
+/// before it, the way on to the sun.
+pub fn along(stops: &[Stop], here: usize) -> Vec3 {
+    let (from, to) = match here.checked_sub(1) {
+        Some(before) => (stops.get(before), stops.get(here)),
+        None => (stops.first(), stops.get(1)),
+    };
+
+    match (from, to) {
+        (Some(from), Some(to)) => (to.at - from.at).normalize_or(Vec3::Z),
+        _ => Vec3::Z,
+    }
+}
+
+/// Which stop a press of Return takes you to from `here`, per spec 0018.
+///
+/// Which way you go is which way you are facing, measured against the way the
+/// chain was already going. On if you are facing along it, back if against,
+/// and neither at the end you are facing past: at the far end facing out, and
+/// at the door facing back into the room, there is nowhere to go.
+///
+/// **Against the chain's direction and not against the next stop's.** The
+/// chain turns a right angle at every moon, because a planet's moons stand out
+/// at right angles to the line: arriving at the Moon you face along the
+/// Earth-to-Moon line, and Mars from there is 579 metres off at ninety
+/// degrees to it. Compared with the way to Mars, facing on from the Moon
+/// pointed at nothing and the chain stopped dead there.
+///
+/// **Where you are is remembered and not worked out**, which took two goes to
+/// accept. In metres the nearest stop is wrong at the sun: you arrive 25.7
+/// short of it and that is 4.6 from the door, so a second press takes you to
+/// the sun you are already standing at. Measured in standoffs instead, so the
+/// stop you travelled to always reads about one, it is wrong at every moon:
+/// standing at Io you are 1.0 of Io's standoff from Io and 0.95 of Jupiter's
+/// from Jupiter.
+///
+/// There is no metric that gets both, because a model whose largest body is
+/// five hundred times its smallest has no one distance that means "here". The
+/// chain knows where you are in it. That is one `usize`, and crossing the
+/// threshold sets it to the door.
+pub fn next(stops: &[Stop], here: usize, facing: Vec3) -> Option<usize> {
+    if facing.dot(along(stops, here)) >= 0.0 {
+        stops.get(here + 1).map(|_| here + 1)
+    } else {
+        here.checked_sub(1)
+    }
+}
+
+/// The floor, as a middle and a size: one slab from under the hidden room's
+/// own to past the last body.
+///
+/// It laps back under that one for the reason spec 0017 gives. Two floors at
+/// one height that meet edge to edge put a vertical face at the surface you
+/// are walking on, and a body resting on a surface counts as touching it.
+pub fn solid(reaches: f32) -> blitzkit::collision::Aabb {
+    let (middle, size) = floor(at(reaches));
+
+    blitzkit::collision::Aabb::from_center_size(middle, size)
+}
+
+/// Where the door of spec 0017 stands, at the floor, which is where all of
+/// this is measured from.
+pub fn at(reaches: f32) -> Vec3 {
+    let middle = crate::behind::at(reaches);
+
+    vec3(
+        middle.x,
+        0.0,
+        middle.z + crate::behind::half().y + THICK * 0.5,
+    )
+}
+
+pub fn floor(door: Vec3) -> (Vec3, Vec3) {
+    let from = door.z - LAPS;
+    let to = sun(door).z + reach() + SPARE;
+
+    (
+        vec3(door.x, -THICK * 0.5, (from + to) * 0.5),
+        vec3(WIDE, THICK, to - from),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::orrery::{every_body, PLANETS};
+
+    fn reaches() -> f32 {
+        crate::room::Room::of(Vec::new()).reaches
+    }
+
+    fn door() -> Vec3 {
+        at(reaches())
+    }
+
+    fn neptune_out() -> f32 {
+        neptune().out
+    }
+
+    fn neptune() -> &'static Planet {
+        PLANETS
+            .iter()
+            .find(|planet| planet.body.name == "Neptune")
+            .expect("Neptune is in the tables")
+    }
+
+    /// Spec 0018: the scale comes off the smallest body in the tables, and
+    /// that body is a two centimetre marble.
+    ///
+    /// The middle assertion is the one doing the work, and the first draft did
+    /// not have it. `drawn` is `MARBLE` divided by the smallest body, so
+    /// asserting that the smallest body is drawn `MARBLE` across is asserting
+    /// that a number equals itself: it passed with the marble set to five
+    /// centimetres. One metre to 135,350 kilometres is the two of them
+    /// multiplied out, and it moves if either does.
+    #[test]
+    fn the_smallest_body_is_a_marble() {
+        let least = every_body()
+            .into_iter()
+            .min_by(|one, other| one.across.total_cmp(&other.across))
+            .expect("the tables are not empty");
+
+        assert_eq!(least.name, "Triton");
+        assert_eq!(least.across, 2707.0);
+
+        let km = 1.0 / per_km();
+
+        assert!(
+            (km - 135_350.0).abs() < 2.0,
+            "one metre is {:.0} km, not 135,350",
+            km
+        );
+        // and nothing in the tables is under the marble, which is the half
+        // that would go wrong quietly if a smaller moon were added
+        for body in every_body() {
+            assert!(
+                drawn(body.across) >= 0.02 - 1e-6,
+                "{} is drawn {} across, under two centimetres",
+                body.name,
+                drawn(body.across)
+            );
+        }
+    }
+
+    /// Spec 0018: one scale, which is the whole of the difference between
+    /// this space and the room of spec 0015.
+    ///
+    /// In there a body is drawn at one scale and its distance at another, 306
+    /// times apart, and a moon is held to a third of even that. Here every
+    /// size and every distance divides by the same number.
+    #[test]
+    fn one_scale_and_no_other() {
+        let scale = per_km();
+
+        for body in every_body() {
+            assert!(
+                (drawn(body.across) / body.across - scale).abs() < 1e-9,
+                "{} is drawn at {} metres to the kilometre and the scale is {}",
+                body.name,
+                drawn(body.across) / body.across,
+                scale
+            );
+        }
+
+        for planet in PLANETS.iter() {
+            assert!(
+                (far(planet) / (planet.out * AU_KM) - scale).abs() < 1e-9,
+                "{} stands at {} metres to the kilometre",
+                planet.body.name,
+                far(planet) / (planet.out * AU_KM)
+            );
+
+            for moon in planet.moons.iter() {
+                assert!(
+                    (moon_far(moon) / moon.out_km - scale).abs() < 1e-9,
+                    "{} stands at {} metres to the kilometre",
+                    moon.body.name,
+                    moon_far(moon) / moon.out_km
+                );
+            }
+        }
+
+        // and against the room's, which is the model this one is the answer
+        // to: there a body's scale and an orbit's are 306 apart
+        let orbits = crate::orrery::au() / AU_KM;
+        let apart = crate::orrery::BODY / orbits;
+
+        assert!(
+            (apart - 306.0).abs() < 1.0,
+            "spec 0015's two scales are {} apart, not 306",
+            apart
+        );
+    }
+
+    /// Spec 0018: every stop stands on the floor, with nothing sunk into it
+    /// and nothing off the edge.
+    #[test]
+    fn nothing_stands_off_the_floor() {
+        let door = door();
+        let slab = solid(reaches());
+
+        for stop in stops(door) {
+            assert!(
+                stop.at.x - stop.across * 0.5 > slab.min.x
+                    && stop.at.x + stop.across * 0.5 < slab.max.x,
+                "{} runs off the side of the floor at {}",
+                stop.name,
+                stop.at
+            );
+            assert!(
+                stop.at.z > slab.min.z && stop.at.z < slab.max.z,
+                "{} stands past the end of the floor at {}",
+                stop.name,
+                stop.at
+            );
+            assert!(
+                stop.at.y - stop.across * 0.5 > -1e-4,
+                "{} is sunk {} into the floor",
+                stop.name,
+                stop.across * 0.5 - stop.at.y
+            );
+        }
+    }
+
+    /// Spec 0018: you arrive short of the body, looking at it, with it filling
+    /// a sensible part of the view.
+    ///
+    /// The second half is the one worth measuring. A standoff proportional to
+    /// the body is the only one that works at both ends of a model whose
+    /// largest thing is five hundred times its smallest, and this says what
+    /// the two ends come to.
+    #[test]
+    fn you_arrive_looking_at_it() {
+        let stops = stops(door());
+
+        for (n, stop) in stops.iter().enumerate().skip(1) {
+            let (stood, facing) = arriving(stops[n - 1].at, stop);
+            let eye = stood + Vec3::Y * crate::EYE;
+            let away = eye.distance(stop.at);
+
+            assert!(
+                facing.dot((stop.at - eye).normalize_or_zero()) > 0.9,
+                "arriving at {} you face {} and it is at {}",
+                stop.name,
+                facing,
+                stop.at
+            );
+            assert!(
+                (away / stands_off(stop.across) - 1.0).abs() < 0.1,
+                "{} is {} away and the standoff is {}",
+                stop.name,
+                away,
+                stands_off(stop.across)
+            );
+
+            // and it is worth looking at: a marble comes to two degrees and
+            // the sun to twenty three
+            let across = (stop.across / away).atan().to_degrees();
+
+            assert!(
+                (1.8..=24.0).contains(&across),
+                "{} subtends {:.2} degrees where you land",
+                stop.name,
+                across
+            );
+        }
+    }
+
+    /// Spec 0018: which way you go is which way you face, and no key means
+    /// out or in.
+    #[test]
+    fn the_way_you_face_is_the_way_you_go() {
+        let stops = stops(door());
+
+        for here in 1..stops.len() - 1 {
+            let (_, facing) = arriving(stops[here - 1].at, &stops[here]);
+
+            assert_eq!(
+                next(&stops, here, facing),
+                Some(here + 1),
+                "facing on from {}, the next stop is not {}",
+                stops[here].name,
+                stops[here + 1].name
+            );
+            assert_eq!(
+                next(&stops, here, -facing),
+                Some(here - 1),
+                "turned round at {}, the way back is not {}",
+                stops[here].name,
+                stops[here - 1].name
+            );
+        }
+    }
+
+    /// Spec 0018: the door is a stop, so there is a way home from anywhere,
+    /// and there is nothing past either end.
+    #[test]
+    fn the_door_is_the_last_stop_in() {
+        let door = door();
+        let stops = stops(door);
+
+        assert_eq!(stops[0].at, door);
+
+        // stepping in from the sun is leaving
+        let (_, facing) = arriving(door, &stops[1]);
+
+        assert_eq!(next(&stops, 1, -facing), Some(0));
+
+        // and nothing past either end
+        let last = stops.len() - 1;
+        let (_, facing) = arriving(stops[last - 1].at, &stops[last]);
+
+        assert_eq!(
+            next(&stops, last, facing),
+            None,
+            "there is a stop past Triton"
+        );
+        assert_eq!(
+            next(&stops, 0, -Vec3::Z),
+            None,
+            "there is a stop behind the door"
+        );
+    }
+
+    /// Spec 0018: the ride crosses in the same proportion as the distance,
+    /// which is the whole reason it is not a jump.
+    #[test]
+    fn the_ride_crosses_in_proportion() {
+        let took = |planet: &Planet| far(planet) / RIDES;
+        let crossing = took(neptune());
+
+        assert!(
+            (crossing - 180.0).abs() < 10.0,
+            "Neptune is {:.0} seconds off, not three minutes",
+            crossing
+        );
+
+        // and every leg in proportion to its own distance, which an eased
+        // ride would not be: that is the shape of the lie every diagram of
+        // the solar system tells
+        for planet in PLANETS.iter() {
+            let share = took(planet) / crossing;
+            let truth = planet.out / neptune_out();
+
+            assert!(
+                (share - truth).abs() < 1e-5,
+                "{} is {:.4} of the way by time and {:.4} by distance",
+                planet.body.name,
+                share,
+                truth
+            );
+        }
+
+        // the numbers the jump was written to get round
+        assert!(
+            far(neptune()) / (crate::SPEED * crate::RUNS) > 3600.0,
+            "running to Neptune is under an hour, so the ride is not needed"
+        );
+    }
+
+    /// Spec 0018: and it stays on the line whatever you are looking at.
+    ///
+    /// Looking about while you travel is the whole point of riding rather than
+    /// jumping, because the thing to watch is the sun going small behind you.
+    /// Steering at 185 metres a second is the thing that would put you over
+    /// the edge of the floor in under a second.
+    #[test]
+    fn the_ride_stays_on_the_line() {
+        let door = door();
+        let from = vec3(door.x, 0.0, door.z + 500.0);
+
+        for facing in [
+            Vec3::X,
+            -Vec3::X,
+            Vec3::Y,
+            vec3(0.9, 0.2, 0.3).normalize(),
+            vec3(-0.9, -0.2, -0.3).normalize(),
+        ] {
+            let went = ridden(from, facing, 1.0, door);
+
+            assert_eq!(went.x, from.x, "facing {} took you off the line", facing);
+            assert_eq!(went.y, from.y);
+            assert!(
+                (went.z - from.z).abs() - RIDES < 1e-3,
+                "facing {} covered {} in a second",
+                facing,
+                went.z - from.z
+            );
+            // and out or back by the sign of the facing, nothing else
+            assert_eq!(
+                went.z > from.z,
+                facing.z >= 0.0,
+                "facing {} went the wrong way",
+                facing
+            );
+        }
+    }
+
+    /// Spec 0018: the ride stops at the door rather than going through the
+    /// wall, and at the far end of the floor rather than off it.
+    ///
+    /// It has to say so itself: the ride does not go through `walk`, because a
+    /// 185 metre a second sweep is three metres a frame looking for something
+    /// to catch on, over a floor that is one flat slab with nothing on it.
+    #[test]
+    fn the_ride_stops_at_both_ends() {
+        let door = door();
+        let (from, to) = runs(door);
+        let back = ridden(vec3(door.x, 0.0, from + 50.0), -Vec3::Z, 10.0, door);
+
+        assert!(
+            back.z >= from,
+            "riding back put you at {}, past the door at {}",
+            back.z,
+            from
+        );
+
+        let out = ridden(vec3(door.x, 0.0, to - 50.0), Vec3::Z, 10.0, door);
+
+        assert!(
+            out.z <= to,
+            "riding on put you at {}, past the end of the floor at {}",
+            out.z,
+            to
+        );
+    }
+
+    /// Spec 0018: the posts stand up, and come at you often enough to read as
+    /// speed.
+    ///
+    /// They were laid flat on the floor first and nothing was drawn at all: a
+    /// mark on the floor seen from eye height is edge-on past twenty metres,
+    /// and at ninety the three tenths of a metre of mark came to five
+    /// thousandths of a metre of picture.
+    #[test]
+    fn the_posts_stand_up_and_come_often() {
+        let marks = marked(door());
+        let spine = marks[0];
+
+        assert!(
+            spine.size.z > 1000.0 && spine.size.y < 0.1,
+            "the spine is {:?}, which is not a stripe down the line",
+            spine.size
+        );
+
+        for mark in marks.iter().skip(1) {
+            assert!(
+                mark.size.y > crate::EYE * 0.5,
+                "a post {:?} is under half eye height, so it is edge-on at any \
+                 distance",
+                mark.size
+            );
+            assert!(
+                (mark.at.y - mark.size.y * 0.5).abs() < 1e-4,
+                "a post at {:?} does not stand on the floor",
+                mark.at
+            );
+        }
+
+        let a_second = RIDES / POSTS;
+
+        assert!(
+            (1.0..=4.0).contains(&a_second),
+            "{:.1} posts go by a second, which is not a rhythm",
+            a_second
+        );
+
+        // and the big ones, one to the unit, with the Earth standing on the
+        // first of them
+        let earth = PLANETS
+            .iter()
+            .find(|planet| planet.body.name == "Earth")
+            .expect("the Earth is in the tables");
+
+        assert!(
+            (far(earth) - au()).abs() < 1e-3,
+            "the Earth is at {} and the unit is {}",
+            far(earth),
+            au()
+        );
+        assert!(
+            marks.iter().filter(|mark| mark.glows).count() >= 60,
+            "there are not thirty glowing pairs down the line"
+        );
+    }
+
+    /// Spec 0018: the floor laps under the hidden room's rather than meeting
+    /// it, for the reason spec 0017 gives.
+    #[test]
+    fn the_floor_laps_under_the_room() {
+        let reaches = reaches();
+        let slab = solid(reaches);
+        let room = crate::behind::solid(reaches)
+            .into_iter()
+            .find(|box_| box_.max.y <= 0.0 && box_.min.y < 0.0)
+            .expect("the hidden room has a floor");
+
+        assert!(
+            room.max.z - slab.min.z > 1.0,
+            "the room's floor ends at {} and this one starts at {}, so there is \
+             an end face at the seam you walk over",
+            room.max.z,
+            slab.min.z
+        );
+    }
+
+    /// Spec 0018: the sun reaches Neptune with something left, which is the
+    /// one thing bent out here.
+    #[test]
+    fn the_sun_still_reaches_neptune() {
+        let lamp = blitzkit::lighting::PointLight::new(
+            Vec3::ZERO,
+            crate::orrery::SUNLIGHT,
+            SUN_LIT,
+            SUN_RANGE,
+        );
+        let out = far(neptune());
+
+        assert!(
+            lamp.falloff(out) > 0.4,
+            "Neptune is {:.0} m out and keeps {:.3} of the light",
+            out,
+            lamp.falloff(out)
+        );
+        // and the inner planets are not blown past it: the spread is two,
+        // where the truth is nine hundred
+        let mercury = far(&PLANETS[0]);
+
+        assert!(
+            lamp.falloff(mercury) / lamp.falloff(out) < 3.0,
+            "Mercury keeps {:.3} against Neptune's {:.3}",
+            lamp.falloff(mercury),
+            lamp.falloff(out)
+        );
+    }
+
+    /// Spec 0018: and you can see it from there, which the building's own far
+    /// plane does not allow.
+    ///
+    /// A hundred metres is further than any of the building goes and is what
+    /// keeps the far wall of the hidden room a thing you find. Out here it
+    /// culls the sun from everywhere past Mercury, and a sun you cannot see
+    /// is the one thing this space is for.
+    #[test]
+    fn the_far_plane_reaches_the_sun_from_neptune() {
+        let out = far(neptune());
+
+        assert!(
+            out > blitzkit::camera::Camera::new().far,
+            "the building's far plane would have shown the sun from Neptune \
+             anyway, at {:.0} m",
+            out
+        );
+        assert!(
+            sees() > out,
+            "from Neptune the sun is {:.0} m off and the camera sees {:.0}",
+            out,
+            sees()
+        );
+    }
+}
