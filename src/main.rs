@@ -249,6 +249,12 @@ struct Arcade {
     planet_mesh: Option<MeshId>,
     ring_mesh: Option<MeshId>,
     worlds: Vec<TextureId>,
+    /// One name per body in the same order, and how many times wider than tall
+    /// its picture came out, which is what the quad is scaled by. Read off the
+    /// picture itself rather than measured again, because a name measured
+    /// twice is a name stretched.
+    names: Vec<(TextureId, f32)>,
+    name_mesh: Option<MeshId>,
     rings: Option<TextureId>,
     /// Stars on all six surfaces of the room, and the quads they are laid on.
     stars: Vec<TextureId>,
@@ -468,6 +474,8 @@ impl Arcade {
             planet_mesh: None,
             ring_mesh: None,
             worlds: Vec::new(),
+            names: Vec::new(),
+            name_mesh: None,
             rings: None,
             stars: Vec::new(),
             star_mesh: Vec::new(),
@@ -843,7 +851,50 @@ impl Arcade {
         (sun, (door - sun).normalize_or_zero())
     }
 
-    /// The sun, the planets, their moons and Saturn's rings. Spec 0015.
+    /// One body's name, over the body, facing you.
+    ///
+    /// `which` is its place in `orrery::every_body`, which is the order the
+    /// pictures are in as well, and `across` is what the body is drawn as.
+    /// Planets hang theirs over and moons hang theirs under, per
+    /// `orrery::Hangs`.
+    ///
+    /// Written over every frame, because where it stands, how big it is and
+    /// which way it faces all come off where your eye is. A name is three
+    /// numbers and a quad, and sixteen of them is the cheapest thing in this
+    /// room by a long way.
+    fn draw_a_name(
+        &self,
+        scene: &mut Scene,
+        which: usize,
+        at: Vec3,
+        across: f32,
+        hangs: orrery::Hangs,
+    ) {
+        let (Some(mesh), Some((said, wide))) = (self.name_mesh, self.names.get(which).copied())
+        else {
+            return;
+        };
+
+        let eye = self.looking_from();
+        let tall = orrery::label_tall((at - eye).length());
+        let stands = orrery::label_at(at, across, eye, hangs);
+
+        scene.push_textured(
+            mesh,
+            said,
+            &Transform::at(stands)
+                .with_rotation(orrery::label_turn(stands, eye))
+                .with_scale(vec3(tall * wide, 1.0, tall)),
+            aim::BODY_NAME,
+            // the same pinpoint the rest of this room gets. The highlight is
+            // added and not multiplied, so a name with a lobe on it is a name
+            // with a white smear across the middle of it.
+            aim::VOID,
+        );
+    }
+
+    /// The sun, the planets, their moons, Saturn's rings and every one of them
+    /// named. Spec 0015.
     fn draw_the_system(&self, scene: &mut Scene, cube: MeshId) {
         let (Some(ball), Some(rings)) = (self.planet_mesh, self.ring_mesh) else {
             return;
@@ -926,6 +977,7 @@ impl Arcade {
             aim::SUN_FACE,
             aim::DULL,
         );
+        self.draw_a_name(scene, 0, sun, orrery::sun_drawn(), orrery::Hangs::Over);
 
         let mut skin = 1;
 
@@ -943,6 +995,7 @@ impl Arcade {
                     aim::MATTE,
                 );
             }
+            self.draw_a_name(scene, skin, at, planet.body.drawn(), orrery::Hangs::Over);
             skin += 1;
 
             // the rings, leaning with the planet they belong to
@@ -973,6 +1026,13 @@ impl Arcade {
                         aim::MATTE,
                     );
                 }
+                self.draw_a_name(
+                    scene,
+                    skin,
+                    at + out,
+                    moon.body.drawn(),
+                    orrery::Hangs::Under,
+                );
                 skin += 1;
             }
         }
@@ -1348,6 +1408,18 @@ impl Game for Arcade {
             .iter()
             .map(|body| renderer.add_texture(&orrery::picture(body)))
             .collect();
+        // and every one of them named, off the same list, so a picture and a
+        // name cannot end up on two different bodies
+        self.names = orrery::every_body()
+            .iter()
+            .map(|body| {
+                let said = orrery::named(body.name);
+                let wide = said.width() as f32 / said.height().max(1) as f32;
+
+                (renderer.add_texture(&said), wide)
+            })
+            .collect();
+        self.name_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.rings = Some(renderer.add_texture(&orrery::ringed(orrery::STAR_SEED ^ 0x1D)));
         self.way_out = Some(
             renderer.add_texture(&blitzkit::text::drawn(orrery::WAY_OUT, orrery::SIGN_TEXELS)),

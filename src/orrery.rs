@@ -888,6 +888,154 @@ pub fn exit_sign(reaches: f32) -> (Vec3, Vec3) {
 /// Eye height, so you look the planets in the face rather than down at them.
 /// The sun swallows you on the way past, which has no collider and is the
 /// right thing to happen.
+/// How tall a body's name is drawn, as a fraction of how far off it is.
+///
+/// Fixed on the glass rather than in the room, which is the whole of why a
+/// name out here can be read at all. Triton is five millimetres across and
+/// sixty four metres from the door, and a name that shrank with it would be
+/// one texel: the thing a label has to beat is not the dark, it is the
+/// distance. Scaled with the distance instead, every name in the room reads
+/// the same size from wherever you are standing.
+///
+/// The camera's `fov_y` is 60 degrees, so a screen is 1.155 times as tall as
+/// it is far away and this is a line 2.4 per cent of the screen's height: 26
+/// pixels on a 1080 window, which is three times over what this font needs.
+///
+/// What it costs is that the far names are enormous in the room. Neptune's is
+/// a metre and a third of lettering beside a ball nine centimetres across.
+/// That is the trade and it is the right way round: a model you cannot find
+/// the planets in is not a model of anything.
+pub const LABEL_SUBTENDS: f32 = 0.028;
+
+/// The smallest a name is drawn, in metres.
+///
+/// Nose to the glass on the Moon, `LABEL_SUBTENDS` of 20 cm is 6 mm of
+/// lettering, which is under this font's own grid. A floor rather than a
+/// ceiling, because the fault at the far end is a name too big and the fault
+/// at the near end is a name gone.
+pub const LABEL_LEAST: f32 = 0.018;
+
+/// How many texels tall a name's picture is drawn.
+pub const LABEL_TEXELS: f32 = 64.0;
+
+/// How far off a body its name stands, in names.
+///
+/// Clear of the ball by its own radius and then most of a line, so there is
+/// sky between the two and the name is not sitting on the planet's shoulder.
+pub const LABEL_UP: f32 = 0.8;
+
+/// Which side of its body a name hangs on.
+///
+/// Planets over, moons under. Not decoration: in the lined up arrangement
+/// every body is on one line, and read from along that line every name lands
+/// on the same row and they pile into each other. A moon is always within a
+/// stride of its planet and is the pair most likely to collide, so hanging
+/// the moons underneath pulls the worst of it apart and says which body
+/// belongs to which at the same time.
+///
+/// It does not fix the rest. Four inner planets within a metre of each other,
+/// read from a metre away, still stack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hangs {
+    Over,
+    Under,
+}
+
+/// How tall a name is drawn, seen from `how_far` away.
+pub fn label_tall(how_far: f32) -> f32 {
+    (how_far * LABEL_SUBTENDS).max(LABEL_LEAST)
+}
+
+/// Where a body's name stands: over the ball, clear of it and of its own
+/// height.
+///
+/// `across` is what the body is **drawn** as and not what it is, so the sun
+/// passes `sun_drawn` and not `SUN.drawn`.
+pub fn label_at(body: Vec3, across: f32, eye: Vec3, hangs: Hangs) -> Vec3 {
+    let tall = label_tall((body - eye).length());
+    let side = match hangs {
+        Hangs::Over => 1.0,
+        Hangs::Under => -1.0,
+    };
+
+    body + Vec3::Y * side * (across * 0.5 + tall * (0.5 + LABEL_UP))
+}
+
+/// Which way to turn a `room::tiled_plane` so its face looks at `eye` and its
+/// letters stand up.
+///
+/// `room::laid_on` is the same job for a wall and only answers the six
+/// directions a wall faces, so this is the general one. The quad is built flat
+/// with its normal on local +Y, its letters running along +X and their tops on
+/// -Z: that last is what `laid_on` says, which is why this is checked against
+/// it rather than against a drawing of it. See
+/// `tests::a_name_turned_at_a_wall_is_the_wall`.
+///
+/// **`laid_on` is only upright for two of its four walls.** Checking this
+/// against it turned that up: facing -x or -z it puts the quad's top at -y, so
+/// anything with an up to it comes out upside down. Nothing has noticed
+/// because the three surfaces it draws are tiling plaster, tile and lining,
+/// none of which has a top, and the one sign that uses it faces +z. So the
+/// comparison below holds for +x and +z and the normal alone for the rest.
+///
+/// The letters are made level by construction rather than by projecting world
+/// up out of the normal. Projecting leaves a residue near the poles: a body a
+/// thousandth off straight overhead came out rolled by a ten-thousandth, which
+/// is nothing to look at and is still a quad whose letters are not level. The
+/// run of the letters is `Vec3::Y` crossed into the normal, which has no y in
+/// it at any angle, and the up is worked back out of that.
+///
+/// Straight up or straight down has no such run, and then any upright will do.
+pub fn label_turn(from: Vec3, eye: Vec3) -> glam::Quat {
+    let out = eye - from;
+    if out.length_squared() < 1e-8 {
+        return glam::Quat::IDENTITY;
+    }
+
+    let looks = out.normalize();
+    let along = Vec3::Y.cross(looks);
+    let along = if along.length_squared() < 1e-6 {
+        Vec3::X
+    } else {
+        along.normalize()
+    };
+    let up = looks.cross(along);
+
+    glam::Quat::from_mat3(&glam::Mat3::from_cols(along, looks, -up))
+}
+
+/// A body's name, on its own black ground.
+///
+/// Drawn and not stencilled, and the first try was the other way round on the
+/// reasoning that a plate out here would be a hole punched in the stars. Two
+/// things were wrong with that.
+///
+/// **A cut-out name is gone at a distance.** Thirty metres from Saturn, with
+/// the columns taken out of the build so that nothing could be hiding it and
+/// the multiplier run up to 24 so that nothing could be dimming it, there was
+/// no name over Saturn at all. Changing this one line put it back, bright and
+/// sharp, from the same spot. Walking the sun back, cut-out names are there
+/// at two metres and four, thin at eight, and gone by twenty.
+///
+/// **Why is not established.** The engine's spec 0047 says mip levels average
+/// the alpha down until small text dissolves, and the shader drops a fragment
+/// under `CUTOUT`, which is 0.35, so that is the obvious candidate. It does
+/// not fit on its own: these names hold the same size on the glass at every
+/// distance by construction, so the sampler should be reaching the same mip
+/// at two metres as at thirty. Occlusion and brightness are ruled out by the
+/// two runs above. What is left is a measurement nobody has taken. The
+/// study's book spines are the only other cut-out text in the building and
+/// they are read from arm's length, which is why this has never shown.
+///
+/// **And the hole in the stars is not there.** The sky in this room is black,
+/// so a black plate against it is invisible except where it crosses a star.
+/// What it buys is a name that reads against the sun as well as against the
+/// dark, and the sun is a metre of blown-out white that the inner names stand
+/// in front of from anywhere near the middle of the model.
+pub fn named(name: &str) -> blitzkit::texture::TextureData {
+    blitzkit::text::drawn(name, LABEL_TEXELS)
+}
+
 pub const PLANE: f32 = 1.6;
 
 /// Saturn's rings, as a flat annulus turned on the wheel.
@@ -1007,6 +1155,253 @@ mod tests {
             .iter()
             .find(|planet| planet.body.name == name)
             .expect("a planet by that name")
+    }
+
+    /// Spec 0015: a name turned at a wall is the turn that wall already uses.
+    ///
+    /// `label_turn` is the general form of `crate::room::laid_on`, which has
+    /// drawn every lined wall in this building and is the only thing that
+    /// knows which way round the quad's letters go. Written from scratch it
+    /// came out rolled a quarter turn twice, so it is checked against the one
+    /// that works rather than against a drawing of it.
+    ///
+    /// Both basis vectors and not the quaternions, because a quaternion and
+    /// its negative are the same turn.
+    ///
+    /// Only +x and +z, and that is the finding. `laid_on` faces the right way
+    /// on all four but stands the quad's top at -y on -x and -z, so a sign on
+    /// either of those walls would read upside down. The three surfaces it
+    /// draws are tiling and have no top, and the one sign using it faces +z,
+    /// which is why nothing has ever shown it. The other two are held to the
+    /// normal alone below, which is the part it does get right.
+    #[test]
+    fn a_name_turned_at_a_wall_is_the_wall() {
+        for looks in [Vec3::X, Vec3::Z] {
+            let wall = crate::room::laid_on(looks);
+            let name = label_turn(Vec3::ZERO, looks * 3.0);
+
+            for local in [Vec3::X, Vec3::Y, Vec3::Z] {
+                assert!(
+                    (wall * local - name * local).length() < 1e-5,
+                    "looking {:?}, a wall puts {:?} at {:?} and a name at {:?}",
+                    looks,
+                    local,
+                    wall * local,
+                    name * local
+                );
+            }
+        }
+
+        for looks in [-Vec3::X, -Vec3::Z] {
+            let wall = crate::room::laid_on(looks);
+            let name = label_turn(Vec3::ZERO, looks * 3.0);
+
+            assert!(
+                (wall * Vec3::Y - name * Vec3::Y).length() < 1e-5,
+                "looking {:?}, the two face {:?} and {:?}",
+                looks,
+                wall * Vec3::Y,
+                name * Vec3::Y
+            );
+            assert!(
+                (wall * -Vec3::Z).dot(Vec3::Y) < 0.0,
+                "`laid_on({:?})` is upright now, so this test is out of date",
+                looks
+            );
+        }
+    }
+
+    /// Spec 0015: a name faces you, stands up, and does not roll.
+    ///
+    /// The three things a billboard has to do, from a dozen places including
+    /// straight under a body, which is the one that has no up to find.
+    #[test]
+    fn a_name_faces_you_and_stands_up() {
+        let eye = vec3(2.0, 1.55, -3.0);
+
+        for at in [
+            vec3(0.0, 1.2, 0.0),
+            vec3(8.0, 1.2, 4.0),
+            vec3(-20.0, 3.0, 40.0),
+            // directly over the eye, where world up is edge on
+            vec3(2.0, 9.0, -3.0),
+            // and directly under it
+            vec3(2.0, -4.0, -3.0),
+            // and a hair off straight up, which is the case either side of
+            // the fallback
+            vec3(2.001, 9.0, -3.0),
+        ] {
+            let turn = label_turn(at, eye);
+            let looks = turn * Vec3::Y;
+            let want = (eye - at).normalize();
+
+            assert!(
+                (looks - want).length() < 1e-4,
+                "a name at {:?} faces {:?} and not {:?}",
+                at,
+                looks,
+                want
+            );
+
+            // no roll: the letters run level
+            let along = turn * Vec3::X;
+            assert!(
+                along.dot(Vec3::Y).abs() < 1e-4,
+                "the letters at {:?} run {:?}, which is not level",
+                at,
+                along
+            );
+
+            // and the right way up. The quad's letters have their tops on
+            // local -Z, which is what `laid_on` says and what the test above
+            // holds it to. Skipped where there is no up: over the eye and
+            // under it, any upright is as good as another.
+            if (want.dot(Vec3::Y)).abs() < 0.99 {
+                assert!(
+                    (turn * -Vec3::Z).dot(Vec3::Y) > 0.0,
+                    "the letters at {:?} are upside down",
+                    at
+                );
+            }
+
+            // orthonormal, so nothing is sheared or mirrored
+            assert!(
+                (turn * Vec3::X).cross(turn * Vec3::Y).dot(turn * Vec3::Z) > 0.99,
+                "the turn at {:?} is not a turn",
+                at
+            );
+        }
+    }
+
+    /// Spec 0015: a name is the same size on the glass wherever it is read
+    /// from, and never under this font's grid.
+    ///
+    /// The point of the whole thing. Triton five millimetres across and sixty
+    /// metres off is the body this is for: its ball is a texel and its name is
+    /// a name.
+    #[test]
+    fn a_name_is_the_same_size_however_far_off_it_is() {
+        for how_far in [1.0f32, 4.0, 16.0, 64.0] {
+            let subtends = label_tall(how_far) / how_far;
+
+            assert!(
+                (subtends - LABEL_SUBTENDS).abs() < 1e-6,
+                "at {}m a name subtends {:.4} and not {:.4}",
+                how_far,
+                subtends,
+                LABEL_SUBTENDS
+            );
+        }
+
+        // and close up it stops shrinking rather than going to nothing
+        assert_eq!(label_tall(0.0), LABEL_LEAST);
+        assert!(label_tall(0.1) >= LABEL_LEAST);
+
+        // 26 pixels of a 1080 window, at the camera's own 60 degree fov
+        let screen = 2.0 * (60f32.to_radians() * 0.5).tan();
+        let pixels = LABEL_SUBTENDS / screen * 1080.0;
+        assert!(
+            (20.0..=40.0).contains(&pixels),
+            "a name is {:.0} pixels tall on a 1080 window",
+            pixels
+        );
+    }
+
+    /// Spec 0015: a name stands clear of its own body, at every size.
+    ///
+    /// Over it and not on it. The sun is the one that matters: it is a metre
+    /// across and a name half a metre up is a name inside it.
+    #[test]
+    fn a_name_stands_clear_of_its_body() {
+        let eye = vec3(0.0, 1.55, 0.0);
+
+        for (what, at, across) in std::iter::once(("the sun", Vec3::ZERO, sun_drawn()))
+            .chain(PLANETS.iter().map(|planet| {
+                (
+                    planet.body.name,
+                    vec3(planet.far(), 1.2, 0.0),
+                    planet.body.drawn(),
+                )
+            }))
+            .chain(PLANETS.iter().flat_map(|planet| {
+                planet.moons.iter().map(move |moon| {
+                    (
+                        moon.body.name,
+                        vec3(planet.far() + moon.far(), 1.2, 0.0),
+                        moon.body.drawn(),
+                    )
+                })
+            }))
+        {
+            let tall = label_tall((at - eye).length());
+
+            for hangs in [Hangs::Over, Hangs::Under] {
+                let stands = label_at(at, across, eye, hangs);
+                let gap = match hangs {
+                    Hangs::Over => (stands.y - tall * 0.5) - (at.y + across * 0.5),
+                    Hangs::Under => (at.y - across * 0.5) - (stands.y + tall * 0.5),
+                };
+
+                assert!(
+                    gap > 0.0,
+                    "{}'s name {:?} overlaps it by {:.3}m",
+                    what,
+                    hangs,
+                    -gap
+                );
+                assert!(
+                    (gap - tall * LABEL_UP).abs() < 1e-4,
+                    "{}'s name {:?} stands {:.3}m off and not {:.3}m",
+                    what,
+                    hangs,
+                    gap,
+                    tall * LABEL_UP
+                );
+            }
+        }
+    }
+
+    /// Spec 0015: every body has a name, and no two share one.
+    ///
+    /// The pictures and the names come off the same `every_body`, and the
+    /// drawing walks it with one index for both. A name repeated is two
+    /// bodies that cannot be told apart, and an empty one is a body with
+    /// nothing over it.
+    #[test]
+    fn every_body_is_named_once() {
+        let bodies = every_body();
+
+        assert_eq!(
+            bodies.len(),
+            1 + PLANETS.len() + 7,
+            "{} bodies",
+            bodies.len()
+        );
+
+        let mut seen = Vec::new();
+        for body in &bodies {
+            assert!(!body.name.trim().is_empty(), "a body with no name");
+            assert!(
+                !seen.contains(&body.name),
+                "two bodies called {}",
+                body.name
+            );
+            seen.push(body.name);
+        }
+
+        // and each name draws something. A string this font never heard of
+        // comes back as one white texel, which is a name gone.
+        for body in &bodies {
+            let said = named(body.name);
+
+            assert!(
+                said.width() > 8 && said.height() > 4,
+                "{} drew a picture {}x{}",
+                body.name,
+                said.width(),
+                said.height()
+            );
+        }
     }
 
     /// Spec 0015: every ball is true against every other ball.

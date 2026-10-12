@@ -621,6 +621,18 @@ pub const STARS: Vec4 = vec4(1.6, 1.6, 1.7, 1.0);
 /// Near white: the pictures carry the colour, and the one thing a planet must
 /// not have is a tint that is not its own.
 pub const WORLD: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+
+/// What a body's name is multiplied by, per spec 0015.
+///
+/// Past one, so it carries its own light the way the exit and the neon do. A
+/// name is a thing somebody put there and not a thing the sun is shining on,
+/// and out past Uranus there is not much sun left to shine on it.
+///
+/// Warm, and that is not a taste either: `FILL` is blue, so a name with three
+/// equal numbers in it comes out of the fill blue. These three are the ones
+/// that leave it near white once the fill has had its way, with the sun's own
+/// lamp adding a little more to the ones near the middle.
+pub const BODY_NAME: Vec4 = vec4(5.4, 4.8, 3.6, 1.0);
 pub const RING: Vec4 = vec4(1.0, 0.98, 0.94, 1.0);
 
 pub const GARDEN_WALL: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);

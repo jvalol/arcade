@@ -1,7 +1,7 @@
 # 0015 A solar system behind the wall
 
 **Status:** draft
-**Date:** 2026-10-11
+**Date:** 2026-10-11, labels added the same day
 
 ## Goal
 
@@ -195,6 +195,92 @@ A plausible spread of magnitudes rather than a uniform sprinkle, since a sky
 of equal dots reads as noise. Real constellations would need a catalogue and
 are not in this spec.
 
+**Every body is named, over the body, facing you.** The sun, the eight
+planets and the seven moons: sixteen names off the same `orrery::every_body`
+the pictures come from, walked with one index for both, so a name and a picture
+cannot end up on two different bodies.
+
+A name is a quad with the name drawn on its own black ground, the same as the
+way out hangs on. It went in cut out of its ground, per the engine's spec
+0047, on the reasoning that a plate out here would be a hole punched in the
+stars. Both halves of that were wrong, and the window said so.
+
+**A cut-out name is gone at a distance.** Thirty metres from Saturn, with the
+columns taken out of the build so that nothing could be hiding it and the
+multiplier run up to 24 so that nothing could be dimming it, there was no name
+over Saturn at all. Changing the one line put it back, bright and sharp, from
+the same spot. Walking back from the sun, cut-out names are there at two
+metres and four, thin at eight, and gone by twenty.
+
+Why is not established, and this spec is not going to pretend otherwise. The
+engine's spec 0047 says mip levels average the alpha down until small text
+dissolves, and the shader drops a fragment under `CUTOUT`, which is 0.35, so
+that is the obvious candidate. It does not fit on its own: these names hold
+the same size on the glass at every distance by construction, so the sampler
+should be reaching the same mip at two metres as at thirty. Occlusion and
+brightness are ruled out by the two runs above. What is left is a measurement
+nobody has taken, and it is the engine's to take. The study's book spines are
+the only other cut-out text in the building and they are read from arm's
+length, which is why this has never shown.
+
+**And the hole in the stars is not there.** The sky in this room is black, so
+a black plate against it is invisible except where it crosses a star. What it
+buys is a name that reads against the sun as well as against the dark, and the
+sun is a metre of blown-out white that the inner names stand in front of from
+anywhere near the middle of the model. It also makes two names that overlap
+read as two cards rather than as one smear.
+
+A name is multiplied past one so it carries its own light, because a name is a
+thing somebody put there rather than a thing the sun is shining on, and out
+past Uranus there is not much sun left. The multiplier is warm, because
+`aim::FILL` is blue and three equal numbers come out of it blue.
+
+**Planets hang their name over, moons hang theirs under.** In the lined up
+arrangement every body is on one line, so read from along that line every name
+lands on the same row and they pile into each other. A moon is always within a
+stride of its planet and is the pair most likely to collide, so hanging the
+moons underneath pulls the worst of it apart and says which body belongs to
+which at the same time.
+
+It does not fix the rest. Standing a metre from Earth, the names of Mercury,
+Venus and Earth still stack, because the three bodies are within a metre of
+each other and the names are the same size whatever they are naming. That is
+the lined up arrangement being what it is, and in orbit the same three are
+spread round the sun. A layout pass that pushed overlapping names apart is a
+different and much larger piece of work.
+
+**A name is the same size on the glass from wherever it is read.** This is the
+whole of why it works. Triton is five millimetres across and sixty four metres
+from the door, and a name that shrank with the ball would be one texel: what a
+label out here has to beat is not the dark, it is the distance. Scaled with the
+distance, every name in the room is a line 2.4 per cent of the screen's height,
+which is 26 pixels on a 1080 window against a font that wants eight.
+
+What it costs is that the far names are enormous in the room: Neptune's is a
+metre and a third of lettering beside a ball nine centimetres across. That is
+the trade and it is the right way round. A model you cannot find the planets in
+is not a model of anything, which is what Jake said about it on the first walk
+through.
+
+**Written over every frame.** Where a name stands, how big it is and which way
+it faces all come off where your eye is, so there is nothing to cache. Sixteen
+quads is the cheapest thing in this room by a long way.
+
+**The turn is `orrery::label_turn` and not `room::laid_on`.** `laid_on` is the
+same job for a wall and answers only the six directions a wall faces. Writing
+the general one against it turned up that `laid_on` is upright for +x and +z
+and upside down for -x and -z: it faces the right way on all four but puts the
+quad's top at -y on two of them. Nothing has ever shown it, because the three
+surfaces it draws are tiling plaster, tile and pool lining, none of which has a
+top, and the one sign that uses it faces +z. A sign on the other two walls
+would read upside down.
+
+The letters are made level by construction, `Vec3::Y` crossed into the normal,
+rather than by projecting world up out of the normal. Projecting leaves a
+residue at the poles: a body a thousandth off straight overhead came out rolled
+by a ten-thousandth, which is nothing to look at and is still a quad whose
+letters are not level.
+
 ## Acceptance criteria
 
 To be written with the code. Each of these is arithmetic and belongs in a test:
@@ -210,6 +296,37 @@ To be written with the code. Each of these is arithmetic and belongs in a test:
 - Nothing in the room is close enough to anything else to fight it, per spec
   0048 of the engine.
 - You can walk from the door to the sun, and round it.
+
+The names are written, and these are theirs:
+
+- A name turned at a wall is the turn that wall already uses, where that turn
+  is upright. — `orrery::tests::a_name_turned_at_a_wall_is_the_wall`
+- A name faces you, stands up, and does not roll, from straight under a body
+  as well as from beside it. — `orrery::tests::a_name_faces_you_and_stands_up`
+- A name is the same size on the glass however far off it is, and never under
+  the font's grid. — `orrery::tests::a_name_is_the_same_size_however_far_off_it_is`
+- A name stands clear of its own body, at every size, the sun included. — `orrery::tests::a_name_stands_clear_of_its_body`
+- Every body has a name, no two share one, and every one draws something. — `orrery::tests::every_body_is_named_once`
+
+### Verified by hand
+
+- Standing at the door, the names tell you where the planets are. Finding them
+  was the complaint this answers.
+- No name is upside down, mirrored, or rolled, from anywhere in the room.
+- Nothing reads as a hole in the stars where a name is.
+- Standing on the line in the lined up arrangement, the names of bodies near
+  each other overlap. Known, and the pictures from 2026-10-11 show it.
+
+### Known and not fixed
+
+**The columns stand in the way of the model.** `behind::columns` clears a
+column that would sit on an orbit, per the note in `behind.rs`, and clears the
+way in, and nothing clears the line of sight. In the lined up arrangement the
+bodies are strung along the door-to-sun diagonal, and the 7.5 m grid puts a
+column on that diagonal more often than not: from the door, and again from out
+by Uranus, the whole model is behind a pillar. This was found while
+photographing the names and is the likeliest half of why the planets were hard
+to find in the first place. It is not the names' problem to solve.
 
 ## Out of scope
 
