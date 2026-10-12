@@ -589,7 +589,7 @@ pub const SYSTEM_NOTE: &str =
 /// The way out of the solar system, and the housing it sits in.
 ///
 /// Green, which is what an exit sign is everywhere, and past white so it
-/// carries itself across ninety seven metres of dark room without a lamp of
+/// carries itself across a hundred and fifty nine metres of dark room without a lamp of
 /// its own. The housing is nearly black, so what you see from the far end is
 /// the word and not a panel.
 pub const EXIT: Vec4 = vec4(0.3, 4.4, 1.1, 1.0);

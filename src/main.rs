@@ -75,10 +75,16 @@ pub const SPEED: f32 = 4.2;
 /// How much faster you go with a shift key down.
 ///
 /// Twice, which at 4.2 is a sprint rather than a jog, and that is the right
-/// number because of what the building became: the room behind the wall is
-/// ninety seven metres across and the walk from the door to the sun is forty
-/// eight of them. Walked it is eleven seconds each way, which is a corridor.
-/// Run it is five, which is a distance.
+/// number because of what the building became: the room behind the wall is a
+/// hundred and fifty nine metres across and the walk from the door to the sun
+/// is a hundred and eleven of them. Walked it is twenty seven seconds each
+/// way, which is a trudge. Run it is thirteen.
+///
+/// It was forty eight metres and eleven seconds when this constant went in,
+/// and the room more than doubled afterwards to keep the Moon's orbit off
+/// Mars. Shift was already there, which is the only reason the bigger room is
+/// a distance rather than a corridor, and is worth saying because the two
+/// changes look unrelated and are not.
 ///
 /// Not in the water. Wading is the whole of what tells you that you are in
 /// the pool rather than beside it, per spec 0008, and a sprint through it
@@ -930,7 +936,7 @@ impl Arcade {
         }
 
         // the way out, named, because the way out is a slot in a black wall
-        // ninety seven metres from the far corner. Spec 0015.
+        // a hundred and fifty nine metres from the far corner. Spec 0015.
         {
             let (at, looks) = orrery::exit_sign(self.room.reaches);
 
@@ -2118,7 +2124,7 @@ impl Game for Arcade {
         // From the other side it is the two pieces, so the way out is a lit
         // rectangle rather than a wall you have to remember the position of.
         // That half of the trick was free while the room behind was empty and
-        // fifty metres across. Spec 0015 made it ninety seven and dark and
+        // fifty metres across. Spec 0015 made it a hundred and fifty nine and dark and
         // gave you something to look at, and a secret door you cannot find
         // from the inside is not a secret, it is a trap.
         //

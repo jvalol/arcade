@@ -31,10 +31,18 @@ use crate::room::{CABINET, THICK, WALL};
 /// camera's far plane is a hundred and a point light falls off long before
 /// that, so what you see is dark in every direction and the far wall is a
 /// thing you find rather than a thing you see.
-/// Ninety seven, which is not a round number and is not a choice either: the
-/// orbits of spec 0015 are 96.4 across and the room has to hold them.
-pub const SPAN: f32 = 97.0;
-pub const DEEP: f32 = 97.0;
+///
+/// A hundred and fifty nine, which is not a round number and is not a choice
+/// either: the orbits of spec 0015 are 158.7 across and the room has to hold
+/// them. It was ninety seven against a disc of 96.4, and the orbits grew when
+/// `orrery::MOON_SHARE` took over setting the orbit scale, to stop the Moon's
+/// orbit reaching for Mars.
+///
+/// Past the far plane now, which is the thing to watch and is not a fault:
+/// you cannot see the far wall from the door and were never meant to. The
+/// stars on it are the same stars at any distance.
+pub const SPAN: f32 = 159.0;
+pub const DEEP: f32 = 159.0;
 
 /// How high the ceiling is.
 ///
@@ -49,8 +57,8 @@ pub const DEEP: f32 = 97.0;
 /// pokes past the edge of the sky. Four and a half metres of it stood up
 /// through the clouds.
 ///
-/// The vastness of this room is ninety seven metres of floor, not its
-/// ceiling. The sun is one metre across.
+/// The vastness of this room is a hundred and fifty nine metres of floor, not
+/// its ceiling. The sun is one metre across.
 pub const HIGH: f32 = 3.2;
 
 /// How far this floor runs back under the hall's.
@@ -251,11 +259,41 @@ pub const STRIDE: f32 = 7.5;
 pub const COLUMN: f32 = 0.72;
 pub const CLEAR: f32 = 2.2;
 
+/// How far along the line from the sun to the way out a point lies, and how
+/// far off it, both in metres.
+///
+/// Its own function because `columns` keeps the line clear and
+/// `tests::nothing_stands_on_the_line` reads the same line back to check it,
+/// and two accounts of one line is the fault this building keeps paying for.
+/// `along` runs from nought at the sun to the length of it at the door, and
+/// is negative behind the sun.
+pub fn down_the_line(reaches: f32, point: Vec2) -> (f32, f32) {
+    let middle = at(reaches);
+    let (from, to) = way();
+    let sun = vec2(middle.x, middle.z);
+    let run = vec2((from + to) * 0.5, reaches) - sun;
+    let length = run.length();
+
+    if length < 1e-6 {
+        return (0.0, (point - sun).length());
+    }
+
+    let heading = run / length;
+    let v = point - sun;
+    let along = v.dot(heading);
+
+    (along, (v - heading * along).length())
+}
+
 /// Where the columns stand.
 ///
 /// They are what gives the size away. An empty floor going off into the dark
 /// is a corridor with the lights off, and the only way to read a distance is
 /// to see the same thing at several of them.
+///
+/// Three things are kept clear of: the way in, every orbit, and the line the
+/// bodies stand on lined up. All three with `CLEAR`, and the grid is what is
+/// left.
 pub fn columns(reaches: f32) -> Vec<Vec3> {
     let middle = at(reaches);
     let half = half();
@@ -293,11 +331,45 @@ pub fn columns(reaches: f32) -> Vec<Vec3> {
                 continue;
             }
 
+            // and nothing on the line the bodies stand on, per spec 0015.
+            // Lined up, every body is strung along the diagonal from the sun
+            // to the way out, and a forty five degree line through a square
+            // grid passes near a grid point every stride and a half. Nine
+            // stand on it, from a fifth of a metre off to two thirds, and one
+            // of them is four metres inside the door: from the door the whole
+            // model was behind a pillar, which is most of why the planets
+            // were hard to find.
+            //
+            // The width is not a judgment. The nine on the line are all
+            // within 0.7 of it and the nearest one that is not is at 4.46, so
+            // anything from one metre to four drops exactly the same nine of
+            // the three hundred and sixty eight, and `CLEAR` is reused rather
+            // than a fourth number invented. See
+            // `tests::the_line_is_cleared_by_a_wide_margin`.
+            let (down, off) = down_the_line(reaches, at_);
+
+            if (0.0..=run_of_the_line(reaches)).contains(&down) && off < CLEAR {
+                continue;
+            }
+
             out.push(vec3(at_.x, 0.0, at_.y));
         }
     }
 
     out
+}
+
+/// How long the line from the sun to the way out is.
+///
+/// A hundred and eleven and a half metres, of which the planets take the
+/// first seventy nine. The whole of it is cleared and not just the planets'
+/// part, because the columns past Neptune are the ones nearest the door and
+/// so the ones that stand in front of everything.
+pub fn run_of_the_line(reaches: f32) -> f32 {
+    let middle = at(reaches);
+    let (from, to) = way();
+
+    (vec2((from + to) * 0.5, reaches) - vec2(middle.x, middle.z)).length()
 }
 
 /// How far apart the lamps are, how far each throws and how hard.
@@ -337,6 +409,134 @@ mod tests {
     use super::*;
     use blitzkit::camera::Camera;
     use blitzkit::renderer::coplanar::Fights;
+
+    /// Spec 0015: no column stands on the line the bodies are strung along.
+    ///
+    /// The whole line, sun to door, and not only the seventy nine metres the
+    /// planets take: the ones past Neptune are nearest the door and so the
+    /// ones that stand in front of everything. Nine of the three hundred and
+    /// sixty eight were on it before this, the nearest four metres inside the
+    /// door, and from the door the model was behind a pillar.
+    ///
+    /// Cleared to the centre and then again to the box, because `CLEAR` is a
+    /// distance between points and a column is 0.72 across.
+    #[test]
+    fn nothing_stands_on_the_line() {
+        let reaches = room().reaches;
+        let run = run_of_the_line(reaches);
+
+        for column in columns(reaches) {
+            let (along, off) = down_the_line(reaches, vec2(column.x, column.z));
+
+            if !(0.0..=run).contains(&along) {
+                continue;
+            }
+
+            assert!(
+                off >= CLEAR,
+                "a column at {:.2} {:.2} stands {:.2}m off the line, {:.2}m down it",
+                column.x,
+                column.z,
+                off,
+                along
+            );
+            assert!(
+                off > COLUMN * 0.5,
+                "a column at {:.2} {:.2} is on the line itself",
+                column.x,
+                column.z
+            );
+        }
+    }
+
+    /// Spec 0015: and the width that clears it is not a judgment call.
+    ///
+    /// The nine that were on the line were all within seven tenths of a metre
+    /// of it and the nearest one still standing is 4.46 metres off, so every
+    /// width from one metre to four drops exactly the same nine. `CLEAR` is
+    /// 2.2 and sits in the middle of that band, reused from the other two
+    /// rules rather than invented as a fourth number.
+    ///
+    /// This is the test to look at if somebody wants to move `CLEAR`: it says
+    /// how much room there is to move it in, and it fails when there is none.
+    #[test]
+    fn the_line_is_cleared_by_a_wide_margin() {
+        let reaches = room().reaches;
+        let run = run_of_the_line(reaches);
+
+        let nearest = columns(reaches)
+            .into_iter()
+            .filter_map(|column| {
+                let (along, off) = down_the_line(reaches, vec2(column.x, column.z));
+
+                (0.0..=run).contains(&along).then_some(off)
+            })
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            nearest > CLEAR * 1.8,
+            "the nearest column off the line is {:.2}m, against a clearance of {:.2}m,              so the clearance is doing fine work and this room has got crowded",
+            nearest,
+            CLEAR
+        );
+
+        // and clearing it cost the room almost nothing. The grid is what says
+        // how big this place is, so a rule that took a tenth of it would be
+        // buying the view with the thing the view is of.
+        let kept = columns(reaches).len();
+        let grid = ((SPAN / STRIDE) as usize) * ((DEEP / STRIDE) as usize);
+
+        assert!(
+            kept * 10 >= grid * 7,
+            "{} columns left standing of a grid of {}",
+            kept,
+            grid
+        );
+    }
+
+    /// Spec 0015: and the way to each body is clear from the doorway.
+    ///
+    /// The property the rule is for, said as what you see rather than as the
+    /// arithmetic that gets it. Lined up, every body sits on the line, so a
+    /// clear line is a clear view of all sixteen. Says nothing about the
+    /// orbiting arrangement, where the bodies are off the line by their own
+    /// distance from the sun and a column between two orbits is the whole
+    /// point of the grid.
+    #[test]
+    fn every_body_is_in_view_from_the_doorway() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let (from, to) = way();
+        let sun = vec3(middle.x, crate::orrery::PLANE, middle.z);
+        let door = vec3((from + to) * 0.5, crate::orrery::PLANE, reaches);
+        let toward = (door - sun).normalize();
+        let boxes: Vec<_> = columns(reaches)
+            .into_iter()
+            .map(|at_| {
+                Aabb::from_center_size(vec3(at_.x, HIGH * 0.5, at_.z), vec3(COLUMN, HIGH, COLUMN))
+            })
+            .collect();
+
+        for planet in crate::orrery::PLANETS.iter() {
+            let body = sun + crate::orrery::stands(planet, toward, 0.0, 0.0);
+
+            // a hundred steps down the way from the door to it, and none of
+            // them inside a column
+            for n in 0..=100 {
+                let at_ = door + (body - door) * (n as f32 / 100.0);
+
+                for (column, box_) in columns(reaches).iter().zip(&boxes) {
+                    assert!(
+                        !box_.contains_point(at_),
+                        "the way to {} runs through the column at {:.2} {:.2}",
+                        planet.body.name,
+                        column.x,
+                        column.z
+                    );
+                }
+            }
+        }
+    }
 
     /// The room these tests walk, taken from the room rather than written down.
     fn room() -> crate::room::Room {

@@ -12,7 +12,7 @@ system is worth coming back for.
 
 So: the sun at the middle of it, the eight planets out from it at their real
 proportions, their moons round them, and stars on every surface. You come in
-at the cold end, forty eight metres from the light, and walk in.
+at the cold end, a hundred and eleven metres from the light, and walk in.
 
 Spec 0011 ruled this out in as many words: "No toy, no cabinet, no key. It is
 a place and not a room, and the moment it has a thing in it to work it is
@@ -34,9 +34,9 @@ So two scales, each exactly proportional inside itself:
 | | one metre is | |
 | --- | --- | --- |
 | **bodies and their moons** | 557,080 km | the Earth is 2.3 cm across |
-| **planets from the sun** | 93,498,669 km | one AU is 1.60 m |
+| **planets from the sun** | 56,769,000 km | one AU is 2.64 m |
 
-The orbit scale is **167.8 times** the body scale. That ratio is the first lie
+The orbit scale is **101.9 times** the body scale. That ratio is the first lie
 in the model and it is written here rather than hidden: every size is true
 against every other size, every distance is true against every other distance,
 and sizes are not true against distances.
@@ -44,10 +44,47 @@ and sizes are not true against distances.
 The body scale was the sun's own diameter at first, which made the sun exactly
 a metre and the Earth a nine millimetre pea. A pea in a room this size is a
 thing you walk past without seeing, so the bodies went up two and a half
-times. The ratio above went up with them, which is what that decision cost.
+times, and the ratio went to 167.8 with them.
 
-**Two and a half and no further, and the Moon says so.** At three times, the
-Moon's orbit is as wide as the gap between the Earth's orbit and Mars's.
+**The Moon sets the orbit scale.** This was the other way round until
+2026-10-11 and it was wrong in a way that showed.
+
+A moon is on the body scale, per the note under `Moon`, so a moon's orbit is
+drawn a hundred times too wide against the planets' spacing. The Moon is the
+worst of them: at an AU of 1.60 m it reached 0.690 m from the Earth against a
+gap to Mars's orbit of 0.838 m, which is 82 per cent of it and 15 cm of
+daylight between the Moon and a planet 1.2 cm across. Jake looked at it and
+said the Moon's orbit gets really close to Mars. Callisto took 49 per cent of
+the gap to Saturn and Titan 14, so the Moon was the one.
+
+None of that was a slip and none of it was hidden. The rule here said "two and
+a half and no further, and the Moon says so: at three times, the Moon's orbit
+is as wide as the gap between the Earth's orbit and Mars's." What it got wrong
+was the threshold. It stopped at the point where the two touch, and a model
+starts lying about which things are near which a long way before that.
+
+So `orrery::MOON_SHARE` is the threshold now, at a half, and `orrery::au` is
+worked out from it: the Moon's orbit is fixed by the body scale, so the orbit
+scale is whatever makes that orbit half the gap. The share is the constant and
+the distance is derived, the same way round as `SUN_SHRUNK`, so growing the
+bodies again moves the orbits with them instead of quietly eating the margin.
+
+The half is a judgment and the only one in this. It is where the Moon's orbit
+reads as belonging to the Earth rather than as reaching for Mars. Two fifths
+wants a room two hundred metres across.
+
+**What it cost and what it bought.** An AU of 2.64 m instead of 1.60, a room
+159 m square instead of 97, and a walk from the door to the sun of 111 m
+instead of 48: twenty seven seconds walked where it was eleven, thirteen at a
+run. Shift was already there, from the running work earlier the same day, and
+it is the only reason the bigger room is a distance rather than a trudge.
+
+What it bought is every proportion in the model staying exactly what it was.
+The Moon is still thirty Earths out, Callisto is still thirteen Jupiters out,
+Neptune is still thirty times the Earth's distance. Nothing was made less
+true. Two things improved on their own: the ratio between the scales fell
+from 167.8 to 101.9, the closest they have been since the bodies grew, and
+Mercury's clearance of the sun went from 11.8 cm to 51.6.
 Callisto gives out at 5.2 times and Saturn's rings at 71, so the Moon is the
 whole of the limit.
 
@@ -64,9 +101,17 @@ sun's diameter per AU, and Neptune is thirty AU out. The disc you need is
 therefore **about seventy eight times the sun's diameter across**, and a sun
 twice as wide costs four times the floor.
 
-At one metre, Mercury's surface clears the sun's by 11.8 cm and the disc is
-96.4 m across. At two and a half metres it would be 243 m across, which also
-puts the reach fill past its cell cap and stops the P key working in there.
+At one metre, Mercury's surface clears the sun's by 51.6 cm and the disc is
+158.7 m across. At two and a half metres it would be 397 m across.
+
+The cell cap this paragraph used to warn about is real and this room has now
+hit it: the reach fill over a building 190 by 11 by 179 at a quarter-metre
+step wants 24 million cells against the engine's 16 million, and it refused.
+Two of the arcade's own tests caught it, because both assert the fill reached
+something before asking where. The engine's cap went to 32 million rather
+than each fill being bounded to the part of the building it expects to reach,
+since a fill bounded to where you already expect to get cannot find the place
+you did not. See the note on `blitzkit::reach::MOST`.
 
 The price is small planets: Earth is a nine millimetre pea. If that turns out
 to disappoint, drawing the sun alone at a third of its true size and labelling
@@ -75,9 +120,11 @@ what planet walks do. It is one constant and it is deliberately not taken here.
 
 ### The room
 
-Ninety seven metres square and eight high, where spec 0011's forty four by
-fifty two was. The way in stays where it is, in the hall's near wall, and the
-sun stands at the middle of the square, forty eight metres from the door.
+A hundred and fifty nine metres square, where spec 0011's forty four by fifty
+two was and where this spec's own ninety seven was until the Moon moved the
+orbit scale. The way in stays where it is, in the hall's near wall, and the
+sun stands at the middle of the square, a hundred and eleven metres from the
+door.
 
 So you enter at Neptune and walk toward the light, which is the right way
 round: the cold, dark, far end first.
@@ -306,6 +353,9 @@ The names are written, and these are theirs:
 - A name is the same size on the glass however far off it is, and never under
   the font's grid. — `orrery::tests::a_name_is_the_same_size_however_far_off_it_is`
 - A name stands clear of its own body, at every size, the sun included. — `orrery::tests::a_name_stands_clear_of_its_body`
+- No column stands on the line the bodies are strung along. — `behind::tests::nothing_stands_on_the_line`
+- And the width that clears it has room to move in, without gutting the grid. — `behind::tests::the_line_is_cleared_by_a_wide_margin`
+- Lined up, the way from the doorway to every body runs through no column. — `behind::tests::every_body_is_in_view_from_the_doorway`
 - Every body has a name, no two share one, and every one draws something. — `orrery::tests::every_body_is_named_once`
 
 ### Verified by hand
@@ -316,17 +366,34 @@ The names are written, and these are theirs:
 - Nothing reads as a hole in the stars where a name is.
 - Standing on the line in the lined up arrangement, the names of bodies near
   each other overlap. Known, and the pictures from 2026-10-11 show it.
+- From the doorway you can see down the line to the sun, with no pillar in
+  the way. This is what the clearing above bought and it is the one thing in
+  this spec that a picture settles and a test cannot.
 
-### Known and not fixed
+**The columns keep off the line the bodies stand on.** Found while
+photographing the names, and the likeliest half of why the planets were hard
+to find in the first place. `behind::columns` cleared a column that would sit
+on an orbit and cleared the way in, and nothing cleared the view. Lined up,
+the bodies are strung along the diagonal from the sun to the way out, and a
+forty five degree line through a square grid passes near a grid point every
+stride and a half. Nine stand on it, from a fifth of a metre off to two
+thirds, and one of them is four metres inside the door: from the door, and
+again from out by Uranus, the whole model was behind a pillar.
 
-**The columns stand in the way of the model.** `behind::columns` clears a
-column that would sit on an orbit, per the note in `behind.rs`, and clears the
-way in, and nothing clears the line of sight. In the lined up arrangement the
-bodies are strung along the door-to-sun diagonal, and the 7.5 m grid puts a
-column on that diagonal more often than not: from the door, and again from out
-by Uranus, the whole model is behind a pillar. This was found while
-photographing the names and is the likeliest half of why the planets were hard
-to find in the first place. It is not the names' problem to solve.
+The width of the corridor is not a judgment call, which is the good part. The
+nine that are on the line are all within 0.7 m of it and the nearest one that
+is not is at 4.46 m, so every width from one metre to four drops exactly the
+same nine of the three hundred and sixty eight. `behind::CLEAR` is reused rather than a fourth number
+invented, and `behind::tests::the_line_is_cleared_by_a_wide_margin` is what
+says how much room there is to move it in.
+
+The whole line is cleared, sun to door, and not only the seventy nine metres
+the planets take. The ones past Neptune are nearest the door and so the ones
+that stand in front of everything.
+
+This says nothing about the orbiting arrangement, where the bodies are off the
+line by their own distance from the sun. A column between two orbits is what
+the grid is for, and the orbit rule already keeps one off a body's path.
 
 ## Out of scope
 

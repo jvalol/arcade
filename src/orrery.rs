@@ -1,6 +1,7 @@
 //! The solar system behind the wall. Spec 0015.
 //!
-//! The sun at the middle of a room ninety seven metres square, the eight
+//! The sun at the middle of a room a hundred and fifty nine metres square,
+//! the eight
 //! planets out from it, their moons round them, and stars on every surface.
 //! You come in at the cold end and walk toward the light.
 //!
@@ -8,22 +9,82 @@
 //! work: put Neptune fifty metres out at true proportion and the Earth is
 //! fourteen hundredths of a millimetre. So bodies are measured against bodies
 //! and distances against distances, each exactly true inside itself, and the
-//! orbit scale is a hundred and sixty eight times the body scale. Said out
-//! loud here rather than buried.
+//! orbit scale is a hundred and two times the body scale. Said out loud here
+//! rather than buried.
+//!
+//! **What sets the orbit scale is the Moon.** A moon is on the body scale, so
+//! its orbit is drawn a hundred times too wide against the planets' spacing,
+//! and the Moon is the worst of them: it used to take 82 per cent of the way
+//! from the Earth's orbit to Mars's and read as reaching for Mars. `MOON_SHARE`
+//! holds it to half and `au` is worked out from that, which is what made this
+//! room a hundred and fifty nine metres instead of ninety seven.
 //!
 //! **Why the sun is a metre.** In the orbiting arrangement Mercury has to
 //! clear the sun's own ball, and Mercury is at 0.387 AU against Neptune's
 //! thirty, so the disc you need comes out at about seventy eight times the
 //! sun's diameter. A sun twice as wide costs four times the floor. At a metre
-//! the disc is 96.4 across and Mercury's surface clears the sun's by 11.8 cm.
+//! the disc is 158.7 across and Mercury's surface clears the sun's by 51.6 cm.
+//! That clearance was 11.8 cm before the orbits grew, and it growing with them
+//! is a thing the Moon bought that nobody asked for.
 
 use glam::{vec3, Vec3};
 
 /// How many kilometres a metre is, for a ball.
 pub const SUN_ACROSS_KM: f32 = 1_392_700.0;
 
+/// How much of the gap between the Earth's orbit and Mars's the Moon's orbit
+/// is allowed to take up.
+///
+/// Half, and this is the number the whole orbit scale now hangs off.
+///
+/// A moon is on the body scale, per `Moon`, and the body scale is 168 times
+/// the orbit scale, so a moon's orbit is drawn 168 times too wide against the
+/// planets' spacing. The Moon is the worst of them by a long way: at an `AU`
+/// of 1.6 it reached 0.690 m against a gap to Mars of 0.838, which is 82 per
+/// cent of it and 15 cm of daylight between the Moon and a planet 1.2 cm
+/// across. Jake looked at it and said the Moon's orbit gets really close to
+/// Mars, which is exactly what it was doing.
+///
+/// Nothing about that is a slip and nothing about it was hidden: `BODY`'s own
+/// note says the Moon is what capped the bodies at two and a half times,
+/// because at three the Moon's orbit is exactly the gap. What it got wrong
+/// was the threshold. It stopped at the point where the two touch, and the
+/// point where a model starts telling a lie about which things are near which
+/// is a long way before that.
+///
+/// So this is the stated threshold, and it is written as the share rather
+/// than as a distance so that growing the bodies again moves the orbits with
+/// them instead of quietly eating the margin. Same reasoning as `SUN_SHRUNK`.
+///
+/// Half is a judgment and the only one here. It is the point at which the
+/// Moon's orbit reads as belonging to the Earth rather than as reaching for
+/// Mars. Two fifths wants a room two hundred metres across.
+pub const MOON_SHARE: f32 = 0.5;
+
+/// Where the Earth and Mars go, in astronomical units.
+///
+/// Named out here because `au` works itself out from the gap between them and
+/// `PLANETS` puts them at it, and two accounts of one distance is the fault
+/// this building keeps paying for.
+pub const EARTH_OUT: f32 = 1.0;
+pub const MARS_OUT: f32 = 1.5237;
+
 /// How many metres one astronomical unit is drawn as.
-pub const AU: f32 = 1.6;
+///
+/// Worked out and not chosen: the Moon's orbit is fixed by the body scale, so
+/// the orbit scale is whatever makes that orbit `MOON_SHARE` of the gap from
+/// the Earth to Mars. It comes out at 2.63 m, against the 1.6 it was built
+/// with, and that is a room a hundred and fifty nine metres square rather
+/// than ninety seven.
+///
+/// What that buys is the model keeping its one promise. Every proportion in
+/// here stays exactly what it was: the Moon is still thirty Earths from the
+/// Earth, Callisto is still thirteen Jupiters from Jupiter, and Neptune is
+/// still thirty times as far out as the Earth. The only thing that moved is
+/// how much floor it takes, and the floor was the cheap thing.
+pub fn au() -> f32 {
+    LUNA[0].far() / (MOON_SHARE * (MARS_OUT - EARTH_OUT))
+}
 
 /// A kilometre, in metres, on the body scale.
 ///
@@ -66,7 +127,7 @@ pub fn sun_drawn() -> f32 {
 pub fn reach() -> f32 {
     PLANETS
         .iter()
-        .fold(0.0f32, |most, planet| most.max(planet.out * AU))
+        .fold(0.0f32, |most, planet| most.max(planet.out * au()))
 }
 
 /// One body: what it is called, how big it is, and how it turns.
@@ -104,7 +165,7 @@ pub struct Planet {
 impl Planet {
     /// How far out it is drawn, in metres.
     pub fn far(&self) -> f32 {
-        self.out * AU
+        self.out * au()
     }
 }
 
@@ -250,7 +311,7 @@ pub const PLANETS: [Planet; 8] = [
             tilt: 23.44,
             spins: 23.934,
         },
-        out: 1.0,
+        out: EARTH_OUT,
         year: 1.0,
         moons: LUNA,
     },
@@ -261,7 +322,7 @@ pub const PLANETS: [Planet; 8] = [
             tilt: 25.19,
             spins: 24.623,
         },
-        out: 1.5237,
+        out: MARS_OUT,
         year: 1.8808,
         moons: NO_MOONS,
     },
@@ -832,7 +893,8 @@ pub fn starred(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
 
 /// The way out, named on a sign beside it.
 ///
-/// The room is ninety seven metres square and black, the way out is a slot
+/// The room is a hundred and fifty nine metres square and black, the way out
+/// is a slot
 /// the width of a door in one wall of it, and spec 0011 spent its whole
 /// design making that slot hard to find. Hard to find from the hall is the
 /// point. Hard to find from in here, with your back to it and a planet in
@@ -1438,33 +1500,68 @@ mod tests {
         );
     }
 
-    /// Spec 0015: the Moon is what stops the bodies growing.
+    /// Spec 0015: the Moon takes half the gap to Mars, and the orbit scale is
+    /// what gives it that.
     ///
-    /// At three times this scale its orbit is as wide as the gap between the
-    /// Earth's orbit and Mars's, and a model where the Moon reaches the next
-    /// planet is a model lying about the one proportion everybody has. Every
-    /// other body has room to spare: Callisto gives out at 5.2 times and
-    /// Saturn's rings at 71.
+    /// This test used to say the opposite, that the Moon was what stopped the
+    /// bodies growing, and it passed on a margin of 15 cm with Mars 1.2 cm
+    /// across. The old threshold was the point where the two touch, and a
+    /// model starts lying about which things are near which a long way before
+    /// then: Jake looked at it and said the Moon's orbit gets really close to
+    /// Mars.
+    ///
+    /// `MOON_SHARE` is the threshold now and `au` is worked out from it, so
+    /// this holds the share and not a distance. Growing the bodies again
+    /// moves the orbits with them instead of eating the margin.
     #[test]
-    fn the_moon_is_what_stops_the_bodies_growing() {
+    fn the_moon_takes_half_the_gap_to_mars() {
         let earth = planet("Earth");
         let mars = planet("Mars");
         let moon = earth.moons[0];
         let gap = mars.far() - earth.far();
+        let share = moon.far() / gap;
 
         assert!(
-            moon.far() < gap * 0.9,
-            "the Moon reaches {:.2} m from the Earth and Mars is {:.2} m away",
-            moon.far(),
-            gap
+            (share - MOON_SHARE).abs() < 1e-4,
+            "the Moon takes {:.3} of the {:.2} m gap to Mars and not {:.3}",
+            share,
+            gap,
+            MOON_SHARE
         );
-        // and there is not much left: a fifth again and it is touching
+
+        // and it is still the Moon that binds. Nothing is gained by holding
+        // the Moon to a half if Callisto is quietly worse.
+        for pair in PLANETS.windows(2) {
+            let (inner, outer) = (pair[0], pair[1]);
+            let reach = inner
+                .moons
+                .iter()
+                .fold(0.0f32, |most, moon| most.max(moon.far()));
+
+            if reach == 0.0 {
+                continue;
+            }
+
+            let took = reach / (outer.far() - inner.far());
+
+            assert!(
+                took <= MOON_SHARE + 1e-4,
+                "{}'s moons take {:.3} of the gap to {}, past the Moon's {:.3}",
+                inner.body.name,
+                took,
+                outer.body.name,
+                MOON_SHARE
+            );
+        }
+
+        // and the Moon is still thirty Earths out, which is the fact the whole
+        // arrangement is for and the thing growing the room protects
+        let earths = moon.far() / earth.body.drawn();
+
         assert!(
-            moon.far() * 1.25 > gap * 0.9,
-            "the Moon reaches {:.2} m of a {:.2} m gap, so the scale has room \
-             to grow and the note in this module saying it does not is wrong",
-            moon.far(),
-            gap
+            (earths - 30.1).abs() < 0.2,
+            "the Moon is {:.1} Earths out, not 30.1",
+            earths
         );
     }
 
@@ -1483,22 +1580,24 @@ mod tests {
 
     /// Spec 0015: the first lie, pinned.
     ///
-    /// It was 67.1 when the sun's own diameter set the body scale. Growing
-    /// the bodies two and a half times to make them worth looking at grew
-    /// the disparity with them, which is the cost of that decision and is
-    /// why it is written down rather than left to be worked out.
+    /// It was 67.1 when the sun's own diameter set the body scale, and 167.8
+    /// once the bodies grew two and a half times to be worth looking at.
+    /// Growing the orbits to keep the Moon off Mars pulls it back to 101.9,
+    /// which is the one good thing about the bigger room that nobody asked
+    /// for: the two scales are closer together now than at any time since the
+    /// bodies grew.
     ///
     /// If this number ever drifts it will be because somebody changed one
     /// scale and not the other, and the model will still look fine.
     #[test]
-    fn the_orbit_scale_is_a_hundred_and_sixty_eight_times_the_body_scale() {
-        let orbit_km_per_metre = 149_597_871.0 / AU;
+    fn the_orbit_scale_is_a_hundred_times_the_body_scale() {
+        let orbit_km_per_metre = 149_597_871.0 / au();
         let body_km_per_metre = 1.0 / BODY;
         let times = orbit_km_per_metre / body_km_per_metre;
 
         assert!(
-            (times - 167.8).abs() < 0.2,
-            "the orbit scale is {:.2} times the body scale, not 167.8",
+            (times - 101.9).abs() < 0.2,
+            "the orbit scale is {:.2} times the body scale, not 101.9",
             times
         );
     }
@@ -1551,7 +1650,7 @@ mod tests {
 
             // and the orbit scale would not do it
             if let Some(moon) = planet.moons.first() {
-                let wrong = moon.out_km / 149_597_871.0 * AU;
+                let wrong = moon.out_km / 149_597_871.0 * au();
 
                 assert!(
                     wrong < planet.body.drawn() * 0.5,

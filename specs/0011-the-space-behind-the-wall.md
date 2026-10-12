@@ -121,7 +121,8 @@ stand on.
 a room, and the moment it has a thing in it to work it is another nook.~~
 
 Struck 2026-10-11. Spec 0015 puts the solar system in here, at true
-proportion, forty eight metres from the sun to the door. The reasoning above
+proportion, seventy nine metres from the sun out to Neptune and a hundred and
+eleven from the sun to the door. The reasoning above
 was sound and the conclusion was wrong: what makes this room worth finding is
 not that it is empty but that it is enormous, and there is exactly one thing
 worth building that needs somewhere enormous and dark. A hidden empty space is
