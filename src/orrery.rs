@@ -429,6 +429,24 @@ pub fn moon_angle_at(moon: &Moon, since: f32) -> f32 {
     since / month_seconds(moon) * std::f32::consts::TAU
 }
 
+/// The same place on a circle, said as the shortest turn from the line.
+///
+/// `angle_at` counts from the moment the building opened and never comes
+/// back, so after five minutes Mercury is twenty one turns along. Wrapped
+/// into a half turn either way it is the same place and a number the swing
+/// can use. See `stands`.
+pub fn shortest_turn(angle: f32) -> f32 {
+    use std::f32::consts::{PI, TAU};
+
+    let round = angle.rem_euclid(TAU);
+
+    if round > PI {
+        round - TAU
+    } else {
+        round
+    }
+}
+
 /// Where a planet is, between lined up and in orbit.
 ///
 /// `swung` is nought lined up and one in orbit, and everything between is a
@@ -437,10 +455,32 @@ pub fn moon_angle_at(moon: &Moon, since: f32) -> f32 {
 /// flying off and coming back. That is the whole of why the key does not snap.
 ///
 /// `toward` is the way the line points, which is the way the door is.
+///
+/// **The shortest way round, and that is not a tidy-up.** This multiplied
+/// `angle_at` by `swung`, and `angle_at` counts from the moment the building
+/// opened and never comes back. So the sweep was however far the planet had
+/// travelled since you walked in, crammed into the three seconds of the
+/// swing: a planet whirling round the sun rather than fanning out to its
+/// place. Half a minute in it was two turns of Mercury, five minutes in it
+/// was twenty one, fifteen minutes in it was sixty two, and it went on
+/// getting worse for as long as the building stayed open. Jake watched it and
+/// said switching modes was a bit chaotic.
+///
+/// `shortest_turn` lands the planet in the same place and asks for at most
+/// half a turn to get there, whatever the clock says.
+///
+/// **What is left is a jump once an orbit.** The wrap flips from half a turn
+/// one way to half a turn the other, and while `swung` is between nought and
+/// one that moves the planet. It is the full width of the orbit for a planet
+/// caught exactly at the wrap, and Mercury passes it every fourteen seconds,
+/// so a three second swing has a fair chance of meeting it. Taking it out
+/// means carrying each planet's drawn angle from frame to frame and easing it
+/// rather than working it out fresh, which is a different shape of code and
+/// is not this. See `tests::a_swing_is_never_more_than_half_a_turn`.
 pub fn stands(planet: &Planet, toward: Vec3, swung: f32, since: f32) -> Vec3 {
     let along = toward.normalize_or_zero();
     let side = vec3(-along.z, 0.0, along.x);
-    let turn = angle_at(planet, since) * swung.clamp(0.0, 1.0);
+    let turn = shortest_turn(angle_at(planet, since)) * swung.clamp(0.0, 1.0);
 
     (along * turn.cos() + side * turn.sin()) * planet.far()
 }
@@ -1758,12 +1798,81 @@ mod tests {
         );
     }
 
+    /// Spec 0015: a swing asks for at most half a turn, however long the
+    /// building has been open.
+    ///
+    /// It used to ask for however far the planet had travelled since you
+    /// walked in. `stands` multiplied `angle_at` by `swung`, and `angle_at`
+    /// counts from the moment the building opened and never comes back, so
+    /// the sweep grew all evening: two turns of Mercury half a minute in,
+    /// twenty one at five minutes, sixty two at fifteen. Three seconds of
+    /// that is a planet whirling and not a line fanning open.
+    ///
+    /// `the_swing_keeps_every_planet_at_its_own_distance` passed throughout
+    /// and could not have done otherwise: a planet twenty turns round its
+    /// own circle is still exactly on it. That is the test that looked like
+    /// it covered this and did not.
+    ///
+    /// The clocks here go well past any sitting anybody will have. The
+    /// control is the line this replaced: put `angle_at` back in place of
+    /// `shortest_turn` in `stands` and the first assertion fails at half a
+    /// minute.
+    #[test]
+    fn a_swing_is_never_more_than_half_a_turn() {
+        use std::f32::consts::PI;
+
+        let toward = vec3(1.0, 0.0, 0.0);
+
+        for since in [0.0f32, 1.0, 30.0, 120.0, 300.0, 900.0, 3_600.0, 36_000.0] {
+            for planet in PLANETS.iter() {
+                let turn = shortest_turn(angle_at(planet, since));
+
+                assert!(
+                    turn.abs() <= PI + 1e-4,
+                    "{} asks for {:.1} turns after {:.0}s open",
+                    planet.body.name,
+                    turn.abs() / (PI * 2.0),
+                    since
+                );
+
+                // and the swing still arrives where the orbit says, which is
+                // the half of this that must not have changed. Worked out
+                // from `angle_at` straight, not from `shortest_turn`, so the
+                // two have to agree rather than agreeing by construction.
+                let raw = angle_at(planet, since);
+                let along = toward.normalize();
+                let side = vec3(-along.z, 0.0, along.x);
+                let orbit = (along * raw.cos() + side * raw.sin()) * planet.far();
+
+                assert!(
+                    (stands(planet, toward, 1.0, since) - orbit).length() < 1e-2,
+                    "{} lands {:.3} m off its orbit after {:.0}s open",
+                    planet.body.name,
+                    (stands(planet, toward, 1.0, since) - orbit).length(),
+                    since
+                );
+
+                // and lined up is still lined up
+                let lined = stands(planet, toward, 0.0, since);
+
+                assert!(
+                    (lined - toward.normalize() * planet.far()).length() < 1e-3,
+                    "{} is not on the line at rest",
+                    planet.body.name
+                );
+            }
+        }
+    }
+
     /// Spec 0015: the swing keeps every planet at its own distance, the whole
     /// way through.
     ///
     /// This is what makes it read as one model rearranged rather than two
     /// models cross faded, and it is the only thing about the animation that
     /// can be checked without eyes.
+    ///
+    /// It is also the test that looked like it covered the sweep and did
+    /// not: see `a_swing_is_never_more_than_half_a_turn`.
     #[test]
     fn the_swing_keeps_every_planet_at_its_own_distance() {
         let toward = vec3(-1.0, 0.0, -0.4);

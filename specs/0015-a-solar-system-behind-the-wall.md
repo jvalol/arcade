@@ -207,6 +207,31 @@ Started in the middle of a swing, the swing runs from where things actually
 are. A toggle caught halfway that jumps is a toggle that breaks the illusion
 the whole exhibit rests on.
 
+**The shortest way round, and that was the bug.** `stands` multiplied
+`angle_at` by the swing, and `angle_at` counts from the moment the building
+opened and never comes back. So the sweep was however far the planet had
+travelled since you walked in, crammed into three seconds: two turns of
+Mercury half a minute in, twenty one at five minutes, sixty two at fifteen,
+and worse for as long as the building stayed open. Jake watched it and said
+switching modes was a bit chaotic. It was a planet whirling, not a line
+fanning open.
+
+`orrery::shortest_turn` wraps the angle into a half turn either way. Same
+place, at most half a turn to reach it, whatever the clock says.
+
+The test above this, that every planet keeps its own radius, passed
+throughout and could not have done otherwise: a planet twenty turns round its
+own circle is still exactly on it. It is the test that looked like it covered
+the sweep.
+
+**What is left is a jump once an orbit.** The wrap flips from half a turn one
+way to half a turn the other, and while the swing is in progress that moves
+the planet, by up to the full width of its orbit for one caught exactly at
+the wrap. Mercury passes it every fourteen seconds, so a three second swing
+has a fair chance of meeting it. Taking it out means carrying each planet's
+drawn angle from frame to frame and easing it rather than working it out
+fresh, which is a different shape of code and is not done.
+
 ### The light
 
 The sun is the only lamp. Its own ball is drawn past white so it glows with
@@ -380,6 +405,7 @@ To be written with the code. Each of these is arithmetic and belongs in a test:
 - Saturn's rings start outside Saturn and the Cassini division falls between
   the two bright rings.
 - The swing leaves every planet at its own radius at every moment of it.
+- And asks for at most half a turn, however long the building has been open. — `orrery::tests::a_swing_is_never_more_than_half_a_turn`
 - A swing interrupted halfway and sent back does not jump.
 - Nothing in the room is close enough to anything else to fight it, per spec
   0048 of the engine.
