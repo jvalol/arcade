@@ -146,18 +146,60 @@ fn staged() -> bool {
     std::env::args().any(|arg| arg == "--screenshot")
 }
 
-/// Where the camera stands for a staged shot, and which way it looks.
+/// How far back from the cabinet the staged shot stands, and how far out of
+/// its face into the aisle.
 ///
 /// Spec 0003 made the screens go dark until you are within reach of one, so
-/// the view from the doorway is now a dark room with nothing answering. The
-/// picture has to be taken from where the room is doing something: a step back
-/// from a cabinet, with it lit and named and offering its key.
-/// Aimed at a cabinet rather than at a bearing. It was a bearing, and adding a
-/// thirteenth game moved the rows under it: the sight landed in the gap between
-/// two cabinets and the picture was a wall.
-const POSED_AT: Vec3 = vec3(0.0, 0.0, 3.6);
-const POSED_YAW: f32 = 0.96;
-const POSED_PITCH: f32 = -0.1;
+/// the view from the doorway is a dark room with nothing answering. The
+/// picture has to be taken from where the room is doing something: a step
+/// back from a cabinet, with it lit and named and offering its key.
+///
+/// Down the aisle and not across it. The shot this replaced stood beside one
+/// row looking at the other, and the room has outgrown that: the nearest
+/// cabinet filled a third of the frame and nothing behind it read. From
+/// along the aisle both rows run away from you, which is what the room
+/// actually looks like, and the sign over the nook and the plinths at the
+/// far end come in behind.
+pub const POSED_BACK: f32 = 2.9;
+pub const POSED_OUT: f32 = 1.2;
+pub const POSED_PAST: f32 = 1.5;
+const POSED_PITCH: f32 = -0.05;
+
+/// Where the camera stands for a staged shot, and which way it looks.
+///
+/// **Worked out from a cabinet and not written down**, which this file has
+/// already learned once: the bearing it used to carry was right until a
+/// thirteenth game moved the rows under it, and then the sight landed in the
+/// gap between two cabinets and the picture was a wall. A bearing goes stale
+/// the day the roster changes. A cabinet does not.
+///
+/// The second one along on the right, counting from the end you come in at.
+/// The first is too close to the near wall to have anything behind it, and
+/// the second has the whole room at its back.
+fn posed(room: &Room) -> (Vec3, f32) {
+    let mut row: Vec<&room::Stood> = room
+        .stood
+        .iter()
+        .filter(|stood| stood.facing.x < -0.5)
+        .collect();
+
+    row.sort_by(|one, other| other.at.z.total_cmp(&one.at.z));
+
+    let Some(stood) = row.get(1).or_else(|| row.first()) else {
+        return (Vec3::new(0.8, 0.0, 6.2), 0.25);
+    };
+
+    // out of its face into the aisle, and back toward the way in
+    let at = stood.at + stood.facing * POSED_OUT + Vec3::Z * POSED_BACK;
+    // aimed a little past it rather than straight at it. Straight at it
+    // turns far enough into the row that the cabinet behind your shoulder
+    // fills a third of the frame; a metre and a half further down the aisle
+    // is eight degrees flatter, still lands the sight on the cabinet, and
+    // leaves the room behind it in the picture.
+    let look = stood.at - Vec3::Z * POSED_PAST - at;
+
+    (Vec3::new(at.x, 0.0, at.z), look.x.atan2(-look.z))
+}
 
 struct Arcade {
     room: Room,
@@ -418,6 +460,8 @@ impl Arcade {
         let (cradle, ropes) = cradle::strung();
 
         let reaches = room.reaches;
+        // worked out before `room` is moved into the struct below
+        let (posed_at, posed_yaw) = posed(&room);
         let (pool_at, pool_size, pool_deep) = spa::pool(reaches);
         let (tub_at, tub_wide, tub_deep) = spa::tub(room.reaches);
         let mut pool = blitzkit::water::Water::new(pool_at, pool_size, pool_deep, spa::CELLS);
@@ -448,7 +492,7 @@ impl Arcade {
             blew: 0.0,
             stirred: 0.0,
             steamy: 0.0,
-            at: if staged() { POSED_AT } else { room.doorway() },
+            at: if staged() { posed_at } else { room.doorway() },
             falling: 0.0,
             eye: 0.0,
             room,
@@ -558,7 +602,7 @@ impl Arcade {
             window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
-            yaw: if staged() { POSED_YAW } else { 0.0 },
+            yaw: if staged() { posed_yaw } else { 0.0 },
             pitch: if staged() { POSED_PITCH } else { 0.0 },
             showing_solid: false,
             wants_planes: false,
