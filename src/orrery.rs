@@ -943,6 +943,90 @@ pub const STAR_SEED: u32 = 0x57A8_5EED;
 /// count falls off steeply with brightness, the way the real one does, and
 /// the bright few get a little colour: hot ones blue, cool ones orange.
 pub fn starred(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
+    let (wide, tall, pixels) = sprinkled(seed, size);
+
+    blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
+}
+
+/// The same, with a few galaxies in it.
+///
+/// Only the sky of spec 0018 gets these, and only because it is the one
+/// surface anywhere that is genuinely far off: it is drawn 36 kilometres away
+/// and moves with the eye. A galaxy is a soft ellipse a few per cent of the
+/// picture across, and a picture laid on something you can walk up to puts
+/// that at a few metres. On the floor they came out as six metre smudges at
+/// your feet.
+pub fn galaxied(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
+    let (wide, tall, mut pixels) = sprinkled(seed, size);
+    let many = (wide as u64 * tall as u64 / 420).max(16) as u32;
+    let mut rng = seed.wrapping_mul(2_654_435_761) | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    // and a few galaxies, which are what says the dark goes on past the stars.
+    //
+    // Soft ellipses with a bright middle, turned any way, and faint: the
+    // brightest pixel of one is under a third of what a bright star gets. A
+    // galaxy that reads as a galaxy at a glance is a galaxy drawn far too
+    // bright, and what gives it away as not a star is the shape and the
+    // softness rather than the light.
+    let few = (many / 900).clamp(2, 24);
+
+    for _ in 0..few {
+        let at = glam::vec2((next() % wide) as f32, (next() % tall) as f32);
+        // across the long way, as a share of the smaller side, so one is the
+        // same size whatever shape the surface is
+        let reach = wide.min(tall) as f32 * (0.012 + (next() % 1000) as f32 / 1000.0 * 0.028);
+        let squash = 0.24 + (next() % 1000) as f32 / 1000.0 * 0.5;
+        let turn = (next() % 1000) as f32 / 1000.0 * std::f32::consts::PI;
+        let (sin, cos) = turn.sin_cos();
+        let warm = (next() % 1000) as f32 / 1000.0;
+        let (r, g, b) = if warm > 0.6 {
+            (1.0, 0.92, 0.80)
+        } else {
+            (0.82, 0.88, 1.0)
+        };
+        let box_ = reach.ceil() as i32;
+
+        for dy in -box_..=box_ {
+            for dx in -box_..=box_ {
+                let (x, y) = (at.x + dx as f32, at.y + dy as f32);
+
+                if x < 0.0 || y < 0.0 || x >= wide as f32 || y >= tall as f32 {
+                    continue;
+                }
+
+                // into the ellipse's own frame, then a falloff that is bright
+                // in the middle and nearly nothing by the rim
+                let along = (dx as f32 * cos + dy as f32 * sin) / reach;
+                let across = (dy as f32 * cos - dx as f32 * sin) / (reach * squash);
+                let out = (along * along + across * across).sqrt();
+
+                if out >= 1.0 {
+                    continue;
+                }
+
+                let lit = (1.0 - out).powi(3) * 92.0;
+                let put = ((y as u32) * wide + x as u32) as usize * 4;
+
+                for (n, c) in [r, g, b].iter().copied().enumerate() {
+                    let was = pixels[put + n] as f32;
+                    pixels[put + n] = (was + c * lit).min(255.0) as u8;
+                }
+            }
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
+}
+
+/// The stars themselves, as raw bytes, so that `starred` and `galaxied` are
+/// the same sky with and without.
+fn sprinkled(seed: u32, size: glam::Vec2) -> (u32, u32, Vec<u8>) {
     let wide = ((size.x * STAR_PER_UNIT) as u32).clamp(64, STAR_MOST);
     let tall = ((size.y * STAR_PER_UNIT) as u32).clamp(64, STAR_MOST);
     let mut pixels = vec![0u8; (wide * tall * 4) as usize];
@@ -1005,7 +1089,7 @@ pub fn starred(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
         }
     }
 
-    blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
+    (wide, tall, pixels)
 }
 
 /// The way out, named on a sign beside it.
@@ -1118,6 +1202,26 @@ pub const LABEL_UP: f32 = 0.8;
 pub enum Hangs {
     Over,
     Under,
+}
+
+/// How wide a body is for the purpose of standing its name clear of it.
+///
+/// Its own drawn size for every body but Saturn, whose rings reach to
+/// `RING_OUT` and are two and a quarter times the ball. Told the ball,
+/// `label_at` puts the name inside the rings: at spec 0018's scale you stand
+/// 2.2 metres from Saturn, where the name is 55 centimetres above the middle
+/// and the near edge of the rings is 46, so the name was drawn behind them and
+/// vanished.
+///
+/// The ring is a picture of a ring and not a disc, so this is not quite the
+/// gap it looks: the name clears the outer edge, which is where the ring is
+/// brightest and is what you would read it against.
+pub fn label_across(body: &Body, drawn: f32) -> f32 {
+    if body.name == "Saturn" {
+        drawn * RING_OUT * 2.0 / body.across
+    } else {
+        drawn
+    }
 }
 
 /// How tall a name is drawn, seen from `how_far` away.
@@ -1279,6 +1383,42 @@ pub fn label_on_the_glass(fov_y: f32) -> f32 {
 /// None of it was the layout: it was `MOONS_DAWDLE`, with Io going round
 /// Jupiter three and a half times a second. Fixing the clock took the same
 /// number to two, from which these two together buy the last one.
+/// Every body's own disc on the glass: where its middle is, how far it reaches
+/// across and down, and how far off it is.
+///
+/// Rectangles round the discs, which is the same approximation the names
+/// themselves get and errs the safe way: a name just clipping the corner of a
+/// ball's box is a name that was going to be hard to read anyway.
+fn discs(
+    names: &[Named],
+    eye: Vec3,
+    seen_through: glam::Mat4,
+    fov_y: f32,
+    aspect: f32,
+) -> Vec<(glam::Vec2, glam::Vec2, f32)> {
+    let spread = (fov_y * 0.5).tan().max(1e-6);
+    let mut out = Vec::new();
+
+    for name in names {
+        let clip = seen_through * name.at.extend(1.0);
+
+        if clip.w <= 1e-4 {
+            continue;
+        }
+
+        let away = (name.at - eye).length().max(1e-3);
+        let reach = name.across * 0.5 / (away * spread);
+
+        out.push((
+            glam::vec2(clip.x / clip.w, clip.y / clip.w),
+            glam::vec2(reach / aspect.max(1e-3), reach),
+            away,
+        ));
+    }
+
+    out
+}
+
 pub fn laid_out(
     names: &[Named],
     eye: Vec3,
@@ -1289,6 +1429,9 @@ pub fn laid_out(
 ) -> Vec<usize> {
     let tall = label_on_the_glass(fov_y);
     let mut want: Vec<(u8, f32, usize, glam::Vec2, f32)> = Vec::new();
+    // every body's own disc on the glass, with how far off it is, so a name
+    // can be asked whether something nearer is standing in front of it
+    let discs = discs(names, eye, seen_through, fov_y, aspect);
 
     for name in names {
         let stands = label_at(name.at, name.across, eye, name.hangs);
@@ -1316,13 +1459,23 @@ pub fn laid_out(
             continue;
         }
 
-        want.push((
-            worth(name),
-            (name.at - eye).length_squared(),
-            name.which,
-            on_glass,
-            half.x,
-        ));
+        // and anything a nearer body is standing in front of. The layout
+        // reads the glass and not what is in the way, so out at spec 0018's
+        // scale, where the line runs 33 kilometres and you stand 60 cm from a
+        // marble, "Saturn" came up written across the Earth from nine
+        // kilometres behind it. Two letters of it showed either side of the
+        // ball and the rest was hidden, which reads as a smudge.
+        let away = (name.at - eye).length();
+
+        if discs.iter().any(|(at, radius, how_far)| {
+            *how_far < away - 1e-3
+                && (on_glass.x - at.x).abs() < half.x + radius.x
+                && (on_glass.y - at.y).abs() < half.y + radius.y
+        }) {
+            continue;
+        }
+
+        want.push((worth(name), away * away, name.which, on_glass, half.x));
     }
 
     want.sort_by(|one, other| one.0.cmp(&other.0).then(one.1.total_cmp(&other.1)));
@@ -2550,6 +2703,71 @@ mod tests {
             across,
             crate::behind::SPAN,
             crate::behind::DEEP
+        );
+    }
+
+    /// Spec 0018: a name a nearer body stands in front of is not drawn.
+    ///
+    /// The layout reads the glass and not what is in the way. At spec 0015's
+    /// scale the bodies are small and close and it rarely bites; out at spec
+    /// 0018's, where the line runs 33 kilometres and you stand 60 cm from a
+    /// marble, "Saturn" came up written across the Earth from nine kilometres
+    /// behind it.
+    #[test]
+    fn a_name_behind_a_nearer_body_is_not_drawn() {
+        let eye = Vec3::ZERO;
+        let seen_through = seen_from(eye);
+        // a ball a metre off, and a second one a hundred metres further on
+        // the same line of sight
+        let near = Named {
+            which: 0,
+            at: vec3(0.0, 0.0, -1.0),
+            across: 0.5,
+            hangs: Hangs::Under,
+            wide: 2.0,
+        };
+        let far = Named {
+            which: 1,
+            at: vec3(0.0, 0.0, -101.0),
+            across: 40.0,
+            hangs: Hangs::Over,
+            wide: 2.0,
+        };
+        let fits =
+            |names: &[Named]| laid_out(names, eye, seen_through, 60f32.to_radians(), 1.0, &[]);
+
+        assert_eq!(
+            fits(&[near, far]),
+            vec![0],
+            "the far one's name was drawn through the near one"
+        );
+        // and on its own it is drawn, which is what says the test is about
+        // being hidden and not about the far one being unreadable
+        assert_eq!(fits(&[far]), vec![1]);
+        // and the same far body off to the side keeps its name, which is what
+        // says the rule is about being hidden rather than about being far
+        let aside = Named {
+            at: vec3(47.0, 0.0, -101.0),
+            ..far
+        };
+
+        assert_eq!(fits(&[near, aside]), vec![0, 1]);
+
+        // and a body *behind* does not take the name of one in front, which
+        // is the other half of "nearer" and was unproven without this: with
+        // the nearness dropped the rule still passed everything above,
+        // because a body's own name is placed just outside its own disc and
+        // nothing else in that set reached across.
+        let behind = Named {
+            at: vec3(0.0, 0.0, -101.0),
+            across: 200.0,
+            ..far
+        };
+
+        assert_eq!(
+            fits(&[near, behind]),
+            vec![0],
+            "a ball a hundred metres back took the name off one a metre away"
         );
     }
 }

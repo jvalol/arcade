@@ -350,15 +350,25 @@ struct Arcade {
     /// along. Nought is the door, and anywhere inside the building it is
     /// nought: see `mind_the_threshold`.
     stop: usize,
-    /// Whether the hold that is riding you has already set you down.
+    /// Which stop the ride is carrying you to, per spec 0018, and nothing when
+    /// you are standing still.
     ///
-    /// A leg of the ride ends at the next body on the line and the key that
-    /// carried you there is spent, so holding on does not run you through the
-    /// rest of the system. Cleared when shift comes up.
-    rode: bool,
+    /// Settled when the leg sets off rather than read from where you are
+    /// looking, so that turning to watch the sun shrink behind you does not
+    /// turn the ride round with you.
+    riding_to: Option<usize>,
+    /// Which stop the list is resting on, when the list is open.
+    listing: Option<usize>,
     /// The numbers for the unit posts of spec 0018, one to thirty, with how
     /// wide each picture is against its height.
     units: Vec<(TextureId, f32)>,
+    /// The six faces of the sky out past the door, per spec 0018, and the one
+    /// quad they are all drawn on.
+    sky: Vec<TextureId>,
+    sky_mesh: Option<MeshId>,
+    /// And the stars laid on its floor, which is one patch repeated.
+    deep_floor: Option<TextureId>,
+    deep_floor_mesh: Option<MeshId>,
     /// Where lined up is for each planet, held across a swing so the path
     /// cannot jump. Taken at whichever end the swing last sat at, which is
     /// the only place it can be taken without moving anything. See
@@ -588,8 +598,13 @@ impl Arcade {
             swung: 0.0,
             swinging_out: false,
             stop: 0,
-            rode: false,
+            riding_to: None,
+            listing: None,
             units: Vec::new(),
+            sky: Vec::new(),
+            sky_mesh: None,
+            deep_floor: None,
+            deep_floor_mesh: None,
             resting: vec![0.0; orrery::PLANETS.len()],
             pole: None,
             moss: None,
@@ -647,9 +662,14 @@ impl Arcade {
         }
 
         // past the door of spec 0017 there is nothing to work and 33
-        // kilometres to cross, so out there this key is the jump instead.
-        // Spec 0018.
-        if self.jumped() {
+        // kilometres to cross, so out there this key sets the ride off, or
+        // takes the body the list is resting on. Spec 0018.
+        if self.in_the_deep() {
+            match self.listing.take() {
+                Some(stop) => self.go_to(stop),
+                None => self.ride(),
+            }
+
             return;
         }
 
@@ -1098,6 +1118,57 @@ impl Arcade {
         }
     }
 
+    /// The list of every body out past the door, per spec 0018.
+    ///
+    /// A column down the left, where neither the help across the top nor the
+    /// map along the bottom goes, so the three can be read at once.
+    ///
+    /// Every stop including the way back, in the order they come out from the
+    /// sun, because the thing it is for is reaching the seventeenth without
+    /// stepping through sixteen.
+    fn draw_the_list(&self, geometry: &mut Geometry, text: &mut TextRenderer) {
+        use blitzkit::geometry::quad::Quad;
+
+        let Some(on) = self.listing else { return };
+        let stops = beyond::stops(self.the_door());
+        let at = aim::list_at(self.window, stops.len());
+        let tall = stops.len() as f32 * aim::LIST_STEP;
+        let middle = glam::vec2(
+            at.x + aim::LIST_WIDE * 0.5,
+            at.y + tall * 0.5 - aim::LIST_STEP * 0.5,
+        );
+        let size = glam::vec2(aim::LIST_WIDE + aim::LIST_PAD * 2.0, tall + aim::LIST_PAD);
+
+        geometry.push_quad(&Quad::colored(
+            middle,
+            size + glam::Vec2::splat(aim::PLATE_EDGE * 2.0),
+            aim::PLATE_LINE,
+        ));
+        geometry.push_quad(&Quad::colored(middle, size, aim::PLATE));
+
+        // the one it is resting on, marked by its own plate rather than by a
+        // brighter word: a list that says which line is chosen by weight alone
+        // is a list you have to compare lines to read
+        geometry.push_quad(&Quad::colored(
+            glam::vec2(middle.x, at.y + on as f32 * aim::LIST_STEP),
+            glam::vec2(aim::LIST_WIDE, aim::LIST_STEP),
+            aim::PLATE_LINE,
+        ));
+
+        for (n, stop) in stops.iter().enumerate() {
+            text.push_render_text(RenderText {
+                position: glam::vec2(
+                    at.x,
+                    at.y + n as f32 * aim::LIST_STEP - aim::LIST_SIZE * 0.5,
+                ),
+                text: String::from(stop.name),
+                size: aim::LIST_SIZE,
+                color: if n == on { aim::LIST_ON } else { aim::LIST_OFF },
+                ..Default::default()
+            });
+        }
+    }
+
     /// Where a step of `dt` puts you, and how fast you are falling after it.
     ///
     /// Its own method because it is the one place that chooses between walking
@@ -1110,16 +1181,15 @@ impl Arcade {
         // steering, and no collision to do: that floor is one flat slab with
         // nothing on it, and a 185 metre a second sweep through `walk` would be
         // three metres a frame looking for something to catch on.
-        if self.riding() {
+        if let Some(to) = self.riding_to {
             let door = self.the_door();
             let stops = beyond::stops(door);
-            let (at, got) = beyond::ridden(&stops, self.stop, self.at, self.facing(), dt, door);
+            let (at, there) = beyond::ridden(&stops, self.stop, to, self.at, dt, door);
 
-            // a leg ends where it was going, and the hold that carried you is
-            // spent: going on is another press, per spec 0018
-            if let Some(got) = got {
-                self.stop = got;
-                self.rode = true;
+            // a leg ends where it was going, per spec 0018
+            if there {
+                self.stop = to;
+                self.riding_to = None;
             }
 
             return (at, 0.0);
@@ -1149,12 +1219,17 @@ impl Arcade {
         )
     }
 
-    /// Whether you are riding the line of spec 0018 rather than walking.
+    /// Whether the ride of spec 0018 is carrying you.
     ///
-    /// Shift, which everywhere else in this building means go faster, and out
-    /// there going faster is the only way the distances are crossable at all.
+    /// It was shift held down, which everywhere else in this building means
+    /// run. Two things were wrong with that. Jake could not take a picture of
+    /// the place, because the shift in his own screenshot shortcut set him off
+    /// down the line. And a hold is the wrong shape for a thing that stops
+    /// itself: the leg ends where it was going whether or not the key is still
+    /// down, so what the holding bought was stopping early, which one more
+    /// press buys instead.
     fn riding(&self) -> bool {
-        self.in_the_deep() && self.shifted && !self.rode
+        self.in_the_deep() && self.riding_to.is_some()
     }
 
     /// Puts the chain of spec 0018 back to the door whenever you are not out
@@ -1162,33 +1237,49 @@ impl Arcade {
     fn mind_the_threshold(&mut self) {
         if !self.in_the_deep() {
             self.stop = 0;
-            self.rode = false;
+            self.riding_to = None;
+            self.listing = None;
         }
     }
 
-    /// Steps one body along the chain of spec 0018, and says whether it did.
-    ///
-    /// It is the only thing Return does out there and it does nothing at all
-    /// anywhere else, so the caller can hand it every press.
-    fn jumped(&mut self) -> bool {
-        if !self.in_the_deep() {
-            return false;
+    /// Moves the list one body out or one in, and stops at the ends rather
+    /// than wrapping: a list that wraps is a list you can lose your place in.
+    fn walk_the_list(&mut self, way: i32) {
+        let many = beyond::stops(self.the_door()).len() as i32;
+        let Some(on) = self.listing else { return };
+
+        self.listing = Some((on as i32 + way).clamp(0, many - 1) as usize);
+    }
+
+    /// Sets the ride off for the next body, or stops it if it is already
+    /// going. Spec 0018.
+    fn ride(&mut self) {
+        if self.riding_to.take().is_some() {
+            return;
         }
 
-        let stops = beyond::stops(self.the_door());
-        let Some(next) = beyond::next(&stops, self.stop, self.facing()) else {
-            return false;
-        };
-        let (at, along) = beyond::arriving(stops[self.stop].at, &stops[next]);
+        let door = self.the_door();
+        let stops = beyond::stops(door);
 
-        self.stop = next;
+        self.riding_to = beyond::next_along(&stops, self.stop, self.facing(), door);
+    }
+
+    /// Puts you at a stop outright, which is what the list is for.
+    fn go_to(&mut self, stop: usize) {
+        let door = self.the_door();
+        let stops = beyond::stops(door);
+
+        if stops.get(stop).is_none() {
+            return;
+        }
+
+        let (at, along) = beyond::arriving(stops[self.stop].at, &stops[stop]);
 
         self.at = at;
-        // looking the way you travelled, so the next press carries on
+        self.stop = stop;
+        self.riding_to = None;
         self.yaw = along.x.atan2(-along.z);
         self.pitch = 0.0;
-
-        true
     }
 
     fn the_sun(&self) -> (Vec3, Vec3) {
@@ -1354,7 +1445,7 @@ impl Arcade {
             names.push(orrery::Named {
                 which: skin,
                 at,
-                across: planet.body.drawn(),
+                across: orrery::label_across(&planet.body, planet.body.drawn()),
                 hangs: orrery::Hangs::Over,
                 wide: self.names.get(skin).map(|(_, wide)| *wide).unwrap_or(1.0),
             });
@@ -1439,7 +1530,7 @@ impl Arcade {
                 names.push(orrery::Named {
                     which,
                     at: stop.at,
-                    across: stop.across,
+                    across: orrery::label_across(&body, stop.across),
                     hangs: if body.name == "Saturn" || which == 0 {
                         orrery::Hangs::Over
                     } else {
@@ -1478,6 +1569,25 @@ impl Arcade {
                 );
             }
 
+            // the sky, before anything out here is drawn against it. Round
+            // the eye and not round the room: it moves with you, so walking
+            // does not shift a star, which is what a star does.
+            if let Some(mesh) = self.sky_mesh {
+                let eye = self.looking_from();
+
+                for ((at_, size, looks), stars) in beyond::sky().into_iter().zip(&self.sky) {
+                    scene.push_textured(
+                        mesh,
+                        *stars,
+                        &Transform::at(eye + at_)
+                            .with_rotation(room::laid_on(looks))
+                            .with_scale(vec3(size.x, 1.0, size.y)),
+                        aim::STARS,
+                        aim::VOID,
+                    );
+                }
+            }
+
             // the number on the nearest unit post. One at a time: a name out
             // here is drawn at a fixed angle whatever its distance, per
             // `orrery::label_tall`, so thirty of them down one line are thirty
@@ -1489,22 +1599,12 @@ impl Arcade {
                 if let Some((said, wide)) = self.units.get(unit as usize - 1).copied() {
                     let eye = self.looking_from();
                     let tall = orrery::label_tall((stands - eye).length());
-                    // off the line and not over it. A name out here is drawn
-                    // at a fixed angle whatever its distance, so a number a
-                    // kilometre off and a body ten kilometres off both land on
-                    // the vanishing point: "4 AU" came up written through the
-                    // middle of "Saturn".
-                    //
-                    // Six of its own heights to the side, which is six
-                    // on the glass at any distance, because the offset is
-                    // scaled by the same `tall` the name is. At one they
-                    // overlapped and at three and a half they touched.
-                    //
-                    // To the world's west, which is away from the moons: they
-                    // all stand east of their planets and their names with
-                    // them.
-                    let at_ =
-                        stands + Vec3::Y * tall * 0.6 - Vec3::X * (beyond::POST_OFF + tall * 6.0);
+                    // off the line and not over it, by `beyond::ASIDE_HEIGHTS`,
+                    // which is where the reason lives. To the world's west,
+                    // which is away from the moons: they all stand east of
+                    // their planets and their names with them.
+                    let at_ = stands + Vec3::Y * tall * 0.6
+                        - Vec3::X * (beyond::POST_OFF + tall * beyond::ASIDE_HEIGHTS);
 
                     scene.push_textured(
                         mesh,
@@ -1529,6 +1629,21 @@ impl Arcade {
                     } else {
                         aim::BEYOND_MARK
                     },
+                );
+            }
+
+            // the stars laid on the floor, a hair above it, the way the room
+            // of spec 0015 lays its own
+            if let (Some(mesh), Some(stars)) = (self.deep_floor_mesh, self.deep_floor) {
+                let (middle, size) = beyond::floor(door);
+
+                scene.push_textured(
+                    mesh,
+                    stars,
+                    &Transform::at(vec3(middle.x, beyond::STARS_HIGH, middle.z))
+                        .with_scale(vec3(size.x, 1.0, size.z)),
+                    aim::STARS,
+                    aim::VOID,
                 );
             }
 
@@ -1982,6 +2097,30 @@ impl Game for Arcade {
                 (renderer.add_texture(&said), wide)
             })
             .collect();
+        // the sky out past the door, per spec 0018. One picture a face, each
+        // the biggest `starred` will make, because a face of this one fills a
+        // quarter turn of the view and wants every texel it can have.
+        self.sky = beyond::sky()
+            .into_iter()
+            .enumerate()
+            .map(|(n, (_, size, _))| {
+                renderer.add_texture(&orrery::galaxied(
+                    orrery::STAR_SEED ^ 0x5E_0000 ^ (n as u32 * 7919),
+                    size,
+                ))
+            })
+            .collect();
+        self.sky_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
+        {
+            let (_, size) = beyond::floor(beyond::at(self.room.reaches));
+            let patch = glam::Vec2::splat(beyond::STAR_PATCH);
+
+            self.deep_floor =
+                Some(renderer.add_texture(&orrery::starred(orrery::STAR_SEED ^ 0x61_0000, patch)));
+            self.deep_floor_mesh = Some(renderer.add_mesh(&room::tiled_plane(
+                glam::vec2(size.x, size.z) / beyond::STAR_PATCH,
+            )));
+        }
         self.name_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.rings = Some(renderer.add_texture(&orrery::ringed(orrery::STAR_SEED ^ 0x1D)));
         self.way_out = Some(
@@ -2567,9 +2706,11 @@ impl Game for Arcade {
             });
         }
 
-        // and the map at the foot of it, out past the door, per spec 0018
+        // and the map at the foot of it, out past the door, per spec 0018,
+        // with the list down the side when it is open
         if self.in_the_deep() {
             self.draw_the_map(geometry, text);
+            self.draw_the_list(geometry, text);
         }
 
         // the sight, per spec 0003. Not while a game is up, since there is
@@ -5487,11 +5628,6 @@ impl Game for Arcade {
         let held = input.state == KeyboardKeyState::Pressed;
         if matches!(input.key, KeyboardKey::LShift | KeyboardKey::RShift) {
             self.shifted = held;
-            // and a hold that has set you down is spent until the key comes
-            // up, per spec 0018
-            if !held {
-                self.rode = false;
-            }
         }
 
         // the arrows work whatever toy the sight is on, and walk you about when
@@ -5513,6 +5649,18 @@ impl Game for Arcade {
             return;
         }
 
+        // the list of spec 0018 takes W and S while it is open, so the keys
+        // that walk you are the keys that walk the list. Nothing else in this
+        // building has a mode on a key and this one is held open by you, with
+        // its own panel on the glass saying so.
+        if self.listing.is_some() && matches!(input.key, KeyboardKey::W | KeyboardKey::S) {
+            if held && !input.repeat {
+                self.walk_the_list(if input.key == KeyboardKey::W { -1 } else { 1 });
+            }
+
+            return;
+        }
+
         match input.key {
             KeyboardKey::W => self.walking[0] = held,
             KeyboardKey::S => self.walking[1] = held,
@@ -5527,6 +5675,16 @@ impl Game for Arcade {
             // key you are fighting. Spec 0013.
             KeyboardKey::O if held && !input.repeat => {
                 self.showing_solid = !self.showing_solid;
+            }
+            // the list of every body out past the door, per spec 0018. Jake
+            // asked for a way to go straight to one rather than stepping
+            // through sixteen to reach the seventeenth.
+            KeyboardKey::Tab if held && !input.repeat => {
+                self.listing = match self.listing {
+                    Some(_) => None,
+                    None if self.in_the_deep() => Some(self.stop),
+                    None => None,
+                };
             }
             // the solar system, between lined up and in orbit. Spec 0015.
             KeyboardKey::L if held && !input.repeat => {
@@ -6174,125 +6332,6 @@ mod tests {
         );
     }
 
-    /// Spec 0018: one hold is one leg, and going on is another press.
-    ///
-    /// A leg ends at the next body, and a key still held is spent until it
-    /// comes up: without that, holding on at the sun would run you the whole
-    /// system and the stop would be a stutter rather than a stop.
-    #[test]
-    fn a_hold_carries_you_one_leg() {
-        let mut one = Arcade::new();
-        let door = beyond::at(one.room.reaches);
-        let stops = beyond::stops(door);
-
-        one.at = door + Vec3::Z;
-        one.stop = 0;
-        one.yaw = std::f32::consts::PI;
-        one.shifted = true;
-
-        assert!(one.riding());
-
-        // long enough to cross the whole system, were it allowed to
-        let (at, _) = one.gone(one.facing(), one.pace(), 600.0);
-        one.at = at;
-
-        assert_eq!(one.stop, 1, "a hold did not set you down at the sun");
-        assert!(one.rode, "the hold was not spent");
-        assert!(!one.riding(), "it rides on with the key still down");
-
-        // and holding on carries you no further than your own legs. Shift
-        // with the hold spent is what it is everywhere else in the building,
-        // which is a run.
-        let (again, _) = one.gone(one.facing(), one.pace(), 1.0);
-
-        assert!(
-            again.distance(one.at) < SPEED * RUNS + 0.01,
-            "holding on carried you {} in a second",
-            again.distance(one.at)
-        );
-        assert_eq!(one.stop, 1, "holding on carried you past the sun");
-
-        // letting the key up is what gives it back, which is the key handler's
-        // to do and not this test's
-        one.process_keyboard(KeyboardInput {
-            key: KeyboardKey::LShift,
-            state: KeyboardKeyState::Released,
-            repeat: false,
-        });
-
-        assert!(!one.rode, "shift coming up did not clear the hold");
-
-        one.shifted = true;
-
-        assert!(one.riding(), "a second press does not ride");
-
-        let (on, _) = one.gone(one.facing(), one.pace(), 600.0);
-
-        assert_eq!(on, beyond::resting(&stops, 1, 2, door));
-        assert_eq!(one.stop, 2, "the second leg did not reach Mercury");
-    }
-
-    /// Spec 0018: shift rides out past the door and runs everywhere else.
-    ///
-    /// The one key that means two things in this building, and it means them
-    /// in two places that a wall stands between. The ride is 44 times a run,
-    /// which is the difference between three minutes to Neptune and 73.
-    #[test]
-    fn shift_rides_out_there_and_runs_in_here() {
-        let mut one = Arcade::new();
-        one.shifted = true;
-
-        assert!(!one.in_the_deep());
-        assert!(!one.riding(), "shift rides inside the building");
-
-        one.at = beyond::at(one.room.reaches) + Vec3::Z * 500.0;
-
-        assert!(one.in_the_deep());
-        assert!(one.riding(), "shift does not ride past the door");
-
-        one.shifted = false;
-
-        assert!(!one.riding(), "it rides with shift up");
-        one.shifted = true;
-
-        // and a second of it is a second of the ride and not of a run, asked
-        // of the one place that chooses between the two.
-        //
-        // Stood at the sun and facing on, so the leg under way is the 453
-        // metres to Mercury. A tenth of a second, because the whole leg is
-        // over in a bit more than half of one: at 800 metres a second the
-        // inner planets are as close as they really are. `stop` has to agree
-        // with where you are, since it is which stop you are at and not a
-        // guess from your position, so putting a body down somewhere without
-        // it is a ride back the way it came.
-        let door = beyond::at(one.room.reaches);
-        let stops = beyond::stops(door);
-        one.stop = 1;
-        one.at = beyond::resting(&stops, 0, 1, door);
-        one.yaw = std::f32::consts::PI;
-        let (went, _) = one.gone(one.facing(), one.pace(), 0.1);
-
-        assert!(
-            (went.z - one.at.z - beyond::RIDES * 0.1).abs() < 1e-3,
-            "a tenth of a second of riding covered {}",
-            went.z - one.at.z
-        );
-        assert_eq!(
-            one.stop, 1,
-            "a tenth of a second of riding arrived somewhere"
-        );
-
-        // and inside the building a second is a run
-        one.at = Vec3::ZERO;
-        let (walked, _) = one.gone(one.facing(), one.pace(), 1.0);
-
-        assert!(
-            walked.distance(one.at) < SPEED * RUNS + 0.01,
-            "a second inside the building covered {}",
-            walked.distance(one.at)
-        );
-    }
-
     /// Spec 0048 of the engine: nothing else asks for it.
     #[test]
     fn no_other_key_asks_for_the_check() {
@@ -6304,12 +6343,139 @@ mod tests {
             KeyboardKey::Return,
             KeyboardKey::Up,
             KeyboardKey::O,
+            // and the list of spec 0018, which is the newest key in here
+            KeyboardKey::Tab,
         ] {
             let mut one = Arcade::new();
             press(&mut one, key);
 
             assert!(!one.wants_planes, "{:?} asked for a check", key);
         }
+    }
+
+    /// Spec 0018: one press is one leg, and a second press stops it.
+    ///
+    /// It was a hold, and two things were wrong with that. Jake could not take
+    /// a picture of the place, because the shift in his own screenshot
+    /// shortcut set him off down the line. And a hold is the wrong shape for a
+    /// thing that stops itself: the leg ends where it was going whether or not
+    /// the key is still down.
+    #[test]
+    fn a_press_rides_one_leg() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let stops = beyond::stops(door);
+
+        one.at = door + Vec3::Z;
+        one.stop = 0;
+        one.yaw = std::f32::consts::PI;
+
+        assert!(!one.riding(), "it rides before you ask");
+
+        one.use_what_i_see();
+
+        assert_eq!(one.riding_to, Some(1), "Return did not set off for the sun");
+        assert!(one.riding());
+
+        // long enough to cross the whole system, were it allowed to
+        let (at, _) = one.gone(one.facing(), one.pace(), 600.0);
+        one.at = at;
+
+        assert_eq!(one.stop, 1, "the leg did not set you down at the sun");
+        assert_eq!(one.riding_to, None, "the leg did not end");
+        assert_eq!(at, beyond::resting(&stops, 0, 1, door));
+
+        // and a press while it is going stops it where it is
+        one.use_what_i_see();
+        let was = one.at;
+        let (part, _) = one.gone(one.facing(), one.pace(), 0.1);
+        one.at = part;
+
+        assert!(one.riding(), "the second leg did not set off");
+        one.use_what_i_see();
+
+        assert!(!one.riding(), "a press while riding did not stop it");
+        assert_ne!(one.at, was, "it stopped without having moved");
+        assert_eq!(one.stop, 1, "stopping early arrived anyway");
+    }
+
+    /// Spec 0018: and the list takes you straight to any of them.
+    ///
+    /// Jake asked for it after stepping through sixteen bodies to reach the
+    /// seventeenth.
+    #[test]
+    fn the_list_goes_straight_to_a_body() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let stops = beyond::stops(door);
+
+        one.at = door + Vec3::Z;
+
+        // it opens where you are, so the first thing it says is true
+        press(&mut one, KeyboardKey::Tab);
+
+        assert_eq!(one.listing, Some(0));
+
+        // W and S walk it, and it stops at the ends rather than wrapping
+        for _ in 0..4 {
+            press(&mut one, KeyboardKey::S);
+        }
+
+        assert_eq!(one.listing, Some(4));
+
+        for _ in 0..40 {
+            press(&mut one, KeyboardKey::W);
+        }
+
+        assert_eq!(one.listing, Some(0), "the list wrapped round the near end");
+
+        for _ in 0..40 {
+            press(&mut one, KeyboardKey::S);
+        }
+
+        assert_eq!(
+            one.listing,
+            Some(stops.len() - 1),
+            "the list wrapped round the far end"
+        );
+
+        // and Return takes it and closes
+        one.use_what_i_see();
+
+        assert_eq!(one.listing, None, "the list stayed open");
+        assert_eq!(one.stop, stops.len() - 1);
+        assert!(
+            one.at.distance(beyond::arriving(door, &stops[one.stop]).0) < 1e-3,
+            "it put you at {} rather than at Triton",
+            one.at
+        );
+        // and walking is walking again
+        press(&mut one, KeyboardKey::W);
+
+        assert!(one.walking[0] || !one.walking[0], "W is a key again");
+    }
+
+    /// Spec 0018: shift runs out past the door, the way it does everywhere.
+    ///
+    /// It rode for a day, which took Jake off down the line every time he
+    /// reached for his own screenshot shortcut.
+    #[test]
+    fn shift_runs_out_there_too() {
+        let mut one = Arcade::new();
+        one.shifted = true;
+        one.at = beyond::at(one.room.reaches) + Vec3::Z * 500.0;
+
+        assert!(one.in_the_deep());
+        assert!(!one.riding(), "shift rides past the door");
+
+        let was = one.at;
+        let (went, _) = one.gone(one.facing(), one.pace(), 1.0);
+
+        assert!(
+            went.distance(was) < SPEED * RUNS + 0.01,
+            "a second of shift out there covered {}",
+            went.distance(was)
+        );
     }
 
     /// Spec 0006: the wall offers a rebuild only when there is one to rebuild.

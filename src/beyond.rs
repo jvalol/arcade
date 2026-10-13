@@ -42,6 +42,48 @@ pub const WIDE: f32 = 40.0;
 pub const LAPS: f32 = 3.0;
 pub const SPARE: f32 = 40.0;
 
+/// How far off the sky is drawn.
+///
+/// Thirty six kilometres, which is further than anything out here can be from
+/// anywhere else: the line runs 33.4, so standing at one end the other is
+/// 33.4 away and the sky is still behind it. Nearer than that and a body at
+/// the far end would be hidden inside the sky.
+///
+/// It is drawn round the eye and moves with you, so walking does not shift a
+/// star, which is what a star does. Six faces, the same six the room of spec
+/// 0015 has, because a sky with nothing underfoot is a sky you are standing
+/// outside of.
+pub const SKY: f32 = 36_000.0;
+
+/// The six faces of it, as a middle relative to the eye, a size, and which
+/// way each looks.
+pub fn sky() -> Vec<(Vec3, glam::Vec2, Vec3)> {
+    let wide = glam::vec2(SKY * 2.0, SKY * 2.0);
+
+    vec![
+        (-Vec3::Y * SKY, wide, Vec3::Y),
+        (Vec3::Y * SKY, wide, -Vec3::Y),
+        (-Vec3::X * SKY, wide, Vec3::X),
+        (Vec3::X * SKY, wide, -Vec3::X),
+        (-Vec3::Z * SKY, wide, Vec3::Z),
+        (Vec3::Z * SKY, wide, -Vec3::Z),
+    ]
+}
+
+/// How big a patch of the floor one picture of stars covers.
+///
+/// The floor is 40 metres by thirty three kilometres and one picture over all
+/// of that is a twentieth of a texel to the metre at the biggest `starred`
+/// will make, so it is laid in patches and repeated. A hundred and twenty
+/// eight metres is exactly that biggest picture at `STAR_PER_UNIT`, so the
+/// stars underfoot out here are the same size as the room's rather than
+/// something near it.
+///
+/// The floor takes stars for the reason the room's does: a floor that is the
+/// one dark surface in a sky of them is a floor, and what you are standing on
+/// out here is not meant to be one.
+pub const STAR_PATCH: f32 = 128.0;
+
 /// How far the camera sees out here.
 ///
 /// The building's is a hundred metres, which is further than any of it goes
@@ -53,7 +95,10 @@ pub const SPARE: f32 = 40.0;
 /// So it reaches past the far end of the floor, and it does that only out
 /// here: inside, the hundred stands.
 pub fn sees() -> f32 {
-    SUN_OUT + reach() + SPARE * 2.0
+    // past the sky's furthest corner, which is its half-size by the root of
+    // three. Short of that the corners of the sky are clipped away and you
+    // are looking at four triangles of nothing where they met.
+    SKY * 3.0f32.sqrt() + SPARE
 }
 
 /// How far the sun's light throws, and how hard.
@@ -290,49 +335,41 @@ pub fn resting(stops: &[Stop], from: usize, at: usize, door: Vec3) -> Vec3 {
     vec3(door.x, stood.y, stood.z)
 }
 
-/// Where the ride takes you over `dt`, and the stop it has brought you to.
+/// Where the ride takes you over `dt`, and whether it has got there.
 ///
 /// Along the line and nothing else. You keep the mouse, which is the whole
-/// point of riding rather than jumping, because the thing to watch is the sun
-/// going small behind you. You do not steer: at 185 metres a second a ten
-/// degree turn crosses the 20 metres to the edge of the floor in under a
-/// second, and over the edge there is no floor at all.
+/// point of riding rather than being put there, because the thing to watch is
+/// the sun going small behind you. You do not steer: at 800 metres a second a
+/// ten degree turn crosses the 20 metres to the edge of the floor in a
+/// fortieth of one, and over the edge there is no floor at all.
 ///
-/// **It stops when it gets there.** Holding and watching and letting go is a
-/// judgment nobody can make in the dark, with the thing you are aiming at a
-/// speck that is still a speck a second before you reach it. So the ride is a
-/// leg rather than a throttle: it carries you to the next body on the line and
-/// sets you down where the jump would have, and going on is another press.
+/// **Where it is going is settled when it sets off**, which is why `to` is
+/// given rather than worked out from the facing each frame. Looking about
+/// while you travel is the point, and a ride that read the facing every frame
+/// turned round when you did.
 ///
-/// A frame at this speed is three metres, and the standoff at a marble is
+/// A frame at this speed is thirteen metres and the standoff at a marble is
 /// sixty centimetres, so arriving has to be a crossing and not a nearness:
 /// landing is clamped to the resting place rather than tested against it.
-///
-/// `None` back means you are still travelling. At either end facing past it
-/// there is nowhere to go and you do not move at all.
 pub fn ridden(
     stops: &[Stop],
-    here: usize,
+    from: usize,
+    to: usize,
     at: Vec3,
-    facing: Vec3,
     dt: f32,
     door: Vec3,
-) -> (Vec3, Option<usize>) {
-    let Some(next) = next_along(stops, here, facing, door) else {
-        return (at, None);
-    };
-    let rest = resting(stops, here, next, door);
+) -> (Vec3, bool) {
+    let rest = resting(stops, from, to, door);
     let way = (rest.z - at.z).signum();
     let gone = at.z + way * RIDES * dt;
     // sideways, back toward the line, which only matters when the leg started
     // at a moon
     let aside = (door.x - at.x).clamp(-ASIDE * dt, ASIDE * dt);
-    let arrived = (gone - rest.z) * way >= 0.0;
 
-    if arrived {
-        (rest, Some(next))
+    if (gone - rest.z) * way >= 0.0 {
+        (rest, true)
     } else {
-        (vec3(at.x + aside, at.y, gone), None)
+        (vec3(at.x + aside, at.y, gone), false)
     }
 }
 
@@ -371,25 +408,29 @@ pub fn mapped(stops: &[Stop], here: usize, at: Vec3, facing: Vec3, door: Vec3) -
     let whole = (last - door.z).max(1e-3);
     let share = |z: f32| ((z - door.z) / whole).clamp(0.0, 1.0);
 
-    // what you came from is the stop you are at when that is on the line, and
-    // the one behind you when it is not: standing at a moon, the leg you are
-    // on is its planet's
-    let from = if on_the_line(&stops[here], door) {
-        Some(here)
-    } else {
-        next_along(stops, here, -facing, door)
-    };
+    // what you came from is the last stop on the line at or before this one,
+    // so standing at a moon the leg you are on is its planet's.
+    //
+    // By index and not by turning the facing round, which is what it was:
+    // facing straight across the line, which is what you do when you are
+    // looking at a moon, `facing.z` is nought and both directions read as out,
+    // so the leg came back with Mars at both ends and a width of nothing to
+    // divide by.
+    let from = line.iter().copied().rfind(|n| *n <= here);
     let to = next_along(stops, here, facing, door);
 
     Map {
         along: share(at.z),
         ticks: line.iter().map(|n| share(stops[*n].at.z)).collect(),
-        leg: from.zip(to).map(|(from, to)| {
-            let (one, other) = (stops[from].at.z, stops[to].at.z);
-            let through = ((at.z - one) / (other - one)).clamp(0.0, 1.0);
+        leg: from
+            .zip(to)
+            .filter(|(from, to)| from != to)
+            .map(|(from, to)| {
+                let (one, other) = (stops[from].at.z, stops[to].at.z);
+                let through = ((at.z - one) / (other - one)).clamp(0.0, 1.0);
 
-            (stops[from].name, stops[to].name, through)
-        }),
+                (stops[from].name, stops[to].name, through)
+            }),
     }
 }
 
@@ -428,7 +469,14 @@ pub const POST_HIGH: f32 = 2.0;
 pub const MARK_WIDE: f32 = 0.14;
 pub const MARK_HIGH: f32 = 4.0;
 
-/// The spine down the line, flat on the floor.
+/// How high the stars laid on the floor sit above it, and the spine on top of
+/// them.
+///
+/// The spine stands on the stars rather than beside them. Both were at 0.02
+/// and so the spine's top face and the whole star sheet were one plane: the
+/// spine came and went as you moved, in pieces, which is what two exposed
+/// faces in one plane have done to this building seven times now.
+pub const STARS_HIGH: f32 = 0.02;
 pub const SPINE_WIDE: f32 = 0.3;
 pub const SPINE_HIGH: f32 = 0.02;
 
@@ -462,7 +510,7 @@ pub fn marked(door: Vec3) -> Vec<Marker> {
     let sun = sun(door);
     let (from, to) = runs(door);
     let mut out = vec![Marker {
-        at: vec3(sun.x, SPINE_HIGH * 0.5, (from + to) * 0.5),
+        at: vec3(sun.x, STARS_HIGH + SPINE_HIGH * 0.5, (from + to) * 0.5),
         size: vec3(SPINE_WIDE, SPINE_HIGH, to - from),
         glows: false,
     }];
@@ -496,6 +544,23 @@ pub fn marked(door: Vec3) -> Vec<Marker> {
 pub fn units() -> u32 {
     (reach() / au()) as u32
 }
+
+/// How far to the side of the line a unit's number stands, in its own
+/// heights.
+///
+/// Its own heights, so it is that many on the glass at any distance: a name
+/// out here is drawn at a fixed angle whatever its distance, per
+/// `orrery::label_tall`, which is also why it has to stand aside at all. A
+/// number a kilometre off and a body ten kilometres off land in the same
+/// place, and "4 AU" came up written through the middle of "Saturn".
+///
+/// Ten, which is sixteen degrees. **Every body subtends the same angle where
+/// the ride sets you down**, because the standoff is two and a half times the
+/// body whatever the body is: that is 11.3 degrees for the sun and for
+/// Jupiter and for a marble alike. At six the number came out from behind
+/// Jupiter's edge as a stray "U", and at one and at three and a half it was
+/// worse.
+pub const ASIDE_HEIGHTS: f32 = 10.0;
 
 /// Where the posts for a unit stand, at the floor.
 ///
@@ -540,62 +605,6 @@ pub fn numbered(door: Vec3, at: Vec3, facing: Vec3) -> Option<(u32, Vec3)> {
     Some((unit as u32, vec3(sun.x, MARK_HIGH, sun.z + au() * unit)))
 }
 
-/// Which way the chain was going when it brought you to `here`.
-///
-/// From the stop before it to this one, and for the door, which has nothing
-/// before it, the way on to the sun.
-pub fn along(stops: &[Stop], here: usize) -> Vec3 {
-    let (from, to) = match here.checked_sub(1) {
-        Some(before) => (stops.get(before), stops.get(here)),
-        None => (stops.first(), stops.get(1)),
-    };
-
-    match (from, to) {
-        (Some(from), Some(to)) => (to.at - from.at).normalize_or(Vec3::Z),
-        _ => Vec3::Z,
-    }
-}
-
-/// Which stop a press of Return takes you to from `here`, per spec 0018.
-///
-/// Which way you go is which way you are facing, measured against the way the
-/// chain was already going. On if you are facing along it, back if against,
-/// and neither at the end you are facing past: at the far end facing out, and
-/// at the door facing back into the room, there is nowhere to go.
-///
-/// **Against the chain's direction and not against the next stop's.** The
-/// chain turns a right angle at every moon, because a planet's moons stand out
-/// at right angles to the line: arriving at the Moon you face along the
-/// Earth-to-Moon line, and Mars from there is 579 metres off at ninety
-/// degrees to it. Compared with the way to Mars, facing on from the Moon
-/// pointed at nothing and the chain stopped dead there.
-///
-/// **Where you are is remembered and not worked out**, which took two goes to
-/// accept. In metres the nearest stop is wrong at the sun: you arrive 25.7
-/// short of it and that is 4.6 from the door, so a second press takes you to
-/// the sun you are already standing at. Measured in standoffs instead, so the
-/// stop you travelled to always reads about one, it is wrong at every moon:
-/// standing at Io you are 1.0 of Io's standoff from Io and 0.95 of Jupiter's
-/// from Jupiter.
-///
-/// There is no metric that gets both, because a model whose largest body is
-/// five hundred times its smallest has no one distance that means "here". The
-/// chain knows where you are in it. That is one `usize`, and crossing the
-/// threshold sets it to the door.
-pub fn next(stops: &[Stop], here: usize, facing: Vec3) -> Option<usize> {
-    if facing.dot(along(stops, here)) >= 0.0 {
-        stops.get(here + 1).map(|_| here + 1)
-    } else {
-        here.checked_sub(1)
-    }
-}
-
-/// The floor, as a middle and a size: one slab from under the hidden room's
-/// own to past the last body.
-///
-/// It laps back under that one for the reason spec 0017 gives. Two floors at
-/// one height that meet edge to edge put a vertical face at the surface you
-/// are walking on, and a body resting on a surface counts as touching it.
 pub fn solid(reaches: f32) -> blitzkit::collision::Aabb {
     let (middle, size) = floor(at(reaches));
 
@@ -810,62 +819,6 @@ mod tests {
         }
     }
 
-    /// Spec 0018: which way you go is which way you face, and no key means
-    /// out or in.
-    #[test]
-    fn the_way_you_face_is_the_way_you_go() {
-        let stops = stops(door());
-
-        for here in 1..stops.len() - 1 {
-            let (_, facing) = arriving(stops[here - 1].at, &stops[here]);
-
-            assert_eq!(
-                next(&stops, here, facing),
-                Some(here + 1),
-                "facing on from {}, the next stop is not {}",
-                stops[here].name,
-                stops[here + 1].name
-            );
-            assert_eq!(
-                next(&stops, here, -facing),
-                Some(here - 1),
-                "turned round at {}, the way back is not {}",
-                stops[here].name,
-                stops[here - 1].name
-            );
-        }
-    }
-
-    /// Spec 0018: the door is a stop, so there is a way home from anywhere,
-    /// and there is nothing past either end.
-    #[test]
-    fn the_door_is_the_last_stop_in() {
-        let door = door();
-        let stops = stops(door);
-
-        assert_eq!(stops[0].at, door);
-
-        // stepping in from the sun is leaving
-        let (_, facing) = arriving(door, &stops[1]);
-
-        assert_eq!(next(&stops, 1, -facing), Some(0));
-
-        // and nothing past either end
-        let last = stops.len() - 1;
-        let (_, facing) = arriving(stops[last - 1].at, &stops[last]);
-
-        assert_eq!(
-            next(&stops, last, facing),
-            None,
-            "there is a stop past Triton"
-        );
-        assert_eq!(
-            next(&stops, 0, -Vec3::Z),
-            None,
-            "there is a stop behind the door"
-        );
-    }
-
     /// Spec 0018: the ride crosses in the same proportion as the distance,
     /// which is the whole reason it is not a jump.
     #[test]
@@ -921,29 +874,30 @@ mod tests {
             .expect("Uranus is a stop");
         let from = vec3(door.x, 0.0, sun(door).z + 27_000.0);
 
-        for facing in [
-            Vec3::X,
-            -Vec3::X,
-            vec3(0.9, 0.2, 0.3).normalize(),
-            vec3(-0.9, -0.2, -0.3).normalize(),
-        ] {
-            let (went, got) = ridden(&stops, uranus, from, facing, 1.0, door);
+        let neptune = stops
+            .iter()
+            .position(|stop| stop.name == "Neptune")
+            .expect("Neptune is a stop");
 
-            assert_eq!(got, None, "facing {} arrived somewhere in a second", facing);
-            assert_eq!(went.x, from.x, "facing {} took you off the line", facing);
+        // where it is going is settled when it sets off, so looking about
+        // while you travel does not turn the ride round with you
+        for (to, out) in [(neptune, true), (uranus - 1, false)] {
+            let (went, there) = ridden(&stops, uranus, to, from, 1.0, door);
+
+            assert!(!there, "a second of it arrived at {}", stops[to].name);
+            assert_eq!(went.x, from.x, "riding to {} left the line", stops[to].name);
             assert_eq!(went.y, from.y);
             assert!(
                 ((went.z - from.z).abs() - RIDES).abs() < 1e-3,
-                "facing {} covered {} in a second",
-                facing,
+                "riding to {} covered {} in a second",
+                stops[to].name,
                 went.z - from.z
             );
-            // and out or back by the sign of the facing, nothing else
             assert_eq!(
                 went.z > from.z,
-                facing.z >= 0.0,
-                "facing {} went the wrong way",
-                facing
+                out,
+                "riding to {} went the wrong way",
+                stops[to].name
             );
         }
     }
@@ -969,13 +923,15 @@ mod tests {
             let was = here;
             let mut took = 0.0;
 
+            let to = next_along(&stops, here, Vec3::Z, door).expect("somewhere to go");
+
             loop {
-                let (went, got) = ridden(&stops, here, at, Vec3::Z, step, door);
+                let (went, there) = ridden(&stops, here, to, at, step, door);
                 at = went;
                 took += step;
 
-                if let Some(got) = got {
-                    here = got;
+                if there {
+                    here = to;
                     break;
                 }
 
@@ -1054,9 +1010,9 @@ mod tests {
     fn the_ride_does_not_overshoot() {
         let door = door();
         let stops = stops(door);
-        let (at, got) = ridden(&stops, 0, door, Vec3::Z, 600.0, door);
+        let (at, there) = ridden(&stops, 0, 1, door, 600.0, door);
 
-        assert_eq!(got, Some(1), "a ten minute step did not stop at the sun");
+        assert!(there, "a ten minute step did not stop at the sun");
 
         let rest = resting(&stops, 0, 1, door);
 
@@ -1110,13 +1066,9 @@ mod tests {
     fn the_ride_stops_at_both_ends() {
         let door = door();
         let stops = stops(door);
-        let (back, got) = ridden(&stops, 1, sun(door), -Vec3::Z, 600.0, door);
+        let (back, there) = ridden(&stops, 1, 0, sun(door), 600.0, door);
 
-        assert_eq!(
-            got,
-            Some(0),
-            "riding in from the sun does not reach the door"
-        );
+        assert!(there, "riding in from the sun does not reach the door");
         assert!(
             back.z >= door.z - 1e-3,
             "riding back put you at {}, past the door at {}",
@@ -1124,16 +1076,18 @@ mod tests {
             door.z
         );
 
-        // and nothing past Neptune, which is the last stop on the line
+        // and nothing past Neptune, which is the last stop on the line, so
+        // there is no leg to set off on at all
         let neptune = stops
             .iter()
             .position(|stop| stop.name == "Neptune")
             .expect("Neptune is a stop");
-        let at = resting(&stops, neptune - 1, neptune, door);
-        let (went, got) = ridden(&stops, neptune, at, Vec3::Z, 600.0, door);
 
-        assert_eq!(got, None, "there is a body past Neptune to ride to");
-        assert_eq!(went, at, "it moved with nowhere to go");
+        assert_eq!(
+            next_along(&stops, neptune, Vec3::Z, door),
+            None,
+            "there is a body past Neptune to ride to"
+        );
     }
 
     /// Spec 0018: the unit posts say which unit they are, and the one that
@@ -1155,6 +1109,39 @@ mod tests {
         // and a metre short of it
         assert_eq!(on(sun.z + au() * 4.0 - 1.0, Vec3::Z), Some(4));
         assert_eq!(on(sun.z + au() * 4.0 - 1.0, -Vec3::Z), Some(3));
+    }
+
+    /// Spec 0018: and it stands clear of whatever body you are at.
+    ///
+    /// Every body subtends the same angle where the ride sets you down, since
+    /// the standoff is two and a half times the body whatever the body is. So
+    /// one offset clears all of them, and this is the number it has to beat.
+    #[test]
+    fn the_number_stands_clear_of_the_body_you_are_at() {
+        let door = door();
+        let aside = (ASIDE_HEIGHTS * crate::orrery::LABEL_SUBTENDS).to_degrees();
+        let mut widest = 0.0f32;
+
+        for stop in stops(door).iter().skip(1) {
+            let half = (stop.across * 0.5 / stands_off(stop.across))
+                .atan()
+                .to_degrees();
+
+            widest = widest.max(half);
+        }
+
+        assert!(
+            (11.0..12.0).contains(&widest),
+            "the widest body is {:.1} degrees across where you land, and they \
+             were all meant to be the same",
+            widest
+        );
+        assert!(
+            aside > widest + 3.0,
+            "the number stands {:.1} degrees aside and a body is {:.1}",
+            aside,
+            widest
+        );
     }
 
     /// Spec 0018: the Earth stands on the first of them, which is what says
@@ -1305,6 +1292,27 @@ mod tests {
             map.leg.map(|(from, to, _)| (from, to)),
             Some(("Jupiter", "Saturn"))
         );
+
+        // and facing straight across the line, which is what you do when you
+        // are looking at the moon itself. Turning the facing round to find the
+        // near end read both ways as out, so the leg came back with Saturn at
+        // both ends and a width of nothing to divide by.
+        for facing in [Vec3::X, -Vec3::X] {
+            let map = mapped(&stops, io, stops[io].at, facing, door);
+            let (from, to, through) = map.leg.expect("a leg");
+
+            assert_ne!(
+                from, to,
+                "facing {} the leg has one body at both ends",
+                facing
+            );
+            assert!(
+                through.is_finite(),
+                "facing {} the leg is {} through",
+                facing,
+                through
+            );
+        }
     }
 
     /// Spec 0018: and there is no leg at the far end facing out, because there
@@ -1395,6 +1403,30 @@ mod tests {
         assert!(
             marks.iter().filter(|mark| mark.glows).count() >= 60,
             "there are not thirty glowing pairs down the line"
+        );
+    }
+
+    /// Spec 0018: the spine stands on the stars rather than beside them.
+    ///
+    /// Both were at 0.02, so the spine's top face and the whole star sheet
+    /// were one plane and the spine came and went in pieces as you moved,
+    /// which is what two exposed faces in one plane have done to this building
+    /// seven times now. Jake called it the track clipping.
+    #[test]
+    fn the_spine_stands_on_the_stars() {
+        let spine = marked(door())[0];
+        let under = spine.at.y - spine.size.y * 0.5;
+
+        assert!(
+            under >= STARS_HIGH - 1e-4,
+            "the spine's underside is at {} and the stars are at {}",
+            under,
+            STARS_HIGH
+        );
+        assert!(
+            under < STARS_HIGH + 0.01,
+            "the spine floats {} above the stars",
+            under - STARS_HIGH
         );
     }
 

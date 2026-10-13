@@ -582,18 +582,19 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 ///
 /// Verb first, like the rest, and four clauses like `SYSTEM_HELP` so the two
 /// read as the same line saying different things. It carries the two things
-/// that are not like anywhere else in this building: shift rides rather than
-/// runs, and Return steps to the next body.
+/// that are not like anywhere else in this building: Return rides to the next
+/// body, and Tab opens the list of them all.
 ///
-/// The ride is named first because it is what the space is for. The jump is
+/// The ride is named first because it is what the space is for. The list is
 /// the way out of a crossing you have had enough of, and a line that names it
 /// first teaches people to skip the thing they came to see.
 ///
 /// It said "turn round to go back" as well, which is true of both and is the
 /// one thing you work out without being told: there is one line and two ways
-/// along it.
+/// along it. It said "hold shift to ride" for a day, which rode you off down
+/// the line every time Jake reached for his own screenshot shortcut.
 pub const DEEP_HELP: &str =
-    "Use WASD and the mouse to get about. Hold Shift to ride the line. Press Return to step to the next body. Press Escape to quit.";
+    "[COPY - Jake] Use WASD and the mouse to get about. Press Return to ride to the next body. Press Tab for the list of all of them. Press Escape to quit.";
 
 /// What the true-scale system owns up to, under its help line.
 ///
@@ -903,6 +904,31 @@ pub const MAP_MARK: Vec4 = vec4(1.0, 1.0, 1.0, 0.95);
 /// whatever the room is doing, and out past the door that is a lit line
 /// running to a vanishing point directly under the middle of the map.
 pub const MAP_PAD: f32 = 10.0;
+
+/// The list of bodies out past the door, per spec 0018: how tall a line is,
+/// how far apart the lines sit, how wide the panel is and how far it stands
+/// off the glass's left edge.
+pub const LIST_SIZE: f32 = 15.0;
+pub const LIST_STEP: f32 = 21.0;
+pub const LIST_WIDE: f32 = 150.0;
+pub const LIST_FROM: f32 = 26.0;
+pub const LIST_PAD: f32 = 10.0;
+
+/// Where the list goes, from the window: the middle of its first line, and
+/// how many lines it holds.
+///
+/// Down the left, because the map is along the bottom and the help is across
+/// the top, and a list is a column. Standing where the room's own text does
+/// not go is what keeps all three readable at once.
+pub fn list_at(window: (f32, f32), many: usize) -> Vec2 {
+    let tall = many as f32 * LIST_STEP;
+
+    vec2(LIST_FROM, (window.1 - tall) * 0.5)
+}
+
+/// What the list is drawn in: the one the sight is resting on, and the rest.
+pub const LIST_ON: Vec4 = vec4(1.0, 1.0, 1.0, 1.0);
+pub const LIST_OFF: Vec4 = vec4(0.62, 0.64, 0.70, 1.0);
 
 /// The frame round the door at the far end, per spec 0017.
 ///

@@ -1,7 +1,7 @@
 # 0018 The system at true scale
 
 **Status:** implemented
-**Date:** 2026-10-12, the ride added and given its stops the same day, sped up and given a map and numbered posts 2026-10-13
+**Date:** 2026-10-12, the ride added and given its stops the same day, sped up and given a map, numbered posts, a sky and a list 2026-10-13
 
 ## Goal
 
@@ -80,8 +80,17 @@ light to be right.
 
 ### The ride, which is the point
 
-**Hold Shift and you ride to the next body on the line**, at 800 metres a
-second. Running it is 73 minutes to Neptune and walking it is two and a quarter
+**Press Return and you ride to the next body on the line**, at 800 metres a
+second. A second press stops you where you are.
+
+It was shift held down, and two things were wrong with that. Shift everywhere
+else in this building means run, and out there it meant something else. And
+Jake could not take a picture of the place, because the shift in his own
+screenshot shortcut set him off down the line every time.
+
+A hold is the wrong shape for a thing that stops itself anyway: the leg ends
+where it was going whether or not the key is still down, so what the holding
+bought was stopping early, which one more press buys instead. Running it is 73 minutes to Neptune and walking it is two and a quarter
 hours; this is 42 seconds of travel for the whole thing.
 
 The speed is constant, so the time of a leg is in the same proportion as its
@@ -108,6 +117,11 @@ you are set down at is not something you have to catch sight of in passing, so
 the inner legs are free to be as short as they truly are. That is the solar system, and it is the one thing no diagram, no
 photograph and neither of the other two scales can do. The jump below was built
 first and it skips every metre of it, which is to say it skips the subject.
+
+**Where the leg is going is settled when it sets off**, rather than read from
+the facing each frame. Looking about while you travel is the point of riding
+rather than being put there, and a ride that read the facing every frame turned
+round when you did.
 
 **A leg ends where it was going.** The ride was a throttle first: you held it
 and watched and let go. Nobody can make that judgment in the dark, with the
@@ -181,12 +195,20 @@ was the first try and it is the one you have just gone past: riding out you
 never see a number at all, because it comes up behind your shoulder a frame
 after you pass the post it belongs to.
 
-Six of its own heights to the side of the line, which is six on the glass at
+Ten of its own heights to the side of the line, which is ten on the glass at
 any distance. The same fixed angle puts a number a kilometre off and a body ten
 kilometres off in the same place: "4 AU" came up written through the middle of
-"Saturn". At one they overlapped and at three and a half they touched. To the
-world's west, which is away from the moons, since they all stand east of their
-planets and their names with them.
+"Saturn".
+
+Ten because that is sixteen degrees, and **every body subtends the same angle
+where the ride sets you down**: the standoff is two and a half times the body
+whatever the body is, so it is 11.3 degrees for the sun and for Jupiter and for
+a marble alike. One offset clears all of them. At one the number overlapped, at
+three and a half it touched, and at six it came out from behind Jupiter's edge
+as a stray "U".
+
+To the world's west, which is away from the moons, since they all stand east of
+their planets and their names with them.
 
 There is no nought. That is where you are measuring from and the sun is already
 named there.
@@ -214,7 +236,20 @@ It carries a plate, for the reason the corner's text carries one: what is
 behind it out here is a lit line running to a vanishing point directly under
 the middle of it.
 
-### And the jump, for when you have had enough
+### The list, for when you have had enough
+
+**Tab opens a list of every stop**, down the left of the glass where neither
+the help across the top nor the map along the bottom goes. It opens on the one
+you are at, W and S walk it, and Return takes you there outright and closes it.
+It stops at the ends rather than wrapping, because a list that wraps is a list
+you can lose your place in.
+
+Jake asked for it after stepping through sixteen bodies to reach the
+seventeenth. The ride is still what the space is for, and the help line names
+it first for that reason, but a model you can only cross one body at a time is
+a model you stop crossing.
+
+### And the step, which the list replaced
 
 **Return steps to the next body.** One press, one body, in the order they come
 out from the sun with each planet's moons after it: the door, the sun,
@@ -286,6 +321,40 @@ you through a wall, and its eight names came up stacked on the one speck the
 sun had become. It is also what keeps the two lists apart, since a name is
 picked by which body it is for and the same body stands in both systems.
 
+### The sky, and the floor under it
+
+**The spine stands on the stars rather than beside them.** Both were at 0.02,
+so the spine's top face and the whole star sheet were one plane: the spine came
+and went in pieces as you moved, which Jake called the track clipping and is
+what two exposed faces in one plane have done to this building seven times now.
+
+
+Jake said the black was empty when it should be full of stars and galaxies,
+and that the planets were standing against something that read as a road.
+
+**Six faces of stars round the eye**, which are the same six the room of spec
+0015 has. They are drawn 36 kilometres off, which is further than anything out
+here can be from anywhere else: the line runs 33.4, so standing at one end the
+other is 33.4 away and the sky is still behind it. Nearer than that and a body
+at the far end would be hidden inside the sky.
+
+They move with you, so walking does not shift a star, which is what a star
+does. The far plane goes out past the sky's furthest corner, its half-size by
+the root of three, because short of that the corners are clipped away and you
+are looking at four triangles of nothing where they met.
+
+**The floor takes stars too**, laid in 128 metre patches and repeated, which
+is exactly the biggest picture `starred` will make at `STAR_PER_UNIT`, so the
+stars underfoot are the same size as the room's. A floor that is the one dark
+surface in a sky of them is a floor, and what you are standing on out here is
+not meant to be one.
+
+**The galaxies are the sky's alone.** A galaxy is a soft ellipse a few per
+cent of the picture across, and a picture laid on something you can walk up to
+puts that at a few metres: on the floor they came out as six metre smudges at
+your feet. The sky is the one surface anywhere in this building that is
+genuinely far off.
+
 ### The floor
 
 One slab, 40 metres across and running from the door to past Triton. It laps
@@ -308,24 +377,23 @@ thing, and this building knows what those do.
 - Every stop stands on the floor. — `beyond::tests::nothing_stands_off_the_floor`
 - You arrive looking at the body you asked for, with it filling a sensible
   part of the view. — `beyond::tests::you_arrive_looking_at_it`
-- Pressing on carries you out and turning round takes you back. —
-  `beyond::tests::the_way_you_face_is_the_way_you_go`
-- The door is a stop, so there is a way home. — `beyond::tests::the_door_is_the_last_stop_in`
 - The floor laps under the hidden room's. — `beyond::tests::the_floor_laps_under_the_room`
 - The ride crosses in the same proportion as the distance. — `beyond::tests::the_ride_crosses_in_proportion`
 - And stays on the line whatever you are looking at. — `beyond::tests::the_ride_stays_on_the_line`
 - A leg ends at the next body on the line, where the jump would have put you. — `beyond::tests::a_leg_of_the_ride_ends_at_the_next_body`
 - And lands on it rather than near it, however long the step. — `beyond::tests::the_ride_does_not_overshoot`
 - The ride steps over the moons. — `beyond::tests::the_ride_steps_over_the_moons`
-- One hold is one leg, and going on is another press. — `tests::a_hold_carries_you_one_leg`
+- One press is one leg, and a second press stops it. — `tests::a_press_rides_one_leg`
+- The list goes straight to any body, opens where you are and does not wrap. — `tests::the_list_goes_straight_to_a_body`
+- Shift runs out there, the way it does everywhere. — `tests::shift_runs_out_there_too`
+- The spine stands on the stars rather than beside them. — `beyond::tests::the_spine_stands_on_the_stars`
 - And it stops at the door and at the far end. — `beyond::tests::the_ride_stops_at_both_ends`
 - The posts stand up and come often enough to read as speed. — `beyond::tests::the_posts_stand_up_and_come_often`
-- Shift rides out there and runs in here, asked of the one place that chooses
-  between them. — `tests::shift_rides_out_there_and_runs_in_here`
 - The unit posts say which unit they are, and the one that speaks is the one
   ahead of you. — `beyond::tests::the_number_is_the_post_ahead`
 - The Earth stands on the first of them, which is what says what a unit is
   without a word being spent on it. — `beyond::tests::the_earth_stands_on_the_first_unit`
+- And it stands clear of whatever body you are at. — `beyond::tests::the_number_stands_clear_of_the_body_you_are_at`
 - And there is no number before the first or past the last. — `beyond::tests::there_is_no_number_off_the_ends`
 - The map's whole-line bar is linear, which crushes the inner planets. — `beyond::tests::the_whole_line_crushes_the_inner_planets`
 - And the leg fills the map whatever its length, which is what answers how
