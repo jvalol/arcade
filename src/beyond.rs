@@ -233,7 +233,62 @@ pub fn arriving(from: Vec3, stop: &Stop) -> (Vec3, Vec3) {
 /// diagram of the solar system tells.
 pub const RIDES: f32 = 185.0;
 
-/// Where the ride takes you over `dt`.
+/// How fast the ride slides you back onto the line.
+///
+/// You can only ride along the line, so a ride that starts from a moon has to
+/// bring you back to it. Callisto is the furthest off at 13.9 metres, which
+/// this covers in under two seconds of a leg that is twenty-six, so it is over
+/// long before there is anything to look at.
+pub const ASIDE: f32 = 8.0;
+
+/// Whether a stop stands on the line, which is everything but the moons.
+///
+/// The ride runs along the line and can only put you down on it. A planet's
+/// moons stand out at right angles, so they are the jump's to reach, and
+/// `next_along` steps over them.
+pub fn on_the_line(stop: &Stop, door: Vec3) -> bool {
+    (stop.at.x - door.x).abs() < 1e-3
+}
+
+/// The next stop on the line from `here`, the way you are facing.
+///
+/// The first stop that way which is not a moon. From Jupiter facing on that is
+/// Saturn, four moons later; from Callisto facing back it is Jupiter.
+///
+/// **Which way is the facing's own, and not the chain's**, which is where this
+/// differs from the jump. The jump reads the facing against the way the chain
+/// was going because the chain turns a right angle at every moon. The ride
+/// never turns one: it runs along the line and nowhere else, so the line is
+/// what the facing is read against. Taking the chain's rule here, riding out
+/// of Callisto went to Saturn whichever way you faced, because the way in to
+/// Callisto was at right angles to both answers.
+pub fn next_along(stops: &[Stop], here: usize, facing: Vec3, door: Vec3) -> Option<usize> {
+    let out = facing.z >= 0.0;
+    let mut n = here;
+
+    loop {
+        n = if out { n + 1 } else { n.checked_sub(1)? };
+
+        let stop = stops.get(n)?;
+
+        if on_the_line(stop, door) {
+            return Some(n);
+        }
+    }
+}
+
+/// Where you come to rest at `stop`, having ridden up to it from `from`.
+///
+/// Short of it by its own standoff, on the line, which is where the jump puts
+/// you as well. One account of where you stand at a body, so arriving by one
+/// means and leaving by the other does not shift you.
+pub fn resting(stops: &[Stop], from: usize, at: usize, door: Vec3) -> Vec3 {
+    let (stood, _) = arriving(stops[from].at, &stops[at]);
+
+    vec3(door.x, stood.y, stood.z)
+}
+
+/// Where the ride takes you over `dt`, and the stop it has brought you to.
 ///
 /// Along the line and nothing else. You keep the mouse, which is the whole
 /// point of riding rather than jumping, because the thing to watch is the sun
@@ -241,13 +296,42 @@ pub const RIDES: f32 = 185.0;
 /// degree turn crosses the 20 metres to the edge of the floor in under a
 /// second, and over the edge there is no floor at all.
 ///
-/// Which way is which way you face, by the same rule the jump uses, and it
-/// stops at the door rather than going through the wall.
-pub fn ridden(at: Vec3, facing: Vec3, dt: f32, door: Vec3) -> Vec3 {
-    let way = if facing.z >= 0.0 { 1.0 } else { -1.0 };
+/// **It stops when it gets there.** Holding and watching and letting go is a
+/// judgment nobody can make in the dark, with the thing you are aiming at a
+/// speck that is still a speck a second before you reach it. So the ride is a
+/// leg rather than a throttle: it carries you to the next body on the line and
+/// sets you down where the jump would have, and going on is another press.
+///
+/// A frame at this speed is three metres, and the standoff at a marble is
+/// sixty centimetres, so arriving has to be a crossing and not a nearness:
+/// landing is clamped to the resting place rather than tested against it.
+///
+/// `None` back means you are still travelling. At either end facing past it
+/// there is nowhere to go and you do not move at all.
+pub fn ridden(
+    stops: &[Stop],
+    here: usize,
+    at: Vec3,
+    facing: Vec3,
+    dt: f32,
+    door: Vec3,
+) -> (Vec3, Option<usize>) {
+    let Some(next) = next_along(stops, here, facing, door) else {
+        return (at, None);
+    };
+    let rest = resting(stops, here, next, door);
+    let way = (rest.z - at.z).signum();
     let gone = at.z + way * RIDES * dt;
+    // sideways, back toward the line, which only matters when the leg started
+    // at a moon
+    let aside = (door.x - at.x).clamp(-ASIDE * dt, ASIDE * dt);
+    let arrived = (gone - rest.z) * way >= 0.0;
 
-    vec3(at.x, at.y, gone.clamp(door.z + 1.0, runs(door).1))
+    if arrived {
+        (rest, Some(next))
+    } else {
+        (vec3(at.x + aside, at.y, gone), None)
+    }
 }
 
 /// How far apart the posts down the line stand, and how big they are.
@@ -717,21 +801,29 @@ mod tests {
     #[test]
     fn the_ride_stays_on_the_line() {
         let door = door();
-        let from = vec3(door.x, 0.0, door.z + 500.0);
+        let stops = stops(door);
+        // between the Earth and Mars, far enough from either to be travelling,
+        // and from the Earth, which is on the line: a leg out of a moon is
+        // `the_ride_steps_over_the_moons`
+        let earth = stops
+            .iter()
+            .position(|stop| stop.name == "Earth")
+            .expect("the Earth is a stop");
+        let from = vec3(door.x, 0.0, sun(door).z + 1400.0);
 
         for facing in [
             Vec3::X,
             -Vec3::X,
-            Vec3::Y,
             vec3(0.9, 0.2, 0.3).normalize(),
             vec3(-0.9, -0.2, -0.3).normalize(),
         ] {
-            let went = ridden(from, facing, 1.0, door);
+            let (went, got) = ridden(&stops, earth, from, facing, 1.0, door);
 
+            assert_eq!(got, None, "facing {} arrived somewhere in a second", facing);
             assert_eq!(went.x, from.x, "facing {} took you off the line", facing);
             assert_eq!(went.y, from.y);
             assert!(
-                (went.z - from.z).abs() - RIDES < 1e-3,
+                ((went.z - from.z).abs() - RIDES).abs() < 1e-3,
                 "facing {} covered {} in a second",
                 facing,
                 went.z - from.z
@@ -746,8 +838,141 @@ mod tests {
         }
     }
 
+    /// Spec 0018: a leg of the ride ends at the next body on the line, where
+    /// the jump would have put you.
+    ///
+    /// Holding and watching and letting go is a judgment nobody can make in
+    /// the dark, with the thing you are aiming at a speck that is still a
+    /// speck a second before you reach it.
+    #[test]
+    fn a_leg_of_the_ride_ends_at_the_next_body() {
+        let door = door();
+        let stops = stops(door);
+        let mut at = door;
+        let mut here = 0;
+        let step = 1.0 / 60.0;
+        let mut legs = Vec::new();
+
+        // ride out, one leg at a time, counting how long each took, until the
+        // line runs out
+        while next_along(&stops, here, Vec3::Z, door).is_some() {
+            let was = here;
+            let mut took = 0.0;
+
+            loop {
+                let (went, got) = ridden(&stops, here, at, Vec3::Z, step, door);
+                at = went;
+                took += step;
+
+                if let Some(got) = got {
+                    here = got;
+                    break;
+                }
+
+                assert!(took < 600.0, "a leg from {} never ended", stops[was].name);
+            }
+
+            assert!(
+                here > was,
+                "the ride went backwards from {}",
+                stops[was].name
+            );
+            legs.push((stops[here].name, took));
+
+            // and set you down where the jump would have
+            let jumped = arriving(stops[was].at, &stops[here]).0;
+
+            assert!(
+                at.distance(vec3(door.x, jumped.y, jumped.z)) < 0.05,
+                "riding to {} put you at {} and jumping puts you at {}",
+                stops[here].name,
+                at,
+                jumped
+            );
+        }
+
+        // every planet and the sun, and not one moon: the moons stand out at
+        // right angles to the line and are the jump's to reach
+        assert_eq!(
+            legs.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+            vec![
+                "the sun", "Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus",
+                "Neptune"
+            ]
+        );
+
+        // and the longest leg is the one the ride exists for
+        let (worst, took) = legs
+            .iter()
+            .max_by(|one, other| one.1.total_cmp(&other.1))
+            .expect("there are legs");
+
+        assert_eq!(*worst, "Neptune");
+        assert!(
+            (60.0..=70.0).contains(took),
+            "the gulf before Neptune is {:.0} seconds",
+            took
+        );
+    }
+
+    /// Spec 0018: and it lands on the body rather than near it.
+    ///
+    /// A frame at this speed is three metres and the standoff at a marble is
+    /// sixty centimetres, so arriving has to be a crossing and not a nearness.
+    /// One step long enough to pass the whole system still stops at the first
+    /// body on the line.
+    #[test]
+    fn the_ride_does_not_overshoot() {
+        let door = door();
+        let stops = stops(door);
+        let (at, got) = ridden(&stops, 0, door, Vec3::Z, 600.0, door);
+
+        assert_eq!(got, Some(1), "a ten minute step did not stop at the sun");
+
+        let rest = resting(&stops, 0, 1, door);
+
+        assert!(
+            at.distance(rest) < 1e-3,
+            "it came to rest at {} and the sun's place is {}",
+            at,
+            rest
+        );
+    }
+
+    /// Spec 0018: the ride steps over the moons, which stand off the line.
+    #[test]
+    fn the_ride_steps_over_the_moons() {
+        let door = door();
+        let stops = stops(door);
+        let jupiter = stops
+            .iter()
+            .position(|stop| stop.name == "Jupiter")
+            .expect("Jupiter is a stop");
+
+        assert_eq!(
+            next_along(&stops, jupiter, Vec3::Z, door).map(|n| stops[n].name),
+            Some("Saturn"),
+            "riding on from Jupiter stops at one of its moons"
+        );
+
+        // and from a moon it picks up the line either side
+        let callisto = stops
+            .iter()
+            .position(|stop| stop.name == "Callisto")
+            .expect("Callisto is a stop");
+
+        assert_eq!(
+            next_along(&stops, callisto, Vec3::Z, door).map(|n| stops[n].name),
+            Some("Saturn")
+        );
+        assert_eq!(
+            next_along(&stops, callisto, -Vec3::Z, door).map(|n| stops[n].name),
+            Some("Jupiter")
+        );
+    }
+
     /// Spec 0018: the ride stops at the door rather than going through the
-    /// wall, and at the far end of the floor rather than off it.
+    /// wall, and there is nothing past the far end.
     ///
     /// It has to say so itself: the ride does not go through `walk`, because a
     /// 185 metre a second sweep is three metres a frame looking for something
@@ -755,24 +980,31 @@ mod tests {
     #[test]
     fn the_ride_stops_at_both_ends() {
         let door = door();
-        let (from, to) = runs(door);
-        let back = ridden(vec3(door.x, 0.0, from + 50.0), -Vec3::Z, 10.0, door);
+        let stops = stops(door);
+        let (back, got) = ridden(&stops, 1, sun(door), -Vec3::Z, 600.0, door);
 
+        assert_eq!(
+            got,
+            Some(0),
+            "riding in from the sun does not reach the door"
+        );
         assert!(
-            back.z >= from,
+            back.z >= door.z - 1e-3,
             "riding back put you at {}, past the door at {}",
             back.z,
-            from
+            door.z
         );
 
-        let out = ridden(vec3(door.x, 0.0, to - 50.0), Vec3::Z, 10.0, door);
+        // and nothing past Neptune, which is the last stop on the line
+        let neptune = stops
+            .iter()
+            .position(|stop| stop.name == "Neptune")
+            .expect("Neptune is a stop");
+        let at = resting(&stops, neptune - 1, neptune, door);
+        let (went, got) = ridden(&stops, neptune, at, Vec3::Z, 600.0, door);
 
-        assert!(
-            out.z <= to,
-            "riding on put you at {}, past the end of the floor at {}",
-            out.z,
-            to
-        );
+        assert_eq!(got, None, "there is a body past Neptune to ride to");
+        assert_eq!(went, at, "it moved with nowhere to go");
     }
 
     /// Spec 0018: the posts stand up, and come at you often enough to read as

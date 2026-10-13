@@ -350,6 +350,12 @@ struct Arcade {
     /// along. Nought is the door, and anywhere inside the building it is
     /// nought: see `mind_the_threshold`.
     stop: usize,
+    /// Whether the hold that is riding you has already set you down.
+    ///
+    /// A leg of the ride ends at the next body on the line and the key that
+    /// carried you there is spent, so holding on does not run you through the
+    /// rest of the system. Cleared when shift comes up.
+    rode: bool,
     /// Where lined up is for each planet, held across a swing so the path
     /// cannot jump. Taken at whichever end the swing last sat at, which is
     /// the only place it can be taken without moving anything. See
@@ -579,6 +585,7 @@ impl Arcade {
             swung: 0.0,
             swinging_out: false,
             stop: 0,
+            rode: false,
             resting: vec![0.0; orrery::PLANETS.len()],
             pole: None,
             moss: None,
@@ -976,16 +983,24 @@ impl Arcade {
     /// the two halves separately does not test the choice: with the ride cut
     /// out of `update` entirely, one that drove `riding` and `beyond::ridden`
     /// by hand still passed.
-    fn gone(&self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
+    fn gone(&mut self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
         // out past the door you ride rather than walk. Along the line, no
         // steering, and no collision to do: that floor is one flat slab with
         // nothing on it, and a 185 metre a second sweep through `walk` would be
         // three metres a frame looking for something to catch on.
         if self.riding() {
-            return (
-                beyond::ridden(self.at, self.facing(), dt, self.the_door()),
-                0.0,
-            );
+            let door = self.the_door();
+            let stops = beyond::stops(door);
+            let (at, got) = beyond::ridden(&stops, self.stop, self.at, self.facing(), dt, door);
+
+            // a leg ends where it was going, and the hold that carried you is
+            // spent: going on is another press, per spec 0018
+            if let Some(got) = got {
+                self.stop = got;
+                self.rode = true;
+            }
+
+            return (at, 0.0);
         }
 
         // along the floor, over anything no taller than a step, and down.
@@ -1017,7 +1032,7 @@ impl Arcade {
     /// Shift, which everywhere else in this building means go faster, and out
     /// there going faster is the only way the distances are crossable at all.
     fn riding(&self) -> bool {
-        self.in_the_deep() && self.shifted
+        self.in_the_deep() && self.shifted && !self.rode
     }
 
     /// Puts the chain of spec 0018 back to the door whenever you are not out
@@ -1025,6 +1040,7 @@ impl Arcade {
     fn mind_the_threshold(&mut self) {
         if !self.in_the_deep() {
             self.stop = 0;
+            self.rode = false;
         }
     }
 
@@ -5293,6 +5309,11 @@ impl Game for Arcade {
         let held = input.state == KeyboardKeyState::Pressed;
         if matches!(input.key, KeyboardKey::LShift | KeyboardKey::RShift) {
             self.shifted = held;
+            // and a hold that has set you down is spent until the key comes
+            // up, per spec 0018
+            if !held {
+                self.rode = false;
+            }
         }
 
         // the arrows work whatever toy the sight is on, and walk you about when
@@ -5975,6 +5996,64 @@ mod tests {
         );
     }
 
+    /// Spec 0018: one hold is one leg, and going on is another press.
+    ///
+    /// A leg ends at the next body, and a key still held is spent until it
+    /// comes up: without that, holding on at the sun would run you the whole
+    /// system and the stop would be a stutter rather than a stop.
+    #[test]
+    fn a_hold_carries_you_one_leg() {
+        let mut one = Arcade::new();
+        let door = beyond::at(one.room.reaches);
+        let stops = beyond::stops(door);
+
+        one.at = door + Vec3::Z;
+        one.stop = 0;
+        one.yaw = std::f32::consts::PI;
+        one.shifted = true;
+
+        assert!(one.riding());
+
+        // long enough to cross the whole system, were it allowed to
+        let (at, _) = one.gone(one.facing(), one.pace(), 600.0);
+        one.at = at;
+
+        assert_eq!(one.stop, 1, "a hold did not set you down at the sun");
+        assert!(one.rode, "the hold was not spent");
+        assert!(!one.riding(), "it rides on with the key still down");
+
+        // and holding on carries you no further than your own legs. Shift
+        // with the hold spent is what it is everywhere else in the building,
+        // which is a run.
+        let (again, _) = one.gone(one.facing(), one.pace(), 1.0);
+
+        assert!(
+            again.distance(one.at) < SPEED * RUNS + 0.01,
+            "holding on carried you {} in a second",
+            again.distance(one.at)
+        );
+        assert_eq!(one.stop, 1, "holding on carried you past the sun");
+
+        // letting the key up is what gives it back, which is the key handler's
+        // to do and not this test's
+        one.process_keyboard(KeyboardInput {
+            key: KeyboardKey::LShift,
+            state: KeyboardKeyState::Released,
+            repeat: false,
+        });
+
+        assert!(!one.rode, "shift coming up did not clear the hold");
+
+        one.shifted = true;
+
+        assert!(one.riding(), "a second press does not ride");
+
+        let (on, _) = one.gone(one.facing(), one.pace(), 600.0);
+
+        assert_eq!(on, beyond::resting(&stops, 1, 2, door));
+        assert_eq!(one.stop, 2, "the second leg did not reach Mercury");
+    }
+
     /// Spec 0018: shift rides out past the door and runs everywhere else.
     ///
     /// The one key that means two things in this building, and it means them
@@ -5999,8 +6078,17 @@ mod tests {
         one.shifted = true;
 
         // and a second of it is a second of the ride and not of a run, asked
-        // of the one place that chooses between the two
-        one.shifted = true;
+        // of the one place that chooses between the two.
+        //
+        // Stood at the sun and facing on, so the leg under way is the 428
+        // metres to Mercury and a second of it arrives nowhere. `stop` has to
+        // agree with where you are: it is which stop you are at, not a guess
+        // from your position, so putting a body down somewhere without it is
+        // a ride back the way it came.
+        let door = beyond::at(one.room.reaches);
+        let stops = beyond::stops(door);
+        one.stop = 1;
+        one.at = beyond::resting(&stops, 0, 1, door);
         one.yaw = std::f32::consts::PI;
         let (went, _) = one.gone(one.facing(), one.pace(), 1.0);
 
@@ -6009,6 +6097,7 @@ mod tests {
             "a second of riding covered {}",
             went.z - one.at.z
         );
+        assert_eq!(one.stop, 1, "a second of riding arrived somewhere");
 
         // and inside the building the same second is a run
         one.at = Vec3::ZERO;

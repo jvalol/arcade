@@ -1,7 +1,7 @@
 # 0018 The system at true scale
 
 **Status:** implemented
-**Date:** 2026-10-12, the ride added the same day
+**Date:** 2026-10-12, the ride added and then given its stops the same day
 
 ## Goal
 
@@ -80,28 +80,55 @@ light to be right.
 
 ### The ride, which is the point
 
-**Hold Shift and you travel down the line**, at 185 metres a second, which is
-three minutes from the sun to Neptune. Running it is 73 minutes and walking it
-is two and a quarter hours.
+**Hold Shift and you ride to the next body on the line**, at 185 metres a
+second. Running it is 73 minutes to Neptune and walking it is two and a quarter
+hours.
 
-The speed is constant, so the time between two bodies is in the same proportion
-as the distance between them:
+The speed is constant, so the time of a leg is in the same proportion as its
+length:
 
 | | |
 |---|---|
-| Mercury | 2.3 s |
-| Venus | 4.3 s |
-| Earth | 6.0 s |
-| Mars | 9.1 s |
-| Jupiter | 31 s |
-| Saturn | 57 s |
-| Uranus | 115 s |
-| Neptune | 180 s |
+| the sun to Mercury | 2.4 s |
+| Mercury to Venus | 2.0 s |
+| Venus to the Earth | 1.7 s |
+| the Earth to Mars | 3.1 s |
+| Mars to Jupiter | 22 s |
+| Jupiter to Saturn | 26 s |
+| Saturn to Uranus | 58 s |
+| Uranus to Neptune | 65 s |
 
 The inner four are over in nine seconds and then nothing happens for
 twenty-two. That is the solar system, and it is the one thing no diagram, no
 photograph and neither of the other two scales can do. The jump below was built
 first and it skips every metre of it, which is to say it skips the subject.
+
+**A leg ends where it was going.** The ride was a throttle first: you held it
+and watched and let go. Nobody can make that judgment in the dark, with the
+thing you are aiming at a speck that is still a speck a second before you reach
+it. So a leg carries you to the next body and sets you down exactly where the
+jump would have, and the hold that carried you is spent: going on is another
+press. Without that, holding on at the sun runs you through the whole system
+and the stop is a stutter rather than a stop.
+
+A frame at this speed is three metres and the standoff at a marble is sixty
+centimetres, so arriving is a crossing and not a nearness: the landing is
+clamped to the resting place rather than tested against it.
+
+**The ride steps over the moons**, which stand off the line at right angles and
+are the jump's to reach. From Jupiter the next body the ride knows is Saturn,
+four moons later.
+
+**Which way it goes is the facing's own**, and this is where the ride differs
+from the jump. The jump reads the facing against the way the chain was going,
+because the chain turns a right angle at every moon. The ride never turns one:
+it runs along the line and nowhere else. Read the chain's way here and riding
+out of Callisto went to Saturn whichever way you faced, because the way in to
+Callisto was at right angles to both answers.
+
+A ride that starts at a moon slides back onto the line at 8 metres a second as
+it goes. Callisto is furthest off at 13.9 metres, which is under two seconds of
+a leg that is twenty-six.
 
 It would be wrong to ease it. An acceleration would put the inner planets in
 slow motion and hurry the gulf, which is the shape of the lie every drawing of
@@ -236,7 +263,11 @@ thing, and this building knows what those do.
 - The floor laps under the hidden room's. — `beyond::tests::the_floor_laps_under_the_room`
 - The ride crosses in the same proportion as the distance. — `beyond::tests::the_ride_crosses_in_proportion`
 - And stays on the line whatever you are looking at. — `beyond::tests::the_ride_stays_on_the_line`
-- And stops at the door and at the far end. — `beyond::tests::the_ride_stops_at_both_ends`
+- A leg ends at the next body on the line, where the jump would have put you. — `beyond::tests::a_leg_of_the_ride_ends_at_the_next_body`
+- And lands on it rather than near it, however long the step. — `beyond::tests::the_ride_does_not_overshoot`
+- The ride steps over the moons. — `beyond::tests::the_ride_steps_over_the_moons`
+- One hold is one leg, and going on is another press. — `tests::a_hold_carries_you_one_leg`
+- And it stops at the door and at the far end. — `beyond::tests::the_ride_stops_at_both_ends`
 - The posts stand up and come often enough to read as speed. — `beyond::tests::the_posts_stand_up_and_come_often`
 - Shift rides out there and runs in here, asked of the one place that chooses
   between them. — `tests::shift_rides_out_there_and_runs_in_here`
@@ -262,20 +293,18 @@ Jake rode it on 2026-10-12 and called it a good starting point. Three things
 he asked for, written down here rather than fixed, because each is a change to
 what the ride is:
 
-- **It should stop at each body on its own.** At the moment you hold and watch
-  and let go, and judging when to let go in the dark is a thing nobody can do.
+- ~~**It should stop at each body on its own.**~~ Done the same day, above.
 - **The posts should say what they measure.** They are a rhythm and nothing
   else right now, so what you get from them is speed and not distance.
-- **Minutes to Neptune is too long.** Three was chosen to keep Mercury
-  perceptible at 2.3 seconds, and the two wants pull against each other only
-  while the ride does not stop.
+- **Minutes to Neptune is too long.** The riding alone is three, and the legs
+  that make it up are 58 seconds to Uranus and 65 to Neptune.
 
-The three fit together, and that is the shape of the fix rather than three
-separate ones. A ride that stops on its own can be far faster without losing
-the inner planets, because they are no longer things to catch sight of in
-passing. Nothing above changes: the time between two stops stays in the same
-proportion as the distance between them, which is the one claim this spec
-makes about the ride.
+The speed was held at 185 to keep Mercury perceptible at a couple of seconds,
+and the stops have taken that constraint away: the inner planets are no longer
+things to catch sight of in passing, because the ride sets you down at each of
+them. Nothing above would change. The time of a leg stays in the same
+proportion as its length, which is the one claim this spec makes about the
+ride, whatever the speed.
 
 ## Out of scope
 
