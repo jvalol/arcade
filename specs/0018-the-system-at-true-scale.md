@@ -321,6 +321,28 @@ you through a wall, and its eight names came up stacked on the one speck the
 sun had become. It is also what keeps the two lists apart, since a name is
 picked by which body it is for and the same body stands in both systems.
 
+### The staged shot
+
+`--screenshot` stages Saturn and Titan, which is what `media/screenshot.png`
+holds, so that the project's own `refresh-screenshots` reproduces the committed
+picture rather than quietly replacing it. It staged the hall for a day while
+the committed picture was the system, which is a script that undoes your work
+the first time anybody runs it. The hall's pose is still there behind
+`--screenshot=hall`.
+
+Saturn and Titan because Saturn is the one body in the tables that is not a
+ball, and a moon at its true distance is what this space is for.
+
+**Past the moon, looking back**, which is the only place both are visible at
+once, and the two pull against each other to get there. The ring plane is
+tilted about the line, so a view along the line lies in it and the rings come
+out as a black streak; a moon stands out at right angles to the line, so a view
+across it puts the moon behind its planet. From past the moon the rings open 25
+degrees and the two sit 38 apart.
+
+Worked out from the bodies and not written down, the way the hall's own pose is
+worked out from a cabinet. A bearing goes stale the day anything moves.
+
 ### The sky, and the floor under it
 
 **The spine stands on the stars rather than beside them.** Both were at 0.02,
@@ -386,6 +408,7 @@ thing, and this building knows what those do.
 - One press is one leg, and a second press stops it. — `tests::a_press_rides_one_leg`
 - The list goes straight to any body, opens where you are and does not wrap. — `tests::the_list_goes_straight_to_a_body`
 - Shift runs out there, the way it does everywhere. — `tests::shift_runs_out_there_too`
+- The staged shot sees the rings and the moon at once. — `beyond::tests::the_staged_shot_sees_the_rings_and_the_moon`
 - The spine stands on the stars rather than beside them. — `beyond::tests::the_spine_stands_on_the_stars`
 - And it stops at the door and at the far end. — `beyond::tests::the_ride_stops_at_both_ends`
 - The posts stand up and come often enough to read as speed. — `beyond::tests::the_posts_stand_up_and_come_often`

@@ -144,7 +144,18 @@ fn inside_its_reach(how_far: f32, reach: f32) -> f32 {
 }
 
 fn staged() -> bool {
-    std::env::args().any(|arg| arg == "--screenshot")
+    std::env::args().any(|arg| arg.starts_with("--screenshot"))
+}
+
+/// Whether the staged shot is the hall's rather than the system's.
+///
+/// `--screenshot` stages what `media/screenshot.png` actually holds, which is
+/// Saturn and its moon, so that `refresh-screenshots` reproduces the committed
+/// picture rather than quietly replacing it with a different one. The hall's
+/// pose is still here behind `--screenshot=hall`: it cost two rounds to derive
+/// and the reasoning on it is still true.
+fn staged_in_the_hall() -> bool {
+    std::env::args().any(|arg| arg == "--screenshot=hall")
 }
 
 /// How far back from the cabinet the staged shot stands, and how far out of
@@ -484,8 +495,20 @@ impl Arcade {
         let (cradle, ropes) = cradle::strung();
 
         let reaches = room.reaches;
-        // worked out before `room` is moved into the struct below
-        let (posed_at, posed_yaw) = posed(&room);
+        // worked out before `room` is moved into the struct below.
+        //
+        // The system's shot by default, because that is what
+        // `media/screenshot.png` holds and `refresh-screenshots` photographs
+        // whatever `--screenshot` stages. The hall's is behind
+        // `--screenshot=hall`.
+        let (posed_at, posed_yaw, posed_stop) = match beyond::posed(beyond::at(reaches)) {
+            Some((at, yaw, stop)) if !staged_in_the_hall() => (at, yaw, stop),
+            _ => {
+                let (at, yaw) = posed(&room);
+
+                (at, yaw, 0)
+            }
+        };
         let (pool_at, pool_size, pool_deep) = spa::pool(reaches);
         let (tub_at, tub_wide, tub_deep) = spa::tub(room.reaches);
         let mut pool = blitzkit::water::Water::new(pool_at, pool_size, pool_deep, spa::CELLS);
@@ -597,7 +620,7 @@ impl Arcade {
             star_mesh: Vec::new(),
             swung: 0.0,
             swinging_out: false,
-            stop: 0,
+            stop: if staged() { posed_stop } else { 0 },
             riding_to: None,
             listing: None,
             units: Vec::new(),
@@ -635,7 +658,13 @@ impl Arcade {
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
             yaw: if staged() { posed_yaw } else { 0.0 },
-            pitch: if staged() { POSED_PITCH } else { 0.0 },
+            // level out past the door, where there is no floor worth looking
+            // down at, and a little down in the hall
+            pitch: if staged() && staged_in_the_hall() {
+                POSED_PITCH
+            } else {
+                0.0
+            },
             showing_solid: false,
             wants_planes: false,
             fighting: Vec::new(),

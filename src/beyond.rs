@@ -434,6 +434,41 @@ pub fn mapped(stops: &[Stop], here: usize, at: Vec3, facing: Vec3, door: Vec3) -
     }
 }
 
+/// Where a staged shot of this space stands, how far it looks past the moon,
+/// and which stop it counts as being at.
+///
+/// **Saturn and Titan**, because Saturn is the one body in the tables that is
+/// not a ball and a moon at its true distance is the thing this space exists
+/// to show. Nine metres of star field between a planet and its moon is a fact
+/// no diagram gets across.
+///
+/// **Past the moon, looking back**, which is the only place both are visible
+/// at once. The two pull against each other: the ring plane is tilted about
+/// the line, so a view along the line lies in it and the rings are a black
+/// streak, and you have to look across. But a moon stands out at right angles
+/// to the line, so looking across puts it behind its planet. Standing past
+/// the moon and turning back opens the rings 25 degrees and leaves 24 between
+/// the two.
+///
+/// Worked out from the bodies and not written down, the way the hall's own
+/// staged shot is worked out from a cabinet. A bearing goes stale the day
+/// anything moves; a body does not.
+pub const POSED_PAST: f32 = 1.0 / 3.0;
+pub const POSED_ASIDE: f32 = 2.0 / 9.0;
+
+pub fn posed(door: Vec3) -> Option<(Vec3, f32, usize)> {
+    let stops = stops(door);
+    let at = |name: &str| stops.iter().position(|stop| stop.name == name);
+    let (planet, moon) = (at("Saturn")?, at("Titan")?);
+    let (planet, moon) = (stops[planet].at, stops[moon].at);
+    let gap = moon.x - planet.x;
+    let eye = vec3(moon.x + gap * POSED_PAST, 0.0, moon.z + gap * POSED_ASIDE);
+    // aimed between the two, so neither is at the edge of the glass
+    let look = (planet + moon) * 0.5 - eye;
+
+    Some((eye, look.x.atan2(-look.z), at("Saturn")?))
+}
+
 /// How far apart the posts down the line stand, and how big they are.
 ///
 /// A pair every 250 metres, which at the ride's speed is three a second: fast
@@ -1403,6 +1438,78 @@ mod tests {
         assert!(
             marks.iter().filter(|mark| mark.glows).count() >= 60,
             "there are not thirty glowing pairs down the line"
+        );
+    }
+
+    /// Spec 0018: the staged shot stands where both Saturn and its moon can
+    /// be seen and the rings are open.
+    ///
+    /// The two pull against each other. The ring plane is tilted about the
+    /// line, so a view along the line lies in it and the rings come out as a
+    /// black streak; and a moon stands out at right angles to the line, so a
+    /// view across it puts the moon behind its planet. This is the corner that
+    /// satisfies both, and it is worked out from the bodies rather than
+    /// written down, so that nothing here goes stale the day one moves.
+    #[test]
+    fn the_staged_shot_sees_the_rings_and_the_moon() {
+        let door = door();
+        let stops = stops(door);
+        let (eye, yaw, stop) = posed(door).expect("a staged pose");
+        let at = |name: &str| {
+            stops
+                .iter()
+                .find(|stop| stop.name == name)
+                .expect("a stop")
+                .at
+        };
+        let (saturn, titan) = (at("Saturn"), at("Titan"));
+
+        assert_eq!(stops[stop].name, "Saturn");
+        assert!(
+            eye.x > titan.x,
+            "the eye is at {} and Titan at {}, so it is not past the moon",
+            eye.x,
+            titan.x
+        );
+
+        // which way it looks, by the same rule `Arcade::facing` uses
+        let look = vec3(yaw.sin(), 0.0, -yaw.cos());
+
+        for body in [saturn, titan] {
+            let to = (vec3(body.x, 0.0, body.z) - vec3(eye.x, 0.0, eye.z)).normalize();
+            let off = look.dot(to).acos().to_degrees();
+
+            // the two sit 38 degrees apart, so aimed between them each is 19
+            // off the middle. The glass is 30 from the middle to the top and
+            // wider than that across, so 19 is about half way out.
+            //
+            // 22 and not 25: at 25 the test passed with the aim on the moon
+            // rather than between the two, which throws Saturn right out of
+            // the frame.
+            assert!(
+                off < 22.0,
+                "a body at {} is {:.0} degrees off the middle of the glass",
+                body,
+                off
+            );
+        }
+
+        // and the rings are open. Their plane is tilted about z, so its normal
+        // is (-sin tilt, cos tilt, 0) and a view from the floor only opens them
+        // by its own x: looking down the line, which is all z, is edge on.
+        let tilt = crate::orrery::PLANETS
+            .iter()
+            .find(|planet| planet.body.name == "Saturn")
+            .expect("Saturn is in the tables")
+            .body
+            .tilt
+            .to_radians();
+        let open = (look.x * -tilt.sin()).abs().asin().to_degrees();
+
+        assert!(
+            open > 20.0,
+            "the rings are {:.0} degrees open, which is nearly edge on",
+            open
         );
     }
 
