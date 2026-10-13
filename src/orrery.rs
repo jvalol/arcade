@@ -1465,10 +1465,23 @@ pub fn laid_out(
         // marble, "Saturn" came up written across the Earth from nine
         // kilometres behind it. Two letters of it showed either side of the
         // ball and the rest was hidden, which reads as a smudge.
+        //
+        // **Only a body at least as tall as the name it covers.** A ball
+        // smaller than the text cannot be what makes the text unreadable: a
+        // two centimetre marble five metres off is four pixels, and four
+        // pixels over a word is not a word you have lost.
+        //
+        // This came in on a wrong diagnosis. The room of spec 0015 names only
+        // one body from its doorway and I took that for this rule's doing; it
+        // is not, and measuring said so. Everything past a hundred metres is
+        // outside the camera, which from that door is everything but Neptune
+        // and its moon, and spec 0015 already says nearest wins among what is
+        // left. The guard is right anyway and is kept for the case above.
         let away = (name.at - eye).length();
 
         if discs.iter().any(|(at, radius, how_far)| {
             *how_far < away - 1e-3
+                && radius.y >= half.y
                 && (on_glass.x - at.x).abs() < half.x + radius.x
                 && (on_glass.y - at.y).abs() < half.y + radius.y
         }) {
@@ -2768,6 +2781,28 @@ mod tests {
             fits(&[near, behind]),
             vec![0],
             "a ball a hundred metres back took the name off one a metre away"
+        );
+
+        // and a ball smaller than the name it stands in front of does not
+        // hide it. Four pixels over a word is not a word you have lost, and
+        // out at spec 0018's scale most of what is between you and a name is
+        // a marble.
+        // right where the far one's name lands, which is 0.39 up the glass and
+        // so 1.13 m up at five metres. Anywhere else the two never meet, which
+        // is what the first draft of this did: it passed with the rule taken
+        // away because the speck was nowhere near the name.
+        let speck = Named {
+            which: 0,
+            at: vec3(0.0, 1.13, -5.0),
+            across: 0.02,
+            hangs: Hangs::Under,
+            wide: 2.0,
+        };
+
+        assert_eq!(
+            fits(&[speck, far]),
+            vec![0, 1],
+            "a two centimetre marble five metres off took a name away"
         );
     }
 }
