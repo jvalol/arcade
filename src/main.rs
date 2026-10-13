@@ -2655,15 +2655,16 @@ impl Game for Arcade {
         // a joke.
         let said: Vec<&str> = if winking {
             vec![self.saying(), aim::WINK]
-        } else if self.in_the_system() || self.in_the_deep() {
-            vec![
-                self.saying(),
-                if self.in_the_deep() {
-                    aim::DEEP_NOTE
-                } else {
-                    aim::SYSTEM_NOTE
-                },
-            ]
+        } else if self.in_the_deep() {
+            // a line to a thing you can do, because this room has twice the
+            // controls of any other
+            let mut out = vec![self.saying()];
+            out.extend(aim::DEEP_MORE);
+            out.push(aim::DEEP_NOTE);
+
+            out
+        } else if self.in_the_system() {
+            vec![self.saying(), aim::SYSTEM_NOTE]
         } else {
             vec![self.saying()]
         };

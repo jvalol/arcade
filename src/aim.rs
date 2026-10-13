@@ -580,10 +580,13 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 
 /// Out past the door of spec 0017, where walking is not how you get about.
 ///
-/// Verb first, like the rest, and four clauses like `SYSTEM_HELP` so the two
-/// read as the same line saying different things. It carries the two things
-/// that are not like anywhere else in this building: Return rides to the next
-/// body, and Tab opens the list of them all.
+/// Jake's words, and the shape of them is the point: the key first and then
+/// what it does, with the "press" dropped from every clause but the first.
+/// `HELP` and `SYSTEM_HELP` are the older register, "Press L to switch modes",
+/// and this is where he moved to.
+///
+/// The ride stops at the sun and at the way back as well as at the planets, so
+/// "the next planet" is not the whole of what it does. His line, and it stays.
 ///
 /// The ride is named first because it is what the space is for. The list is
 /// the way out of a crossing you have had enough of, and a line that names it
@@ -593,8 +596,19 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 /// one thing you work out without being told: there is one line and two ways
 /// along it. It said "hold shift to ride" for a day, which rode you off down
 /// the line every time Jake reached for his own screenshot shortcut.
-pub const DEEP_HELP: &str =
-    "[COPY - Jake] Use WASD and the mouse to get about. Press Return to ride to the next body. Press Tab for the list of all of them. Press Escape to quit.";
+pub const DEEP_HELP: &str = "Use WASD and the mouse / arrow keys to move around, Shift to run.";
+
+/// The rest of it, a line to a thing you can do.
+///
+/// Four lines rather than one wrapped paragraph, because this room has twice
+/// the controls of any other and a paragraph of them is a paragraph you read
+/// twice. The corner wraps whatever it is given, so these are what it breaks
+/// on rather than where the words happen to run out.
+pub const DEEP_MORE: [&str; 3] = [
+    "Return to ride to the next planet.",
+    "Tab to list all the solar bodies and Return to go to one.",
+    "Escape to quit.",
+];
 
 /// What the true-scale system owns up to, under its help line.
 ///
@@ -1120,7 +1134,8 @@ mod tests {
     /// for this only went under the corner.
     #[test]
     fn every_line_of_text_sits_on_its_plate() {
-        let help = [HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE, DEEP_HELP, DEEP_NOTE];
+        let mut help = vec![HELP, SYSTEM_HELP, WINK, SYSTEM_NOTE, DEEP_HELP, DEEP_NOTE];
+        help.extend(DEEP_MORE);
         let window = (1600.0f32, 1200.0f32);
 
         for many in 1..=help.len() {
