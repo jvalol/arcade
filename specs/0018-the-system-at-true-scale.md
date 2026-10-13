@@ -1,7 +1,7 @@
 # 0018 The system at true scale
 
 **Status:** implemented
-**Date:** 2026-10-12, the ride added and then given its stops the same day
+**Date:** 2026-10-12, the ride added and given its stops the same day, sped up and given a map and numbered posts 2026-10-13
 
 ## Goal
 
@@ -80,26 +80,32 @@ light to be right.
 
 ### The ride, which is the point
 
-**Hold Shift and you ride to the next body on the line**, at 185 metres a
+**Hold Shift and you ride to the next body on the line**, at 800 metres a
 second. Running it is 73 minutes to Neptune and walking it is two and a quarter
-hours.
+hours; this is 42 seconds of travel for the whole thing.
 
 The speed is constant, so the time of a leg is in the same proportion as its
 length:
 
 | | |
 |---|---|
-| the sun to Mercury | 2.4 s |
-| Mercury to Venus | 2.0 s |
-| Venus to the Earth | 1.7 s |
-| the Earth to Mars | 3.1 s |
-| Mars to Jupiter | 22 s |
-| Jupiter to Saturn | 26 s |
-| Saturn to Uranus | 58 s |
-| Uranus to Neptune | 65 s |
+| the sun to Mercury | 0.6 s |
+| Mercury to Venus | 0.5 s |
+| Venus to the Earth | 0.4 s |
+| the Earth to Mars | 0.7 s |
+| Mars to Jupiter | 5.1 s |
+| Jupiter to Saturn | 6.0 s |
+| Saturn to Uranus | 13.4 s |
+| Uranus to Neptune | 15.1 s |
 
-The inner four are over in nine seconds and then nothing happens for
-twenty-two. That is the solar system, and it is the one thing no diagram, no
+The inner four are over in two seconds and then nothing happens for five. The
+longest leg is forty times the shortest crossing between two planets, and that
+ratio is the thing, not the seconds.
+
+It was 185, three minutes to Neptune, and it was held there to keep Mercury
+perceptible at a couple of seconds. The stops took the constraint away: a body
+you are set down at is not something you have to catch sight of in passing, so
+the inner legs are free to be as short as they truly are. That is the solar system, and it is the one thing no diagram, no
 photograph and neither of the other two scales can do. The jump below was built
 first and it skips every metre of it, which is to say it skips the subject.
 
@@ -145,8 +151,10 @@ a frame looking for something to catch on over a slab with nothing on it.
 
 ### What you ride past
 
-A spine down the middle of the line, and a pair of posts every hundred metres,
-which at the ride's speed is nearly two a second. Without them the ride is
+A spine down the middle of the line, and a pair of posts every 250 metres,
+which at the ride's speed is three a second. It was every hundred when the ride
+was 185 a second; at 800 that is eight a second, which is not a rhythm and is a
+flicker rate to keep away from besides. Without them the ride is
 three minutes of an unchanging black screen, which reads as broken rather than
 as vast.
 
@@ -160,8 +168,51 @@ way to read a distance being to see the same thing at several of them.
 A taller pair every astronomical unit, 1,105.3 metres, thirty of them over the
 whole line. They glow, because a post two metres tall is a pixel at seven
 hundred metres and nothing at a kilometre, and the gulf between Uranus and
-Neptune is twelve thousand. Nothing says what they are and nothing needs to:
-the Earth stands on the first.
+Neptune is twelve thousand.
+
+**They say which they are.** "1 AU" through "30 AU", written the same way the
+bodies' names are, so the two read as one hand. The unit itself needs no
+explaining because the Earth stands on the first of them.
+
+One at a time, and the one **ahead** of you. A name out here is drawn at a
+fixed angle whatever its distance, per `orrery::label_tall`, so thirty of them
+down one line are thirty the same size stacked on the vanishing point. Nearest
+was the first try and it is the one you have just gone past: riding out you
+never see a number at all, because it comes up behind your shoulder a frame
+after you pass the post it belongs to.
+
+Six of its own heights to the side of the line, which is six on the glass at
+any distance. The same fixed angle puts a number a kilometre off and a body ten
+kilometres off in the same place: "4 AU" came up written through the middle of
+"Saturn". At one they overlapped and at three and a half they touched. To the
+world's west, which is away from the moons, since they all stand east of their
+planets and their names with them.
+
+There is no nought. That is where you are measuring from and the sun is already
+named there.
+
+### The map at the foot of the screen
+
+Two bars, out past the door and nowhere else.
+
+The thin one is the whole line, the door at the left and Neptune at the right,
+linear, with a tick for every body on it. Mercury sits at a hundredth of the
+way across and the four inner planets are all inside the first twentieth. That
+picture is true, and it is the reason the solar system is hard to draw.
+
+It is also why it cannot be the whole map. A bar on which Mercury is one pixel
+from the door cannot tell you anything about crossing to it. So the thick bar
+under it is **the leg you are on, measured again on its own**: nought where you
+left, one where you are going, filling the width whatever its length, with both
+bodies named at the ends. That is the one that answers how far.
+
+Standing at a moon it shows the moon's planet's leg, because the ride runs on
+the line and the moons stand off it. At the far end facing out there is no leg,
+because there is nowhere to go, and the thin bar still says where you are.
+
+It carries a plate, for the reason the corner's text carries one: what is
+behind it out here is a lit line running to a vanishing point directly under
+the middle of it.
 
 ### And the jump, for when you have had enough
 
@@ -271,6 +322,17 @@ thing, and this building knows what those do.
 - The posts stand up and come often enough to read as speed. — `beyond::tests::the_posts_stand_up_and_come_often`
 - Shift rides out there and runs in here, asked of the one place that chooses
   between them. — `tests::shift_rides_out_there_and_runs_in_here`
+- The unit posts say which unit they are, and the one that speaks is the one
+  ahead of you. — `beyond::tests::the_number_is_the_post_ahead`
+- The Earth stands on the first of them, which is what says what a unit is
+  without a word being spent on it. — `beyond::tests::the_earth_stands_on_the_first_unit`
+- And there is no number before the first or past the last. — `beyond::tests::there_is_no_number_off_the_ends`
+- The map's whole-line bar is linear, which crushes the inner planets. — `beyond::tests::the_whole_line_crushes_the_inner_planets`
+- And the leg fills the map whatever its length, which is what answers how
+  far. — `beyond::tests::the_leg_fills_the_map_whatever_its_length`
+- Standing at a moon the map reads its planet's leg. — `beyond::tests::the_map_reads_a_moon_as_its_planet`
+- And there is no leg past the end. — `beyond::tests::the_map_has_no_leg_past_the_end`
+- The map fits on the glass at every window the building opens at. — `aim::tests::the_map_fits_on_the_glass`
 - The sun reaches Neptune with something left. — `beyond::tests::the_sun_still_reaches_neptune`
 - And you can see it from there, which the building's own far plane does not
   allow. — `beyond::tests::the_far_plane_reaches_the_sun_from_neptune`
@@ -287,24 +349,17 @@ thing, and this building knows what those do.
 - The building is unchanged. Confirmed 2026-10-12 against the staged shot of
   the hall.
 
-## What is still wrong
+## What was still wrong
 
-Jake rode it on 2026-10-12 and called it a good starting point. Three things
-he asked for, written down here rather than fixed, because each is a change to
-what the ride is:
+Jake rode it on 2026-10-12 and called it a good starting point. Three things he
+asked for, all three done since:
 
-- ~~**It should stop at each body on its own.**~~ Done the same day, above.
-- **The posts should say what they measure.** They are a rhythm and nothing
-  else right now, so what you get from them is speed and not distance.
-- **Minutes to Neptune is too long.** The riding alone is three, and the legs
-  that make it up are 58 seconds to Uranus and 65 to Neptune.
-
-The speed was held at 185 to keep Mercury perceptible at a couple of seconds,
-and the stops have taken that constraint away: the inner planets are no longer
-things to catch sight of in passing, because the ride sets you down at each of
-them. Nothing above would change. The time of a leg stays in the same
-proportion as its length, which is the one claim this spec makes about the
-ride, whatever the speed.
+- ~~**It should stop at each body on its own.**~~ Done 2026-10-12.
+- ~~**Minutes to Neptune is too long.**~~ Done 2026-10-13: 42 seconds of
+  travel for the whole line, the longest leg fifteen.
+- ~~**The posts should say what they measure.**~~ Done 2026-10-13: every
+  taller pair carries its own number, and the Earth standing on the first is
+  what says what the unit is.
 
 ## Out of scope
 

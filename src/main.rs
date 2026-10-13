@@ -356,6 +356,9 @@ struct Arcade {
     /// carried you there is spent, so holding on does not run you through the
     /// rest of the system. Cleared when shift comes up.
     rode: bool,
+    /// The numbers for the unit posts of spec 0018, one to thirty, with how
+    /// wide each picture is against its height.
+    units: Vec<(TextureId, f32)>,
     /// Where lined up is for each planet, held across a swing so the path
     /// cannot jump. Taken at whichever end the swing last sat at, which is
     /// the only place it can be taken without moving anything. See
@@ -586,6 +589,7 @@ impl Arcade {
             swinging_out: false,
             stop: 0,
             rode: false,
+            units: Vec::new(),
             resting: vec![0.0; orrery::PLANETS.len()],
             pole: None,
             moss: None,
@@ -976,6 +980,124 @@ impl Arcade {
         self.looking_from().z > self.the_door().z
     }
 
+    /// The map at the foot of the screen, per spec 0018.
+    ///
+    /// Two bars. The thin one is the whole line, door at the left and Neptune
+    /// at the right, with a tick for every body on it: Mercury sits at a
+    /// hundredth of the way across and the four inner planets are all inside
+    /// the first twentieth, which is a true picture and is the reason the
+    /// solar system is hard to draw.
+    ///
+    /// The thick one under it is the leg you are on, measured again on its own
+    /// so that it fills the width whatever its length, with what you left and
+    /// what you are going to named at either end. That is the one that answers
+    /// how far, because the thin one cannot: a bar on which Mercury is one
+    /// pixel from the door cannot show you anything about crossing to it.
+    fn draw_the_map(&self, geometry: &mut Geometry, text: &mut TextRenderer) {
+        use blitzkit::geometry::quad::Quad;
+
+        let door = self.the_door();
+        let stops = beyond::stops(door);
+        let map = beyond::mapped(&stops, self.stop, self.at, self.facing(), door);
+        let (at, wide) = aim::map_at(self.window);
+        let along = |share: f32| at.x + wide * share;
+        let bar = |geometry: &mut Geometry, from: f32, to: f32, y: f32, thick: f32, colour| {
+            let (from, to) = (from.min(to), from.max(to));
+            geometry.push_quad(&Quad::colored(
+                glam::vec2((from + to) * 0.5, y),
+                glam::vec2((to - from).max(1.0), thick),
+                colour,
+            ));
+        };
+
+        // a plate under the lot, for the reason the corner's text has one: what
+        // is behind it out here is a lit line running to a vanishing point
+        // directly under the middle of the map
+        {
+            let top = at.y - aim::MAP_TICK * 0.5 - aim::MAP_PAD;
+            let foot = at.y + aim::MAP_GAP * 2.0 + aim::MAP_NAME + aim::MAP_PAD;
+            let middle = glam::vec2(at.x + wide * 0.5, (top + foot) * 0.5);
+            let size = glam::vec2(wide + aim::MAP_PAD * 2.0, foot - top);
+
+            geometry.push_quad(&Quad::colored(
+                middle,
+                size + glam::Vec2::splat(aim::PLATE_EDGE * 2.0),
+                aim::PLATE_LINE,
+            ));
+            geometry.push_quad(&Quad::colored(middle, size, aim::PLATE));
+        }
+
+        // the whole line, and where each body stands on it
+        bar(
+            geometry,
+            at.x,
+            at.x + wide,
+            at.y,
+            aim::MAP_THIN,
+            aim::MAP_LINE,
+        );
+        bar(
+            geometry,
+            at.x,
+            along(map.along),
+            at.y,
+            aim::MAP_THIN,
+            aim::MAP_DONE,
+        );
+
+        for tick in map.ticks.iter() {
+            geometry.push_quad(&Quad::colored(
+                glam::vec2(along(*tick), at.y),
+                glam::vec2(1.0, aim::MAP_TICK),
+                aim::MAP_LINE,
+            ));
+        }
+
+        geometry.push_quad(&Quad::colored(
+            glam::vec2(along(map.along), at.y),
+            glam::vec2(aim::MAP_YOU, aim::MAP_TICK),
+            aim::MAP_MARK,
+        ));
+
+        // and the leg, if there is one to be on
+        let Some((from, to, through)) = map.leg else {
+            return;
+        };
+        let y = at.y + aim::MAP_GAP;
+
+        bar(
+            geometry,
+            at.x,
+            at.x + wide,
+            y,
+            aim::MAP_THICK,
+            aim::MAP_LINE,
+        );
+        bar(
+            geometry,
+            at.x,
+            along(through),
+            y,
+            aim::MAP_THICK,
+            aim::MAP_LEG,
+        );
+        geometry.push_quad(&Quad::colored(
+            glam::vec2(along(through), y),
+            glam::vec2(aim::MAP_YOU, aim::MAP_THICK + aim::MAP_TICK),
+            aim::MAP_MARK,
+        ));
+
+        for (words, x, centred) in [(from, at.x, false), (to, at.x + wide, true)] {
+            text.push_render_text(RenderText {
+                position: glam::vec2(x, y + aim::MAP_GAP),
+                text: String::from(words),
+                size: aim::MAP_NAME,
+                centered: centred,
+                ..Default::default()
+            });
+        }
+    }
+
     /// Where a step of `dt` puts you, and how fast you are falling after it.
     ///
     /// Its own method because it is the one place that chooses between walking
@@ -1354,6 +1476,46 @@ impl Arcade {
                     aim::RING,
                     aim::MATTE,
                 );
+            }
+
+            // the number on the nearest unit post. One at a time: a name out
+            // here is drawn at a fixed angle whatever its distance, per
+            // `orrery::label_tall`, so thirty of them down one line are thirty
+            // the same size stacked on the vanishing point.
+            if let (Some(mesh), Some((unit, stands))) = (
+                self.name_mesh,
+                beyond::numbered(door, self.at, self.facing()),
+            ) {
+                if let Some((said, wide)) = self.units.get(unit as usize - 1).copied() {
+                    let eye = self.looking_from();
+                    let tall = orrery::label_tall((stands - eye).length());
+                    // off the line and not over it. A name out here is drawn
+                    // at a fixed angle whatever its distance, so a number a
+                    // kilometre off and a body ten kilometres off both land on
+                    // the vanishing point: "4 AU" came up written through the
+                    // middle of "Saturn".
+                    //
+                    // Six of its own heights to the side, which is six
+                    // on the glass at any distance, because the offset is
+                    // scaled by the same `tall` the name is. At one they
+                    // overlapped and at three and a half they touched.
+                    //
+                    // To the world's west, which is away from the moons: they
+                    // all stand east of their planets and their names with
+                    // them.
+                    let at_ =
+                        stands + Vec3::Y * tall * 0.6 - Vec3::X * (beyond::POST_OFF + tall * 6.0);
+
+                    scene.push_textured(
+                        mesh,
+                        said,
+                        &Transform::at(at_)
+                            .with_rotation(orrery::label_turn(at_, eye))
+                            .with_scale(vec3(tall * wide, 1.0, tall)),
+                        aim::BODY_NAME,
+                        aim::VOID,
+                    );
+                }
             }
 
             // the spine down the line and the posts beside it, which are what
@@ -1804,6 +1966,17 @@ impl Game for Arcade {
             .iter()
             .map(|body| {
                 let said = orrery::named(body.name);
+                let wide = said.width() as f32 / said.height().max(1) as f32;
+
+                (renderer.add_texture(&said), wide)
+            })
+            .collect();
+        // and the numbers for the unit posts out past the door, per spec 0018.
+        // Thirty pictures of three characters each, made the same way the
+        // bodies' names are so the two read as one hand.
+        self.units = (1..=beyond::units())
+            .map(|unit| {
+                let said = orrery::named(&format!("{} AU", unit));
                 let wide = said.width() as f32 / said.height().max(1) as f32;
 
                 (renderer.add_texture(&said), wide)
@@ -2392,6 +2565,11 @@ impl Game for Arcade {
                 size,
                 ..Default::default()
             });
+        }
+
+        // and the map at the foot of it, out past the door, per spec 0018
+        if self.in_the_deep() {
+            self.draw_the_map(geometry, text);
         }
 
         // the sight, per spec 0003. Not while a game is up, since there is
@@ -6080,26 +6258,31 @@ mod tests {
         // and a second of it is a second of the ride and not of a run, asked
         // of the one place that chooses between the two.
         //
-        // Stood at the sun and facing on, so the leg under way is the 428
-        // metres to Mercury and a second of it arrives nowhere. `stop` has to
-        // agree with where you are: it is which stop you are at, not a guess
-        // from your position, so putting a body down somewhere without it is
-        // a ride back the way it came.
+        // Stood at the sun and facing on, so the leg under way is the 453
+        // metres to Mercury. A tenth of a second, because the whole leg is
+        // over in a bit more than half of one: at 800 metres a second the
+        // inner planets are as close as they really are. `stop` has to agree
+        // with where you are, since it is which stop you are at and not a
+        // guess from your position, so putting a body down somewhere without
+        // it is a ride back the way it came.
         let door = beyond::at(one.room.reaches);
         let stops = beyond::stops(door);
         one.stop = 1;
         one.at = beyond::resting(&stops, 0, 1, door);
         one.yaw = std::f32::consts::PI;
-        let (went, _) = one.gone(one.facing(), one.pace(), 1.0);
+        let (went, _) = one.gone(one.facing(), one.pace(), 0.1);
 
         assert!(
-            (went.z - one.at.z - beyond::RIDES).abs() < 1e-3,
-            "a second of riding covered {}",
+            (went.z - one.at.z - beyond::RIDES * 0.1).abs() < 1e-3,
+            "a tenth of a second of riding covered {}",
             went.z - one.at.z
         );
-        assert_eq!(one.stop, 1, "a second of riding arrived somewhere");
+        assert_eq!(
+            one.stop, 1,
+            "a tenth of a second of riding arrived somewhere"
+        );
 
-        // and inside the building the same second is a run
+        // and inside the building a second is a run
         one.at = Vec3::ZERO;
         let (walked, _) = one.gone(one.facing(), one.pace(), 1.0);
 

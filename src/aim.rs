@@ -860,6 +860,50 @@ pub const BEYOND_MARK: Vec4 = vec4(0.34, 0.35, 0.40, 1.0);
 /// and Neptune is twelve thousand.
 pub const BEYOND_UNIT: Vec4 = vec4(1.5, 1.62, 1.95, 1.0);
 
+/// The map at the foot of the screen out past the door, per spec 0018.
+///
+/// How wide it is as a share of the window, with a floor and a ceiling so it
+/// is neither a thread on a wide window nor the whole of a narrow one; how far
+/// up from the bottom; how thick the two bars are and how far apart; and how
+/// big the two names at the ends of the leg are.
+pub const MAP_SHARE: f32 = 0.42;
+pub const MAP_LEAST: f32 = 260.0;
+pub const MAP_MOST: f32 = 620.0;
+pub const MAP_UP: f32 = 78.0;
+pub const MAP_THIN: f32 = 2.0;
+pub const MAP_THICK: f32 = 5.0;
+pub const MAP_GAP: f32 = 13.0;
+pub const MAP_TICK: f32 = 7.0;
+pub const MAP_YOU: f32 = 3.0;
+pub const MAP_NAME: f32 = 13.0;
+
+/// Where the map goes and how big it is, from the window.
+///
+/// Its own function because the drawing and the test that says it sits clear
+/// of the corner's text both want it, and two accounts of where a thing is
+/// come apart.
+pub fn map_at(window: (f32, f32)) -> (Vec2, f32) {
+    let wide = (window.0 * MAP_SHARE)
+        .clamp(MAP_LEAST, MAP_MOST)
+        .min(window.0 - 16.0);
+
+    (vec2((window.0 - wide) * 0.5, window.1 - MAP_UP), wide)
+}
+
+/// The whole line, which is context and quiet, and the leg, which is the
+/// thing you are reading.
+pub const MAP_LINE: Vec4 = vec4(1.0, 1.0, 1.0, 0.22);
+pub const MAP_DONE: Vec4 = vec4(1.0, 1.0, 1.0, 0.30);
+pub const MAP_LEG: Vec4 = vec4(0.72, 0.78, 0.92, 0.85);
+pub const MAP_MARK: Vec4 = vec4(1.0, 1.0, 1.0, 0.95);
+
+/// How far the map's plate stands out past it.
+///
+/// It needs one for the reason the corner's text does: what is behind it is
+/// whatever the room is doing, and out past the door that is a lit line
+/// running to a vanishing point directly under the middle of the map.
+pub const MAP_PAD: f32 = 10.0;
+
 /// The frame round the door at the far end, per spec 0017.
 ///
 /// `behind::LAMP_COLOUR` at 2.4. Colour is an unclamped multiplier in this
@@ -1515,5 +1559,56 @@ mod tests {
             pointed.screen.x < look_of(true, true).screen.x,
             "its screen is as bright as a lit one"
         );
+    }
+
+    /// Spec 0018: the map fits on the glass, at every window the building is
+    /// opened at.
+    ///
+    /// The corner's text is measured against the window and this is too, and a
+    /// bar that runs off the edge is the same fault in a different place.
+    #[test]
+    fn the_map_fits_on_the_glass() {
+        // the last of these is narrower than `MAP_LEAST`, which is the only
+        // window the `min` in `map_at` bites on. Left out, that guard is
+        // unreachable at every size the building is ever opened at and the
+        // test passes with it taken away.
+        for window in [
+            (640.0, 480.0),
+            (800.0, 600.0),
+            (1600.0, 1200.0),
+            (3840.0, 2160.0),
+            (200.0, 300.0),
+        ] {
+            let (at, wide) = map_at(window);
+
+            assert!(
+                at.x > 0.0 && at.x + wide < window.0,
+                "a map {} wide at {} runs off a window {} across",
+                wide,
+                at.x,
+                window.0
+            );
+            assert!(
+                wide > window.0 * 0.15,
+                "a map {} wide on a window {} across is a thread",
+                wide,
+                window.0
+            );
+            // and the names under it, which hang the furthest down
+            let foot = at.y + MAP_GAP * 2.0 + MAP_NAME + MAP_PAD;
+
+            assert!(
+                foot < window.1,
+                "the map's foot is at {} on a window {} tall",
+                foot,
+                window.1
+            );
+            // and clear of the corner's text, which is measured from the top
+            assert!(
+                at.y - MAP_TICK - MAP_PAD > SAYS_AT.y + SAYS_SIZE * 4.0,
+                "the map at {} meets the corner's text",
+                at.y
+            );
+        }
     }
 }

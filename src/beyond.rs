@@ -218,20 +218,22 @@ pub fn arriving(from: Vec3, stop: &Stop) -> (Vec3, Vec3) {
 
 /// How fast the ride carries you down the line, per spec 0018.
 ///
-/// Three minutes from the sun to Neptune, which is 185 metres a second.
-/// Running it is 73 minutes and walking it is two and a quarter hours, and
-/// those are the numbers the jump was written to get round.
+/// Eight hundred metres a second, which is the whole system in 42 seconds of
+/// travel: half a second to Mercury, five to Jupiter, and fifteen across the
+/// gulf to Neptune. Running it is 73 minutes and walking it is two and a
+/// quarter hours.
 ///
-/// Constant, and so the time between two bodies is in the same proportion as
-/// the distance: Mercury at 2.3 seconds, the Earth at 6, Mars at 9, and then
-/// 22 seconds of nothing before Jupiter, 26 more before Saturn, 58 before
-/// Uranus and 65 before Neptune. The emptiness is the subject and this is the
-/// only way the model has of charging you for it.
+/// It was 185, which is three minutes to Neptune, and that was held there to
+/// keep Mercury perceptible at a couple of seconds. The stops took the
+/// constraint away: a body you are set down at is not something you have to
+/// catch sight of in passing, so the inner legs are free to be as short as
+/// they truly are.
 ///
-/// It would be wrong to ease it. An acceleration would put the inner planets
-/// in slow motion and hurry the gulf, which is the shape of the lie every
-/// diagram of the solar system tells.
-pub const RIDES: f32 = 185.0;
+/// Constant, and so the time of a leg stays in the same proportion as its
+/// length whatever the speed. It would be wrong to ease it. An acceleration
+/// would put the inner planets in slow motion and hurry the gulf, which is the
+/// shape of the lie every diagram of the solar system tells.
+pub const RIDES: f32 = 800.0;
 
 /// How fast the ride slides you back onto the line.
 ///
@@ -334,12 +336,72 @@ pub fn ridden(
     }
 }
 
+/// What the map at the foot of the screen shows, per spec 0018.
+///
+/// Fractions and not pixels: where to put it and how big is the drawing's
+/// business, and how far along you are is this module's. Nought is the door
+/// and one is the last body on the line.
+#[derive(Clone, Debug, Default)]
+pub struct Map {
+    /// Where you are along the whole line.
+    pub along: f32,
+    /// Where each stop on the line is, in the same measure.
+    pub ticks: Vec<f32>,
+    /// The leg you are on: what you came from, what you are going to, and how
+    /// far through it you are. Nothing at the far end facing out, where there
+    /// is nowhere to go.
+    pub leg: Option<(&'static str, &'static str, f32)>,
+}
+
+/// Where you are, for the map.
+///
+/// Two measures and not one, because one cannot do it. Linear over the whole
+/// line, Mercury is at a hundredth and the four inner planets are inside the
+/// first twentieth: that picture is true, and it is the reason the solar
+/// system is hard to draw, but you cannot read your distance to the next body
+/// off it. So the leg is measured again on its own, nought where you left and
+/// one where you are going, and that is the one that answers how far.
+pub fn mapped(stops: &[Stop], here: usize, at: Vec3, facing: Vec3, door: Vec3) -> Map {
+    let line: Vec<usize> = (0..stops.len())
+        .filter(|n| on_the_line(&stops[*n], door))
+        .collect();
+    let Some(last) = line.last().map(|n| stops[*n].at.z) else {
+        return Map::default();
+    };
+    let whole = (last - door.z).max(1e-3);
+    let share = |z: f32| ((z - door.z) / whole).clamp(0.0, 1.0);
+
+    // what you came from is the stop you are at when that is on the line, and
+    // the one behind you when it is not: standing at a moon, the leg you are
+    // on is its planet's
+    let from = if on_the_line(&stops[here], door) {
+        Some(here)
+    } else {
+        next_along(stops, here, -facing, door)
+    };
+    let to = next_along(stops, here, facing, door);
+
+    Map {
+        along: share(at.z),
+        ticks: line.iter().map(|n| share(stops[*n].at.z)).collect(),
+        leg: from.zip(to).map(|(from, to)| {
+            let (one, other) = (stops[from].at.z, stops[to].at.z);
+            let through = ((at.z - one) / (other - one)).clamp(0.0, 1.0);
+
+            (stops[from].name, stops[to].name, through)
+        }),
+    }
+}
+
 /// How far apart the posts down the line stand, and how big they are.
 ///
-/// A pair every hundred metres, which at the ride's speed is nearly two a
-/// second: fast enough to read as speed and slow enough to count. Without them
-/// the ride is three minutes of an unchanging black screen, which reads as
-/// broken rather than as vast.
+/// A pair every 250 metres, which at the ride's speed is three a second: fast
+/// enough to read as speed and slow enough to count. Without them the ride is
+/// an unchanging black screen, which reads as broken rather than as vast.
+///
+/// It was every hundred, from when the ride was 185 metres a second. At 800
+/// that is eight a second, which is not a rhythm and is a flicker rate to keep
+/// away from besides.
 ///
 /// **Standing up, and not laid on the floor**, which is what they were first.
 /// A mark on the floor seen from eye height is edge-on past twenty metres: at
@@ -348,7 +410,7 @@ pub fn ridden(
 /// at all. It is the lesson the hall's columns already teach, which spec 0011
 /// puts as the only way to read a distance being to see the same thing at
 /// several of them.
-pub const POSTS: f32 = 100.0;
+pub const POSTS: f32 = 250.0;
 pub const POST_OFF: f32 = 2.0;
 pub const POST_WIDE: f32 = 0.1;
 pub const POST_HIGH: f32 = 2.0;
@@ -421,13 +483,61 @@ pub fn marked(door: Vec3) -> Vec<Marker> {
         at += POSTS;
     }
 
-    let mut at = sun.z;
-    while at <= to {
-        pair(at, MARK_WIDE, MARK_HIGH, true);
-        at += au();
+    // and the units. The one at the sun is not numbered: nought is where you
+    // are measuring from and the sun is already named there.
+    for unit in 1..=units() {
+        pair(unit_at(door, unit).z, MARK_WIDE, MARK_HIGH, true);
     }
 
     out
+}
+
+/// How many whole astronomical units the line runs to.
+pub fn units() -> u32 {
+    (reach() / au()) as u32
+}
+
+/// Where the posts for a unit stand, at the floor.
+///
+/// The one account of it: `marked` puts the posts there and `numbered` hangs
+/// the number over them, and two accounts of where a thing is come apart.
+pub fn unit_at(door: Vec3, unit: u32) -> Vec3 {
+    let sun = sun(door);
+
+    vec3(sun.x, 0.0, sun.z + au() * unit as f32)
+}
+
+/// Which unit mark is the next one the way you are facing, and where its
+/// number stands.
+///
+/// The next one and not the nearest. Nearest is the one you have just gone
+/// past, so riding out you never see a number at all: it comes up behind your
+/// shoulder a frame after you have passed the post it belongs to.
+///
+/// Over the posts rather than under them, because the bodies' own names hang
+/// under out here and the Earth stands on the first of these: without the two
+/// going opposite ways, "Earth" and "1 AU" are one smear.
+///
+/// Nothing past the thirtieth, which is as far as the line runs, and nothing
+/// before the first: nought is where you are measuring from and the sun is
+/// already named there.
+pub fn numbered(door: Vec3, at: Vec3, facing: Vec3) -> Option<(u32, Vec3)> {
+    let sun = sun(door);
+    let out = (at.z - sun.z) / au();
+    // the smallest post past you going out, the largest short of you coming
+    // back, and never the one at the sun: from the door the first post ahead
+    // is nought, which is the sun's own and carries no number.
+    let unit = if facing.z >= 0.0 {
+        (out.floor() + 1.0).max(1.0)
+    } else {
+        out.ceil() - 1.0
+    };
+
+    if !(1.0..=units() as f32).contains(&unit) {
+        return None;
+    }
+
+    Some((unit as u32, vec3(sun.x, MARK_HIGH, sun.z + au() * unit)))
 }
 
 /// Which way the chain was going when it brought you to `here`.
@@ -764,8 +874,8 @@ mod tests {
         let crossing = took(neptune());
 
         assert!(
-            (crossing - 180.0).abs() < 10.0,
-            "Neptune is {:.0} seconds off, not three minutes",
+            (crossing - 42.0).abs() < 4.0,
+            "Neptune is {:.0} seconds off, not forty two",
             crossing
         );
 
@@ -802,14 +912,14 @@ mod tests {
     fn the_ride_stays_on_the_line() {
         let door = door();
         let stops = stops(door);
-        // between the Earth and Mars, far enough from either to be travelling,
-        // and from the Earth, which is on the line: a leg out of a moon is
+        // mid-way between Uranus and Neptune, which is the longest leg, and
+        // from Uranus, which is on the line: a leg out of a moon is
         // `the_ride_steps_over_the_moons`
-        let earth = stops
+        let uranus = stops
             .iter()
-            .position(|stop| stop.name == "Earth")
-            .expect("the Earth is a stop");
-        let from = vec3(door.x, 0.0, sun(door).z + 1400.0);
+            .position(|stop| stop.name == "Uranus")
+            .expect("Uranus is a stop");
+        let from = vec3(door.x, 0.0, sun(door).z + 27_000.0);
 
         for facing in [
             Vec3::X,
@@ -817,7 +927,7 @@ mod tests {
             vec3(0.9, 0.2, 0.3).normalize(),
             vec3(-0.9, -0.2, -0.3).normalize(),
         ] {
-            let (went, got) = ridden(&stops, earth, from, facing, 1.0, door);
+            let (went, got) = ridden(&stops, uranus, from, facing, 1.0, door);
 
             assert_eq!(got, None, "facing {} arrived somewhere in a second", facing);
             assert_eq!(went.x, from.x, "facing {} took you off the line", facing);
@@ -909,9 +1019,28 @@ mod tests {
 
         assert_eq!(*worst, "Neptune");
         assert!(
-            (60.0..=70.0).contains(took),
+            (13.0..=18.0).contains(took),
             "the gulf before Neptune is {:.0} seconds",
             took
+        );
+        // and the shortest crossing between two planets is the Earth's, which
+        // is the shape of the thing: the inner four are over before the gulf
+        // has begun.
+        //
+        // The sun's leg is left out because it is not a crossing. It is 30
+        // metres from the door and you stand 25.7 short of it, so what is left
+        // is four metres of threshold.
+        let shortest = legs
+            .iter()
+            .filter(|(name, _)| *name != "the sun")
+            .min_by(|one, other| one.1.total_cmp(&other.1))
+            .expect("there are legs");
+
+        assert_eq!(shortest.0, "Earth");
+        assert!(
+            took / shortest.1 > 20.0,
+            "the longest leg is only {:.0} times the shortest",
+            took / shortest.1
         );
     }
 
@@ -1007,6 +1136,201 @@ mod tests {
         assert_eq!(went, at, "it moved with nowhere to go");
     }
 
+    /// Spec 0018: the unit posts say which unit they are, and the one that
+    /// speaks is the one ahead of you.
+    ///
+    /// The nearest was the first try and it is the one you have just gone
+    /// past: riding out you never see a number at all, because it comes up
+    /// behind your shoulder a frame after you pass the post it belongs to.
+    #[test]
+    fn the_number_is_the_post_ahead() {
+        let door = door();
+        let sun = sun(door);
+        let on =
+            |z: f32, facing: Vec3| numbered(door, vec3(door.x, 0.0, z), facing).map(|(n, _)| n);
+
+        // a metre past the fourth post, which is where the nearest rule failed
+        assert_eq!(on(sun.z + au() * 4.0 + 1.0, Vec3::Z), Some(5));
+        assert_eq!(on(sun.z + au() * 4.0 + 1.0, -Vec3::Z), Some(4));
+        // and a metre short of it
+        assert_eq!(on(sun.z + au() * 4.0 - 1.0, Vec3::Z), Some(4));
+        assert_eq!(on(sun.z + au() * 4.0 - 1.0, -Vec3::Z), Some(3));
+    }
+
+    /// Spec 0018: the Earth stands on the first of them, which is what says
+    /// what a unit is without a word being spent on it.
+    #[test]
+    fn the_earth_stands_on_the_first_unit() {
+        let door = door();
+        let (unit, stands) = numbered(door, door, Vec3::Z).expect("a first post");
+        let earth = stops(door)
+            .into_iter()
+            .find(|stop| stop.name == "Earth")
+            .expect("the Earth is a stop");
+
+        assert_eq!(unit, 1);
+        assert!(
+            (stands.z - earth.at.z).abs() < 1e-2,
+            "the first post is at {} and the Earth at {}",
+            stands.z,
+            earth.at.z
+        );
+    }
+
+    /// Spec 0018: and there is no number before the first or past the last.
+    ///
+    /// Nought is where you are measuring from and the sun is already named
+    /// there, and the line stops at Neptune. The drawing reads this straight
+    /// into its list of pictures, so a number outside what the line holds is a
+    /// post with nothing over it at best.
+    #[test]
+    fn there_is_no_number_off_the_ends() {
+        let door = door();
+        let sun = sun(door);
+        let on =
+            |z: f32, facing: Vec3| numbered(door, vec3(door.x, 0.0, z), facing).map(|(n, _)| n);
+
+        assert_eq!(on(door.z, -Vec3::Z), None, "there is a post behind the sun");
+        assert_eq!(
+            on(sun.z + au() * units() as f32 + 10.0, Vec3::Z),
+            None,
+            "there is a post past the last unit"
+        );
+
+        // and everything it does give is a picture the drawing holds
+        for step in 0..400 {
+            let z = door.z + (reach() + SPARE) * step as f32 / 400.0;
+
+            for facing in [Vec3::Z, -Vec3::Z] {
+                if let Some((unit, _)) = numbered(door, vec3(door.x, 0.0, z), facing) {
+                    assert!(
+                        (1..=units()).contains(&unit),
+                        "{} AU at {} is outside the thirty the line holds",
+                        unit,
+                        z
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0018: the map's whole-line bar is linear, and that is why it
+    /// cannot be the whole map.
+    ///
+    /// Mercury sits at a hundredth of the way across and the four inner
+    /// planets are all inside the first twentieth. That picture is true, and
+    /// it is the reason the solar system is hard to draw, and you cannot read
+    /// your distance to the next body off it.
+    #[test]
+    fn the_whole_line_crushes_the_inner_planets() {
+        let door = door();
+        let stops = stops(door);
+        let map = mapped(&stops, 0, door, Vec3::Z, door);
+        let share = |name: &str| {
+            let n = stops
+                .iter()
+                .position(|stop| stop.name == name)
+                .expect("a stop");
+            let line: Vec<usize> = (0..stops.len())
+                .filter(|n| on_the_line(&stops[*n], door))
+                .collect();
+
+            map.ticks[line.iter().position(|one| *one == n).expect("on the line")]
+        };
+
+        assert!(
+            share("Mercury") < 0.02,
+            "Mercury is {:.3} of the way across",
+            share("Mercury")
+        );
+        assert!(
+            share("Mars") < 0.06,
+            "Mars is {:.3} of the way across",
+            share("Mars")
+        );
+        assert!(
+            (share("Neptune") - 1.0).abs() < 1e-3,
+            "Neptune is {:.3} of the way across",
+            share("Neptune")
+        );
+        // every body on the line and not one moon
+        assert_eq!(map.ticks.len(), 10);
+    }
+
+    /// Spec 0018: and the leg fills the map whatever its length, which is what
+    /// answers how far.
+    #[test]
+    fn the_leg_fills_the_map_whatever_its_length() {
+        let door = door();
+        let stops = stops(door);
+
+        for (from, to) in [("Venus", "Earth"), ("Uranus", "Neptune")] {
+            let one = stops.iter().position(|s| s.name == from).expect("a stop");
+            let other = stops.iter().position(|s| s.name == to).expect("a stop");
+            let at = |through: f32| {
+                vec3(
+                    door.x,
+                    0.0,
+                    stops[one].at.z + (stops[other].at.z - stops[one].at.z) * through,
+                )
+            };
+
+            for want in [0.0, 0.25, 0.5, 1.0] {
+                let map = mapped(&stops, one, at(want), Vec3::Z, door);
+                let (said, next, through) = map.leg.expect("a leg");
+
+                assert_eq!((said, next), (from, to));
+                assert!(
+                    (through - want).abs() < 1e-3,
+                    "{} of the way from {} to {} read as {}",
+                    want,
+                    from,
+                    to,
+                    through
+                );
+            }
+        }
+    }
+
+    /// Spec 0018: standing at a moon, the leg is its planet's, because the
+    /// ride runs on the line and the moons stand off it.
+    #[test]
+    fn the_map_reads_a_moon_as_its_planet() {
+        let door = door();
+        let stops = stops(door);
+        let io = stops.iter().position(|s| s.name == "Io").expect("a stop");
+        let map = mapped(&stops, io, stops[io].at, Vec3::Z, door);
+
+        assert_eq!(
+            map.leg.map(|(from, to, _)| (from, to)),
+            Some(("Jupiter", "Saturn"))
+        );
+    }
+
+    /// Spec 0018: and there is no leg at the far end facing out, because there
+    /// is nowhere to go.
+    #[test]
+    fn the_map_has_no_leg_past_the_end() {
+        let door = door();
+        let stops = stops(door);
+        let neptune = stops
+            .iter()
+            .position(|s| s.name == "Neptune")
+            .expect("a stop");
+        let at = resting(&stops, neptune - 1, neptune, door);
+
+        assert!(mapped(&stops, neptune, at, Vec3::Z, door).leg.is_none());
+        assert_eq!(
+            mapped(&stops, neptune, at, -Vec3::Z, door)
+                .leg
+                .map(|(from, to, _)| (from, to)),
+            Some(("Neptune", "Uranus")),
+            "turned round at Neptune the map does not show the way back"
+        );
+        // and the whole-line bar still says where you are
+        assert!((mapped(&stops, neptune, at, Vec3::Z, door).along - 1.0).abs() < 1e-3);
+    }
+
     /// Spec 0018: the posts stand up, and come at you often enough to read as
     /// speed.
     ///
@@ -1045,6 +1369,14 @@ mod tests {
             (1.0..=4.0).contains(&a_second),
             "{:.1} posts go by a second, which is not a rhythm",
             a_second
+        );
+        // and what you see when you are not riding: the next pair is close
+        // enough to stand as a row rather than as two lights in the distance
+        assert!(
+            POSTS < au() * 0.25,
+            "the posts are {} apart against a unit of {}",
+            POSTS,
+            au()
         );
 
         // and the big ones, one to the unit, with the Earth standing on the
