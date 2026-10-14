@@ -18,7 +18,7 @@
 //! and arithmetic can be checked without a speaker.
 
 use blitzkit::sound::Samples;
-use glam::Vec3;
+use glam::{vec3, Vec3};
 
 /// How many samples a second everything here is made at.
 ///
@@ -51,38 +51,57 @@ pub enum Underfoot {
     Gravel,
 }
 
-/// What a body at `at` is standing on.
+/// Which room of the building a point is in.
 ///
 /// Taken from where you are rather than from a flag somebody sets on the way
 /// through a door, because a flag is a second account of where you are and this
 /// building has learned what two accounts of one thing do.
 ///
-/// Read in the order the building is stacked: everything below the hall first,
-/// then the stair, then the two rooms off the hall's left wall, then the hall.
-/// Each test is the one that is true of nowhere else.
-pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
-    let floor = -crate::cellar::DOWN;
+/// **The one account of where the rooms are**, and the thing several others
+/// were standing in for. What is under your feet was the nearest this building
+/// had and it is not the same question: three rooms are floored in the same
+/// boards, and the pool is tile you are standing in water on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Room {
+    Hall,
+    Nook,
+    /// Its own, between the hall and the cellar, and floored like the cellar.
+    Stair,
+    Cellar,
+    /// Which holds the pool, the fountain and the sauna.
+    Baths,
+    Garden,
+}
 
-    if at.y < floor + 0.5 {
-        // the baths and the cellar are both down here, and the baths are the
-        // far side of the cellar's own wall
+/// Which room a point is in.
+///
+/// Read in the order the building is stacked: everything below the hall
+/// first, then the stair, then the rooms through the hall's left wall, then
+/// the hall itself.
+pub fn room_at(reaches: f32, at: Vec3) -> Room {
+    // below the hall's floor is the cellar, the baths, or the stair between
+    // them, and which one is a question about where you are and not how high.
+    //
+    // It was how high: anything in the three metres between the two floors
+    // counted as the stair. That is true of a body, whose feet are on one
+    // floor or the other, and false of a point. The sauna's own voice sounds
+    // from the middle of its room at 1.55 down, and the building put it on
+    // the stair.
+    if at.y < -0.1 {
+        // the stair runs from the hall's floor down to its foot, and nothing
+        // else in the building is over that strip of the cellar
+        if at.x > crate::cellar::stair_foot() - crate::cellar::TREAD
+            && at.z > crate::cellar::opening(reaches) - crate::cellar::WIDE * 0.5
+            && at.z < crate::cellar::opening(reaches) + crate::cellar::WIDE * 0.5
+        {
+            return Room::Stair;
+        }
+        // and the baths are the far side of the cellar's own wall
         if at.z > crate::cellar::opening(reaches) + crate::cellar::SPAN * 0.5 {
-            // and in the pool it is the water you hear and not the tile it
-            // is standing on. Asked of the same function that slows you down
-            // in it, so what you hear and what you can do cannot disagree.
-            if crate::spa::wading(reaches, at) {
-                return Underfoot::Water;
-            }
-
-            return Underfoot::Tile;
+            return Room::Baths;
         }
 
-        return Underfoot::Boards;
-    }
-    if at.y < -0.1 {
-        // on the stair, whose treads are drawn with the same boards as the
-        // floor they go down to
-        return Underfoot::Boards;
+        return Room::Cellar;
     }
 
     // the garden and the nook are both through the hall's left wall, and the
@@ -90,17 +109,37 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
     // enough on its own to tell them apart.
     //
     // Asked of `garden::under_the_sky`, which is the same question the storm
-    // asks and so is answered once. What is under your feet here is gravel
-    // because this is the garden, and not the other way about.
+    // asks and so is answered once.
     if at.x < crate::garden::wall_at() {
         if crate::garden::under_the_sky(reaches, at) {
-            return Underfoot::Gravel;
+            return Room::Garden;
         }
 
-        return Underfoot::Boards;
+        return Room::Nook;
     }
 
-    Underfoot::Carpet
+    Room::Hall
+}
+
+/// What a body at `at` is standing on.
+///
+/// Which room it is in, and then what that room is floored with. It used to
+/// be the other way about, with the rooms worked out inside here and only the
+/// floor coming back out, which left every other question about where you are
+/// to be answered again somewhere else.
+pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
+    match room_at(reaches, at) {
+        // in the pool it is the water you hear and not the tile it is
+        // standing on. Asked of the same function that slows you down in it,
+        // so what you hear and what you can do cannot disagree.
+        Room::Baths if crate::spa::wading(reaches, at) => Underfoot::Water,
+        Room::Baths => Underfoot::Tile,
+        // the stair's treads are drawn with the same boards as the floor they
+        // go down to
+        Room::Nook | Room::Stair | Room::Cellar => Underfoot::Boards,
+        Room::Garden => Underfoot::Gravel,
+        Room::Hall => Underfoot::Carpet,
+    }
 }
 
 /// How far you walk between steps.
@@ -383,26 +422,64 @@ pub fn adrift(piece: usize, many: usize) -> (usize, f32, f32) {
 /// hear from the hall.
 pub const CARRIES: f32 = 14.0;
 
-/// Which of the room's notes you can hear from here, if any.
+/// Which voice you can hear from here, if any.
 ///
-/// One, and the nearest. The engine plays what it is given one after another,
-/// per spec 0044, and that is not a mixer: four notes a second each a second
-/// long is a queue growing by three seconds every second, which after an hour
-/// or two is a gigabyte of audio waiting its turn and a machine on its knees.
-/// It is also why each of them is short.
+/// One, and the nearest in your own room. The engine plays what it is given
+/// one after another, per spec 0044, and that is not a mixer: four pieces a
+/// second each a second long is a queue growing by three seconds every second,
+/// which after an hour or two is a gigabyte of audio waiting its turn and a
+/// machine on its knees. It is also why each of them is short.
 ///
-/// So the building plays the voice of the room you are in, and the room you
-/// are in is the one whose voice is nearest.
-pub fn nearest(ear: Vec3, voices: &[Vec3]) -> Option<usize> {
+/// **In your own room, which is the half this was missing.** It used to be
+/// the nearest voice full stop, on the reasoning that the nearest voice is the
+/// one in the room you are in. That is not true of a building with rooms under
+/// other rooms: the baths sit beneath the garden, and from the middle of the
+/// garden the tub is 9.4 metres away and from its south end 5.4, both of them
+/// straight down through a floor. Nothing else is nearer, because the garden
+/// has no voice of its own, so the garden's background sound was a hot tub
+/// underneath it.
+///
+/// A distance with nothing checking what is between the two points is this
+/// building's commonest mistake. It has cost it a light through a wall, a
+/// storm through the whole place, and this.
+///
+/// **A doorway does not carry**, which is the simplification left in. Stand in
+/// the hall by the garden's opening and you hear the hall, where in life you
+/// would hear both. One voice at a time is already the rule, and a room you
+/// can see into is a harder question than the one this was wrong about.
+pub fn nearest(ear: Vec3, here: Room, voices: &[(Room, Vec3)]) -> Option<usize> {
     voices
         .iter()
         .enumerate()
-        .filter(|(_, at)| ear.distance(**at) <= CARRIES)
+        .filter(|(_, (room, at))| *room == here && ear.distance(*at) <= CARRIES)
         .min_by(|one, other| {
-            ear.distance_squared(*one.1)
-                .total_cmp(&ear.distance_squared(*other.1))
+            ear.distance_squared(one.1 .1)
+                .total_cmp(&ear.distance_squared(other.1 .1))
         })
         .map(|(n, _)| n)
+}
+
+/// One voice: which room it is in, where it sounds from, what makes its
+/// pieces and the seed they come off.
+pub type Voice = (Room, Vec3, fn(u32) -> Samples, u32);
+
+/// Every voice in the building.
+///
+/// Here rather than in the drawing, so that where a voice is and which room
+/// that puts it in are one account and a test can walk them.
+pub fn voices(reaches: f32) -> Vec<Voice> {
+    vec![
+        (Room::Cellar, crate::cellar::hearth(reaches), fire, 0xF12E),
+        (Room::Baths, crate::spa::stream(reaches).0, trickle, 0x7121),
+        (Room::Baths, crate::spa::tub(reaches).0, bubble, 0xB0B1),
+        (
+            Room::Baths,
+            crate::spa::sauna(reaches).center(),
+            steam,
+            0x57EA,
+        ),
+        (Room::Hall, vec3(0.0, crate::EYE, 0.0), hum, 0x4040),
+    ]
 }
 
 /// The one random number generator in here, which is the same one the textures
@@ -671,6 +748,100 @@ pub fn steam(seed: u32) -> Samples {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The building, for the tests that ask about where things are in it.
+    fn a_room() -> crate::room::Room {
+        crate::room::Room::of(
+            (0..12)
+                .map(|n| {
+                    crate::cabinet::Cabinet::found(
+                        &format!("game{}", n),
+                        std::path::Path::new("/nowhere"),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    /// Spec 0009: every voice is in the room it says it is in.
+    ///
+    /// Which room a voice is in and where it sounds from are one account now,
+    /// and this is what holds them together: move the tub and the room it
+    /// claims follows, or this fails and says so.
+    #[test]
+    fn every_voice_is_in_the_room_it_says_it_is() {
+        let reaches = a_room().reaches;
+
+        for (room, at, _, _) in voices(reaches) {
+            assert_eq!(
+                room_at(reaches, at),
+                room,
+                "a voice at {:?} says it is in the {:?} and stands in the {:?}",
+                at,
+                room,
+                room_at(reaches, at)
+            );
+        }
+    }
+
+    /// Spec 0009: the garden does not hear the baths through its own floor.
+    ///
+    /// The fault this rule was written for, in the building's own numbers. The
+    /// baths sit under the garden: from the middle of the garden the tub is
+    /// 9.4 metres away and from its south end 5.4, both of them straight down
+    /// through a floor, and both inside the 14 a voice carries. Nothing else
+    /// was nearer, because the garden has no voice of its own, so the garden's
+    /// background sound was a hot tub underneath it.
+    ///
+    /// Walked across the garden rather than checked in its middle, because the
+    /// south end is where it was worst and the middle is where it was obvious.
+    #[test]
+    fn the_garden_does_not_hear_the_baths_through_its_floor() {
+        let reaches = a_room().reaches;
+        let places: Vec<(Room, Vec3)> = voices(reaches)
+            .into_iter()
+            .map(|(room, at, _, _)| (room, at))
+            .collect();
+        let middle = crate::garden::at(reaches);
+        let mut near = 0;
+
+        for step in 0..=10 {
+            let along = middle.z - 7.0 + 14.0 * step as f32 / 10.0;
+            let stood = glam::vec3(middle.x, 0.0, along);
+
+            assert_eq!(
+                room_at(reaches, stood),
+                Room::Garden,
+                "the test walked out of the garden at z {:.1}",
+                along
+            );
+
+            let heard = nearest(stood, Room::Garden, &places);
+
+            assert!(
+                heard.is_none(),
+                "from the garden at z {:.1} you hear the {:?}",
+                along,
+                places[heard.unwrap()].0
+            );
+
+            // and the thing that made it wrong is still true: something in the
+            // baths is well inside earshot from here
+            if places
+                .iter()
+                .any(|(room, at)| *room == Room::Baths && stood.distance(*at) <= CARRIES)
+            {
+                near += 1;
+            }
+        }
+
+        assert!(
+            near > 5,
+            "only {} of eleven places in the garden have the baths within earshot, \
+             so this test is no longer about anything",
+            near
+        );
+    }
 
     /// Spec 0016: the storm is heard where the sky is, and the sky is a place
     /// rather than a floor.
@@ -1343,24 +1514,39 @@ mod tests {
     /// waiting its turn and a machine with nothing left to draw with.
     #[test]
     fn one_voice_plays_at_a_time_and_it_is_the_nearest() {
+        let here = Room::Baths;
         let voices = [
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(3.0, 0.0, 0.0),
-            Vec3::new(40.0, 0.0, 0.0),
+            (here, Vec3::new(0.0, 0.0, 0.0)),
+            (here, Vec3::new(3.0, 0.0, 0.0)),
+            (here, Vec3::new(40.0, 0.0, 0.0)),
+            // and one a couple of metres away in another room, which is the
+            // case the garden was losing to: near enough to win on distance
+            // and not yours to hear
+            (Room::Garden, Vec3::new(2.0, 0.0, 0.0)),
         ];
 
-        // the nearest of the ones you can hear, and only ever one
-        assert_eq!(nearest(Vec3::new(2.6, 0.0, 0.0), &voices), Some(1));
-        assert_eq!(nearest(Vec3::new(-1.0, 0.0, 0.0), &voices), Some(0));
+        // the nearest of the ones you can hear in your own room, and only one
+        assert_eq!(nearest(Vec3::new(2.6, 0.0, 0.0), here, &voices), Some(1));
+        assert_eq!(nearest(Vec3::new(-1.0, 0.0, 0.0), here, &voices), Some(0));
+
+        // the next room's is nearest of the lot at 2.1 and is not heard
+        assert_eq!(nearest(Vec3::new(2.1, 0.0, 0.0), here, &voices), Some(1));
+        // and from in that room it is the only one heard
+        assert_eq!(
+            nearest(Vec3::new(2.1, 0.0, 0.0), Room::Garden, &voices),
+            Some(3)
+        );
+        // a room with nothing in it is silent rather than borrowing
+        assert_eq!(nearest(Vec3::ZERO, Room::Nook, &voices), None);
 
         // and nothing at all when they are all out of earshot
-        assert_eq!(nearest(Vec3::new(200.0, 0.0, 0.0), &voices), None);
-        assert_eq!(nearest(Vec3::ZERO, &[]), None);
+        assert_eq!(nearest(Vec3::new(200.0, 0.0, 0.0), here, &voices), None);
+        assert_eq!(nearest(Vec3::ZERO, here, &[]), None);
 
         // the far one is past earshot even standing next to the others
-        assert_ne!(nearest(Vec3::new(20.0, 0.0, 0.0), &voices), Some(2));
+        assert_ne!(nearest(Vec3::new(20.0, 0.0, 0.0), here, &voices), Some(2));
 
-        // and a note is short, because anything else from the world waits
+        // and a piece is short, because anything else from the world waits
         // behind it
         for (what, sound) in all() {
             if !matches!(what, "fire" | "trickle" | "hum" | "steam" | "bubble") {
@@ -1369,7 +1555,7 @@ mod tests {
 
             assert!(
                 sound.seconds() <= PIECE + 1e-3,
-                "the {} runs {} seconds and a note is {}",
+                "the {} runs {} seconds and a piece is {}",
                 what,
                 sound.seconds(),
                 PIECE

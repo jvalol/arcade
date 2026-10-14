@@ -194,16 +194,49 @@ A pick does come up twice in a row now and then, and that is fine: two of the
 same four tenths running is a slightly longer sound. It is the order that
 gives a loop away rather than the repeat.
 
-So the building plays the voice of the room you are in, which is the nearest
-one within earshot, and nothing else until it has finished. The pieces are
-short for the same reason: anything else from somewhere in the world waits
-behind one, and a splash a whole second late is a splash for something you have
-forgotten doing.
+So the building plays the nearest voice **in the room you are in**, and
+nothing else until it has finished. The pieces are short for the same reason:
+anything else from somewhere in the world waits behind one, and a splash a
+whole second late is a splash for something you have forgotten doing.
 
-**The rooms each have a voice of their own.** The cellar has its fire. The
-baths have the fountain and the tub's blower. The sauna, with its door shut,
-has the stove ticking and the hiss of what is on it. The hall has the cabinets,
-which hum the way a room full of them hums.
+**In the room you are in, which is the half this was missing.** It was the
+nearest voice full stop, on the reasoning that the nearest voice is the one in
+the room you are in. That is not true of a building with rooms under other
+rooms. The baths sit beneath the garden: from the middle of the garden the
+tub is 9.4 metres away and from its south end 5.4, both of them straight down
+through a floor and both inside the 14 metres a voice carries. Nothing else was
+nearer, because the garden has no voice at all, so the garden's background
+sound was a hot tub underneath it.
+
+A distance with nothing checking what is between the two points is this
+building's commonest mistake. It has cost it a light through a wall, a storm
+through the whole place, and this.
+
+**Which room you are in is `noise::room_at`**, and it is the one account of
+where the rooms are. What is under your feet reads it now rather than working
+the rooms out for itself: three rooms are floored in the same boards and the
+pool is tile you are standing in water on, so a floor was never the same
+question as a room.
+
+It tells the stair apart by where it is and not by how high. How high is true
+of a body, whose feet are on one floor or the other, and false of a point: the
+sauna's voice sounds from the middle of its own room, 1.55 down, and the first
+version of this put it on the stair.
+
+**A doorway does not carry**, which is the simplification left in. Stand in the
+hall by the garden's opening and you hear the hall, where in life you would
+hear both. One voice at a time is already the rule, and a room you can see into
+is a harder question than the one this was wrong about.
+
+**Most rooms have a voice of their own.** The cellar has its fire. The baths
+have the fountain and the tub's blower. The sauna, with its door shut, has the
+stove ticking and the hiss of what is on it. The hall has the cabinets, which
+hum the way a room full of them hums.
+
+**The garden, the nook and the stair have none**, and are silent. That is not
+a decision, it is the state this leaves them in: the garden was never given one
+and was borrowing the tub through its floor, which is what hid it. What a zen
+garden sounds like is its own question and spec 0010's to answer.
 
 **Where a sound is heard from** is the engine's business, so everything that
 comes from somewhere goes through `play_at` and the listener is moved to your
@@ -222,7 +255,9 @@ the engine's and stays available.
 - None of them clips: no sample past one. — `noise::tests::nothing_is_louder_than_one`
 - None of them starts or ends with a jump, which is a click. — `noise::tests::nothing_begins_or_ends_with_a_click`
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
-- One voice plays at a time, and it is the nearest one within earshot. — `noise::tests::one_voice_plays_at_a_time_and_it_is_the_nearest`
+- One voice plays at a time, and it is the nearest one within earshot in your own room. — `noise::tests::one_voice_plays_at_a_time_and_it_is_the_nearest`
+- Every voice is in the room it says it is in. — `noise::tests::every_voice_is_in_the_room_it_says_it_is`
+- The garden does not hear the baths through its own floor. — `noise::tests::the_garden_does_not_hear_the_baths_through_its_floor`
 - Every floor has footsteps and every one of them reads. — `noise::tests::every_floor_has_footsteps_that_read`
 - No two floors share a recording. — `noise::tests::no_two_floors_sound_the_same`
 - Each room sounds like what it is floored with. — `noise::tests::each_room_sounds_like_its_own_floor`

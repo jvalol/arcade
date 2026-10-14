@@ -368,7 +368,7 @@ struct Arcade {
     /// It has no length. What has a length is the piece of it the engine is
     /// handed, and one played two and a half times a second is a loop, which
     /// is why there are several of each.
-    voices: Vec<(Vec3, Vec<Samples>)>,
+    voices: Vec<(noise::Room, Vec3, Vec<Samples>)>,
     /// How many pieces have gone, which is what picks and bends the next.
     pieced: usize,
     /// How long the piece sounding now has left.
@@ -2418,30 +2418,25 @@ impl Game for Arcade {
             .map(|n| noise::splash(2.0 + n as f32 * 1.2, 0x51A5 + n * 7919))
             .collect();
 
-        // and every voice in the building, each from where it sounds
-        let fire = cellar::hearth(self.room.reaches);
-        let (tub, _, _) = spa::tub(self.room.reaches);
-        let (spout, _) = spa::stream(self.room.reaches);
-        let sauna = spa::sauna(self.room.reaches).center();
+        // and every voice in the building, in several pieces each, off a seed
+        // apiece. Spec 0009: one piece queued again the moment it runs out is
+        // the same four tenths of a second two and a half times a second, and
+        // that is a loop whatever is in it. These all took a seed already, so
+        // this costs a few kilobytes.
+        //
+        // Which room each is in comes from `noise::voices` rather than from
+        // here, so where a voice is and which room that puts it in cannot
+        // disagree.
+        self.voices = noise::voices(self.room.reaches)
+            .into_iter()
+            .map(|(room, at, make, seed)| {
+                let pieces = (0..noise::PIECES)
+                    .map(|n| make(seed.wrapping_add(n as u32 * 7919)))
+                    .collect();
 
-        // several pieces of each, off a seed apiece. Spec 0009: one piece
-        // queued again the moment it runs out is the same four tenths of a
-        // second two and a half times a second, and that is a loop whatever
-        // is in it. These all took a seed already, so this costs a few
-        // kilobytes.
-        let several = |seed: u32, make: &dyn Fn(u32) -> Samples| -> Vec<Samples> {
-            (0..noise::PIECES)
-                .map(|n| make(seed.wrapping_add(n as u32 * 7919)))
-                .collect()
-        };
-
-        self.voices = vec![
-            (fire, several(0xF12E, &noise::fire)),
-            (spout, several(0x7121, &noise::trickle)),
-            (tub, several(0xB0B1, &noise::bubble)),
-            (sauna, several(0x57EA, &noise::steam)),
-            (vec3(0.0, crate::EYE, 0.0), several(0x4040, &noise::hum)),
-        ];
+                (room, at, pieces)
+            })
+            .collect();
         self.sounding = 0.0;
         self.knock = Some(noise::clack(0xC1AC));
         self.was_standing = self.wrecker.standing();
@@ -2662,16 +2657,23 @@ impl Game for Arcade {
         self.sounding -= dt;
         if self.sounding <= 0.0 {
             let ear = self.looking_from();
-            let places: Vec<Vec3> = self.voices.iter().map(|(at, _)| *at).collect();
+            let places: Vec<(noise::Room, Vec3)> = self
+                .voices
+                .iter()
+                .map(|(room, at, _)| (*room, *at))
+                .collect();
 
-            let heard = noise::nearest(ear, &places);
+            // the voice of the room you are in, which is not the same as the
+            // nearest voice: the baths are under the garden, and the tub was
+            // nearer to most of the garden than anything the garden had.
+            let heard = noise::nearest(ear, noise::room_at(self.room.reaches, self.at), &places);
             // picked and bent the way a footstep is, or five pieces in a
             // fixed order is a bar of five beats. Spec 0009.
             self.pieced = self.pieced.wrapping_add(1);
             let pieced = self.pieced;
 
             self.sounding = match heard.and_then(|n| self.voices.get(n)) {
-                Some((at, voice)) => {
+                Some((_, at, voice)) => {
                     let (which, pitch, quieter) = noise::adrift(pieced, voice.len());
 
                     match voice.get(which) {
