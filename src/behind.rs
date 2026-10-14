@@ -88,6 +88,110 @@ pub fn way() -> (f32, f32) {
     (WAY_OFF - WAY_WIDE * 0.5, WAY_OFF + WAY_WIDE * 0.5)
 }
 
+/// How far back from the wall the worn track in the carpet runs, how wide the
+/// worn part of it is, and how much of it is the soft edge either side.
+///
+/// Spec 0020. The track is the only thing in the hall that says the way in is
+/// here, and what lets it say so without saying anything is that it is wear
+/// and not a mark. Everything else in this hall is a thing somebody put there.
+/// This is a thing that happened.
+///
+/// 3.2 back, and that is the dial on this. Nobody looks at the wall they woke
+/// with their back to, so a track that only exists at the foot of it is seen
+/// by somebody already standing there. What everybody does do is walk back up
+/// the aisle, and the length of this is how much of that walk it is in front
+/// of them for.
+///
+/// It was 2.2, the depth of the open bay at the near end, and 2.2 came out as
+/// a stain at the skirting rather than as a path: a lane shorter than it is
+/// away from you reads as a patch, and at that length most of it is behind
+/// the turn. Longer is the whole of the fix. Nothing is in the way of it
+/// either, because the track keeps to the middle of the aisle until it is
+/// well inside the bay and the cabinets are out at the walls.
+///
+/// 0.78 wide, which is a body's 0.9 less a little. A worn lane is narrower
+/// than the people who wore it, because feet land under somebody rather than
+/// out at their shoulders.
+pub const TRACK_BACK: f32 = 3.2;
+pub const TRACK_WIDE: f32 = 0.78;
+pub const TRACK_FADE: f32 = 0.14;
+
+/// How much plain quad there is round it.
+///
+/// The band fades out well inside the quad, so nothing drawn has a straight
+/// edge and the rectangle it is painted on is never a thing you can see. Wear
+/// with a corner on it is a rug.
+pub const TRACK_ROUND: f32 = 0.3;
+
+/// How far past the wall's inner face it carries, and how far above the carpet
+/// it lies.
+///
+/// The one edge of this that is straight is the one at the wall, and it is
+/// straight because the wall is standing on it. Carried a hand past the face,
+/// the texture's own seam is inside the wall rather than at the foot of it: a
+/// repeating sampler wraps at the edge of its picture, and the wrap would
+/// otherwise show as a hair of half strength wear along the skirting.
+///
+/// Two millimetres up, the hair the stars out past the door lie above their
+/// own floor. In the carpet's own plane it would be two exposed faces sharing
+/// one, which is this building's commonest fault and has cost it seven
+/// sittings.
+pub const TRACK_UNDER: f32 = 0.1;
+pub const TRACK_HIGH: f32 = 0.002;
+
+/// The worn track: the quad it is painted on, and where its two ends fall in
+/// that quad's own u and v.
+///
+/// The one account of it. The quad, the weave's curve and the tests all read
+/// this, because a hint whose drawn end has drifted off the hole it points at
+/// is a hint that lies.
+pub struct Track {
+    pub at: Vec3,
+    pub size: Vec3,
+    /// Where it leaves the aisle, and where it meets the wall.
+    pub aisle: Vec2,
+    pub wall: Vec2,
+    /// Its half width and its soft edge, as shares of the quad's length down
+    /// the room, and how much wider than long the quad is.
+    ///
+    /// The quad was square for a while so that one unit of it was one length
+    /// either way and the weaving needed neither of these. A square quad also
+    /// caps how long the track can be, because the hall is only 5.4 across,
+    /// and the length is the one number on this worth turning. `shape` buys
+    /// that back: it is what the weaving measures across with, so a lane of
+    /// one width comes out that width wherever the curve has got to.
+    pub wide: f32,
+    pub fade: f32,
+    pub shape: f32,
+}
+
+pub fn track(reaches: f32) -> Track {
+    let face = reaches - THICK * 0.5;
+    // the middle of the aisle at the mouth of the bay, and the middle of the
+    // hole at the foot of the wall
+    let aisle = vec2(0.0, face - TRACK_BACK);
+    let wall = vec2(WAY_OFF, face);
+
+    // the two ends, and the band's own room round them
+    let round = Vec2::splat(TRACK_WIDE * 0.5 + TRACK_FADE + TRACK_ROUND);
+    let span = (wall - aisle).abs() + round * 2.0;
+    // centred across, and hung off the wall end down the room, so the quad
+    // stops a hand inside the wall rather than coming out the far side of it
+    let far = vec2((aisle.x + wall.x) * 0.5 + span.x * 0.5, face + TRACK_UNDER);
+    let near = far - span;
+    let on_it = |end: Vec2| (end - near) / span;
+
+    Track {
+        at: vec3((near.x + far.x) * 0.5, TRACK_HIGH, (near.y + far.y) * 0.5),
+        size: vec3(span.x, 1.0, span.y),
+        aisle: on_it(aisle),
+        wall: on_it(wall),
+        wide: TRACK_WIDE * 0.5 / span.y,
+        fade: TRACK_FADE / span.y,
+        shape: span.x / span.y,
+    }
+}
+
 /// How wide and how high the door at the far end is, per spec 0017.
 ///
 /// 1.5 because `WAY_WIDE` is, and that number was paid for once already: at
@@ -1422,6 +1526,138 @@ mod tests {
             "two seconds over open floor covers {} and through the door {}",
             other,
             one
+        );
+    }
+
+    /// Where a point of the track's quad falls in the room, which is the trip
+    /// the weave makes in reverse.
+    fn back(track: &Track, on: Vec2) -> Vec2 {
+        vec2(
+            track.at.x + (on.x - 0.5) * track.size.x,
+            track.at.z + (on.y - 0.5) * track.size.z,
+        )
+    }
+
+    /// Spec 0020: the wall end of the track is in the hole, and the aisle end
+    /// is out where somebody walking the hall actually walks.
+    ///
+    /// Round the trip rather than off the constants, because the constants
+    /// cannot drift from themselves. What can drift is the mapping into the
+    /// quad's own units: a quad moved or resized without the two ends moving
+    /// with it is a track pointing at a patch of wall.
+    #[test]
+    fn the_worn_track_ends_at_the_hole() {
+        let reaches = room().reaches;
+        let track = track(reaches);
+        let (from, to) = way();
+        let (at_wall, at_aisle) = (back(&track, track.wall), back(&track, track.aisle));
+
+        assert!(
+            at_wall.x > from && at_wall.x < to,
+            "the track meets the wall at x {:.3}, and the hole is {:.3} to {:.3}",
+            at_wall.x,
+            from,
+            to
+        );
+        assert!(
+            (at_wall.y - (reaches - THICK * 0.5)).abs() < 1e-3,
+            "the track meets the wall at z {:.3} and the wall's face is at {:.3}",
+            at_wall.y,
+            reaches - THICK * 0.5
+        );
+
+        // and it comes from outside the hole's own width, so it crosses the
+        // floor rather than sitting in the doorway
+        assert!(
+            at_aisle.x > to,
+            "the track starts at x {:.3}, which is inside the hole's {:.3} to {:.3}",
+            at_aisle.x,
+            from,
+            to
+        );
+        assert!(
+            at_wall.y - at_aisle.y > 1.0,
+            "the track is only {:.3} long down the room",
+            at_wall.y - at_aisle.y
+        );
+    }
+
+    /// Spec 0020: the wear fades out inside its own quad on three sides, so
+    /// nothing drawn has a straight edge and the rectangle it is painted on is
+    /// not a thing you can see.
+    ///
+    /// Three sides. The fourth is at the wall and is straight because the wall
+    /// is standing on it.
+    ///
+    /// The two ends are enough to say it of the whole curve. A quadratic lies
+    /// inside the triangle of its three points, and `carpet::worn` puts its
+    /// middle point at one end's u and between the two ends' v, so the curve
+    /// never leaves the box the ends make. That is
+    /// `carpet::tests::the_wear_keeps_between_its_two_ends`.
+    #[test]
+    fn the_worn_track_fades_out_before_the_edge_of_its_quad() {
+        let track = track(room().reaches);
+        // how far the wear reaches, down the room and across it. The two are
+        // not the same number: `wide` and `fade` are shares of the quad's
+        // length, and across it a share is a different distance.
+        let reach = track.wide + track.fade;
+        let across = reach / track.shape;
+
+        for (which, on) in [("the aisle", track.aisle), ("the wall", track.wall)]
+            .iter()
+            .copied()
+        {
+            for (side, room, reach) in [
+                ("the west edge", on.x, across),
+                ("the east edge", 1.0 - on.x, across),
+                ("down the room", on.y, reach),
+            ]
+            .iter()
+            .copied()
+            {
+                assert!(
+                    room > reach,
+                    "{} end is {:.4} off {} and the wear reaches {:.4}",
+                    which,
+                    room,
+                    side,
+                    reach
+                );
+            }
+        }
+    }
+
+    /// Spec 0020: all of it lies on the hall's own carpet.
+    ///
+    /// Both ways. Off the sides it would lie on nothing at all, and out past
+    /// the near wall it would come up on the floor of the dark room, where
+    /// there is no carpet to be worn and no reason for a patch of one.
+    #[test]
+    fn the_worn_track_lies_on_the_halls_carpet() {
+        let room = room();
+        let track = track(room.reaches);
+        let carpet = room.floors()[0];
+        let (at, half) = (track.at, vec2(track.size.x, track.size.z) * 0.5);
+
+        assert!(
+            at.x - half.x > carpet.min.x - 1e-3 && at.x + half.x < carpet.max.x + 1e-3,
+            "the track runs x {:.3} to {:.3} and the carpet {:.3} to {:.3}",
+            at.x - half.x,
+            at.x + half.x,
+            carpet.min.x,
+            carpet.max.x
+        );
+        assert!(
+            at.z + half.y < carpet.max.z + 1e-3,
+            "the track reaches z {:.3} and the carpet stops at {:.3}",
+            at.z + half.y,
+            carpet.max.z
+        );
+        assert!(
+            at.z - half.y > carpet.min.z - 1e-3,
+            "the track starts at z {:.3} and the carpet starts at {:.3}",
+            at.z - half.y,
+            carpet.min.z
         );
     }
 }

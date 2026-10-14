@@ -128,8 +128,21 @@ not that it is empty but that it is enormous, and there is exactly one thing
 worth building that needs somewhere enormous and dark. A hidden empty space is
 worth one moment. A hidden solar system is worth the walk back.
 
-**No way of telling you it exists.** No mark on the wall, no draught, no sound
-through it. Somebody who never walks into that wall never finds it, and that is
-the design rather than a gap in it.
+**No way of telling you it exists.** ~~No mark on the wall, no draught, no
+sound through it. Somebody who never walks into that wall never finds it, and
+that is the design rather than a gap in it.~~
+
+Struck 2026-10-13. Spec 0020 wears a lane in the carpet across the near bay,
+from the middle of the aisle to the foot of the wall at the hole. The
+reasoning above held while there was nothing behind the wall worth the walk,
+and by the time the orrery and thirty-three kilometres of solar system were in
+there it had become a way of hiding most of what has been built in this
+building from everyone who uses it.
+
+The letter of it survives: there is still no mark on the wall, no draught and
+no sound through it, because the hint is on the floor and is wear. Everything
+else in this hall is a thing somebody installed and that is a trace of
+somebody having been here, which is the one thing that can say where to go
+without saying anything at all.
 
 **No second way out.** The way in is the way out.

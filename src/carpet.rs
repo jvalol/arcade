@@ -57,6 +57,26 @@ pub fn ground() -> glam::Vec3 {
     )
 }
 
+/// The brightest thread thrown over it, as a colour.
+///
+/// Only the checks ask, the same way only they ask for the ground. `aim`
+/// counts what the wear of spec 0020 does to both, and a wash that mutes the
+/// loudest thing on this floor mutes the rest of it too.
+#[cfg(test)]
+pub fn thread() -> glam::Vec3 {
+    let brightest = THREADS
+        .iter()
+        .copied()
+        .max_by_key(|thread| thread.iter().map(|shade| *shade as u32).sum::<u32>())
+        .unwrap_or([255, 255, 255]);
+
+    glam::vec3(
+        brightest[0] as f32 / 255.0,
+        brightest[1] as f32 / 255.0,
+        brightest[2] as f32 / 255.0,
+    )
+}
+
 /// The rug in the nook, which is not the arcade's carpet.
 ///
 /// The room out there is a dim neon hall and its floor is confetti on black,
@@ -662,6 +682,139 @@ pub fn woven() -> TextureData {
     TextureData::from_pixels(WOVEN, WOVEN, pixels)
 }
 
+/// How many texels across the worn track is, how finely its curve is measured
+/// on the way in, and how much of it the speck takes off.
+///
+/// 256 over a quad a little under four units across is a texel every centimetre
+/// and a half, which is finer than anything a wash with no edge in it needs.
+pub const WORN: u32 = 256;
+const WORN_STEPS: u32 = 48;
+const WORN_SPECK: f32 = 0.2;
+const WORN_SEED: u32 = 0x5EED_0009;
+
+/// Where the track's two control points sit, as shares of the way from the
+/// aisle to the wall.
+///
+/// The curve is a cubic and an S, and it has to be both. A Bezier leaves and
+/// arrives along the line to its nearer control point, so a point out at the
+/// aisle's own x holds the lane straight up the aisle before it turns, and a
+/// point in at the wall's own x brings it to the hole face on. Somebody goes
+/// through a doorway square, and a lane meeting the wall at an angle reads as
+/// passing by rather than as going in.
+///
+/// It was a quadratic, with the one control point in at the wall's x. One
+/// point cannot do both jobs, and the one it did was the arrival: a quadratic
+/// moves most of the way across in its first third, so by the time the wear
+/// had come up out of nothing the lane was already over at the wall and the
+/// whole thing read as a rug laid straight at the skirting. With two points
+/// the across is a smoothstep, which is to say it happens in the middle,
+/// which is where somebody walking actually turns.
+const WORN_LEAVES: f32 = 0.4;
+const WORN_ARRIVES: f32 = 0.75;
+
+/// How much of the track the wear comes up over, as a share of its length.
+///
+/// Wear is heaviest where the traffic converges, so it has to come up from
+/// nothing somewhere, and a lane with a start you can see is a painted line.
+/// Over the whole length, which is what this was, it is half strength at the
+/// half way point and the track reads as a stain at the wall with a smear
+/// behind it. Over the first two fifths it comes up while it is still out in
+/// the aisle and is a lane for the rest of the way.
+const WORN_TAPER: f32 = 0.3;
+
+/// Nought below nought, one above one, and an S between them.
+fn smooth(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// The track itself, as a line of points and how far down it each one is.
+///
+/// Measured once into a line rather than solved for each of sixty-five
+/// thousand texels. A Bezier lies inside the hull of its points, and all four
+/// of these sit at one end's u or the other and between the two ends' v, so
+/// the curve never leaves the box the two ends make. `behind` leans on that:
+/// it keeps its quad clear of the two ends and so takes the whole track with
+/// it.
+fn curve(aisle: glam::Vec2, wall: glam::Vec2) -> Vec<(glam::Vec2, f32)> {
+    let down = wall.y - aisle.y;
+    let leaves = glam::vec2(aisle.x, aisle.y + down * WORN_LEAVES);
+    let arrives = glam::vec2(wall.x, aisle.y + down * WORN_ARRIVES);
+
+    (0..=WORN_STEPS)
+        .map(|n| {
+            let t = n as f32 / WORN_STEPS as f32;
+            let rest = 1.0 - t;
+
+            (
+                aisle * (rest * rest * rest)
+                    + leaves * (3.0 * rest * rest * t)
+                    + arrives * (3.0 * rest * t * t)
+                    + wall * (t * t * t),
+                t,
+            )
+        })
+        .collect()
+}
+
+/// The wear in the carpet where feet have gone: white, with the shape of it in
+/// the alpha. Spec 0020.
+///
+/// White on purpose. What colour wear is belongs with every other colour in
+/// `aim`, and `aim::WORN` is what this is multiplied by, so the alpha here is
+/// a mask running nought to one and nothing else.
+///
+/// The two ends and the two widths come in rather than being worked out here,
+/// because where the track runs is `behind`'s to say and this only weaves it.
+/// They are in the quad's own units, which is why that quad is square: a band
+/// of one width on a quad half as wide as it is long comes out twice as wide
+/// across the turn as it is along the straight.
+///
+/// Nothing in here has a straight edge. The band is full inside its own width
+/// and gone by the end of the fade, and the fade is a few centimetres rather
+/// than a metre: a wash falling off over a metre is a glow, and a glow on a
+/// floor reads as a lamp rather than as wear.
+pub fn worn(aisle: glam::Vec2, wall: glam::Vec2, wide: f32, fade: f32, shape: f32) -> TextureData {
+    let along = curve(aisle, wall);
+
+    let mut pixels = Vec::with_capacity((WORN * WORN * 4) as usize);
+    for y in 0..WORN {
+        for x in 0..WORN {
+            let at = glam::vec2(
+                (x as f32 + 0.5) / WORN as f32,
+                (y as f32 + 0.5) / WORN as f32,
+            );
+            // how far off the track this texel is, and how far down the track
+            // the nearest part of it lies
+            let (off, down) = along
+                .iter()
+                .map(|(point, t)| {
+                    // across the quad in the quad's own length rather than in
+                    // its width, so a lane of one width is that width
+                    // wherever the curve has got to
+                    let off = (at - *point) * glam::vec2(shape, 1.0);
+
+                    (off.length(), *t)
+                })
+                .min_by(|one, other| one.0.total_cmp(&other.0))
+                .unwrap_or((f32::MAX, 0.0));
+
+            // across the lane: full inside it, nothing past the fade, soft
+            // between the two. And down it: nothing where it leaves the aisle,
+            // full by `WORN_TAPER` of the way along.
+            let worn = smooth((wide + fade - off) / fade) * smooth(down / WORN_TAPER);
+            // and specked, so it is pile rather than an airbrush
+            let roll = (from((y * WORN + x) ^ WORN_SEED) % 1000) as f32 / 1000.0;
+            let shade = worn * (1.0 - WORN_SPECK * roll) * 255.0;
+
+            pixels.extend_from_slice(&[255, 255, 255, shade.clamp(0.0, 255.0) as u8]);
+        }
+    }
+
+    TextureData::from_pixels(WORN, WORN, pixels)
+}
+
 /// A surface with something on it rather than nothing: a base colour with a
 /// fine speck through it.
 ///
@@ -762,6 +915,119 @@ pub fn tiled(seed: u32) -> TextureData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The track as it is actually laid, so these read the picture the room
+    /// gets rather than one made up for the test.
+    fn track() -> (crate::behind::Track, TextureData) {
+        let track = crate::behind::track(9.0);
+        let picture = worn(track.aisle, track.wall, track.wide, track.fade, track.shape);
+
+        (track, picture)
+    }
+
+    /// How worn a texel is, nought to one.
+    fn wear(picture: &TextureData, at: glam::Vec2) -> f32 {
+        let on = |v: f32| ((v * WORN as f32) as u32).min(WORN - 1);
+        let n = ((on(at.y) * WORN + on(at.x)) * 4 + 3) as usize;
+
+        picture.levels[0].pixels[n] as f32 / 255.0
+    }
+
+    /// Spec 0020: the curve stays inside the box its two ends make.
+    ///
+    /// `behind::tests::the_worn_track_fades_out_before_the_edge_of_its_quad`
+    /// measures the two ends and says the whole track is clear of the edge of
+    /// the picture. This is the half of that claim the ends cannot carry: a
+    /// bend that swung wide would put the track out past them and nothing over
+    /// there would know.
+    #[test]
+    fn the_wear_keeps_between_its_two_ends() {
+        let (track, _) = track();
+        let low = track.aisle.min(track.wall);
+        let high = track.aisle.max(track.wall);
+
+        for (at, t) in curve(track.aisle, track.wall) {
+            assert!(
+                at.x >= low.x - 1e-4
+                    && at.x <= high.x + 1e-4
+                    && at.y >= low.y - 1e-4
+                    && at.y <= high.y + 1e-4,
+                "{:.3} of the way down, the track is at {:?} and its ends box {:?} to {:?}",
+                t,
+                at,
+                low,
+                high
+            );
+        }
+    }
+
+    /// Spec 0020: the wear is heaviest where the track meets the wall, nothing
+    /// where it leaves the aisle, and nothing a stride to either side of it.
+    ///
+    /// The last of those is the one that matters. A wash that reached a stride
+    /// off the lane would be a glow on the floor, and a glow on a floor reads
+    /// as a lamp rather than as something feet did.
+    #[test]
+    fn the_wear_is_heaviest_at_the_wall_and_gone_a_stride_off_it() {
+        let (track, picture) = track();
+        let (at_wall, at_aisle) = (wear(&picture, track.wall), wear(&picture, track.aisle));
+
+        assert!(
+            at_wall > 0.75,
+            "the wear at the wall is {:.3} of itself",
+            at_wall
+        );
+        assert!(
+            at_aisle < 0.05,
+            "the wear where it leaves the aisle is {:.3} of itself",
+            at_aisle
+        );
+
+        // a stride is 0.75, and across the picture is measured in shares of
+        // the quad's own width
+        let stride = 0.75 / track.size.x;
+        for off in [-stride, stride].iter().copied() {
+            let beside = wear(&picture, track.wall + glam::vec2(off, 0.0));
+
+            assert!(
+                beside < 0.02,
+                "a stride off the lane the wear is {:.3} of itself",
+                beside
+            );
+        }
+    }
+
+    /// Spec 0020: there is no wear at the edge of the picture but the edge the
+    /// wall stands on.
+    ///
+    /// Which is what makes the quad invisible. Wear with a corner on it is a
+    /// rug, and the one straight edge this has is at the wall, where the wall
+    /// is standing on it.
+    #[test]
+    fn the_wear_runs_out_before_the_edge_of_its_picture() {
+        let (_, picture) = track();
+
+        for step in 0..WORN {
+            let on = (step as f32 + 0.5) / WORN as f32;
+
+            for (side, at) in [
+                ("the west edge", glam::vec2(0.0, on)),
+                ("the east edge", glam::vec2(1.0, on)),
+                ("down the room", glam::vec2(on, 0.0)),
+            ]
+            .iter()
+            .copied()
+            {
+                let found = wear(&picture, at);
+
+                assert_eq!(
+                    found, 0.0,
+                    "there is {:.3} of wear on {} at {:.3}",
+                    found, side, on
+                );
+            }
+        }
+    }
 
     /// Spec 0006: the boards run one way and are the same width all the way.
     #[test]

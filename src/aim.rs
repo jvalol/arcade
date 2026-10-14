@@ -134,6 +134,36 @@ pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
 /// plinths are lighter than both, because what stands on them is pale.
 pub const FLOOR: Vec4 = vec4(0.95, 0.95, 1.0, 1.0);
 pub const WALL: Vec4 = vec4(0.30, 0.22, 0.16, 1.0);
+
+/// The worn track in the carpet, per spec 0020.
+///
+/// Dark, which is the thing that is easy to get backwards here. Wear is
+/// flattened pile and flattened pile is paler than standing pile, so the
+/// first reading of this was a pale grey wash. A pale grey wash on this floor
+/// is a searchlight: the weave's ground is 16 of 255, which is five
+/// thousandths of full once it is in linear light, and the hardware blends in
+/// linear light, so a sixth of an alpha of a 0.6 grey comes out twenty times
+/// the floor it is lying on.
+///
+/// And then dark enough to see, which is the other half and was got wrong the
+/// other way. The first dark grey here doubled the ground in linear light and
+/// was invisible: two frames of the same bay with it on and off, differenced,
+/// came back four code values of 255 apart at the middle of the lane. Twice
+/// nothing is nothing. What this is measured in now is what the screen
+/// actually shows, and that is why the test on it converts back out of linear
+/// light before it counts anything.
+///
+/// At 0.085 the same difference is eighteen, which is a floor plainly a
+/// different tone where the feet have been and is still nowhere near a lamp.
+/// The alpha is what quietens the weave on top of that: a third of it takes
+/// the bright threads down a quarter, so the confetti goes dim in the lane
+/// rather than being painted over. Worn carpet is a weave gone quiet rather
+/// than a weave gone pale, and that is what this does.
+///
+/// Its colour is multiplied by whatever light falls on it like any other
+/// surface, so what it does to the carpet holds at any brightness and the
+/// hint reads the same in a lit bay as in a dark one.
+pub const WORN: Vec4 = vec4(0.085, 0.085, 0.085, 0.30);
 /// The cradle on its bench: its frame, its ropes and its balls. Spec 0006.
 pub const CRADLE_FRAME: Vec4 = vec4(0.20, 0.21, 0.25, 1.0);
 pub const CRADLE_ROPE: Vec4 = vec4(0.62, 0.60, 0.56, 1.0);
@@ -1121,6 +1151,68 @@ pub fn shape_colour(lit: bool) -> Vec4 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0020: the wear lifts the carpet's dark ground far enough to see
+    /// and not so far as to read as a light on the floor, and quietens its
+    /// bright threads on the way.
+    ///
+    /// **Counted in code values and not in linear light**, which is the whole
+    /// reason this test is worth having. The hardware blends in linear light,
+    /// so that is where the blend is worked out, but a ratio there says
+    /// nothing about whether anybody can see it: the weave's ground is five
+    /// thousandths of full once it is linear, and a wash that doubled it was
+    /// four of 255 on the screen and invisible in the room. Two frames of the
+    /// near bay differenced is where that number came from, and eighteen is
+    /// what the setting here measured the same way.
+    #[test]
+    fn the_worn_track_can_be_seen_and_is_not_a_spotlight() {
+        // out of the picture into light, and back again, which is the trip
+        // every channel makes
+        fn straight(srgb: f32) -> f32 {
+            if srgb <= 0.040_45 {
+                srgb / 12.92
+            } else {
+                ((srgb + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        fn shown(light: f32) -> f32 {
+            255.0
+                * if light <= 0.003_130_8 {
+                    light * 12.92
+                } else {
+                    1.055 * light.powf(1.0 / 2.4) - 0.055
+                }
+        }
+        fn seen(colour: Vec3) -> f32 {
+            let lit = vec3(
+                straight(colour.x) * FLOOR.x,
+                straight(colour.y) * FLOOR.y,
+                straight(colour.z) * FLOOR.z,
+            );
+
+            0.2126 * lit.x + 0.7152 * lit.y + 0.0722 * lit.z
+        }
+
+        // the wear is drawn on a white picture, so what goes over the carpet
+        // is its own colour and nothing else
+        let wear = 0.2126 * WORN.x + 0.7152 * WORN.y + 0.0722 * WORN.z;
+        let over = |under: Vec3| WORN.w * wear + (1.0 - WORN.w) * seen(under);
+
+        let (ground, thread) = (crate::carpet::ground(), crate::carpet::thread());
+        let lift = shown(over(ground)) - shown(seen(ground));
+        let mute = over(thread) / seen(thread);
+
+        assert!(
+            lift > 12.0 && lift < 35.0,
+            "the wear lifts the carpet's ground by {:.1} of 255",
+            lift
+        );
+        assert!(
+            mute > 0.6 && mute < 0.9,
+            "and takes its brightest thread to {:.2} of itself",
+            mute
+        );
+    }
 
     /// Spec 0003: every line of text sits inside its plate.
     ///

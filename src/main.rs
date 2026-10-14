@@ -233,6 +233,10 @@ struct Arcade {
     floor: Option<MeshId>,
     /// The carpet, and the ceiling that stops the room opening onto nothing.
     carpet: Option<TextureId>,
+    /// The worn track in it at the foot of the near wall, which is the one
+    /// thing in the hall that says the way through is there. Spec 0020.
+    worn: Option<TextureId>,
+    worn_mesh: Option<MeshId>,
     /// The rug in the nook, which is not the arcade's carpet.
     rug: Option<TextureId>,
     rug_mesh: Option<MeshId>,
@@ -553,6 +557,8 @@ impl Arcade {
             cube: None,
             floor: None,
             carpet: None,
+            worn: None,
+            worn_mesh: None,
             rug: None,
             rug_mesh: None,
             says: None,
@@ -1962,6 +1968,19 @@ impl Game for Arcade {
         ))));
         self.ceiling_mesh = Some(renderer.add_mesh(&MeshData::plane()));
         self.carpet = Some(renderer.add_texture(&carpet::woven()));
+        {
+            // and the wear in it at the foot of the near wall, per spec 0020
+            let track = behind::track(self.room.reaches);
+
+            self.worn = Some(renderer.add_texture(&carpet::worn(
+                track.aisle,
+                track.wall,
+                track.wide,
+                track.fade,
+                track.shape,
+            )));
+            self.worn_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
+        }
         let (_, rug) = room::open_floor(self.room.reaches);
         self.rug = Some(renderer.add_texture(&carpet::rug(rug.z / rug.x)));
         self.boards = Some(renderer.add_texture(&carpet::boards(carpet::BOARD_SEED)));
@@ -2852,6 +2871,22 @@ impl Game for Arcade {
             // grey the first time this was laid.
             Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
             None => scene.push_colored(floor, &laid, aim::FLOOR),
+        }
+
+        // and the wear in it where feet have gone, which is the only thing in
+        // this hall that says the way through the near wall is there. Spec
+        // 0020: it is a thing that happened rather than a thing somebody put
+        // up, which is what lets it point without pointing.
+        if let (Some(worn), Some(worn_mesh)) = (self.worn, self.worn_mesh) {
+            let track = behind::track(self.room.reaches);
+
+            scene.push_textured(
+                worn_mesh,
+                worn,
+                &Transform::at(track.at).with_scale(track.size),
+                aim::WORN,
+                aim::MATTE,
+            );
         }
 
         // a ceiling, because the room opened onto nothing and a corridor with
