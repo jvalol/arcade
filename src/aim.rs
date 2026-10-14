@@ -467,6 +467,22 @@ pub const SPA_BAND: Vec4 = vec4(0.20, 0.38, 0.42, 1.0);
 pub const SPA_PIER: Vec4 = vec4(0.68, 0.66, 0.62, 1.0);
 pub const SPA_INLAY: Vec4 = vec4(0.30, 0.44, 0.47, 1.0);
 
+/// The ceiling's hanging work, which is the band's colour lifted most of the
+/// way to the plaster it hangs under.
+///
+/// Not the band's own colour, which it was. A rib is a long shallow edge seen
+/// at a glancing angle, the worst case there is for drawing a straight line on
+/// a grid of pixels: the boundary can only sit on whole pixels, so it runs
+/// flat for five and drops one, and multisampling shades the one pixel at each
+/// drop and cannot move the boundary. At the band's contrast against plaster,
+/// a jump of about forty of two hundred and fifty five, that run and drop is a
+/// staircase you cannot stop seeing, and eight samples a pixel took eight per
+/// cent off it.
+///
+/// So the rib gives up contrast instead. The staircase is still there and
+/// there is not enough difference across it left to read.
+pub const SPA_RIB: Vec4 = vec4(0.47, 0.58, 0.60, 1.0);
+
 /// Cut stone for the plinths, the seat and the fountain's basin, terracotta for
 /// the urns, and brass for everything a hand would touch.
 pub const SPA_CUT: Vec4 = vec4(0.78, 0.75, 0.70, 1.0);

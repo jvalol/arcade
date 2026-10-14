@@ -277,6 +277,8 @@ pub enum Made {
     Pier,
     /// The border laid into the floor.
     Inlay,
+    /// The ceiling's ribs and the border course they land on.
+    Rib,
     /// A fitting in brass: a sconce's bracket, the fountain's spout.
     Brass,
     /// Cut stone: the plinths, the seat, the fountain's basin.
@@ -1288,7 +1290,7 @@ pub fn ceiling(reaches: f32) -> Vec<(Aabb, Made)> {
             vec3(INLAY, RIB_DOWN, to - from),
         ),
     ] {
-        out.push((Aabb::from_center_size(at_, size), Made::Inlay));
+        out.push((Aabb::from_center_size(at_, size), Made::Rib));
     }
 
     // and the ribs between the two long runs of it, evenly over what the
@@ -1305,7 +1307,7 @@ pub fn ceiling(reaches: f32) -> Vec<(Aabb, Made)> {
                 vec3(on, hung, (from + to) * 0.5),
                 vec3(RIB, RIB_DOWN, to - from),
             ),
-            Made::Band,
+            Made::Rib,
         ));
     }
 

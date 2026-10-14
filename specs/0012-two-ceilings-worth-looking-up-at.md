@@ -60,6 +60,25 @@ under the ceiling and a border drawn over it is a border nobody sees. The ribs
 stop at it rather than crossing it, so a rib reads as landing on the border and
 no two undersides share a plane.
 
+**The ceiling's work is pale, and that is a drawing decision rather than a
+decorative one.** The ribs and the border they land on were the dado band's
+dark teal, which is right for a band at shoulder height and wrong hanging under
+plaster. A rib is a long shallow edge at a glancing angle, which is the worst
+case there is for putting a straight line on a grid of pixels: the boundary can
+only sit on whole pixels, so it runs flat for five and drops one. Spec 0052's
+multisampling shades the single pixel at each drop and cannot move the boundary,
+and eight samples a pixel took eight per cent off what four left.
+
+So the contrast goes instead. At the band's colour the jump across a rib edge
+was 38 of 255 near and 25 far; at the ceiling's own colour it is 22 and 10. The
+staircase is still there and there is not enough difference across it left to
+read as one. This is the only fix of the three that was cheap, and it is a
+fix for this ceiling rather than for the engine, which still draws shallow
+edges the way it always did.
+
+**This building draws no contact shadows**, per blitzkit's spec 0029, and this
+ceiling is why. See the note at `set_contact_shadows` in `main.rs`.
+
 **Both borders are mitred, the floor's included.** Four runs each at their full
 length meet twice over at every corner, which is two faces in one plane four
 times round the room. The ceiling's border was written that way, the test

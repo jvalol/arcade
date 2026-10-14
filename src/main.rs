@@ -2061,6 +2061,30 @@ impl Game for Arcade {
         // See `Room::outline`, which has the measurements.
         renderer.set_scene_bounds(self.room.outline());
 
+        // No contact shadows in this building, per spec 0029's own limits.
+        //
+        // The bath house ceiling is eleven ribs hanging fifteen centimetres
+        // under a lid, lit by sconces low on the walls, so the light runs
+        // along those surfaces rather than onto them. That is the one shape a
+        // march through the depth buffer cannot answer: it walks nearly
+        // parallel to the edge, and whether a step lands inside the rib next
+        // door comes down to a texel. Jake called what that produces striping
+        // and reported it five times in an afternoon.
+        //
+        // Every setting was tried and measured at his camera. Dithering the
+        // march's phase per pixel turns it into a fizz that crawls as you
+        // walk. One phase for every pixel turns it into a dashed line. Forty
+        // steps, sixty, a hundred, a longer start, a start that grows as the
+        // light grazes: all within the noise of each other. Counting how many
+        // steps were inside rather than stopping at the first trades the
+        // dashes for a regular scallop, which is worse.
+        //
+        // So it is off here. What that costs is the darkening where a thing
+        // meets what it stands on, which this building had for a day and which
+        // nobody asked after. It is one line to put back, and the engine keeps
+        // the feature for a game whose rooms are not built like this one.
+        renderer.set_contact_shadows(false);
+
         self.cube = Some(renderer.add_mesh(&MeshData::cube()));
         // The carpet covers the aisle alone now, which is less than half the
         // width of the quad it used to be, so its count comes down with it. The
@@ -3713,6 +3737,7 @@ impl Game for Arcade {
                     spa::Made::Band => aim::SPA_BAND,
                     spa::Made::Pier => aim::SPA_PIER,
                     spa::Made::Inlay => aim::SPA_INLAY,
+                    spa::Made::Rib => aim::SPA_RIB,
                     spa::Made::Brass => aim::BRASS,
                     spa::Made::Cut => aim::SPA_CUT,
                 },
