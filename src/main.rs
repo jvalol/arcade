@@ -2059,7 +2059,7 @@ impl Game for Arcade {
         // the hall alone, which was sharp and left the cellar, the baths and
         // the space behind the wall taking full sun through solid ground.
         // See `Room::outline`, which has the measurements.
-        renderer.set_scene_bounds(self.room.outline());
+        renderer.set_scene_bounds(self.room.under_the_sun());
 
         // No contact shadows in this building, per spec 0029's own limits.
         //
@@ -3044,6 +3044,14 @@ impl Game for Arcade {
 
         scene.light.direction = garden::sunlight(self.since);
         scene.light.color = colour;
+        // and nothing at all in a room with no sky, per `Room::sees_the_sky`.
+        // The sun cannot reach these rooms and the map cannot quite say so.
+        let strength = if noise::room_at(self.room.reaches, self.at).sees_the_sky() {
+            strength
+        } else {
+            0.0
+        };
+
         scene.light.intensity = strength;
         scene.light.ambient = garden::filled(self.since);
 

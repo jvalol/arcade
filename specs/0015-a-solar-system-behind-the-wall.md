@@ -618,6 +618,29 @@ This says nothing about the orbiting arrangement, where the bodies are off the
 line by their own distance from the sun. A column between two orbits is what
 the grid is for, and the orbit rule already keeps one off a body's path.
 
+**The sun is not asked to cover this room.** Putting seventy nine metres of
+solar system behind the wall took the building's outline from forty five
+metres across to a hundred and eighty eight, and that outline is what the
+engine is handed as the bounds of the sun's shadow map. One map over all of
+it, at 2048 across, is a texel of nine centimetres, which is coarser than this
+building's walls are thick. Daylight came through them, and what it looked
+like from inside the baths is bands of sun lying across a ceiling that is
+three metres underground. Jake reported it as striping four times before it
+was found, because it does not look like a leak. It looks like a pattern.
+
+So the sun's bounds are the building without this room, which costs nothing:
+the room has no sky, it is lit by its own lamps and by planets that glow, and
+the frame is identical pixel for pixel either way. `Room::under_the_sun` is
+that bounds and `the_sun_is_not_asked_to_cover_the_solar_system` holds both
+halves of it, that the hidden room is out and that every room with a sky is
+still in.
+
+What is left after it is a little daylight still reaching the baths, because
+forty five metres at 2048 is still two centimetres a texel. Measured on that
+ceiling the brightest tenth went from 146.8 to 130.7, against 126.0 with the
+sun switched off altogether. The rest of that is the engine's to fix if it is
+ever worth fixing, by following the camera rather than the world.
+
 ## Out of scope
 
 **Elliptical orbits, inclinations and real positions.** Circles, coplanar, at

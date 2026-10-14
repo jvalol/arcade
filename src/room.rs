@@ -938,6 +938,13 @@ impl Room {
     /// The building, in other words, which is what `outline` is the outline
     /// of and what every measurement of the building's own size wants.
     pub fn building(&self) -> Vec<Aabb> {
+        self.built(true)
+    }
+
+    /// The same, with the space behind the wall left out when asked.
+    ///
+    /// One list either way, because two lists of one thing drift.
+    fn built(&self, behind_the_wall: bool) -> Vec<Aabb> {
         let mut out = self.walls.clone();
         out.extend(self.floors());
         out.extend(crate::cellar::solid(self.reaches));
@@ -946,7 +953,10 @@ impl Room {
         // the hall's near end wall, which is two boxes with a gap between
         // them, and the space that gap leads into. Spec 0011.
         out.extend(crate::behind::near_wall(self.reaches));
-        out.extend(crate::behind::solid(self.reaches));
+
+        if behind_the_wall {
+            out.extend(crate::behind::solid(self.reaches));
+        }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
         out.extend(
@@ -1073,11 +1083,37 @@ impl Room {
     /// in the building, and it takes spec 0049's reach fill past the engine's
     /// cap of 32 million cells, which is no fill at all and a test that
     /// quietly proves nothing. The building is what this is the outline of.
+    /// Test only since the sun stopped using it: what the game needs is
+    /// [`Room::under_the_sun`], and what a walk needs is the whole building.
+    #[cfg(test)]
     pub fn outline(&self) -> Aabb {
+        Self::round(self.building())
+    }
+
+    /// What the sun has to cover, which is the building without the space
+    /// behind the wall.
+    ///
+    /// The sun gets one shadow map over whatever it is given, so what it is
+    /// given decides how coarse a texel is. Given the whole building it is
+    /// given the solar system too, per spec 0015: a hundred and eighty eight
+    /// metres across for a building of forty five, because Neptune is seventy
+    /// nine metres out and the walk to the sun is a hundred and eleven. Nine
+    /// tenths of the map went on a room with no sky in it, a texel came to
+    /// nine centimetres, which is coarser than these walls are thick, and
+    /// daylight came through them into the baths in bands.
+    ///
+    /// Nothing is lost by leaving that room out. It is lit by its own lamps
+    /// and by planets that glow, and the frame is identical pixel for pixel
+    /// with it in the bounds and with it out.
+    pub fn under_the_sun(&self) -> Aabb {
+        Self::round(self.built(false))
+    }
+
+    fn round(boxes: Vec<Aabb>) -> Aabb {
         let mut lo = Vec3::splat(f32::MAX);
         let mut hi = Vec3::splat(f32::MIN);
 
-        for box_ in self.building() {
+        for box_ in boxes {
             lo = lo.min(box_.min);
             hi = hi.max(box_.max);
         }
@@ -1191,6 +1227,47 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0015: the sun's bounds leave out the space behind the wall.
+    ///
+    /// The sun gets one shadow map over whatever it is given, so a room with
+    /// no sky in it spends that map's resolution for nothing. Given the whole
+    /// building, nine tenths of it went on the solar system and a texel came
+    /// to nine centimetres, coarser than these walls are thick, and daylight
+    /// came through them into the baths in bands.
+    ///
+    /// Both halves matter. It has to lose the hidden room, and it has to keep
+    /// every room that can see the sky.
+    #[test]
+    fn the_sun_is_not_asked_to_cover_the_solar_system() {
+        let room = Room::of(some(12));
+        let all = room.outline();
+        let sunlit = room.under_the_sun();
+
+        let wide = (all.max - all.min).max_element();
+        let near = (sunlit.max - sunlit.min).max_element();
+
+        assert!(
+            near < wide * 0.5,
+            "the sun covers {:.1} of the building's {:.1}",
+            near,
+            wide
+        );
+
+        for (boxes, name) in [
+            (crate::garden::solid(room.reaches), "the garden"),
+            (crate::spa::solid(room.reaches), "the baths"),
+            (crate::cellar::solid(room.reaches), "the cellar"),
+        ] {
+            for one in boxes {
+                assert!(
+                    sunlit.min.cmple(one.max).all() && sunlit.max.cmpge(one.min).all(),
+                    "{} is outside what the sun covers",
+                    name
+                );
+            }
+        }
+    }
+
     use super::*;
     use std::path::Path;
 

@@ -71,10 +71,26 @@ comes down out of it and leans toward the strike by about half.
 
 **It rides on the sun and not on the ambient**, which is the whole reason it
 can be done at all. The ambient is added everywhere and a flash riding on it
-would light the cellar. The sun is shadowed by the roof and already measured in
-`room::outline` as reaching no room but the garden, so the one light in this
-building that can flash without getting indoors is the one that is already kept
-out.
+would light the cellar. The sun is switched off in any room with no sky
+in it, per `noise::Room::sees_the_sky`, so the one light in this building that
+can flash without getting indoors is the one that cannot get indoors.
+
+That sentence used to say the sun was shadowed by the roof and leave it there,
+which was nearly true and not true. A shadow map holds one depth a texel, and
+along the edge of anything thin it leaves a fringe one texel wide that it
+cannot resolve away. The bath house ribs are thin fins lit nearly edge on, so
+the fringe ran the length of every beam and wobbled as the beam crossed the
+map's grid. Jake called it ripples and reported it, in one form or another,
+for most of an afternoon.
+
+Only the texel size moved it. Halving it halved the fringe; the grazing bias
+swept twelvefold did nothing, and the normal offset taken to nothing or to
+four times did nothing. Out-resolving it is a losing trade: the fringe is
+about six pixels at a normal viewing distance, a map twice as wide costs
+67 MB to halve that, and one four times as wide costs 268 MB.
+
+Switching the sun off where it cannot reach costs nothing. There is no
+sightline from the baths, the cellar, the stair or the nook to the sky.
 
 **Near lights the ground and far lights only the cloud.** The patch's falloff
 and the garden's are different on purpose: what you are looking at overhead is

@@ -73,6 +73,33 @@ pub enum Room {
     Garden,
 }
 
+impl Room {
+    /// Whether the sky is visible from in here, which decides whether the sun
+    /// is switched on at all.
+    ///
+    /// The sun's shadow map is one map over the whole building, so a texel of
+    /// it is a couple of centimetres, and along the edge of anything thin it
+    /// leaves a fringe one texel wide that the map cannot resolve away. On the
+    /// bath house ribs, which are thin fins lit nearly edge-on, that fringe
+    /// wobbles along each beam as the beam crosses the map's grid, and what it
+    /// looks like is ripples. Measured, only the texel size moves it: halving
+    /// it halves the fringe, while bias and normal offset do nothing.
+    ///
+    /// So the sun is not asked about rooms it cannot reach. `main` already
+    /// says in as many words that the sun is kept out of these rooms by the
+    /// roof and that this is the whole reason a lightning flash can ride on
+    /// it. This makes that true rather than nearly true, and costs nothing:
+    /// there is no sightline from any of these to the sky.
+    pub fn sees_the_sky(self) -> bool {
+        match self {
+            // the garden is open to it, and the hall looks into the garden
+            // through its door
+            Room::Garden | Room::Hall => true,
+            Room::Nook | Room::Stair | Room::Cellar | Room::Baths => false,
+        }
+    }
+}
+
 /// Which room a point is in.
 ///
 /// Read in the order the building is stacked: everything below the hall
@@ -892,6 +919,30 @@ pub fn steam(seed: u32) -> Samples {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0016: the sun is switched off in every room with no sky.
+    ///
+    /// The storm's flash rides on the sun because the sun is supposed not to
+    /// get indoors. It did get indoors, as a fringe one shadow map texel wide
+    /// along every ceiling beam, because a map holds one depth a texel and
+    /// cannot resolve the edge of a thin fin. This is what makes the claim
+    /// true, so it is what has to hold.
+    #[test]
+    fn the_sun_is_switched_off_where_there_is_no_sky() {
+        use super::Room::*;
+
+        for room in [Garden, Hall] {
+            assert!(room.sees_the_sky(), "{:?} should be lit by the sun", room);
+        }
+
+        for room in [Nook, Stair, Cellar, Baths] {
+            assert!(
+                !room.sees_the_sky(),
+                "{:?} has no sky and should get no sun",
+                room
+            );
+        }
+    }
+
     use super::*;
 
     /// The building, for the tests that ask about where things are in it.
