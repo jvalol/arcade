@@ -577,6 +577,23 @@ pub const DULL: f32 = 900.0;
 /// the line.
 pub const SKY: Vec4 = vec4(1.35, 1.40, 1.52, 1.0);
 
+/// What a strike adds to the sky's own multiplier. Spec 0016.
+///
+/// Enough to take the cloud deck white at the top of a near flash, from
+/// 0.06 at midnight or 1.5 at noon, so that what you see is the cloud's own
+/// shape blown out rather than the sky merely getting lighter. Blue-white,
+/// because a flash is twenty thousand kelvin against daylight's six.
+pub const FLASH_SKY: Vec3 = vec3(2.6, 2.7, 3.2);
+
+/// Blue-white, and brighter than the sun it is added to.
+///
+/// A flash is 20,000 K or so against daylight's 5,800, which is why a
+/// photograph of a lit room during one comes out blue. The number is what it
+/// looks like rather than what it measures: the engine's light is a colour and
+/// a strength, and this is the colour.
+pub const FLASH_LIGHT: Vec3 = vec3(0.82, 0.88, 1.0);
+pub const FLASH_STRENGTH: f32 = 3.4;
+
 /// The gravel, which is pale stone, and the wall behind it, which is the
 /// weathered plaster of a garden wall rather than the hall's.
 pub const GRAVEL: Vec4 = vec4(0.78, 0.76, 0.70, 1.0);

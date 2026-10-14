@@ -403,6 +403,215 @@ pub fn lanterns_lit(since: f32) -> f32 {
 pub const WEATHER: f32 = 0.0110;
 pub const DRIFT: f32 = 0.0067;
 
+/// How fast sound goes, in metres a second.
+///
+/// The whole exhibit rests on this one number being the real one. Everybody
+/// knows you count the seconds between the flash and the bang and almost
+/// nobody has watched a thing demonstrate it, so a storm that fudged it would
+/// be worth nothing at all.
+pub const SOUND: f32 = 343.0;
+
+/// How near and how far a strike may be, and how long between them on average.
+///
+/// 250 to 2,800 metres, which is three quarters of a second to eight. Short
+/// enough at one end that the bang is nearly on the flash, long enough at the
+/// other that you can count to eight, and a spread between so that no two
+/// strikes running teach the same lesson.
+///
+/// Not further. At eleven seconds between strikes a delay longer than that
+/// puts a flash before the last thunder has arrived, which is true of real
+/// storms and is a muddle in an exhibit about one flash and one bang.
+pub const NEAR: f32 = 250.0;
+pub const FAR: f32 = 2_800.0;
+pub const STRIKES: f32 = 11.0;
+
+/// One strike: when it flashes, how far off it is, and where on the dome.
+///
+/// **How far off is the only number in it that matters.** Everything else
+/// comes out of that one: when the thunder arrives, how bright the flash is,
+/// how much of the garden it lights, how loud the bang is and what it sounds
+/// like. One number into five, all moving together, which is what makes it
+/// worth building rather than a light that blinks.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Strike {
+    /// When the flash is, in seconds since the building opened.
+    pub at: f32,
+    /// How far off, in metres.
+    pub away: f32,
+    /// And where on the dome: round it, and how far up it.
+    pub bearing: f32,
+    pub high: f32,
+}
+
+impl Strike {
+    /// How long after the flash the thunder arrives.
+    pub fn late(&self) -> f32 {
+        self.away / SOUND
+    }
+
+    /// When it arrives.
+    pub fn heard(&self) -> f32 {
+        self.at + self.late()
+    }
+}
+
+/// The `n`th strike of the storm.
+///
+/// Worked out from its number rather than rolled and remembered, so there is
+/// no state to keep and a test can ask about the four hundredth strike without
+/// waiting an hour for it. The storm is the same storm every time the building
+/// opens, which nobody can tell and every check can rely on.
+pub fn strike(n: u32) -> Strike {
+    // mixed first and then kept off nought, rather than the other way about.
+    // `n | 1` before the multiply is what every other seed in this building
+    // does and it is wrong here, because those seeds are constants chosen to
+    // differ and these are 0, 1, 2, 3: it sends 0 and 1 to the same number,
+    // and 2 and 3, so the storm struck twice from one place at one distance
+    // and then twice from another.
+    let mut rng = (n.wrapping_mul(0x9E37_79B9) ^ 0x5706_0016) | 1;
+    let mut roll = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+
+        (rng >> 8) as f32 / 16_777_216.0
+    };
+
+    // spread about its own slot rather than stacked on the beat. Four tenths
+    // either way, so two strikes can come close together and never in the same
+    // instant.
+    let when = (n as f32 + 0.5 + (roll() - 0.5) * 0.8) * STRIKES;
+
+    Strike {
+        at: when,
+        away: NEAR + (FAR - NEAR) * roll(),
+        bearing: roll() * std::f32::consts::TAU,
+        // between a quarter and three quarters of the way up the dome. On the
+        // horizon it is behind the garden's own walls and at the top it is
+        // over your head, and a storm is neither.
+        high: 0.25 + roll() * 0.5,
+    }
+}
+
+/// Which strike is the latest to have flashed by `since`, if any has.
+///
+/// The strikes run in order of their slot, and the jitter is under half a slot
+/// either way, so a strike never overtakes its neighbour and a walk outward
+/// from the slot `since` falls in finds it.
+pub fn struck(since: f32) -> Option<u32> {
+    let slot = (since / STRIKES).floor().max(0.0) as u32;
+
+    (slot.saturating_sub(1)..=slot + 1).rfind(|n| strike(*n).at <= since)
+}
+
+/// Which strike is the latest whose thunder has had time to reach you.
+///
+/// Its own walk rather than `struck`'s, because a strike eight seconds off
+/// flashes in one slot and is heard in the next, so the one you can see and
+/// the one you can hear are not the same strike.
+pub fn heard(since: f32) -> Option<u32> {
+    let slot = (since / STRIKES).floor().max(0.0) as u32;
+
+    (slot.saturating_sub(2)..=slot + 1).rfind(|n| strike(*n).heard() <= since)
+}
+
+/// How far a strike's light leans toward the strike, against coming straight
+/// down.
+///
+/// **Mostly down**, which follows from what is glowing. If the flash were the
+/// bolt then its light would come from wherever the bolt was, and a bolt low
+/// on the horizon would light nothing in a walled garden at all: that was
+/// measured, with a strike 297 metres off lifting the sky eight times over and
+/// the ground under it by nothing whatever, because the garden's own west wall
+/// stood in the way of a light coming in at twenty degrees.
+///
+/// What is glowing is the whole cloud deck, and a deck is overhead. So the
+/// light comes down out of it and leans toward the strike by about half, which
+/// is enough to throw the shadows one way and not enough to put them flat
+/// along the ground.
+pub const FLASH_LEANS: f32 = 0.55;
+
+/// Which way the light of a strike travels.
+///
+/// Down out of the lit deck, leaning toward the strike, so the shadows a near
+/// one throws fall away from the part of the sky that lit up. Getting that
+/// wrong is the sort of thing nobody can name and everybody feels.
+pub fn flashlight(strike: &Strike) -> Vec3 {
+    let out = (strike.high * std::f32::consts::FRAC_PI_2).cos();
+
+    vec3(
+        -strike.bearing.cos() * out * FLASH_LEANS,
+        -1.0,
+        -strike.bearing.sin() * out * FLASH_LEANS,
+    )
+    .normalize()
+}
+
+/// How much of itself the flash is giving, `after` seconds in.
+///
+/// Three strokes rather than one. A single rise and fall is a light being
+/// switched on, and what tells an eye it is lightning is that it comes back:
+/// a flash flickers because a bolt is several strokes down one channel, a
+/// few hundredths of a second apart.
+pub fn flashing(after: f32) -> f32 {
+    if after < 0.0 {
+        return 0.0;
+    }
+
+    // when each stroke is and how much of the first it carries
+    const STROKES: [(f32, f32); 3] = [(0.0, 1.0), (0.085, 0.62), (0.20, 0.34)];
+    const FADES: f32 = 0.055;
+
+    STROKES
+        .iter()
+        .copied()
+        .map(|(at, much)| {
+            let since = after - at;
+
+            if since < 0.0 {
+                0.0
+            } else {
+                much * (-since / FADES).exp()
+            }
+        })
+        .sum::<f32>()
+        .min(1.0)
+}
+
+/// How long a flash is worth drawing for.
+pub const FLASHES: f32 = 0.55;
+
+/// How much the whole cloud deck lights up, for a strike this far off.
+///
+/// **The whole deck and not a patch of it**, which is not what this spec first
+/// said and is what the engine allows. A soft bright patch wants a picture
+/// whose alpha fades, and in this engine a texture's alpha is a stencil rather
+/// than a blend: `CUTOUT` in the shader throws away every texel under 0.35,
+/// and the one blend the translucent pass has is alpha over rather than
+/// additive. A patch drawn that way is a disc with a rim you can point at,
+/// which is a moon. It was built and photographed before this was written.
+///
+/// Lighting the whole deck loses little. Ninety-nine strikes in a hundred are
+/// a flash behind cloud rather than a bolt, the cloud's own shape is a better
+/// picture of it than any patch, and the direction still arrives: `flashlight`
+/// throws the garden's shadows from the strike, which is the half of the
+/// direction you can read without being told.
+///
+/// It falls off slowly, because what lights up is not the bolt but a mile of
+/// cloud lit from inside.
+pub fn flash_lit(away: f32) -> f32 {
+    (away / NEAR).max(1.0).powf(-0.6)
+}
+
+/// And how much of it reaches the garden itself.
+///
+/// This one does fall off hard. A near strike lights the walls and the gravel
+/// and throws the trees against them; a far one lights the cloud and nothing
+/// else, and that difference at a glance is how far away it was.
+pub fn flash_fills(away: f32) -> f32 {
+    (away / NEAR).max(1.0).powi(-2)
+}
+
 /// A storm, as a picture to wrap round the inside of the dome.
 ///
 /// Value noise over a few octaves, wrapped the way round the dome so the seam
@@ -2662,6 +2871,177 @@ pub const SKINS: [(u32, [f32; 3], usize); 3] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0016: how far off a strike is sets five things, and they all move
+    /// together.
+    ///
+    /// The whole of the spec in one test. Any one of these alone can be
+    /// satisfied by a constant, and the point is not that the thunder is late
+    /// but that everything about a strike is one number told five ways.
+    #[test]
+    fn how_far_off_a_strike_is_sets_everything_about_it() {
+        let near = Strike {
+            at: 0.0,
+            away: NEAR,
+            bearing: 0.0,
+            high: 0.5,
+        };
+        let far = Strike { away: FAR, ..near };
+
+        // it is later
+        assert!(
+            far.late() > near.late() * 10.0,
+            "the far strike is {:.2}s late and the near one {:.2}s",
+            far.late(),
+            near.late()
+        );
+        // and late by what the air actually costs, which is the exhibit
+        assert!(
+            (near.late() - NEAR / 343.0).abs() < 1e-4 && (far.late() - FAR / 343.0).abs() < 1e-3,
+            "sound went at some speed other than 343 m/s"
+        );
+
+        // it lights the cloud less
+        assert!(
+            flash_lit(far.away) < flash_lit(near.away) * 0.5,
+            "the far strike lights the deck to {:.3} against the near one's {:.3}",
+            flash_lit(far.away),
+            flash_lit(near.away)
+        );
+        // and it lights the garden far less, which is the difference you read
+        // at a glance
+        assert!(
+            flash_fills(far.away) < flash_fills(near.away) * 0.02,
+            "the far strike still fills the garden to {:.4}",
+            flash_fills(far.away)
+        );
+
+        // and its thunder is quieter, longer and duller
+        let bang = |away: f32| {
+            let sound: Vec<f32> = crate::noise::thunder(away, 7).collect();
+            let loudest = sound.iter().fold(0.0f32, |most, s| most.max(s.abs()));
+            // how much of it is high end: how far a sample is from the one
+            // before it, averaged. A rumble moves slowly and a crack does not.
+            let edge = sound
+                .windows(2)
+                .map(|two| (two[1] - two[0]).abs())
+                .sum::<f32>()
+                / sound.len().max(1) as f32;
+
+            (sound.len(), loudest, edge)
+        };
+        let (near_long, near_loud, near_edge) = bang(near.away);
+        let (far_long, far_loud, far_edge) = bang(far.away);
+
+        assert!(
+            far_long > near_long * 3,
+            "the far rumble is {} samples and the near crack {}",
+            far_long,
+            near_long
+        );
+        assert!(
+            far_loud < near_loud * 0.7,
+            "the far bang peaks at {:.3} and the near one {:.3}",
+            far_loud,
+            near_loud
+        );
+        assert!(
+            far_edge < near_edge * 0.3,
+            "the far bang still has {:.5} of high end against the near one's {:.5}",
+            far_edge,
+            near_edge
+        );
+    }
+
+    /// Spec 0016: the strikes come in order and keep to their own slots, which
+    /// is what lets `struck` and `heard` find one by walking a slot or two
+    /// rather than by keeping a list.
+    #[test]
+    fn no_strike_overtakes_the_one_before_it() {
+        let mut last = strike(0);
+
+        for n in 1..400 {
+            let next = strike(n);
+
+            assert!(
+                next.at > last.at,
+                "strike {} is at {:.2} and {} at {:.2}",
+                n,
+                next.at,
+                n - 1,
+                last.at
+            );
+            assert!(
+                next.away >= NEAR && next.away <= FAR,
+                "strike {} is {:.0} m off",
+                n,
+                next.away
+            );
+            // and it is its own strike rather than the last one again. The
+            // seeds here are 0, 1, 2, 3 rather than constants chosen to
+            // differ, so a mixer weak in its low bits sends neighbours to the
+            // same number: this storm struck twice from one place at one
+            // distance, then twice from another, and the ordering above was
+            // perfectly happy with it.
+            //
+            // Exactly equal and not merely close. Two strikes a few metres
+            // apart in four hundred draws is chance doing what chance does,
+            // and three floats agreeing to the bit is a seed that collapsed.
+            assert!(
+                (next.away, next.bearing, next.high) != (last.away, last.bearing, last.high),
+                "strike {} is {:.0} m off at {:.3} and so, exactly, was {}",
+                n,
+                next.away,
+                next.bearing,
+                n - 1
+            );
+            last = next;
+        }
+    }
+
+    /// Spec 0016: the flash flickers, because a bolt is several strokes down
+    /// one channel and a single rise and fall is a light being switched on.
+    #[test]
+    fn the_flash_comes_back_rather_than_fading_once() {
+        let many = 220;
+        let read: Vec<f32> = (0..many)
+            .map(|n| flashing(n as f32 / many as f32 * FLASHES))
+            .collect();
+
+        // it starts at full and ends at nothing
+        assert!(read[0] > 0.9, "it opens at {:.3}", read[0]);
+        assert!(read[many - 1] < 0.02, "it ends at {:.3}", read[many - 1]);
+
+        // and it goes back up on the way down, more than once
+        let returns = read
+            .windows(3)
+            .filter(|three| three[1] > three[0] && three[1] >= three[2])
+            .count();
+
+        assert!(
+            returns >= 2,
+            "the flash turned back up {} times, so it is one stroke",
+            returns
+        );
+    }
+
+    /// Spec 0016: what you can see and what you can hear are not the same
+    /// strike, which is the whole exhibit stated as arithmetic.
+    #[test]
+    fn the_strike_you_see_is_not_the_strike_you_hear() {
+        // a strike far enough off to still be in the air a second later
+        let n = (0..200)
+            .find(|n| strike(*n).late() > 2.0)
+            .expect("no strike in two hundred is more than two seconds off");
+        let hit = strike(n);
+
+        // just after the flash: seen, and not yet heard
+        assert_eq!(struck(hit.at + 0.01), Some(n));
+        assert_ne!(heard(hit.at + 0.01), Some(n));
+
+        // and after the air has had its time, heard
+        assert_eq!(heard(hit.heard() + 0.01), Some(n));
+    }
 
     /// Spec 0010: every koi stays in the water, all the way round.
     ///

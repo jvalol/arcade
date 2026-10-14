@@ -23,7 +23,7 @@ not a priority, and it never changes once a spec exists.
 | [0013](0013-showing-what-is-solid.md) | A key that outlines every collider, because a collider that disagrees with what is drawn is this building's commonest fault |
 | [0014](0014-two-faces-in-one-plane.md) | A key that finds two drawn faces sharing a plane, which is the other fault this building keeps hitting |
 | [0015](0015-a-solar-system-behind-the-wall.md) | The sun, the planets and their moons at true proportion in the hidden room, lined up to walk or swung out into their orbits |
-| [0016](0016-lightning-and-thunder.md) | Parked: a storm that breaks, with the thunder arriving as late as the distance says |
+| [0016](0016-lightning-and-thunder.md) | A storm that breaks: one number per strike, and the flash, the light, the delay and the bang all come out of it |
 | [0017](0017-a-door-at-the-far-end.md) | A lit door in the far wall of the hidden room, out of sight from the way in and in sight from the sun |
 | [0018](0018-the-system-at-true-scale.md) | The same system through that door with nothing bent but the light: one scale, a ten metre sun, Neptune 33 kilometres out, and three minutes to ride there |
 | [0019](0019-a-pondoria.md) | A room you stay in, which is the garden given a twenty minute day: the light swings and reddens, the sky goes out, and the lanterns earn their keep |

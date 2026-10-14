@@ -278,6 +278,8 @@ struct Arcade {
     /// thing in the hall that says the way through is there. Spec 0020.
     worn: Option<TextureId>,
     worn_mesh: Option<MeshId>,
+    /// Which strike's thunder has been played. Spec 0016.
+    thundered: Option<u32>,
     /// The rug in the nook, which is not the arcade's carpet.
     rug: Option<TextureId>,
     rug_mesh: Option<MeshId>,
@@ -615,6 +617,7 @@ impl Arcade {
             carpet: None,
             worn: None,
             worn_mesh: None,
+            thundered: None,
             rug: None,
             rug_mesh: None,
             says: None,
@@ -1811,6 +1814,44 @@ impl Arcade {
         )
     }
 
+    /// The strike lighting the sky right now, and how much of itself it is
+    /// giving. Spec 0016.
+    ///
+    /// One at a time. Two flashes at once is a thing that happens in a storm
+    /// and is a muddle in an exhibit about one flash and one bang, and
+    /// `garden::STRIKES` is eleven seconds against a flash that lasts half of
+    /// one, so the case is arithmetic rather than taste.
+    fn flashing(&self) -> Option<(garden::Strike, f32)> {
+        let strike = garden::strike(garden::struck(self.since)?);
+        let after = self.since - strike.at;
+
+        if after > garden::FLASHES {
+            return None;
+        }
+
+        match garden::flashing(after) {
+            fade if fade > 0.004 => Some((strike, fade)),
+            _ => None,
+        }
+    }
+
+    /// What a strike adds to the sky's own multiplier, per spec 0016.
+    ///
+    /// Added rather than multiplied. The sky's multiplier runs from 0.06 at
+    /// midnight to 1.5 at noon, and a flash that multiplied it would be
+    /// twenty-five times brighter at noon than at midnight, which is the
+    /// wrong way round and is not a flash either way: a strike puts out what
+    /// a strike puts out, and whether that is a lot depends on what was
+    /// already there.
+    fn flashed(&self) -> glam::Vec4 {
+        match self.flashing() {
+            Some((strike, fade)) => {
+                (aim::FLASH_SKY * fade * garden::flash_lit(strike.away)).extend(0.0)
+            }
+            None => glam::Vec4::ZERO,
+        }
+    }
+
     fn looking_from(&self) -> Vec3 {
         vec3(self.at.x, self.eye + EYE, self.at.z)
     }
@@ -2539,6 +2580,31 @@ impl Game for Arcade {
         }
         self.was_wading = wading;
 
+        // and the thunder of any strike whose sound has had time to get here.
+        // Spec 0016, and the whole of it: how far off the strike was is what
+        // decided when this plays, how loud it is, how long it runs and what
+        // is left of its high end.
+        //
+        // Mixed rather than queued. `play` hands the sound straight to the
+        // mixer and it starts now; it is `play_at` that is a queue, and a
+        // three second rumble waiting its turn behind the room's note would
+        // arrive after the next flash. It has nowhere to be played from in any
+        // case: the strike is a chosen distance and not a place, so a sound
+        // coming from a point in this garden would be the fiction told twice.
+        if let Some(n) = garden::heard(self.since) {
+            if self.thundered != Some(n) {
+                self.thundered = Some(n);
+
+                let strike = garden::strike(n);
+                // indoors it is a storm through a wall, which is the garden's
+                // own `Underfoot` asked a different question
+                let outside = self.underfoot() == noise::Underfoot::Gravel;
+                let bang = noise::thunder(strike.away, noise::THUNDER_SEED ^ n);
+
+                sound.play(&bang.gain(if outside { 1.0 } else { noise::INDOORS }));
+            }
+        }
+
         // and the note each room has, each from where it is, queued again as it
         // runs out. Nothing here loops: a sound that goes on for ever is a
         // sound a game queues again, per spec 0044.
@@ -2908,6 +2974,38 @@ impl Game for Arcade {
         scene.light.color = colour;
         scene.light.intensity = strength;
         scene.light.ambient = garden::filled(self.since);
+
+        // and a strike on top of the day, per spec 0016.
+        //
+        // **On the sun and not on the ambient**, which is the whole reason it
+        // can be done at all. The ambient is added everywhere and a flash that
+        // rode on it would light the cellar. The sun is shadowed by the roof,
+        // already measured in `room::outline` as reaching no room but the
+        // garden, so the one light in this building that can flash without
+        // getting indoors is the one that is already kept out.
+        //
+        // The direction leans toward the strike by how much of the light the
+        // strike is. At noon the sun carries it and nothing swings; at night
+        // the sun is nothing at all and the shadows come off the patch you
+        // just watched light up.
+        if let Some((strike, fade)) = self.flashing() {
+            // `flash_fills` and not `flash_lit`, which is the distinction the
+            // whole thing turns on. The patch on the cloud dims slowly with
+            // distance because what you are looking at is a mile of cloud lit
+            // from inside. What reaches the garden falls off the way light
+            // falls off, so a near strike throws the trees against the walls
+            // and a far one lights nothing but the sky.
+            let flash = aim::FLASH_STRENGTH * fade * garden::flash_fills(strike.away);
+            let share = flash / (flash + strength).max(1e-4);
+
+            scene.light.direction = scene
+                .light
+                .direction
+                .lerp(garden::flashlight(&strike), share)
+                .normalize_or(scene.light.direction);
+            scene.light.color = colour.lerp(aim::FLASH_LIGHT, share);
+            scene.light.intensity = strength + flash;
+        }
 
         // the aisle's carpet, and only the aisle's. It used to be a rectangle
         // wide enough for the nook as well, which was wasted twice over: the
@@ -3583,8 +3681,11 @@ impl Game for Arcade {
                     storm,
                     &Transform::at(garden::dome_at(self.room.reaches)),
                     // the same cloud all day, with the day taken out from
-                    // behind it. Spec 0019.
-                    garden::skylit(self.since),
+                    // behind it. Spec 0019. And a strike lighting the whole of
+                    // it, per spec 0016: what you see of lightning from under
+                    // a storm is the deck going white, and the cloud's own
+                    // shape is a better picture of it than any patch.
+                    garden::skylit(self.since) + self.flashed(),
                     900.0,
                 );
             }
