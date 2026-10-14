@@ -233,10 +233,47 @@ have the fountain and the tub's blower. The sauna, with its door shut, has the
 stove ticking and the hiss of what is on it. The hall has the cabinets, which
 hum the way a room full of them hums.
 
-**The garden, the nook and the stair have none**, and are silent. That is not
-a decision, it is the state this leaves them in: the garden was never given one
-and was borrowing the tub through its floor, which is what hid it. What a zen
-garden sounds like is its own question and spec 0010's to answer.
+**The garden has leaves**, which is what a walled garden under a permanent
+overcast has. It had nothing and was borrowing the tub through its floor, which
+is what hid the fault above.
+
+Made rather than recorded, and that is not the lapse it was for thunder. A clap
+of thunder is a structured event an ear knows by heart and noise under an
+envelope will never be one. Rustle is not an event: it is a great many tiny
+scrapes at once, which is to say it is noise, and noise shaped like the thing
+that is already noise is the one case where this is the honest way round. Both
+of the CC0 wind recordings that could be reached had everything they carried at
+forty hertz and nothing above a hundred and sixty, which is a windshield
+problem rather than a garden; what is here peaks at five kilohertz, where a
+leaf actually is.
+
+Steady, with no gust. See below for why nothing in a voice may swell.
+
+**The nook and the stair have none and are silent**, which is the state this
+leaves them in rather than a decision.
+
+**Nothing inside a piece may swell**, and this is the rule the pieces impose.
+A voice is played by queueing its pieces one after another, so anything
+periodic inside one comes out periodic at the rate they are queued, which is
+two and a half times a second.
+
+Every voice broke it. All five went through `noise::shaped`, which rises fast
+and falls away across the whole run because that is the shape of a thing being
+struck, and a voice is not struck: measured, the fire went 0.07, 0.12, 0.09,
+0.09, 0.06, 0.02, 0.01, 0.01, 0.00, 0.00 across one piece. The fire and the
+fountain each broke it a second time on their own, with a sine of about a turn
+per piece for the fire's breathing and the water's beat.
+
+So a piece goes through `noise::joined` instead, which takes three
+milliseconds off each end so no join is a click and leaves the level alone in
+between, and anything that wanders does so by a slow random walk rather than a
+cycle. A gust cannot live in a piece at all and the garden does without one.
+
+**The tub was a fifteenth of a piece.** Its voice was one bubble, 59
+milliseconds of a rising sine, used as though it were a voice: queued again
+seventeen times a second, which is a buzz at 17 hertz rather than a hot tub. It
+is a whole piece of many bubbles bursting over the churn they come up through,
+each one ringing at 3.26 over its radius, which is Minnaert's.
 
 **Where a sound is heard from** is the engine's business, so everything that
 comes from somewhere goes through `play_at` and the listener is moved to your
@@ -257,7 +294,8 @@ the engine's and stays available.
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
 - One voice plays at a time, and it is the nearest one within earshot in your own room. — `noise::tests::one_voice_plays_at_a_time_and_it_is_the_nearest`
 - Every voice is in the room it says it is in. — `noise::tests::every_voice_is_in_the_room_it_says_it_is`
-- The garden does not hear the baths through its own floor. — `noise::tests::the_garden_does_not_hear_the_baths_through_its_floor`
+- The garden hears its own leaves and never the baths, wherever you stand in it. — `noise::tests::the_garden_does_not_hear_the_baths_through_its_floor`
+- A piece of a voice does not die inside itself, and is a whole piece. — `noise::tests::a_voices_piece_does_not_die_inside_itself`
 - Every floor has footsteps and every one of them reads. — `noise::tests::every_floor_has_footsteps_that_read`
 - No two floors share a recording. — `noise::tests::no_two_floors_sound_the_same`
 - Each room sounds like what it is floored with. — `noise::tests::each_room_sounds_like_its_own_floor`

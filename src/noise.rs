@@ -479,6 +479,18 @@ pub fn voices(reaches: f32) -> Vec<Voice> {
             0x57EA,
         ),
         (Room::Hall, vec3(0.0, crate::EYE, 0.0), hum, 0x4040),
+        // the garden's, from the middle of it at head height rather than from
+        // any one tree. A rustle is all round you and not over there.
+        (
+            Room::Garden,
+            {
+                let middle = crate::garden::at(reaches);
+
+                vec3(middle.x, crate::EYE, middle.z)
+            },
+            leaves,
+            0x1EA5,
+        ),
     ]
 }
 
@@ -494,6 +506,41 @@ fn noise(seed: u32) -> impl FnMut() -> f32 {
 
         (rng >> 8) as f32 / 8_388_608.0 - 1.0
     }
+}
+
+/// How long a piece of a voice takes to come up at one end and go down at the
+/// other.
+///
+/// Three milliseconds. Long enough that no join is a step in the waveform,
+/// which is a click, and far too short to be heard as a shape of its own.
+const JOINS: f32 = 0.003;
+
+/// A piece of a voice, with its two ends taken off a step and its level left
+/// alone in between.
+///
+/// **`shaped` is for a thing that happens** and this is for a thing that does
+/// not stop. A splash, a knock, a clap of thunder: those rise fast and fall
+/// away over the whole run, which is the shape of something being struck.
+///
+/// A voice is not struck. Put through that shape, a piece of one swells and
+/// dies inside its own four tenths of a second, and a voice is played by
+/// queueing those one after another: measured, the fire went 0.07, 0.12,
+/// 0.09, 0.09, 0.06, 0.02, 0.01, 0.01, 0.00, 0.00 across one piece, so every
+/// continuous sound in this building throbbed two and a half times a second.
+/// Four of the five did it, the hum of a hall full of cabinets included.
+fn joined(samples: Vec<f32>) -> Samples {
+    let count = samples.len();
+    let ends = ((RATE as f32 * JOINS) as usize).max(1).min(count / 2);
+    let mut out = samples;
+
+    for n in 0..ends {
+        let up = n as f32 / ends as f32;
+
+        out[n] *= up;
+        out[count - 1 - n] *= up;
+    }
+
+    Samples::new(RATE, out)
 }
 
 /// A run that begins and ends at nothing.
@@ -580,23 +627,62 @@ pub fn clack(seed: u32) -> Samples {
 
     shaped(samples, 0.002)
 }
+/// How many bubbles burst in one piece of the tub's voice, and how long one
+/// rings for.
+///
+/// **Many, which is what this had wrong.** It was one bubble, 59 milliseconds
+/// of a rising sine, used as if it were a voice: four tenths of a second is
+/// what a piece of a voice is and this was a fifteenth, so it was queued again
+/// seventeen times a second. That is not a hot tub, it is a buzz at 17 hertz.
+///
+/// A bubble rings at 3.26 over its radius in metres, which is Minnaert's, so a
+/// centimetre across is about 650 hertz and two millimetres is three
+/// kilohertz. A tub's blower makes a great many small ones at once.
+const BURSTS: usize = 90;
+const RINGS: f32 = 0.012;
 
-/// A bubble coming up: a short tone that rises, which is a bubble getting
-/// smaller as it goes.
+/// The tub: a great many small bubbles bursting, over the churn of the water
+/// they are coming up through.
 pub fn bubble(seed: u32) -> Samples {
+    let count = (RATE as f32 * PIECE) as usize;
     let mut next = noise(seed);
-    let from = 280.0 + next().abs() * 420.0;
-    let count = 2_600;
-    let samples: Vec<f32> = (0..count)
-        .map(|n| {
-            let along = n as f32 / count as f32;
-            let t = n as f32 / RATE as f32;
-
-            ((t * (from * (1.0 + along * 1.4))) * std::f32::consts::TAU).sin() * 0.22
-        })
+    // the churn underneath, which is what says water rather than air.
+    //
+    // Run on before anything is kept, because a running average starts from
+    // nothing and takes a while to reach the level it will hold: kept from the
+    // first sample, every piece opened with a swell up out of silence, and a
+    // swell at the top of every piece is the thing a piece may not have.
+    let warm = (RATE as f32 * 0.05) as usize;
+    let mut samples: Vec<f32> = dulled(&mut next, count + warm, 0.08)
+        .into_iter()
+        .skip(warm)
+        .map(|sample| sample * 1.6)
         .collect();
 
-    shaped(samples, 0.04)
+    for _ in 0..BURSTS {
+        // where it bursts, and how big it was
+        let at = ((next().abs() * count as f32) as usize).min(count - 1);
+        let across = 0.002 + next().abs() * 0.011;
+        let hertz = 3.26 / across;
+        // bigger ones are louder and ring longer, which is the same fact twice
+        let rings = RINGS * (across / 0.013).sqrt();
+        let loud = 0.09 * (across / 0.013).sqrt();
+        let over = ((RATE as f32 * rings * 4.0) as usize).min(count);
+
+        for n in 0..over {
+            let t = n as f32 / RATE as f32;
+            // the pitch climbs as it goes, because the bubble is closing
+            let turn = (hertz * (1.0 + t / rings * 0.12)) * t * std::f32::consts::TAU;
+            // round the end rather than off it. A ring that runs past the last
+            // sample was cut there, which is a click and not a bubble, and at
+            // ninety of them to a piece several were cut every time.
+            let into = (at + n) % count;
+
+            samples[into] += turn.sin() * (-t / rings).exp() * loud;
+        }
+    }
+
+    joined(samples.into_iter().map(|s| s.clamp(-1.0, 1.0)).collect())
 }
 
 /// How long one piece of a voice runs.
@@ -617,34 +703,43 @@ pub fn fire(seed: u32) -> Samples {
     let mut next = noise(seed);
     let count = (RATE as f32 * PIECE) as usize;
     let mut last = 0.0f32;
+    // its breathing wanders rather than cycling. It was a sine of exactly one
+    // turn across the piece, which is a 2.5 hertz tremolo locked to the piece
+    // boundary however the pieces are shuffled: anything periodic inside a
+    // piece comes out periodic at the rate the pieces are queued.
+    let mut breathe = noise(seed ^ 0xF1AE);
+    let mut breathing = 0.0f32;
     let samples: Vec<f32> = (0..count)
-        .map(|n| {
+        .map(|_| {
             last += (next() - last) * 0.03;
             // a crack now and then, which is what says fire rather than wind
             let crack = if next() > 0.9988 { next() * 0.5 } else { 0.0 };
-            let breathe = 0.7 + ((n as f32 / count as f32) * 6.3).sin() * 0.3;
+            breathing += (breathe() - breathing) * 0.0009;
 
-            (last * 2.2 * breathe + crack).clamp(-1.0, 1.0) * 0.3
+            (last * 2.2 * (0.7 + breathing * 1.2).clamp(0.3, 1.2) + crack).clamp(-1.0, 1.0) * 0.3
         })
         .collect();
 
-    shaped(samples, 0.08)
+    joined(samples)
 }
 
 /// Water falling into water, which is the fountain and goes on for ever.
 pub fn trickle(seed: u32) -> Samples {
     let count = (RATE as f32 * PIECE) as usize;
+    let mut beat = noise(seed ^ 0x7B1C);
+    let mut running = 0.0f32;
     let samples: Vec<f32> = dulled(noise(seed), count, 0.45)
         .into_iter()
-        .enumerate()
-        .map(|(n, sample)| {
-            let beat = ((n as f32 / RATE as f32) * 11.0).sin() * 0.3 + 0.7;
+        .map(|sample| {
+            // wandering and not beating, for the reason `fire` gives: a beat
+            // inside a piece is a beat at the rate pieces are queued
+            running += (beat() - running) * 0.0012;
 
-            sample * 0.18 * beat
+            sample * 0.18 * (0.7 + running * 1.1).clamp(0.3, 1.2)
         })
         .collect();
 
-    shaped(samples, 0.1)
+    joined(samples)
 }
 
 /// How far off a strike has to be to count as the next band out.
@@ -710,6 +805,56 @@ pub fn carries(away: f32) -> f32 {
     (crate::garden::NEAR / away.max(1.0)).powf(0.7)
 }
 
+/// Where the leaves sit in the ear, and how fast one leaf lets go of another.
+///
+/// Rustle is high. A leaf is a few centimetres of stiff paper and what it makes
+/// when it moves is a fast broadband scrape, so the body of this is above a
+/// kilohertz and there is very little under three hundred. Wind on a
+/// microphone is the opposite and is what you get instead if you record it
+/// badly: both of the CC0 wind recordings that could be reached for this had
+/// everything they had at forty hertz and nothing at all above a hundred and
+/// sixty, which is a windshield problem and not a garden.
+const LEAVES_UNDER: f32 = 0.18;
+const LEAVES_STIRS: f32 = 0.0016;
+
+/// The garden: leaves, moving.
+///
+/// **Made rather than recorded, and that is not the lapse it was for thunder.**
+/// A clap of thunder is a structured event an ear knows by heart, and noise
+/// under an envelope will never be one. Rustle is not an event. It is a great
+/// many tiny scrapes at once, which is to say it is noise, and noise shaped
+/// like the thing that is already noise is the one case where this is the
+/// honest way round.
+///
+/// Steady, with no gust in it. A gust is several seconds long and a piece of a
+/// voice is four tenths of one, so a gust cannot live in here at all: what
+/// would come out is the same swell two and a half times a second, which is a
+/// throb and not weather. The garden is walled, which makes a steady stir the
+/// easier thing to believe anyway.
+pub fn leaves(seed: u32) -> Samples {
+    let count = (RATE as f32 * PIECE) as usize;
+    let mut next = noise(seed);
+    // the low end taken off rather than the high, because what is left of
+    // noise after a running average has followed it is everything the average
+    // could not keep up with, which is the top
+    let mut under = 0.0f32;
+    // and a slow stir over that, so it is leaves letting go of each other
+    // rather than a hiss. Slow enough to hear and far too slow to be a pitch.
+    let mut stir = noise(seed ^ 0x1EAF);
+    let mut stirring = 0.0f32;
+    let samples: Vec<f32> = (0..count)
+        .map(|_| {
+            let whole = next();
+            under += (whole - under) * LEAVES_UNDER;
+            stirring += (stir() - stirring) * LEAVES_STIRS;
+
+            (whole - under) * (0.55 + stirring * 2.4).clamp(0.15, 1.0) * 0.12
+        })
+        .collect();
+
+    joined(samples)
+}
+
 /// The hum a hall full of cabinets has.
 pub fn hum(seed: u32) -> Samples {
     let mut next = noise(seed);
@@ -725,7 +870,7 @@ pub fn hum(seed: u32) -> Samples {
         })
         .collect();
 
-    shaped(samples, 0.12)
+    joined(samples)
 }
 
 /// The sauna: the stove ticking and what is on it hissing.
@@ -742,7 +887,7 @@ pub fn steam(seed: u32) -> Samples {
         })
         .collect();
 
-    shaped(samples, 0.1)
+    joined(samples)
 }
 
 #[cfg(test)]
@@ -761,6 +906,54 @@ mod tests {
                 })
                 .collect(),
         )
+    }
+
+    /// Spec 0009: a piece of a voice does not die inside itself.
+    ///
+    /// The fault this was written for. Every voice went through `shaped`,
+    /// which rises fast and falls away over the whole run because that is the
+    /// shape of a thing being struck. A voice is not struck, and a voice is
+    /// played by queueing its pieces one after another: measured, the fire
+    /// went 0.07, 0.12, 0.09, 0.09, 0.06, 0.02, 0.01, 0.01, 0.00, 0.00 across
+    /// one piece, so every continuous sound in this building throbbed two and
+    /// a half times a second. Four of five did it, the hall's hum included.
+    ///
+    /// Measured over the middle eight tenths, because the two ends are meant
+    /// to come up and go down: that is `JOINS`, and three milliseconds of it
+    /// is what keeps a join from being a click.
+    #[test]
+    fn a_voices_piece_does_not_die_inside_itself() {
+        for (room, _, make, seed) in voices(9.0) {
+            let sound: Vec<f32> = make(seed).collect();
+            let n = sound.len();
+            let tenth = |k: usize| {
+                sound[n * k / 10..n * (k + 1) / 10]
+                    .iter()
+                    .fold(0.0f32, |most, s| most.max(s.abs()))
+            };
+            let loudest = (1..9).map(tenth).fold(0.0f32, f32::max);
+            let quietest = (1..9).map(tenth).fold(f32::MAX, f32::min);
+
+            assert!(
+                quietest > loudest * 0.4,
+                "the {:?}'s voice runs {:.3} at its loudest tenth and {:.3} at its \
+                 quietest, so it throbs every {:.2}s",
+                room,
+                loudest,
+                quietest,
+                n as f32 / RATE as f32
+            );
+            // and it is a piece and not a fifteenth of one. The tub's was 59
+            // milliseconds, which is one bubble queued seventeen times a
+            // second rather than a hot tub.
+            assert!(
+                (sound.len() as f32 / RATE as f32 - PIECE).abs() < 0.02,
+                "the {:?}'s voice is {:.3}s and a piece is {:.3}s",
+                room,
+                n as f32 / RATE as f32,
+                PIECE
+            );
+        }
     }
 
     /// Spec 0009: every voice is in the room it says it is in.
@@ -795,6 +988,11 @@ mod tests {
     ///
     /// Walked across the garden rather than checked in its middle, because the
     /// south end is where it was worst and the middle is where it was obvious.
+    ///
+    /// It hears its own leaves now and this says so, rather than saying it
+    /// hears nothing: silence passed this test for as long as the garden had
+    /// no voice, and would have gone on passing it if the leaves were ever
+    /// dropped.
     #[test]
     fn the_garden_does_not_hear_the_baths_through_its_floor() {
         let reaches = a_room().reaches;
@@ -816,14 +1014,17 @@ mod tests {
                 along
             );
 
-            let heard = nearest(stood, Room::Garden, &places);
-
-            assert!(
-                heard.is_none(),
-                "from the garden at z {:.1} you hear the {:?}",
-                along,
-                places[heard.unwrap()].0
-            );
+            // its own voice and never the baths', wherever you stand in it
+            match nearest(stood, Room::Garden, &places) {
+                Some(n) => assert_eq!(
+                    places[n].0,
+                    Room::Garden,
+                    "from the garden at z {:.1} you hear the {:?}",
+                    along,
+                    places[n].0
+                ),
+                None => panic!("the garden is silent at z {:.1}", along),
+            }
 
             // and the thing that made it wrong is still true: something in the
             // baths is well inside earshot from here
