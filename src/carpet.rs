@@ -771,10 +771,15 @@ fn curve(aisle: glam::Vec2, wall: glam::Vec2) -> Vec<(glam::Vec2, f32)> {
 /// of one width on a quad half as wide as it is long comes out twice as wide
 /// across the turn as it is along the straight.
 ///
-/// Nothing in here has a straight edge. The band is full inside its own width
-/// and gone by the end of the fade, and the fade is a few centimetres rather
-/// than a metre: a wash falling off over a metre is a glow, and a glow on a
-/// floor reads as a lamp rather than as wear.
+/// The band is full inside its own width and gone by the end of the fade, and
+/// the fade is a few centimetres rather than a metre: a wash falling off over
+/// a metre is a glow, and a glow on a floor reads as a lamp rather than as
+/// wear.
+///
+/// **It does have one straight edge, at the outside, and that is the engine
+/// rather than the drawing.** A texture's alpha here is a stencil and not a
+/// blend, so the fade can run down to a third of itself and then has to stop.
+/// See the mapping below.
 pub fn worn(aisle: glam::Vec2, wall: glam::Vec2, wide: f32, fade: f32, shape: f32) -> TextureData {
     let along = curve(aisle, wall);
 
@@ -806,9 +811,37 @@ pub fn worn(aisle: glam::Vec2, wall: glam::Vec2, wide: f32, fade: f32, shape: f3
             let worn = smooth((wide + fade - off) / fade) * smooth(down / WORN_TAPER);
             // and specked, so it is pile rather than an airbrush
             let roll = (from((y * WORN + x) ^ WORN_SEED) % 1000) as f32 / 1000.0;
-            let shade = worn * (1.0 - WORN_SPECK * roll) * 255.0;
+            let speck = 1.0 - WORN_SPECK * roll;
+            // lifted clear of the shader's cutout, which is the thing this got
+            // wrong first time. A texture's alpha in this engine is a stencil
+            // and not a fade: `blitzkit::text::CUTOUT` throws away every texel
+            // under 0.35 before anything is lit. Written as a plain nought to
+            // one ramp, the whole outer third of this lane's fade was being
+            // discarded and the lane came out narrower than it was drawn, with
+            // its edge at whatever contour happened to be 0.35.
+            //
+            // Mapped into what survives, the fade is real over the whole of
+            // its own width and what is left is one step at the outer edge,
+            // from a tenth of the wash to nothing. That step cannot be removed
+            // on this engine at all: it is `CUTOUT` times the alpha `aim::WORN`
+            // carries, which is six values of 255 against a wash of eighteen.
+            // The speck goes in before the lift and not after. After it, a
+            // texel at the thin end of the fade comes out at 0.35 times 0.8,
+            // which is back under the cutout and thrown away again.
+            let worn = worn * speck;
+            let shade = if worn > 0.0 {
+                blitzkit::text::CUTOUT + (1.0 - blitzkit::text::CUTOUT) * worn
+            } else {
+                0.0
+            };
 
-            pixels.extend_from_slice(&[255, 255, 255, shade.clamp(0.0, 255.0) as u8]);
+            // rounded up and not down, because the cutout is a threshold and
+            // eight bits do not land on it: 0.35 of 255 is 89.25, and 89 back
+            // out is 0.349, which is under the threshold by a rounding and
+            // thrown away by it.
+            let shade = (shade * 255.0).ceil().clamp(0.0, 255.0) as u8;
+
+            pixels.extend_from_slice(&[255, 255, 255, shade]);
         }
     }
 
@@ -993,6 +1026,35 @@ mod tests {
                 beside < 0.02,
                 "a stride off the lane the wear is {:.3} of itself",
                 beside
+            );
+        }
+    }
+
+    /// Spec 0020: no texel of the wear lands where the shader would throw it
+    /// away.
+    ///
+    /// A texture's alpha in this engine is a stencil and not a fade: every
+    /// texel under `blitzkit::text::CUTOUT` is discarded before anything is
+    /// lit. Written as a plain ramp, the outer third of this lane's fade went
+    /// into that gap and was never drawn, so the lane came out narrower than
+    /// it was drawn with its edge at whatever contour happened to be 0.35.
+    ///
+    /// So every texel is either nothing at all or something the shader keeps,
+    /// and the fade lives entirely in what it keeps.
+    #[test]
+    fn no_wear_is_drawn_at_a_strength_the_shader_throws_away() {
+        let (_, picture) = track();
+        let cut = blitzkit::text::CUTOUT;
+
+        for (n, texel) in picture.levels[0].pixels.chunks(4).enumerate() {
+            let alpha = texel[3] as f32 / 255.0;
+
+            assert!(
+                alpha == 0.0 || alpha >= cut,
+                "texel {} is {:.3} of an alpha, which is under {:.2} and over nothing",
+                n,
+                alpha,
+                cut
             );
         }
     }

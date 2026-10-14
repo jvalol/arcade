@@ -58,11 +58,29 @@ The alpha does the other half. A third of it takes the carpet's brightest
 threads down a quarter, so the confetti goes quiet inside the lane rather than
 being painted over, which is what worn carpet actually looks like.
 
-**Nothing drawn has a straight edge but the one at the wall**, and that one is
-straight because the wall is standing on it. The band fades out well inside
-the quad it is painted on, and the quad carries a hand's width past the wall's
-inner face so the picture's own repeat seam is buried in the wall rather than
-showing as a hair of half strength wear along the skirting.
+**Nothing drawn has a straight edge but the one at the wall and the one at the
+very outside.** The wall's is straight because the wall is standing on it. The
+band fades out well inside the quad it is painted on, and the quad carries a
+hand's width past the wall's inner face so the picture's own repeat seam is
+buried in the wall rather than showing as a hair of half strength wear along
+the skirting.
+
+The outside one is the engine and not the drawing, and it was found while
+building spec 0016. **A texture's alpha here is a stencil and not a fade.**
+`blitzkit::text::CUTOUT` throws away every texel under 0.35 before anything is
+lit, and the one blend the translucent pass has is alpha over rather than
+additive. Written as a plain nought to one ramp, as this was, the outer third
+of the lane's fade went into that gap and was never drawn: the lane came out
+narrower than it was drawn, with its edge at whatever contour happened to be
+0.35.
+
+The mask is mapped into what survives now, so the fade is real over the whole
+of its own width and what is left is one step at the outer edge, from a tenth
+of the wash to nothing. That step cannot be removed on this engine: it is the
+cutout times the alpha the wash carries, which is six values of 255 against a
+wash of eighteen. It is rounded up rather than down as well, because 0.35 of
+255 is 89.25 and 89 back out is 0.349, which is under the threshold by a
+rounding and thrown away by it.
 
 **Two millimetres above the carpet**, the hair the stars out past the door lie
 above their own floor. In the carpet's own plane it would be two exposed faces
@@ -80,6 +98,7 @@ worn and no reason for a patch of one.
 - The curve stays inside the box its two ends make, which is what lets the two ends speak for the whole of it. — `carpet::tests::the_wear_keeps_between_its_two_ends`
 - The wear is heaviest at the wall, nothing where it leaves the aisle, and gone a stride to either side. — `carpet::tests::the_wear_is_heaviest_at_the_wall_and_gone_a_stride_off_it`
 - There is none of it at the edge of its picture. — `carpet::tests::the_wear_runs_out_before_the_edge_of_its_picture`
+- And no texel of it is drawn at a strength the shader throws away. — `carpet::tests::no_wear_is_drawn_at_a_strength_the_shader_throws_away`
 - It lifts the carpet far enough to see and not far enough to read as a light, counted in code values rather than in linear light. — `aim::tests::the_worn_track_can_be_seen_and_is_not_a_spotlight`
 
 ### Verified by hand
