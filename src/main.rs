@@ -2591,17 +2591,24 @@ impl Game for Arcade {
         // arrive after the next flash. It has nowhere to be played from in any
         // case: the strike is a chosen distance and not a place, so a sound
         // coming from a point in this garden would be the fiction told twice.
+        //
+        // Where the sky is and nowhere else, per `garden::under_the_sky`,
+        // which is a place and not a floor: this asked what was underfoot and
+        // played wherever that was gravel, and gravel is what this garden
+        // happens to be floored with rather than a fact about the weather. A
+        // strike
+        // whose bang falls due while you are indoors is a strike you missed,
+        // so it is marked heard either way and walking out afterwards does not
+        // set off a bang that should already have gone.
         if let Some(n) = garden::heard(self.since) {
             if self.thundered != Some(n) {
                 self.thundered = Some(n);
 
-                let strike = garden::strike(n);
-                // indoors it is a storm through a wall, which is the garden's
-                // own `Underfoot` asked a different question
-                let outside = self.underfoot() == noise::Underfoot::Gravel;
-                let bang = noise::thunder(strike.away, noise::THUNDER_SEED ^ n);
+                if garden::under_the_sky(self.room.reaches, self.at) {
+                    let strike = garden::strike(n);
 
-                sound.play(&bang.gain(if outside { 1.0 } else { noise::INDOORS }));
+                    sound.play(&noise::thunder(strike.away, noise::THUNDER_SEED ^ n));
+                }
             }
         }
 

@@ -126,9 +126,34 @@ next flash. It has nowhere to be played from in any case: the strike is a
 chosen distance and not a place, so a sound coming from a point in this garden
 would be the fiction told twice.
 
-**A fifth of it indoors.** Thunder carries into the building, because a
-building is not a sealed box and because a storm you can only hear in one room
-is a feature of that room rather than weather over the place.
+**The garden and nowhere else.** This was built the other way first, at a
+fifth of itself indoors, on the reasoning that a building is not a sealed box
+and that a storm heard in one room is a feature of that room rather than
+weather over the place. That overran this spec's own out of scope and Jake's
+answer was no.
+
+The reasoning was wrong anyway. The rooms that would have heard it are the
+hall, the nook, the cellar and the baths, and three of those are underground.
+A fifth of a bang with no wall between you and it reads as a sound effect
+rather than as weather, which is the opposite of what it was for.
+
+**And where the sky is, not where the gravel is.** The first answer to that
+asked what was under your feet and sounded wherever it was gravel, which works
+in this building for a reason that is a coincidence: the garden's floor is
+gravel and nothing else here is. A later room with a gravel path through it
+would have been in a thunderstorm. Jake's point, and it is the right one.
+
+So it is a place. `garden::under_the_sky` is the one account of where the
+weather reaches, and `noise::underfoot` reads it too: what you are walking on
+and what is over you are different questions about the same spot, and the
+second is the one the first was standing in for. Above ground as well as on
+the right side of the wall, because the cellar and the baths run under the
+garden, and a point in the garden's own footprint three metres down has the
+garden's floor between it and any weather.
+
+A strike whose bang falls due while you are indoors is a strike you missed. It
+is marked heard either way, so walking out afterwards does not set off a bang
+that should already have gone.
 
 ## Acceptance criteria
 
@@ -138,6 +163,7 @@ is a feature of that room rather than weather over the place.
 - What you can see and what you can hear are not the same strike. — `garden::tests::the_strike_you_see_is_not_the_strike_you_hear`
 - The air takes the top off a far rumble and leaves a near crack its own, and both keep a body a speaker can sound. — `noise::tests::the_air_takes_the_top_off_a_far_rumble_and_leaves_a_near_crack_its_own`
 - A far rumble rolls rather than fading once. — `noise::tests::a_far_rumble_rolls_rather_than_fading_once`
+- The storm is heard where the sky is, and the sky is a place rather than a floor. — `noise::tests::the_storm_is_heard_where_the_sky_is_and_not_where_the_gravel_is`
 
 ### Verified by hand
 
@@ -146,7 +172,6 @@ is a feature of that room rather than weather over the place.
 - A near strike and a far one are plainly different things, and you can tell
   which before the thunder tells you.
 - Counting the seconds works.
-- The thunder indoors reads as weather outside rather than as a sound effect.
 
 ## Out of scope
 
@@ -156,8 +181,8 @@ from under them.
 
 **Rain.** Separate, and wants the pond to answer it.
 
-**Anywhere but the garden.** It is the only room with a sky. The thunder is
-heard everywhere, which is weather rather than a second storm.
+**Anywhere but the garden.** It is the only room with a sky, and the thunder
+is the garden's too. See above for the version of this that overran the line.
 
 **A soft-edged sprite.** Wanted here and not available: see the flash above.
 If the engine ever grows one, the patch is worth another look.

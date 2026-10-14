@@ -88,10 +88,12 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
     // the garden and the nook are both through the hall's left wall, and the
     // nook stops short of the garden: which side of that wall you are on is not
     // enough on its own to tell them apart.
+    //
+    // Asked of `garden::under_the_sky`, which is the same question the storm
+    // asks and so is answered once. What is under your feet here is gravel
+    // because this is the garden, and not the other way about.
     if at.x < crate::garden::wall_at() {
-        let middle = crate::garden::at(reaches);
-
-        if at.z > middle.z - crate::garden::SPAN * 0.5 {
+        if crate::garden::under_the_sky(reaches, at) {
             return Underfoot::Gravel;
         }
 
@@ -561,16 +563,8 @@ pub fn trickle(seed: u32) -> Samples {
     shaped(samples, 0.1)
 }
 
-/// The seed the storm's thunder is made from, and how much of itself a bang is
-/// worth indoors.
-///
-/// A fifth. Thunder carries into the building because a building is not a
-/// sealed box and because a storm you can only hear in one room is a feature
-/// of that room rather than weather over the place. It is dulled by the walls
-/// as well as quietened, in truth, and it is not: this is one number, and the
-/// one it is standing in for is a filter per wall between you and the sky.
+/// The seed the storm's thunder is made from.
 pub const THUNDER_SEED: u32 = 0x5EED_0016;
-pub const INDOORS: f32 = 0.2;
 
 /// How long the thunder of a near strike lasts and of a far one, in seconds.
 ///
@@ -869,6 +863,76 @@ mod tests {
                 share(sound, 320.0)
             );
         }
+    }
+
+    /// Spec 0016: the storm is heard where the sky is, and the sky is a place
+    /// rather than a floor.
+    ///
+    /// Written after getting it the other way about. The storm asked what was
+    /// under your feet and sounded wherever that was gravel, which works in
+    /// this building for a reason that is a coincidence: the garden's floor is
+    /// gravel and nothing else here is. A later room with a gravel path
+    /// through it would have been in a thunderstorm.
+    ///
+    /// So the two halves are here. Every room is checked, and the garden's own
+    /// footprint is checked again from the cellar's depth, where the thing
+    /// overhead is the garden's floor and not any weather.
+    #[test]
+    fn the_storm_is_heard_where_the_sky_is_and_not_where_the_gravel_is() {
+        let room = crate::room::Room::of(
+            (0..12)
+                .map(|n| {
+                    crate::cabinet::Cabinet::found(
+                        &format!("game{}", n),
+                        std::path::Path::new("/nowhere"),
+                    )
+                })
+                .collect(),
+        );
+        let reaches = room.reaches;
+        let middle = crate::garden::at(reaches);
+        let hall = glam::vec3(0.0, 0.0, 0.0);
+
+        assert!(
+            crate::garden::under_the_sky(reaches, middle),
+            "the middle of the garden is not under the sky"
+        );
+        for (what, stood) in [
+            ("the hall", hall),
+            (
+                "the nook",
+                glam::vec3(
+                    -crate::room::WALL - crate::room::CABINET.x - 1.0,
+                    0.0,
+                    -reaches + 2.0,
+                ),
+            ),
+            (
+                "the cellar",
+                glam::vec3(0.0, -crate::cellar::DOWN, -reaches + 4.0),
+            ),
+            // and the one that matters: the garden's own ground plan, from
+            // under its floor. Whatever is down there, it is not weather.
+            (
+                "under the garden",
+                glam::vec3(middle.x, -crate::cellar::DOWN, middle.z),
+            ),
+        ]
+        .iter()
+        .copied()
+        {
+            assert!(
+                !crate::garden::under_the_sky(reaches, stood),
+                "{} at {:?} is under the sky",
+                what,
+                stood
+            );
+        }
+
+        // and the floor is read from the place rather than the place from the
+        // floor, which is what keeps the two in step
+        assert_eq!(underfoot(reaches, middle), Underfoot::Gravel);
+        assert_eq!(underfoot(reaches, hall), Underfoot::Carpet);
     }
 
     /// Spec 0016: a roll of thunder is several arrivals and not one fade.

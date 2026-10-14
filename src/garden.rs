@@ -69,6 +69,28 @@ pub fn near(reaches: f32) -> f32 {
     -reaches + NOOK_SPAN + THICK * 0.5
 }
 
+/// Whether somebody standing here has the sky over them.
+///
+/// **The one account of where the weather reaches.** It was two, and the
+/// second one was wrong: the storm of spec 0016 asked what was under your
+/// feet and played where that was gravel. Gravel is what this garden's floor
+/// happens to be made of and not a fact about the sky, and the moment some
+/// later room has a gravel path through it, that room is in a thunderstorm.
+/// Jake's point, and it is the right one.
+///
+/// So it is a place and not a material. `noise::underfoot` reads this too,
+/// which is what keeps it to one account: what you are walking on and what is
+/// over you are different questions about the same spot, and the second is
+/// the one the first was standing in for.
+///
+/// Above ground as well as on the right side of the wall. The cellar and the
+/// baths run under the garden, and a point in the garden's own footprint two
+/// and a half metres down is in the baths, with the garden's floor between it
+/// and any weather.
+pub fn under_the_sky(reaches: f32, stood: Vec3) -> bool {
+    stood.y > -0.1 && stood.x < wall_at() && stood.z > at(reaches).z - SPAN * 0.5
+}
+
 /// The middle of the garden's ground.
 pub fn at(reaches: f32) -> Vec3 {
     vec3(
