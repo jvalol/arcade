@@ -26,7 +26,7 @@ not a priority, and it never changes once a spec exists.
 | [0016](0016-lightning-and-thunder.md) | Parked: a storm that breaks, with the thunder arriving as late as the distance says |
 | [0017](0017-a-door-at-the-far-end.md) | A lit door in the far wall of the hidden room, out of sight from the way in and in sight from the sun |
 | [0018](0018-the-system-at-true-scale.md) | The same system through that door with nothing bent but the light: one scale, a ten metre sun, Neptune 33 kilometres out, and three minutes to ride there |
-| [0019](0019-a-pondoria.md) | Draft: a room you stay in, where the second minute differs from the first and nothing asks anything of you |
+| [0019](0019-a-pondoria.md) | A room you stay in, which is the garden given a twenty minute day: the light swings and reddens, the sky goes out, and the lanterns earn their keep |
 
 ---
 

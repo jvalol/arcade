@@ -1,7 +1,7 @@
 # 0019 A pondoria
 
-**Status:** draft
-**Date:** 2026-10-13
+**Status:** implemented
+**Date:** 2026-10-13, the garden given a day the same day
 
 ## Goal
 
@@ -33,13 +33,17 @@ circuit. The orrery turns, and turns back when you press L. Every room is in
 the state you found it in, for ever, and that is why there is no reason to be
 in any of them once you have worked out what they hold.
 
-So the one thing this room must have is a change you cannot hurry and cannot
-reverse. Light crossing a floor. Water going still after something fell in it.
-A fire burning down to nothing and staying there. The test is whether you can
-tell how long you have been in the room by looking at it.
+So the one thing this room must have is a change you cannot hurry. The test is
+whether you can tell how long you have been in the room by looking at it.
 
-That is also what tells a pondoria from a screensaver: a loop says nothing
-about how long you have been watching, and a change does.
+**It may loop, and this spec said otherwise for an afternoon.** The first
+draft ruled loops out, on the ground that a loop says nothing about how long
+you have been watching. That is true of the cellar's fire, whose period is a
+fraction of a second, and false of a day, and the thing that separates them is
+not whether they come round but how long they take against a visit. Anything
+that genuinely never repeats eventually stops changing, which fails the next
+person through the door: a fire that burns down to nothing leaves a room with
+cold ashes in it for ever.
 
 ### It asks nothing
 
@@ -54,16 +58,71 @@ The one thing it may have is somewhere to sit. The building has benches and
 every one of them is a table with a toy on it; there is nowhere in it to sit
 and do nothing.
 
-### Where it goes
+### Where it goes: the garden
 
-Undecided, and these are the three readings.
+Settled, and it is the garden. The other two readings are kept below because
+they were real and may be again.
 
-**The garden, given time.** The cheapest and probably the best. The garden is
-already the room nobody is doing anything in: moss, a koi pond, stone lanterns,
-and a sky. It has one thing the others do not, which is a sky, and a sky is the
-natural home of a change you cannot hurry. A sun that crosses it over ten
-minutes turns the garden into a pondoria without a wall being built, and the
-lanterns start earning their light.
+**A day in the garden lasts twenty minutes.** The sun goes round once, east to
+west and under, and three things follow it: the light's direction, colour and
+strength; what the sky's own picture is multiplied by; and how much of their
+light the lanterns are giving.
+
+Twenty minutes is the number that serves both halves of the rule. The sun
+moves eighteen degrees a minute, which is a shadow you can watch swing, and no
+one visit sees it come round.
+
+**The hour it opens at matters as much as the length.** It opened just short of
+noon, and Jake played it and could not tell the garden was doing anything: that
+is the flattest part of the whole day, where two minutes takes the sun from
+0.95 of its height to 0.95 of its height on the other side and the brightness
+does not move at all. It opens in the late afternoon now. A minute in is
+visibly dimmer, two and the sun is nearly down, four and the lanterns are up.
+The first visit is the one that has to show the room is alive.
+
+**It changes the garden and nothing else.** The directional light is the one
+light in this building that keeps the day, and `room::outline` already records
+as measured that the hall, the nook, the cellar and the baths are roofed and
+the sun reaches none of them: "a measurement of both with the sun at full and
+at nought came back the same to three places."
+
+**Noon is the garden as it was.** The garden had one state for its whole life
+and that state is now the top of the day; everything the day adds is either
+side of it. Nothing was taken away to make room for this.
+
+**The shadows had to stop crawling.** A sun that moves was the first thing in
+this building to move the shadow map, and spec 0015 of the engine fitted that
+map to the scene bounds as the light saw them, so every frame covered a
+different patch of ground and every edge crawled. It is fitted to the bounds'
+own sphere now, which is the same width from every direction. The trade is in
+that spec: a texel over this building goes from 78 millimetres to 110.
+
+**The sky is weather you can watch going over.** It drifted slowly enough that
+nothing was seen to move, on the reasoning that a sky is different when you
+look up again. Jake's answer to that is the one that matters: nobody is in the
+garden long enough to look up again, and a sky that only changes while you are
+not watching gives you no reason to stay.
+
+A cloud crosses the whole sky in about a minute now, and it goes in two
+directions at rates that do not divide. One alone is the picture sliding past
+and the same cloud comes round as soon as it has gone by; crossways as well,
+the dome's disc walks about the square picture and never takes the same path
+twice, so the shapes themselves keep changing. The storm's noise wraps in both
+axes, which is what lets this run for ever without a seam.
+
+That is also the half of this room that works inside ten seconds. The day works
+over minutes and the weather over seconds, and between them there is something
+moving at whatever length of time somebody gives it.
+
+**The lanterns earn their light.** They were lit at all hours against a sky
+that was always the same. They come up over a minute and a half as the sun
+goes down, and they are the only light in the garden by the time it is dark.
+
+**The sky is never black.** What is overhead at night still has to read as
+weather rather than as a lid, so the storm's picture stays and what comes down
+is the day behind it.
+
+### The two readings not taken
 
 **Past Neptune.** The far end of spec 0018's line, where you arrive after 42
 seconds of riding and there is nothing further. It is the loneliest place in
@@ -82,17 +141,23 @@ not enough rather than what else would look good.
 
 ## Acceptance criteria
 
-Nothing is built yet, so these are the claims to prove and not the proof.
-
-- You can tell how long you have been in the room by looking at it, which is
-  to say the state at ten minutes is not the state at one.
-- The change does not loop and does not reverse.
-- Nothing in the room answers the sight, and the corner offers no key.
-- The walk in and the walk out are the same walk, so it is somewhere you go
-  rather than somewhere you end up.
+- The weather goes over while you watch, in two directions that do not
+  divide. — `garden::tests::the_weather_goes_over_while_you_watch`
+- A day is long against a visit and plain inside a minute. — `garden::tests::the_day_is_long_against_a_visit_and_plain_within_one`
+- And it comes round, which is the point rather than a flaw. — `garden::tests::a_day_comes_round`
+- The lanterns come up as the sun goes down, and take their time over it. — `garden::tests::the_lanterns_come_up_as_the_sun_goes_down`
+- The sky is never black. — `garden::tests::the_sky_is_never_black`
+- Noon is the garden as it was, so the day took nothing away. — `garden::tests::noon_is_the_garden_as_it_was`
 
 ### Verified by hand
 
+- The sky is visibly different eighteen seconds later. Confirmed 2026-10-13.
+- The garden at morning, dusk and midnight are three different rooms.
+  Confirmed 2026-10-13: at dusk the lantern is the brightest thing in it and
+  lays a pool on the wall behind, which it never did under a sky that was
+  always the same.
+- Nothing in the room answers the sight and the corner offers no key, which
+  was already true of the garden and is why it was the right room.
 - It is worth a second visit. Only Jake can say that, and the honest version
   of this criterion is that the room fails if he does not go back to it.
 

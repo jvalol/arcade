@@ -255,15 +255,153 @@ pub const DOME: f32 = 19.0;
 /// `the_sky_clears_the_room_next_door`.
 pub const DOME_UP: f32 = 12.0;
 
-/// How fast the weather goes over, in radians a second.
+/// How long a day in the garden lasts, in seconds, and where in one the
+/// building opens.
 ///
-/// The dome turns rather than the clouds moving across it. A texture that
-/// scrolls wants its coordinates changed every frame and this wants one
-/// rotation, which the engine already does to everything else.
+/// Twenty minutes, per spec 0019. The rule there is that the second minute
+/// has to differ from the first, and the measure of it is whether you can tell
+/// how long you have been in the room by looking at it. Twenty is long against
+/// any one visit and short enough that a change is plain inside a minute: the
+/// sun moves eighteen degrees a minute, which is a shadow you can see swing.
 ///
-/// Slow enough that nothing is seen to move while you watch it and the sky is
-/// different when you look up again.
-pub const WEATHER: f32 = 0.013;
+/// A day is a loop, and spec 0019 as first drafted ruled loops out. That was
+/// wrong and is corrected there: a flicker and a day are not the same kind of
+/// thing, and what separates them is the period against the length of a visit.
+/// Anything that truly never repeats eventually stops changing, which fails
+/// the next person through the door.
+///
+/// **The building opens in the late afternoon**, and the hour matters as much
+/// as the length. It opened at a fifth past dawn, which is just short of noon,
+/// and Jake could not tell the garden was doing anything: that is the flattest
+/// part of the whole day. Two minutes there takes the sun from 0.95 of its
+/// height to 0.95 of its height on the other side, and the brightness does not
+/// move at all.
+///
+/// At four tenths the sun is low and falling. A minute in it is visibly
+/// dimmer, two and it is nearly down, four and the lanterns are up. The first
+/// visit is the one that has to show the room is alive, and this is the only
+/// stretch of the day that shows it inside a minute.
+pub const DAY: f32 = 20.0 * 60.0;
+pub const OPENS_AT: f32 = 0.4;
+
+/// How far through a day it is, nought at dawn and a half at dusk.
+pub fn hour(since: f32) -> f32 {
+    (since / DAY + OPENS_AT).rem_euclid(1.0)
+}
+
+/// And back: how long the building has been open at a given hour.
+///
+/// Its own function because the two are `OPENS_AT` apart and doing that sum
+/// by hand is a trap I fell into three times in one sitting, each time asking
+/// for noon and measuring mid-afternoon.
+///
+/// Only the tests want it. Nothing that runs ever asks what time it is; it
+/// asks what the light is doing, which is `sunlit` and its neighbours.
+#[cfg(test)]
+pub fn when(hour: f32) -> f32 {
+    (hour - OPENS_AT).rem_euclid(1.0) * DAY
+}
+
+/// How high the sun stands, one overhead and negative when it is down.
+///
+/// A plain sine, so the two twilights take as long as each other and the night
+/// is as long as the day. A garden is not a planet and nothing here is worth
+/// an axial tilt.
+pub fn sun_up(since: f32) -> f32 {
+    (hour(since) * std::f32::consts::TAU).sin()
+}
+
+/// Which way the light comes from: round the sky once a day, east to west, and
+/// leaning a little so it is never straight down the dome's axis.
+///
+/// Pointing the way the light travels, which is what `Light::direction` holds,
+/// so this is the sun's own place negated.
+pub fn sunlight(since: f32) -> Vec3 {
+    let turn = hour(since) * std::f32::consts::TAU;
+
+    -vec3(turn.cos(), turn.sin(), 0.22).normalize()
+}
+
+/// How bright the sun is and what colour, through the day.
+///
+/// Zero while it is down, and the last of it is warm: the low sun is reddened
+/// because its light is coming the long way through the storm, which is the
+/// one piece of this that is a reason rather than a taste.
+pub fn sunlit(since: f32) -> (Vec3, f32) {
+    let up = sun_up(since).max(0.0);
+    // the edge of the day, where the light is lowest and reddest
+    let low = (1.0 - up).powi(3);
+    // off `aim::SUN` rather than repeating its numbers, so noon is the colour
+    // the garden has always had by construction and not by my arithmetic
+    // happening to match it
+    let colour = crate::aim::SUN - vec3(0.0, low * 0.30, low * 0.42);
+
+    (colour, up.powf(0.7) * crate::aim::SUN_STRENGTH)
+}
+
+/// What fills the shade, which is the sky rather than the sun.
+///
+/// Never nought: a storm at midnight is still a lid over the garden and a
+/// garden with no fill at all is a black rectangle. It goes from deep blue to
+/// the daylight fill of `aim::FILL`.
+pub fn filled(since: f32) -> Vec3 {
+    let up = (sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
+    let night = vec3(0.03, 0.04, 0.09);
+
+    night + (crate::aim::FILL - night) * up.powf(1.4)
+}
+
+/// What the sky's own picture is multiplied by, through the day.
+///
+/// The storm is past one in every channel, per `aim::SKY`, which is this
+/// engine's way of saying a thing is lit rather than being lit. At night it
+/// has nothing lighting it either, so the multiplier comes down rather than
+/// the picture changing: the same cloud, with no day behind it.
+pub fn skylit(since: f32) -> glam::Vec4 {
+    let up = (sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
+    let day = crate::aim::SKY;
+    // not nought at midnight. A sky you cannot see at all is a ceiling, and
+    // what is overhead at night still has to read as weather.
+    let night = glam::vec4(0.055, 0.062, 0.085, 1.0);
+    let share = up.powf(1.6);
+
+    night + (day - night) * share
+}
+
+/// How much of their light the lanterns are giving.
+///
+/// On through the night and out through the day, and they take a while over
+/// both: a lamp that snaps on is a switch, and nothing in this garden is
+/// switched. They are already lit by the time the sun is on the horizon, which
+/// is when a garden's lanterns are lit.
+pub fn lanterns_lit(since: f32) -> f32 {
+    let up = sun_up(since);
+    let out = ((up - 0.06) / 0.22).clamp(0.0, 1.0);
+
+    1.0 - out * out * (3.0 - 2.0 * out)
+}
+
+/// How fast the weather goes over, as a share of the picture a second, and in
+/// which two directions.
+///
+/// **Fast enough to watch.** It was slow enough that nothing was seen to move,
+/// on the reasoning that a sky is different when you look up again. Jake's
+/// answer to that is the one that matters: nobody is in the garden long enough
+/// to look up again. A pondoria is a room you stay in, per spec 0019, and a
+/// sky that only moves while you are not watching gives you no reason to.
+///
+/// At these rates a cloud crosses the whole sky in about a minute, which is
+/// weather you can see going over rather than weather you can catch moving if
+/// you stare.
+///
+/// **Two directions, at rates that do not divide.** One alone is the picture
+/// sliding past, and you see the same cloud again as soon as it has gone by.
+/// Crossways as well, the disc walks about the square picture and never takes
+/// the same path twice, so the shapes themselves keep changing. The noise
+/// `storm` lays down wraps in both axes, which is what lets this run for ever
+/// without a seam.
+pub const WEATHER: f32 = 0.0110;
+pub const DRIFT: f32 = 0.0067;
 
 /// A storm, as a picture to wrap round the inside of the dome.
 ///
@@ -469,12 +607,12 @@ pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
         ];
     }
 
-    // and the weather goes round by moving the picture over it, since u is
-    // the angle round and nothing else uses it
-    let round = by / std::f32::consts::TAU;
-
+    // and the weather goes over by moving the picture across it, in both
+    // directions. `by` is the time, and the two rates are `WEATHER` and
+    // `DRIFT`.
     for vertex in mesh.vertices.iter_mut() {
-        vertex.uv[0] += round;
+        vertex.uv[0] += by * WEATHER;
+        vertex.uv[1] += by * DRIFT;
     }
 
     mesh
@@ -3678,18 +3816,22 @@ mod tests {
             }
 
             // and the control: the picture on it did move, or the weather has
-            // simply stopped
-            let moved = still
-                .vertices
-                .iter()
-                .zip(turned.vertices.iter())
-                .any(|(one, two)| (one.uv[0] - two.uv[0]).abs() > 1e-6);
+            // simply stopped. Both ways, per spec 0019: one direction alone is
+            // the picture sliding past, and the same cloud comes round again
+            // as soon as it has gone by.
+            for (axis, which) in [(0usize, "over"), (1, "across")] {
+                let moved = still
+                    .vertices
+                    .iter()
+                    .zip(turned.vertices.iter())
+                    .any(|(one, two)| (one.uv[axis] - two.uv[axis]).abs() > 1e-6);
 
-            assert!(
-                moved,
-                "nothing on the sky moved when the weather turned by {:.2}",
-                by
-            );
+                assert!(
+                    moved,
+                    "nothing on the sky went {} when the weather turned by {:.2}",
+                    which, by
+                );
+            }
         }
     }
 
@@ -4303,6 +4445,194 @@ mod tests {
             got.x > wall_at(),
             "it reached the door and not through it: {:?}",
             got
+        );
+    }
+
+    /// Spec 0019: the sky is weather you can watch going over.
+    ///
+    /// It drifted slowly enough that nothing was seen to move, on the
+    /// reasoning that a sky is different when you look up again. Jake's answer
+    /// is the one that counts: nobody is in the garden long enough to look up
+    /// again.
+    #[test]
+    fn the_weather_goes_over_while_you_watch() {
+        // how much of the picture crosses the sky in ten seconds. The disc the
+        // dome uses is half the picture across, so this is the share of the
+        // whole sky.
+        let went = glam::vec2(WEATHER, DRIFT).length() * 10.0 / 0.5;
+
+        assert!(
+            (0.1..0.4).contains(&went),
+            "a tenth of a minute moves the sky {:.2} of its width",
+            went
+        );
+
+        // and the two rates do not divide, so the disc never walks the same
+        // path twice and the shapes keep changing rather than repeating
+        let ratio = WEATHER / DRIFT;
+
+        for over in 1..=6 {
+            for across in 1..=6 {
+                assert!(
+                    (ratio - over as f32 / across as f32).abs() > 0.02,
+                    "the rates are {} to {}, so the sky comes round",
+                    over,
+                    across
+                );
+            }
+        }
+    }
+
+    /// Spec 0019: a day is long against a visit and plain inside a minute.
+    ///
+    /// Those two pull against each other and the number has to serve both. A
+    /// day you can watch go round is a loop; a day that moves too little to
+    /// notice is the empty room spec 0011 built.
+    #[test]
+    fn the_day_is_long_against_a_visit_and_plain_within_one() {
+        assert!(
+            (10.0 * 60.0..=40.0 * 60.0).contains(&DAY),
+            "a day is {:.0} seconds",
+            DAY
+        );
+
+        // a minute of it, taken from where the building opens, which is the
+        // measurement that matters: the first visit is the one that has to
+        // show the room is alive. Taken at noon instead it is 0.05, which is
+        // what Jake could not see.
+        let moved = (sun_up(60.0) - sun_up(0.0)).abs();
+
+        assert!(
+            moved > 0.1,
+            "a minute from opening moves the sun {:.3} of its height, which is \
+             nothing to see",
+            moved
+        );
+        // and four minutes in, the lanterns are coming up
+        assert!(
+            lanterns_lit(4.0 * 60.0) > 0.5,
+            "four minutes in the lanterns are {:.2} lit",
+            lanterns_lit(4.0 * 60.0)
+        );
+        let dawn = when(0.0);
+        // and ten minutes is a different garden from one. By where the light
+        // comes from and not by how high it is: ten minutes from dawn is dusk,
+        // so the sun is back at the height it started at and on the other side
+        // of the sky, which is the whole of what you see.
+        let turned = sunlight(dawn + 600.0).dot(sunlight(dawn + 60.0));
+
+        assert!(
+            turned < -0.5,
+            "ten minutes on, the light comes from {:.2} of the same way",
+            turned
+        );
+    }
+
+    /// Spec 0019: and it comes round, which is the point rather than a flaw.
+    ///
+    /// Anything that truly never repeats eventually stops changing, which
+    /// fails the next person through the door. What separates a day from the
+    /// cellar's flicker is the period against the length of a visit.
+    #[test]
+    fn a_day_comes_round() {
+        for at in [0.0f32, 123.0, 600.0] {
+            assert!(
+                (hour(at) - hour(at + DAY)).abs() < 1e-3,
+                "a day and the same day are {} apart at {}",
+                hour(at) - hour(at + DAY),
+                at
+            );
+        }
+
+        // and the building opens with the sun up and falling, which is the
+        // half of the day you can see move
+        assert!(sun_up(0.0) > 0.3, "it opens at {:.2} of noon", sun_up(0.0));
+        assert!(
+            sun_up(60.0) < sun_up(0.0),
+            "it opens with the sun still climbing, where the light is flattest"
+        );
+    }
+
+    /// Spec 0019: the lanterns come up as the sun goes down, and take their
+    /// time over it.
+    #[test]
+    fn the_lanterns_come_up_as_the_sun_goes_down() {
+        assert_eq!(lanterns_lit(when(0.25)), 0.0, "they are lit at noon");
+        assert_eq!(lanterns_lit(when(0.75)), 1.0, "they are out at midnight");
+
+        // and over more than a stroke. A lamp that snaps on is a switch.
+        let mut went = 0.0;
+        let step = DAY / 2000.0;
+        let mut at = when(0.3);
+        let until = at + DAY * 0.3;
+
+        while at < until {
+            let (one, other) = (lanterns_lit(at), lanterns_lit(at + step));
+
+            if (one - other).abs() > 1e-6 {
+                went += step;
+            }
+
+            at += step;
+        }
+
+        assert!(
+            (20.0..300.0).contains(&went),
+            "they take {:.0} seconds to come up",
+            went
+        );
+    }
+
+    /// Spec 0019: and the sky is never black, because what is overhead at
+    /// night still has to read as weather rather than as a lid.
+    #[test]
+    fn the_sky_is_never_black() {
+        for n in 0..64 {
+            let at = DAY * n as f32 / 64.0;
+            let lit = skylit(at);
+
+            assert!(
+                lit.x > 0.04 && lit.y > 0.04 && lit.z > 0.04,
+                "the sky is {:?} at {:.2} of a day",
+                lit,
+                hour(at)
+            );
+        }
+    }
+
+    /// Spec 0019: and noon is the garden as it was, so the day took nothing
+    /// away.
+    ///
+    /// The garden had one state for its whole life and that state was this
+    /// one. Everything the day adds is either side of it.
+    #[test]
+    fn noon_is_the_garden_as_it_was() {
+        let noon = when(0.25);
+        let (colour, strength) = sunlit(noon);
+
+        assert!(
+            (colour - crate::aim::SUN).length() < 0.02,
+            "noon is {} where the garden was {}",
+            colour,
+            crate::aim::SUN
+        );
+        assert!(
+            (strength - crate::aim::SUN_STRENGTH).abs() < 0.01,
+            "noon is {} where the garden was {}",
+            strength,
+            crate::aim::SUN_STRENGTH
+        );
+        assert!(
+            (skylit(noon) - crate::aim::SKY).length() < 0.02,
+            "the sky at noon is {:?} where it was {:?}",
+            skylit(noon),
+            crate::aim::SKY
+        );
+        assert!(
+            (filled(noon) - crate::aim::FILL).length() < 0.02,
+            "the fill at noon is {} where it was {}",
+            filled(noon),
+            crate::aim::FILL
         );
     }
 }

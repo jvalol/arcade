@@ -1904,7 +1904,7 @@ impl Game for Arcade {
         // and the sky, whose weather goes round by its picture moving rather
         // than by the dome turning. See `garden::dome_mesh`.
         if let Some(mesh) = self.dome {
-            renderer.update_mesh(mesh, &garden::dome_mesh(self.since * garden::WEATHER));
+            renderer.update_mesh(mesh, &garden::dome_mesh(self.since));
         }
 
         // the coplanar check, per spec 0048 of the engine. Asked here because
@@ -2820,9 +2820,19 @@ impl Game for Arcade {
         // enough that a lit cabinet is the thing you look at. Warm from above
         // and cool in what it misses, because a white sun over a neutral fill
         // is what made every surface in here grey.
-        scene.light.color = aim::SUN;
-        scene.light.intensity = aim::SUN_STRENGTH;
-        scene.light.ambient = aim::FILL;
+        //
+        // and it moves, per spec 0019. A day in the garden is twenty minutes
+        // and this is the one light in the building that keeps it: the hall,
+        // the nook, the cellar and the baths are roofed and the sun reaches
+        // none of them, which `room::outline` records as measured, so a sun
+        // that swings and reddens and goes out changes the garden and nothing
+        // else.
+        let (colour, strength) = garden::sunlit(self.since);
+
+        scene.light.direction = garden::sunlight(self.since);
+        scene.light.color = colour;
+        scene.light.intensity = strength;
+        scene.light.ambient = garden::filled(self.since);
 
         // the aisle's carpet, and only the aisle's. It used to be a rectangle
         // wide enough for the nook as well, which was wasted twice over: the
@@ -3481,7 +3491,9 @@ impl Game for Arcade {
                     dome,
                     storm,
                     &Transform::at(garden::dome_at(self.room.reaches)),
-                    aim::SKY,
+                    // the same cloud all day, with the day taken out from
+                    // behind it. Spec 0019.
+                    garden::skylit(self.since),
                     900.0,
                 );
             }
@@ -5452,14 +5464,21 @@ impl Game for Arcade {
 
         // the garden's, which are inside its stone lanterns and nowhere else.
         // Spec 0010.
-        for lamp in garden::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(lamp),
-                lamp,
-                aim::LANTERN_LIT,
-                garden::LAMP_LIT,
-                garden::LAMP_RANGE,
-            ));
+        // and they come up as the sun goes down, per spec 0019, over a couple
+        // of minutes rather than at a stroke: nothing in this garden is
+        // switched.
+        {
+            let lit = garden::lanterns_lit(self.since);
+
+            for lamp in garden::lamps(self.room.reaches) {
+                shades.push((
+                    eye.distance_squared(lamp),
+                    lamp,
+                    aim::LANTERN_LIT,
+                    garden::LAMP_LIT * lit,
+                    garden::LAMP_RANGE,
+                ));
+            }
         }
 
         // the sun, which is the only lamp in the room behind the wall. Spec
