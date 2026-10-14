@@ -21,6 +21,17 @@ cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 Or `./check-all` from `blitzkit-project`, which runs that for every crate and
 then checks the copy markers, the spec citations and the listings.
 
+```
+WHERE=1 cargo run --release 2> /tmp/arcade.log
+```
+
+`WHERE=1` prints where you are standing, twice a second, with the room the
+building thinks you are in. It is for the slow half of fixing what somebody
+can see: a fault here arrives as a picture, and a picture has to be matched to
+a camera before anything can be measured. Stand in the thing, read the last
+line, put the camera there, and the same frame can be rendered with one thing
+changed at a time.
+
 ## The spec flow
 
 A spec before the code, in `specs/`, numbered in the order written. Each

@@ -371,6 +371,8 @@ struct Arcade {
     voices: Vec<(noise::Room, Vec3, Vec<Samples>)>,
     /// How many pieces have gone, which is what picks and bends the next.
     pieced: usize,
+    /// How long since `WHERE` last said where you are standing.
+    said: f32,
     /// How long the piece sounding now has left.
     sounding: f32,
     /// Whether you were in the water last frame, so going in can be heard.
@@ -601,6 +603,7 @@ impl Arcade {
             splashes: Vec::new(),
             voices: Vec::new(),
             pieced: 0,
+            said: 0.0,
             sounding: 0.0,
             was_wading: false,
             knock: None,
@@ -2478,6 +2481,37 @@ impl Game for Arcade {
         sound: &SoundSystem,
     ) {
         self.since += dt;
+
+        // `WHERE=1` says where you are standing, twice a second, on stderr.
+        //
+        // This is here because the slow part of fixing what somebody can see
+        // is finding where they were standing. A fault in this building is
+        // reported as a picture, and a picture has to be matched to a camera
+        // before anything can be measured or shot again: six guesses at a pose
+        // found nothing on 2026-10-08, and one line of this found it at once.
+        // On 2026-10-14 it ended an afternoon of chasing ripples on the bath
+        // house ceiling, by putting the camera exactly where Jake's was so the
+        // same frame could be rendered with one thing changed at a time.
+        //
+        // Off unless asked for, so it costs a string lookup a frame and
+        // nothing else. It prints the room as well as the pose, because which
+        // room the building thinks you are in is itself a thing that has been
+        // wrong.
+        if std::env::var("WHERE").is_ok() {
+            self.said += dt;
+            if self.said >= 0.5 {
+                self.said = 0.0;
+                eprintln!(
+                    "WHERE at {:.2} {:.2} {:.2}  yaw {:.3}  pitch {:.3}  room {:?}",
+                    self.at.x,
+                    self.at.y,
+                    self.at.z,
+                    self.yaw,
+                    self.pitch,
+                    noise::room_at(self.room.reaches, self.at)
+                );
+            }
+        }
         self.mind_the_threshold();
 
         // the toy on the bench, stepped at its own rate so a slow frame does
