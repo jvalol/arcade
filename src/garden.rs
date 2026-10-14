@@ -2894,8 +2894,8 @@ pub const SKINS: [(u32, [f32; 3], usize); 3] = [
 mod tests {
     use super::*;
 
-    /// Spec 0016: how far off a strike is sets five things, and they all move
-    /// together.
+    /// Spec 0016: how far off a strike is sets everything about it, and it all
+    /// moves together.
     ///
     /// The whole of the spec in one test. Any one of these alone can be
     /// satisfied by a constant, and the point is not that the thunder is late
@@ -2938,40 +2938,21 @@ mod tests {
             flash_fills(far.away)
         );
 
-        // and its thunder is quieter, longer and duller
-        let bang = |away: f32| {
-            let sound: Vec<f32> = crate::noise::thunder(away, 7).collect();
-            let loudest = sound.iter().fold(0.0f32, |most, s| most.max(s.abs()));
-            // how much of it is high end: how far a sample is from the one
-            // before it, averaged. A rumble moves slowly and a crack does not.
-            let edge = sound
-                .windows(2)
-                .map(|two| (two[1] - two[0]).abs())
-                .sum::<f32>()
-                / sound.len().max(1) as f32;
-
-            (sound.len(), loudest, edge)
-        };
-        let (near_long, near_loud, near_edge) = bang(near.away);
-        let (far_long, far_loud, far_edge) = bang(far.away);
-
-        assert!(
-            far_long > near_long * 3,
-            "the far rumble is {} samples and the near crack {}",
-            far_long,
-            near_long
+        // and its thunder is a different sound and not the same one quieter.
+        // Which recording it is comes from the distance, and so does how loud,
+        // and those are the two halves of what a bang tells you.
+        assert_ne!(
+            crate::noise::rolled(near.away),
+            crate::noise::rolled(far.away),
+            "a strike at {:.0} m and one at {:.0} m are heard in the same band",
+            near.away,
+            far.away
         );
         assert!(
-            far_loud < near_loud * 0.7,
-            "the far bang peaks at {:.3} and the near one {:.3}",
-            far_loud,
-            near_loud
-        );
-        assert!(
-            far_edge < near_edge * 0.3,
-            "the far bang still has {:.5} of high end against the near one's {:.5}",
-            far_edge,
-            near_edge
+            crate::noise::carries(far.away) < crate::noise::carries(near.away) * 0.4,
+            "the far bang carries {:.3} against the near one's {:.3}",
+            crate::noise::carries(far.away),
+            crate::noise::carries(near.away)
         );
     }
 

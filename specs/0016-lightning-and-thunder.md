@@ -18,8 +18,14 @@ almost nobody has watched a thing demonstrate it. Sound goes 343 metres a
 second. Three seconds is a kilometre.
 
 So a strike is **one number: how far away it is**, and that number sets
-everything else. One number into five, all moving together, which is what
-makes it worth building rather than a light that blinks.
+everything else: when the bang lands, how much the cloud lights up, how much
+the garden does, how loud it is and what kind of sound it is. All moving
+together, which is what makes it worth building rather than a light that
+blinks.
+
+Four of those five are worked out from the number. The fifth, what kind of
+sound it is, is **picked** from it, and that is the one concession in here.
+See the thunder below.
 
 ## Behavior
 
@@ -81,43 +87,36 @@ up: 21 code values dark, 27 under a strike 2,470 metres off, 40 under one at
 several strokes down one channel and a single rise and fall is a light being
 switched on.
 
-**The thunder is made rather than recorded**, per spec 0044: noise under a
-wall, shaped into arrivals. How far off sets when it plays, how loud it is, how
-long it runs, how many arrivals it is made of and how much of its top is left.
+**The thunder is recordings and not arithmetic**, which is the second thing
+in this building to go that way after the footsteps and for the same reason.
+It was made first, out of noise under a wall shaped into arrivals, and it did
+not land. A noise burst under an envelope is a noise burst under an envelope
+however carefully the envelope was chosen, and thunder is a sound every ear
+already knows by heart. `res/thunder/README.md` has the sources and what was
+done to them.
+
+**So the character is picked and the loudness is worked out.** Three bands
+over the range, near, middling and far, and how far off a strike is chooses
+which. That is the concession: how long the bang runs and how much of its top
+is left stop being derived and become a consequence of which file was reached
+for. They still change with distance, in three steps rather than smoothly, and
+how loud it is still moves smoothly across a band. The alternative was to
+filter a recording by distance, and `res/steps/README.md` already settled that
+one: a recording shaped into something it is not is halfway back to the
+arithmetic it replaced.
 
 **A far rumble is longer, not just quieter.** This is the part people get
-backwards. A distant rumble is not a near crack turned down: the bolt is
-kilometres of channel and the sound off the far end arrives seconds after the
-sound off the near end. Up close those arrivals are on top of each other and
-you hear one crack.
+backwards, and the recordings bear it out. A distant rumble is not a near
+crack turned down: the bolt is kilometres of channel and the sound off the far
+end arrives seconds after the sound off the near end. Up close those arrivals
+are on top of each other and you hear one crack.
 
-**Kilometres of air are a wall and not a tilt**, and the first build of this
-got it wrong. It was one running average, which is six decibels an octave, and
-six an octave leaves the hiss roughly where it was: measured, a rumble from
-2,800 metres still carried 0.29 of its body at 1,280 hertz. A noise burst with
-its top still on is a waterfall. Four stages is twenty-four an octave and takes
-it to 0.02. A near crack keeps its top, because that is what a crack is.
-
-**A roll of thunder is several arrivals and not one fade**, which was the other
-half of it. The first envelope fell 0.098, 0.056, 0.047, 0.040, 0.020 down the
-run and never once turned back up, which is a noise burst going out. What a
-roll is is the sound off one part of the channel arriving, then another, then
-the ground and the cloud handing some of it back, at times with no rhythm to
-them. A near strike is allowed to be one arrival, because up close they are all
-on top of each other.
-
-**And the body stays where a speaker can sound it.** Thunder's own spectrum
-falls about six decibels an octave, so starting from brown noise rather than
-white looked right and was not: with the wall over it as well the tilt is
-counted twice, and every distance came out with all of it under eighty hertz.
-That is honest about thunder and silent on the machines this will be heard on.
-White under a wall is flat up to the corner and gone above it.
-
-The corners are each stage's own, which is not where the wall ends up: four
-stages are each three decibels down at their corner, so the run of them is
-twelve down there and its real corner is about four tenths of the number in the
-source. That was reasoned wrong first, by moving the number from 170 to 260 and
-measuring the body move by a twentieth.
+**What the recordings said the synthesis had wrong.** Not what it was tuned
+for. The near strikes were built bright, on the reasoning that a crack keeps
+its high end, and real close thunder has 0.08 of its body at 640 hertz and
+nothing at all above 1,300. The synthesis had 0.25 and 0.17. They were not
+failing for want of a crack. They were hissing, and no amount of turning the
+dials that existed would have found that.
 
 **It is mixed and not queued, and it comes from nowhere.** `play` hands a sound
 straight to the mixer and it starts now; `play_at` is a queue, and a three
@@ -161,8 +160,8 @@ that should already have gone.
 - The strikes come in order, keep inside their range, and no two running are the same strike. — `garden::tests::no_strike_overtakes_the_one_before_it`
 - The flash comes back rather than fading once. — `garden::tests::the_flash_comes_back_rather_than_fading_once`
 - What you can see and what you can hear are not the same strike. — `garden::tests::the_strike_you_see_is_not_the_strike_you_hear`
-- The air takes the top off a far rumble and leaves a near crack its own, and both keep a body a speaker can sound. — `noise::tests::the_air_takes_the_top_off_a_far_rumble_and_leaves_a_near_crack_its_own`
-- A far rumble rolls rather than fading once. — `noise::tests::a_far_rumble_rolls_rather_than_fading_once`
+- Every band has thunder, and every one of it reads. — `noise::tests::every_band_has_thunder_that_reads`
+- Every distance in the range lands in a band, and the bands run in order. — `noise::tests::every_strike_lands_in_a_band_and_the_bands_run_in_order`
 - The storm is heard where the sky is, and the sky is a place rather than a floor. — `noise::tests::the_storm_is_heard_where_the_sky_is_and_not_where_the_gravel_is`
 
 ### Verified by hand

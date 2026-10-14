@@ -563,183 +563,67 @@ pub fn trickle(seed: u32) -> Samples {
     shaped(samples, 0.1)
 }
 
-/// The seed the storm's thunder is made from.
-pub const THUNDER_SEED: u32 = 0x5EED_0016;
-
-/// How long the thunder of a near strike lasts and of a far one, in seconds.
+/// How far off a strike has to be to count as the next band out.
 ///
-/// Longer the further off, which is the one part of this people get backwards.
-/// A distant rumble is not a near crack turned down: it is longer, because the
-/// bolt is kilometres of channel and the sound off the far end of it arrives
-/// seconds after the sound off the near end. Up close those arrivals are on
-/// top of each other and you hear one crack.
-pub const CRACK: f32 = 0.9;
-pub const RUMBLE: f32 = 3.4;
+/// Three bands over 250 to 2,800 metres. The character of thunder changes with
+/// distance in a way a level cannot carry, and with recordings that change is
+/// which file is picked rather than a filter turned further: see
+/// `res/thunder/README.md`, and spec 0016 for what that costs.
+pub const MIDDLING_AT: f32 = 700.0;
+pub const FAR_AT: f32 = 1_600.0;
 
-/// Where the air has taken the top off by, near and far, and how hard.
-///
-/// **How hard is the number that matters**, and the first version of this had
-/// it at one stage, which is six decibels an octave. Six an octave is a tilt
-/// and not a wall: measured, a rumble from two and a half kilometres still
-/// carried half its peak at five kilohertz, and a noise burst with its top
-/// still on is a waterfall. Air over kilometres is far steeper than that, so
-/// the far end of this runs four stages, which is twenty-four an octave.
-///
-/// The corners are each stage's own, which is not where the wall ends up. Four
-/// stages are each three decibels down at their corner, so the run of them is
-/// twelve down there and its real corner is about four tenths of the number
-/// below. 560 puts the far rumble's body around 240 hertz, which is dark
-/// enough to be weather and not so dark that a laptop cannot sound it: a
-/// rumble put honestly at forty hertz is a rumble nobody hears.
-///
-/// Measured rather than reasoned, and the reasoning was wrong first: moving
-/// this from 170 to 260 moved the body by a twentieth, because what the ear
-/// gets is four stages and not one.
-const CRACK_CORNER: f32 = 1_400.0;
-const RUMBLE_CORNER: f32 = 560.0;
-const CRACK_STAGES: usize = 2;
-const RUMBLE_STAGES: usize = 4;
-
-/// How many claps a near strike and a far one are made of.
-///
-/// **A rumble is several arrivals and not one fade.** The first version had a
-/// single envelope falling smoothly from its own start, which is a noise burst
-/// going out and is the other half of why it did not land. What a roll of
-/// thunder is is the sound off one part of the channel arriving, then another,
-/// then the ground and the cloud handing some of it back, at times that have
-/// no rhythm to them. Measured, the old one fell 0.77, 0.68, 0.57, 0.36 and so
-/// on down the run without ever once turning back up.
-const CRACK_CLAPS: usize = 2;
-const RUMBLE_CLAPS: usize = 6;
-
-/// A run levelled so its loudest sample is one.
-///
-/// The cascade below eats most of the level and how much depends on how many
-/// stages it ran, so what comes out of it has to be put back somewhere known
-/// before anything is shaped. Otherwise every number after it is a number
-/// about the filter.
-fn levelled(mut samples: Vec<f32>) -> Vec<f32> {
-    let most = samples.iter().fold(0.0f32, |m, s| m.max(s.abs())).max(1e-6);
-
-    for sample in samples.iter_mut() {
-        *sample /= most;
-    }
-
-    samples
+/// Which band a strike this far off is heard in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rolled {
+    /// Close enough that the strike and its own roll are one sound.
+    Near,
+    Middling,
+    /// Far enough that the strike itself never arrives, only the roll.
+    Far,
 }
 
-/// The same running average as `dulled`, several times over.
-///
-/// Each pass is six decibels an octave. One is a tilt, which leaves the hiss
-/// where it was; four is a wall, which is what kilometres of air is.
-fn deepened(samples: Vec<f32>, corner: f32, stages: usize) -> Vec<f32> {
-    // a one-pole's corner in hertz, as the share of itself each sample keeps
-    let through = (corner * std::f32::consts::TAU / RATE as f32).clamp(0.001, 1.0);
-    let mut out = samples;
+/// All of them, so a check can walk the bands rather than name them.
+pub const ROLLS: [Rolled; 3] = [Rolled::Near, Rolled::Middling, Rolled::Far];
 
-    for _ in 0..stages.max(1) {
-        let mut last = 0.0f32;
-        for sample in out.iter_mut() {
-            last += (*sample - last) * through;
-            *sample = last;
-        }
+pub fn rolled(away: f32) -> Rolled {
+    if away < MIDDLING_AT {
+        Rolled::Near
+    } else if away < FAR_AT {
+        Rolled::Middling
+    } else {
+        Rolled::Far
     }
-
-    out
 }
 
-/// Thunder, for a strike `away` metres off.
+/// The recordings for a band, in the order they are picked from.
 ///
-/// The second half of spec 0016's one idea. How far off sets when this
-/// arrives, how loud it is, how long it runs, how many arrivals it is made of
-/// and what is left of its top, and the last two are the ones an ear reads
-/// without being told: a near strike is one crack with its high end intact and
-/// a far one is several soft arrivals with the top eaten off them.
-pub fn thunder(away: f32, seed: u32) -> Samples {
-    // nought at the nearest strike and one at the furthest, which is what
-    // every number below is a slide along
-    let out =
-        ((away - crate::garden::NEAR) / (crate::garden::FAR - crate::garden::NEAR)).clamp(0.0, 1.0);
-    let count = (RATE as f32 * (CRACK + (RUMBLE - CRACK) * out)) as usize;
-    let mut next = noise(seed);
-
-    // the body: white noise with the air's own wall over it.
-    //
-    // White and not brown. Brown noise falls six decibels an octave on its
-    // own, which sounded like the right place to start and is not: with the
-    // wall over it as well the tilt is counted twice, and measured, all three
-    // distances came out with everything they had under eighty hertz. That is
-    // honest about the bottom of thunder and is nothing at all on the speakers
-    // anybody will hear this through. White under a wall is flat up to the
-    // corner and gone above it, which puts the body where it can be sounded.
-    let corner = CRACK_CORNER + (RUMBLE_CORNER - CRACK_CORNER) * out;
-    let stages = CRACK_STAGES + ((RUMBLE_STAGES - CRACK_STAGES) as f32 * out) as usize;
-    let body = levelled(deepened(
-        (0..count).map(|_| next()).collect::<Vec<f32>>(),
-        corner,
-        stages,
-    ));
-
-    // and the arrivals. The first is at the start and is the strike itself;
-    // the rest are the channel, the ground and the cloud handing it back, at
-    // times with no rhythm to them.
-    let claps = CRACK_CLAPS + ((RUMBLE_CLAPS - CRACK_CLAPS) as f32 * out).round() as usize;
-    let mut roll = noise(seed ^ 0x5CA1_AB1E);
-    let mut when: Vec<(f32, f32, f32)> = Vec::with_capacity(claps);
-    for n in 0..claps {
-        let (one, other, third) = (roll() * 0.5 + 0.5, roll() * 0.5 + 0.5, roll() * 0.5 + 0.5);
-
-        // how long each one takes to go, as a share of the run. A third of
-        // it for the first, which is the strike: measured at a twentieth, a
-        // near crack was over inside a tenth of a second and was a click
-        // rather than a crack.
-        when.push(if n == 0 {
-            (0.0, 1.0, 0.30)
-        } else {
-            (one * 0.62, 0.3 + other * 0.55, 0.16 * (0.6 + third * 0.8))
-        });
+/// Recordings and not arithmetic, which is the second time this building has
+/// come to that conclusion and for the same reason as the first. A noise burst
+/// under an envelope is a noise burst under an envelope however carefully the
+/// envelope was chosen, and thunder is a sound every ear knows by heart. See
+/// `res/thunder/README.md`.
+pub fn claps(band: Rolled) -> &'static [&'static [u8]] {
+    match band {
+        Rolled::Near => &[include_bytes!("../res/thunder/near1.wav")],
+        Rolled::Middling => &[include_bytes!("../res/thunder/mid1.wav")],
+        // two, because this is the band most strikes land in: the range runs
+        // to 2,800 and everything past 1,600 is here
+        Rolled::Far => &[
+            include_bytes!("../res/thunder/far1.wav"),
+            include_bytes!("../res/thunder/far2.wav"),
+        ],
     }
+}
 
-    let loud = 0.95 * (crate::garden::NEAR / away).powf(0.7);
-    let samples: Vec<f32> = body
-        .into_iter()
-        .enumerate()
-        .map(|(n, sample)| {
-            let along = n as f32 / count as f32;
-            let swell = when
-                .iter()
-                .map(|(at, much, over)| {
-                    if along < *at {
-                        0.0
-                    } else {
-                        much * (-(along - at) / over).exp()
-                    }
-                })
-                .sum::<f32>();
-
-            (sample * swell * loud).clamp(-1.0, 1.0)
-        })
-        .collect();
-
-    // and the crack on the front of a near one, which is the shock itself and
-    // is the only part of this with any top left on it. A far strike has none:
-    // the first thing kilometres of air takes is exactly this.
-    let mut samples = samples;
-    let sharp = ((1.0 - out) * 1.6 - 0.6).clamp(0.0, 1.0);
-    if sharp > 0.0 {
-        let over = (RATE as f32 * 0.045) as usize;
-        let edge = deepened(dulled(&mut next, over.min(count), 1.0), 5_000.0, 1);
-
-        for (n, bit) in edge.into_iter().enumerate() {
-            let fades = (-(n as f32) / (over as f32 * 0.3)).exp();
-
-            samples[n] = (samples[n] + bit * fades * sharp * loud * 2.4).clamp(-1.0, 1.0);
-        }
-    }
-
-    // in fast and out over whatever is left, which `shaped` does, and here it
-    // is only keeping the two ends off a step. The shape is the claps above.
-    shaped(samples, 0.002)
+/// How loud a strike this far off is, against one at the nearest.
+///
+/// The one thing about the sound that is still worked out from the distance
+/// rather than picked, and so the one that still moves smoothly across a band
+/// rather than in steps. Sound falls off faster than this in open air; the
+/// exponent softens it, because a rumble that is honestly a fiftieth of a near
+/// clap is a rumble nobody hears over an arcade.
+pub fn carries(away: f32) -> f32 {
+    (crate::garden::NEAR / away.max(1.0)).powf(0.7)
 }
 
 /// The hum a hall full of cabinets has.
@@ -780,90 +664,6 @@ pub fn steam(seed: u32) -> Samples {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// How much of a sound sits at a frequency, over the loudest window of it.
-    ///
-    /// Every sample of one window and not every sixteenth of the whole run.
-    /// Decimating drops the sample rate and folds everything above the new
-    /// Nyquist down on top of the bands below it, which is how the first
-    /// reading of this reported half a peak at five kilohertz off a run that
-    /// had none. That was the measurement lying rather than the sound.
-    #[cfg(test)]
-    fn at_hertz(sound: &[f32], hertz: f32) -> f32 {
-        let window = 16_384.min(sound.len());
-        // the loudest window, found by sliding the sum rather than adding each
-        // window up from scratch. From scratch is the window's length times
-        // the run's, which on a three second rumble is two thousand million
-        // multiplies and took this test a minute on its own.
-        let (mut from, mut loudest, mut running) = (0, 0.0f32, 0.0f32);
-        for n in 0..sound.len() {
-            running += sound[n] * sound[n];
-            if n >= window {
-                running -= sound[n - window] * sound[n - window];
-            }
-            if n + 1 >= window && running > loudest {
-                loudest = running;
-                from = n + 1 - window;
-            }
-        }
-        let (mut re, mut im) = (0.0f64, 0.0f64);
-
-        for i in 0..window {
-            // a raised cosine over the window, or its own two ends ring
-            let taper = 0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / window as f64).cos();
-            let turn = std::f64::consts::TAU * hertz as f64 * i as f64 / RATE as f64;
-            let sample = sound[from + i] as f64 * taper;
-
-            re += sample * turn.cos();
-            im += sample * turn.sin();
-        }
-
-        ((re * re + im * im).sqrt() / window as f64) as f32
-    }
-
-    /// Spec 0016: kilometres of air are a wall and not a tilt.
-    ///
-    /// The thing that made the first thunder not land. It was one running
-    /// average, which is six decibels an octave, and six an octave leaves the
-    /// hiss roughly where it was: a rumble from two and a half kilometres away
-    /// still carried a good share of its peak at five kilohertz, and a noise
-    /// burst with its top still on is a waterfall rather than weather.
-    ///
-    /// Four of them is twenty-four an octave, which is a wall. A near crack
-    /// keeps its top, because that is what a crack is.
-    #[test]
-    fn the_air_takes_the_top_off_a_far_rumble_and_leaves_a_near_crack_its_own() {
-        let near: Vec<f32> = thunder(crate::garden::NEAR, 7).collect();
-        let far: Vec<f32> = thunder(crate::garden::FAR, 7).collect();
-        let share = |sound: &[f32], hertz: f32| at_hertz(sound, hertz) / at_hertz(sound, 160.0);
-
-        for hertz in [1_280.0, 2_560.0, 5_120.0] {
-            assert!(
-                share(&far, hertz) < 0.08,
-                "a rumble from {:.0} m still has {:.3} of its body at {:.0} Hz",
-                crate::garden::FAR,
-                share(&far, hertz),
-                hertz
-            );
-        }
-        assert!(
-            share(&near, 2_560.0) > 0.1,
-            "a crack from {:.0} m has only {:.3} of its body at 2560 Hz, so it is not a crack",
-            crate::garden::NEAR,
-            share(&near, 2_560.0)
-        );
-
-        // and it still has a body where a speaker can sound it. All of it
-        // under eighty hertz is honest about thunder and silent on a laptop.
-        for (what, sound) in [("a crack", &near), ("a rumble", &far)] {
-            assert!(
-                share(sound, 320.0) > 0.1,
-                "{} has {:.3} of its body at 320 Hz, which is too low to be heard",
-                what,
-                share(sound, 320.0)
-            );
-        }
-    }
 
     /// Spec 0016: the storm is heard where the sky is, and the sky is a place
     /// rather than a floor.
@@ -935,37 +735,78 @@ mod tests {
         assert_eq!(underfoot(reaches, hall), Underfoot::Carpet);
     }
 
-    /// Spec 0016: a roll of thunder is several arrivals and not one fade.
+    /// Spec 0016: every band has thunder, and every one of it reads.
     ///
-    /// The other thing that made the first one not land. Its envelope fell
-    /// 0.77, 0.68, 0.57, 0.36 and on down without ever turning back up, which
-    /// is a noise burst going out. What a roll is is the sound off one part of
-    /// the channel arriving, then another, then the ground and the cloud
-    /// handing some of it back, at times with no rhythm to them.
-    ///
-    /// A near crack is allowed to be one arrival, because up close they are
-    /// all on top of each other and that is why it is a crack.
+    /// The one test that matters for a bundled file. A WAV that will not parse
+    /// is a band that strikes in silence, and the loading drops what it cannot
+    /// read rather than crashing, so nothing at run time would ever say so.
     #[test]
-    fn a_far_rumble_rolls_rather_than_fading_once() {
-        let far: Vec<f32> = thunder(crate::garden::FAR, 7).collect();
-        let tenths: Vec<f32> = (0..10)
-            .map(|k| {
-                let (from, to) = (far.len() * k / 10, far.len() * (k + 1) / 10);
+    fn every_band_has_thunder_that_reads() {
+        for band in ROLLS.iter().copied() {
+            let files = claps(band);
 
-                far[from..to]
-                    .iter()
-                    .fold(0.0f32, |most, s| most.max(s.abs()))
-            })
-            .collect();
-        let rolls = tenths
-            .windows(2)
-            .filter(|two| two[1] > two[0] * 1.05)
-            .count();
+            assert!(!files.is_empty(), "{:?} has no thunder at all", band);
 
-        assert!(
-            rolls >= 1,
-            "the rumble went {:?} and never once turned back up",
-            tenths
+            for (n, bytes) in files.iter().enumerate() {
+                let got = Samples::from_wav(bytes)
+                    .unwrap_or_else(|why| panic!("{:?} clap {}: {}", band, n, why));
+
+                assert!(!got.is_empty(), "{:?} clap {} is silence", band, n);
+                // long, and that is the point of them. Thunder is mixed and
+                // not queued, so nothing here has the footsteps' cap, and a
+                // roll that is over in half a second is a door slamming.
+                assert!(
+                    got.seconds() > 2.0,
+                    "{:?} clap {} lasts {:.2}s, which is too short to roll",
+                    band,
+                    n,
+                    got.seconds()
+                );
+                // and not so long that one is still going two strikes later
+                assert!(
+                    got.seconds() < crate::garden::STRIKES,
+                    "{:?} clap {} lasts {:.2}s against {:.2}s between strikes",
+                    band,
+                    n,
+                    got.seconds(),
+                    crate::garden::STRIKES
+                );
+            }
+        }
+    }
+
+    /// Spec 0016: every distance in the storm's range lands in a band, and the
+    /// bands run in order.
+    ///
+    /// Walked across the whole range rather than checked at the two ends. The
+    /// boundaries are the part worth walking: a band nobody can reach is a
+    /// recording nobody hears.
+    #[test]
+    fn every_strike_lands_in_a_band_and_the_bands_run_in_order() {
+        let mut seen = Vec::new();
+
+        for step in 0..=200 {
+            let away = crate::garden::NEAR
+                + (crate::garden::FAR - crate::garden::NEAR) * step as f32 / 200.0;
+            let band = rolled(away);
+
+            if seen.last() != Some(&band) {
+                assert!(
+                    !seen.contains(&band),
+                    "the bands go {:?} and then back to {:?} at {:.0} m",
+                    seen,
+                    band,
+                    away
+                );
+                seen.push(band);
+            }
+        }
+
+        assert_eq!(
+            seen,
+            ROLLS.to_vec(),
+            "the range reaches {:?} of the three bands",
+            seen.len()
         );
     }
 

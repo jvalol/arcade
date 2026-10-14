@@ -352,6 +352,8 @@ struct Arcade {
     /// A footstep for every floor, read out of the files bundled beside this.
     /// Spec 0009, and the engine's 0045.
     steps: Vec<(noise::Underfoot, Vec<Samples>)>,
+    /// And the storm's, one set per distance band. Spec 0016.
+    claps: Vec<(noise::Rolled, Vec<Samples>)>,
     /// How far you have walked since the last one, and how many you have taken.
     /// What a climb still owes, in height. See `walk::CLIMBS`.
     climbs: f32,
@@ -586,6 +588,7 @@ impl Arcade {
                 spa::TUB_CELLS,
             ),
             steps: Vec::new(),
+            claps: Vec::new(),
             climbs: 0.0,
             paced: 0.0,
             stepped: 0,
@@ -2389,6 +2392,22 @@ impl Game for Arcade {
                 (on, heard)
             })
             .collect();
+        // and the thunder, the same way and for the same reason. Spec 0016:
+        // what distance does to the sound of a strike is which band it is
+        // picked from, because a recording shaped into something it is not is
+        // halfway back to the arithmetic this replaced.
+        self.claps = noise::ROLLS
+            .iter()
+            .copied()
+            .map(|band| {
+                let heard = noise::claps(band)
+                    .iter()
+                    .filter_map(|bytes| Samples::from_wav(bytes).ok())
+                    .collect();
+
+                (band, heard)
+            })
+            .collect();
         self.splashes = (0..4)
             .map(|n| noise::splash(2.0 + n as f32 * 1.2, 0x51A5 + n * 7919))
             .collect();
@@ -2606,8 +2625,21 @@ impl Game for Arcade {
 
                 if garden::under_the_sky(self.room.reaches, self.at) {
                     let strike = garden::strike(n);
+                    let band = noise::rolled(strike.away);
 
-                    sound.play(&noise::thunder(strike.away, noise::THUNDER_SEED ^ n));
+                    if let Some((_, heard)) = self.claps.iter().find(|(one, _)| *one == band) {
+                        // picked and bent the way a footstep is, off the
+                        // strike's own number. How loud is still worked out
+                        // from how far off it was, which is the one thing
+                        // about the sound that did not become a choice.
+                        let (which, pitch, quieter) = noise::bend(n as usize, heard.len());
+
+                        if let Some(clap) = heard.get(which) {
+                            let loud = noise::carries(strike.away) * quieter;
+
+                            sound.play(&clap.pitched(pitch).gain(loud));
+                        }
+                    }
                 }
             }
         }
