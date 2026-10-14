@@ -160,39 +160,50 @@ for every floor would either cut the splash off short or hold every dry floor
 to a splash's length. `noise::shortest_gap` works it out per floor and
 `noise::longest` takes the cap off that.
 
-**One note at a time.** The room notes go out through `play_at`, which still
-appends to a player and runs them one after another. Four notes a second, each
-a second long, is a queue growing by three seconds every second: left running
-for two hours it was a gigabyte of audio waiting its turn and a machine with
-nothing left to draw with, which is what the pool looking like a wall of
-streaks turned out to be. The notes are paced to start as the last one ends and
-rely on the queue to hold that, so moving them to the mixer would change what a
-room sounds like and is not part of this.
+**A voice is a thing that sounds for as long as it exists**, and a piece is
+four tenths of a second of one. The fire does not stop and has no length. What
+has a length is the buffer the engine is handed, so the slicing is plumbing and
+the voice is the fire.
 
-**Several of each note, picked and bent.** One note queued again the moment
+Both of those were nameless for a while, and it cost a misreading. The
+constant was `NOTE`, which named the slice, so the thing it was a slice of had
+no name at all, and `AIRS` got stretched over the gap while already meaning how
+many slices there were. One word, two meanings, and both of them five.
+
+**One voice at a time.** They go out through `play_at`, which appends to a
+player and runs them one after another. Four pieces a second, each a second
+long, is a queue growing by three seconds every second: left running for two
+hours it was a gigabyte of audio waiting its turn and a machine with nothing
+left to draw with, which is what the pool looking like a wall of streaks turned
+out to be. The pieces are paced to start as the last one ends and rely on the
+queue to hold that, so moving them to the mixer would change what a room sounds
+like and is not part of this.
+
+**Several pieces of each, picked and bent.** One piece queued again the moment
 it runs out is the same four tenths of a second played two and a half times a
-second, which is a loop and is heard as one whatever is in it. Each room has
-`noise::AIRS` of its note, each off its own seed, and the one to play is
-picked by `noise::adrift` and bent in pitch and level the way a footstep is.
+second, which is a loop and is heard as one whatever is in it. Each voice has
+`noise::PIECES` of them, each off its own seed, and the one to play is picked
+by `noise::adrift` and bent in pitch and level the way a footstep is.
 
 Picked and not cycled. The floors cycle, on purpose, because you do not take
-two steps from the same place and the room moves between them. A room's note
-comes from one place at a fixed rate, so five in a fixed order is a bar of
-five beats and a listener catches the order long before the sample.
+two steps from the same place and the room moves between them. A voice comes
+from one place at a fixed rate, so five in a fixed order is a bar of five beats
+and a listener catches the order long before the sample.
 
 A pick does come up twice in a row now and then, and that is fine: two of the
 same four tenths running is a slightly longer sound. It is the order that
 gives a loop away rather than the repeat.
 
-So the building plays the note of the room you are in, which is the nearest one
-within earshot, and nothing else until it has finished. The notes are short for
-the same reason: anything else from somewhere in the world waits behind one, and
-a splash a whole second late is a splash for something you have forgotten doing.
+So the building plays the voice of the room you are in, which is the nearest
+one within earshot, and nothing else until it has finished. The pieces are
+short for the same reason: anything else from somewhere in the world waits
+behind one, and a splash a whole second late is a splash for something you have
+forgotten doing.
 
-**The rooms each have a note of their own.** The cellar has its fire. The baths
-have the fountain and the tub's blower. The sauna, with its door shut, has the
-stove ticking and the hiss of what is on it. The hall has the cabinets, which
-hum the way a room full of them hums.
+**The rooms each have a voice of their own.** The cellar has its fire. The
+baths have the fountain and the tub's blower. The sauna, with its door shut,
+has the stove ticking and the hiss of what is on it. The hall has the cabinets,
+which hum the way a room full of them hums.
 
 **Where a sound is heard from** is the engine's business, so everything that
 comes from somewhere goes through `play_at` and the listener is moved to your
@@ -203,15 +214,15 @@ the engine's and stays available.
 ## Acceptance criteria
 
 - Every sound the building makes has samples in it and ends. — `noise::tests::every_sound_is_a_sound`
-- A room's note does not come round in a bar. — `noise::tests::a_rooms_note_does_not_come_round_in_a_bar`
-- And it is bent within the bounds a step is. — `noise::tests::a_rooms_note_is_bent_like_a_step`
+- A voice's pieces do not come round in a bar. — `noise::tests::a_voices_pieces_do_not_come_round_in_a_bar`
+- And it is bent within the bounds a step is. — `noise::tests::a_voices_piece_is_bent_like_a_step`
 - The pool sounds like water and its edge like tile. — `noise::tests::each_room_sounds_like_its_own_floor`
 - No more than two footsteps sound at once, at a run and in the water. — `noise::tests::no_more_than_two_steps_sound_at_once`
 - The stride lengthens at a run, so the cadence rises by less than the speed. — `noise::tests::a_run_is_a_longer_step_and_not_just_a_faster_one`
 - None of them clips: no sample past one. — `noise::tests::nothing_is_louder_than_one`
 - None of them starts or ends with a jump, which is a click. — `noise::tests::nothing_begins_or_ends_with_a_click`
 - A splash is louder the faster you went in. — `noise::tests::a_splash_is_as_big_as_the_fall`
-- One note plays at a time, and it is the nearest one within earshot. — `noise::tests::one_note_plays_at_a_time_and_it_is_the_nearest`
+- One voice plays at a time, and it is the nearest one within earshot. — `noise::tests::one_voice_plays_at_a_time_and_it_is_the_nearest`
 - Every floor has footsteps and every one of them reads. — `noise::tests::every_floor_has_footsteps_that_read`
 - No two floors share a recording. — `noise::tests::no_two_floors_sound_the_same`
 - Each room sounds like what it is floored with. — `noise::tests::each_room_sounds_like_its_own_floor`

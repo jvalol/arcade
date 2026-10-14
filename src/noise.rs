@@ -340,32 +340,32 @@ pub fn bend(step: usize, many: usize) -> (usize, f32, f32) {
     )
 }
 
-/// How many of each room's note there are. Spec 0009.
+/// How many pieces of each voice there are. Spec 0009.
 ///
-/// One was not enough and the reason is the rate. A note is four tenths of a
+/// One was not enough and the reason is the rate. A piece is four tenths of a
 /// second and is queued again the moment it runs out, so the same four tenths
 /// played two and a half times a second: that is a loop, and a loop is heard
 /// as a loop whatever is in it. Every one of these comes off a seed already,
 /// so more of them costs a few kilobytes and nothing else.
-pub const AIRS: usize = 5;
+pub const PIECES: usize = 5;
 
-/// Which of a room's notes to play next, and how to bend it.
+/// Which piece of a voice to play next, and how to bend it.
 ///
 /// Like [`bend`], which the floors use, except that it picks rather than
 /// cycling. A floor's steps cycle because you do not take two steps from the
-/// same place and the room moves between them. A room's note comes from one
-/// place at a fixed rate, so a cycle of five is a bar of five beats and you
-/// hear it by the second time round.
+/// same place and the room moves between them. A voice comes from one place at
+/// a fixed rate, so a cycle of five is a bar of five beats and you hear it by
+/// the second time round.
 ///
-/// Picked and not shuffled, so the same note does come up twice in a row now
+/// Picked and not shuffled, so the same piece does come up twice in a row now
 /// and then. That is fine and a cycle is not: two of the same four tenths of
 /// a second running is a slightly longer sound, while five in a fixed order
 /// is a bar of five beats, and it is the order a listener catches rather than
 /// the repeat. The first version of this tried to rule out the back to back
 /// case and compared against a previous pick it had not worked out.
-pub fn adrift(note: usize, many: usize) -> (usize, f32, f32) {
+pub fn adrift(piece: usize, many: usize) -> (usize, f32, f32) {
     let many = many.max(1);
-    let mut state = (note as u32).wrapping_mul(2_246_822_519) ^ 0x85EB_CA6B;
+    let mut state = (piece as u32).wrapping_mul(2_246_822_519) ^ 0x85EB_CA6B;
     let mut next = move || {
         state ^= state << 13;
         state ^= state >> 17;
@@ -391,10 +391,11 @@ pub const CARRIES: f32 = 14.0;
 /// or two is a gigabyte of audio waiting its turn and a machine on its knees.
 /// It is also why each of them is short.
 ///
-/// So the building plays the note of the room you are in, and the room you are
-/// in is the one whose note is nearest.
-pub fn nearest(ear: Vec3, airs: &[Vec3]) -> Option<usize> {
-    airs.iter()
+/// So the building plays the voice of the room you are in, and the room you
+/// are in is the one whose voice is nearest.
+pub fn nearest(ear: Vec3, voices: &[Vec3]) -> Option<usize> {
+    voices
+        .iter()
         .enumerate()
         .filter(|(_, at)| ear.distance(**at) <= CARRIES)
         .min_by(|one, other| {
@@ -521,17 +522,23 @@ pub fn bubble(seed: u32) -> Samples {
     shaped(samples, 0.04)
 }
 
-/// How long a room's own note runs.
+/// How long one piece of a voice runs.
 ///
-/// Short, because one of them is playing at a time and anything else from
+/// **A piece and not the voice.** The fire does not stop and has no length;
+/// what has a length is the buffer the engine is handed, and this is that. The
+/// voice is the fire, and the slicing is plumbing. This was called `NOTE`,
+/// which named the slice and left the thing it is a slice of with no name at
+/// all, and `PIECES` then got stretched over the gap.
+///
+/// Short, because one voice is playing at a time and anything else from
 /// somewhere in the world waits behind it: a splash a whole second late is a
 /// splash for something you have forgotten doing.
-pub const NOTE: f32 = 0.4;
+pub const PIECE: f32 = 0.4;
 
 /// The fire: a low roll with the odd crack in it.
 pub fn fire(seed: u32) -> Samples {
     let mut next = noise(seed);
-    let count = (RATE as f32 * NOTE) as usize;
+    let count = (RATE as f32 * PIECE) as usize;
     let mut last = 0.0f32;
     let samples: Vec<f32> = (0..count)
         .map(|n| {
@@ -549,7 +556,7 @@ pub fn fire(seed: u32) -> Samples {
 
 /// Water falling into water, which is the fountain and goes on for ever.
 pub fn trickle(seed: u32) -> Samples {
-    let count = (RATE as f32 * NOTE) as usize;
+    let count = (RATE as f32 * PIECE) as usize;
     let samples: Vec<f32> = dulled(noise(seed), count, 0.45)
         .into_iter()
         .enumerate()
@@ -629,7 +636,7 @@ pub fn carries(away: f32) -> f32 {
 /// The hum a hall full of cabinets has.
 pub fn hum(seed: u32) -> Samples {
     let mut next = noise(seed);
-    let count = (RATE as f32 * NOTE) as usize;
+    let count = (RATE as f32 * PIECE) as usize;
     let samples: Vec<f32> = (0..count)
         .map(|n| {
             let t = n as f32 / RATE as f32;
@@ -646,7 +653,7 @@ pub fn hum(seed: u32) -> Samples {
 
 /// The sauna: the stove ticking and what is on it hissing.
 pub fn steam(seed: u32) -> Samples {
-    let count = (RATE as f32 * NOTE) as usize;
+    let count = (RATE as f32 * PIECE) as usize;
     let samples: Vec<f32> = dulled(noise(seed), count, 0.8)
         .into_iter()
         .enumerate()
@@ -810,22 +817,22 @@ mod tests {
         );
     }
 
-    /// Spec 0009: a room's note is picked rather than cycled.
+    /// Spec 0009: a voice's pieces are picked rather than cycled.
     ///
     /// A cycle of five at two and a half notes a second is a bar of five
     /// beats, and a listener catches the order long before they catch the
     /// sample. `bend`, which the floors use, cycles on purpose: you do not
     /// take two steps from the same place and the room moves between them.
     #[test]
-    fn a_rooms_note_does_not_come_round_in_a_bar() {
-        let many = AIRS;
+    fn a_voices_pieces_do_not_come_round_in_a_bar() {
+        let many = PIECES;
         let picks: Vec<usize> = (0..600).map(|n| adrift(n, many).0).collect();
 
         for which in picks.iter() {
-            assert!(*which < many, "picked note {} of {}", which, many);
+            assert!(*which < many, "picked piece {} of {}", which, many);
         }
 
-        // a cycle would have every note the same as the one `many` before it
+        // a cycle would have every piece the same as the one `many` before it
         let same = picks
             .iter()
             .skip(many)
@@ -853,11 +860,11 @@ mod tests {
 
     /// Spec 0009: and it is bent, within the same bounds a step is.
     #[test]
-    fn a_rooms_note_is_bent_like_a_step() {
+    fn a_voices_piece_is_bent_like_a_step() {
         let (mut moved, mut quietened) = (false, false);
 
         for n in 0..200 {
-            let (_, pitch, quieter) = adrift(n, AIRS);
+            let (_, pitch, quieter) = adrift(n, PIECES);
 
             assert!(
                 (1.0 - PITCHED..=1.0 + PITCHED).contains(&pitch),
@@ -892,7 +899,7 @@ mod tests {
     /// engine that already existed. Written down because the next person will
     /// read the same method list.
     #[test]
-    fn a_rooms_notes_are_not_all_one_note() {
+    fn a_voices_pieces_are_not_all_one_piece() {
         for (what, make) in [
             ("the fire", fire as fn(u32) -> Samples),
             ("the spout", trickle),
@@ -900,7 +907,7 @@ mod tests {
             ("the sauna", steam),
             ("the hall", hum),
         ] {
-            let built: Vec<Vec<f32>> = (0..AIRS)
+            let built: Vec<Vec<f32>> = (0..PIECES)
                 .map(|n| make(0x1234u32.wrapping_add(n as u32 * 7919)).collect())
                 .collect();
 
@@ -1335,23 +1342,23 @@ mod tests {
     /// four seconds every second: after two hours it was a gigabyte of audio
     /// waiting its turn and a machine with nothing left to draw with.
     #[test]
-    fn one_note_plays_at_a_time_and_it_is_the_nearest() {
-        let airs = [
+    fn one_voice_plays_at_a_time_and_it_is_the_nearest() {
+        let voices = [
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(3.0, 0.0, 0.0),
             Vec3::new(40.0, 0.0, 0.0),
         ];
 
         // the nearest of the ones you can hear, and only ever one
-        assert_eq!(nearest(Vec3::new(2.6, 0.0, 0.0), &airs), Some(1));
-        assert_eq!(nearest(Vec3::new(-1.0, 0.0, 0.0), &airs), Some(0));
+        assert_eq!(nearest(Vec3::new(2.6, 0.0, 0.0), &voices), Some(1));
+        assert_eq!(nearest(Vec3::new(-1.0, 0.0, 0.0), &voices), Some(0));
 
         // and nothing at all when they are all out of earshot
-        assert_eq!(nearest(Vec3::new(200.0, 0.0, 0.0), &airs), None);
+        assert_eq!(nearest(Vec3::new(200.0, 0.0, 0.0), &voices), None);
         assert_eq!(nearest(Vec3::ZERO, &[]), None);
 
         // the far one is past earshot even standing next to the others
-        assert_ne!(nearest(Vec3::new(20.0, 0.0, 0.0), &airs), Some(2));
+        assert_ne!(nearest(Vec3::new(20.0, 0.0, 0.0), &voices), Some(2));
 
         // and a note is short, because anything else from the world waits
         // behind it
@@ -1361,11 +1368,11 @@ mod tests {
             }
 
             assert!(
-                sound.seconds() <= NOTE + 1e-3,
+                sound.seconds() <= PIECE + 1e-3,
                 "the {} runs {} seconds and a note is {}",
                 what,
                 sound.seconds(),
-                NOTE
+                PIECE
             );
         }
     }

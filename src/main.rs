@@ -360,13 +360,19 @@ struct Arcade {
     paced: f32,
     stepped: usize,
     splashes: Vec<Samples>,
-    /// Each room's note, several of each. Spec 0009: one played two and a
-    /// half times a second is a loop.
-    airs: Vec<(Vec3, Vec<Samples>)>,
-    /// How many notes have gone, which is what picks and bends the next.
-    noted: usize,
-    /// How long the note playing now has left.
-    aired: f32,
+    /// Every voice in the building: where it sounds from, and the pieces it
+    /// is played in. Spec 0009.
+    ///
+    /// A voice is a thing that makes a sound for as long as it exists: the
+    /// fire, the fountain, the tub's jets, the sauna, a hall full of cabinets.
+    /// It has no length. What has a length is the piece of it the engine is
+    /// handed, and one played two and a half times a second is a loop, which
+    /// is why there are several of each.
+    voices: Vec<(Vec3, Vec<Samples>)>,
+    /// How many pieces have gone, which is what picks and bends the next.
+    pieced: usize,
+    /// How long the piece sounding now has left.
+    sounding: f32,
     /// Whether you were in the water last frame, so going in can be heard.
     was_wading: bool,
     /// A knock for the chain hitting the wall, and how much of it was standing
@@ -593,9 +599,9 @@ impl Arcade {
             paced: 0.0,
             stepped: 0,
             splashes: Vec::new(),
-            airs: Vec::new(),
-            noted: 0,
-            aired: 0.0,
+            voices: Vec::new(),
+            pieced: 0,
+            sounding: 0.0,
             was_wading: false,
             knock: None,
             was_standing: 0,
@@ -2412,30 +2418,31 @@ impl Game for Arcade {
             .map(|n| noise::splash(2.0 + n as f32 * 1.2, 0x51A5 + n * 7919))
             .collect();
 
-        // and the note each room has, each from where it is
+        // and every voice in the building, each from where it sounds
         let fire = cellar::hearth(self.room.reaches);
         let (tub, _, _) = spa::tub(self.room.reaches);
         let (spout, _) = spa::stream(self.room.reaches);
         let sauna = spa::sauna(self.room.reaches).center();
 
-        // several of each, off a seed apiece. Spec 0009: one note queued
-        // again the moment it runs out is the same four tenths of a second
-        // two and a half times a second, and that is a loop whatever is in
-        // it. These all took a seed already, so this costs a few kilobytes.
+        // several pieces of each, off a seed apiece. Spec 0009: one piece
+        // queued again the moment it runs out is the same four tenths of a
+        // second two and a half times a second, and that is a loop whatever
+        // is in it. These all took a seed already, so this costs a few
+        // kilobytes.
         let several = |seed: u32, make: &dyn Fn(u32) -> Samples| -> Vec<Samples> {
-            (0..noise::AIRS)
+            (0..noise::PIECES)
                 .map(|n| make(seed.wrapping_add(n as u32 * 7919)))
                 .collect()
         };
 
-        self.airs = vec![
+        self.voices = vec![
             (fire, several(0xF12E, &noise::fire)),
             (spout, several(0x7121, &noise::trickle)),
             (tub, several(0xB0B1, &noise::bubble)),
             (sauna, several(0x57EA, &noise::steam)),
             (vec3(0.0, crate::EYE, 0.0), several(0x4040, &noise::hum)),
         ];
-        self.aired = 0.0;
+        self.sounding = 0.0;
         self.knock = Some(noise::clack(0xC1AC));
         self.was_standing = self.wrecker.standing();
     }
@@ -2606,7 +2613,7 @@ impl Game for Arcade {
         //
         // Mixed rather than queued. `play` hands the sound straight to the
         // mixer and it starts now; it is `play_at` that is a queue, and a
-        // three second rumble waiting its turn behind the room's note would
+        // three second rumble waiting its turn behind a room's voice would
         // arrive after the next flash. It has nowhere to be played from in any
         // case: the strike is a chosen distance and not a place, so a sound
         // coming from a point in this garden would be the fiction told twice.
@@ -2644,30 +2651,30 @@ impl Game for Arcade {
             }
         }
 
-        // and the note each room has, each from where it is, queued again as it
-        // runs out. Nothing here loops: a sound that goes on for ever is a
-        // sound a game queues again, per spec 0044.
-        // the note of the room you are in, one at a time. The engine plays what
-        // it is given one after another, per spec 0044, and that is not a
-        // mixer: four notes a second each a second long is a queue growing by
-        // three seconds every second, which after two hours was a gigabyte of
-        // audio waiting its turn and a machine too busy to draw.
-        self.aired -= dt;
-        if self.aired <= 0.0 {
+        // and the nearest voice, a piece at a time, queued again as each runs
+        // out. Nothing here loops: a sound that goes on for ever is a sound a
+        // game queues again, per spec 0044.
+        // the voice of the room you are in, one piece at a time. The engine
+        // plays what it is given one after another, per spec 0044, and that is
+        // not a mixer: four pieces a second each a second long is a queue
+        // growing by three seconds every second, which after two hours was a
+        // gigabyte of audio waiting its turn and a machine too busy to draw.
+        self.sounding -= dt;
+        if self.sounding <= 0.0 {
             let ear = self.looking_from();
-            let places: Vec<Vec3> = self.airs.iter().map(|(at, _)| *at).collect();
+            let places: Vec<Vec3> = self.voices.iter().map(|(at, _)| *at).collect();
 
             let heard = noise::nearest(ear, &places);
-            // picked and bent the way a footstep is, or five notes in a fixed
-            // order is a bar of five beats. Spec 0009.
-            self.noted = self.noted.wrapping_add(1);
-            let noted = self.noted;
+            // picked and bent the way a footstep is, or five pieces in a
+            // fixed order is a bar of five beats. Spec 0009.
+            self.pieced = self.pieced.wrapping_add(1);
+            let pieced = self.pieced;
 
-            self.aired = match heard.and_then(|n| self.airs.get(n)) {
-                Some((at, air)) => {
-                    let (which, pitch, quieter) = noise::adrift(noted, air.len());
+            self.sounding = match heard.and_then(|n| self.voices.get(n)) {
+                Some((at, voice)) => {
+                    let (which, pitch, quieter) = noise::adrift(pieced, voice.len());
 
-                    match air.get(which) {
+                    match voice.get(which) {
                         Some(note) => {
                             let bent = note.pitched(pitch).gain(quieter);
                             let runs = bent.seconds();
@@ -2675,12 +2682,12 @@ impl Game for Arcade {
 
                             runs
                         }
-                        None => noise::NOTE,
+                        None => noise::PIECE,
                     }
                 }
                 // nothing within earshot, so ask again shortly rather than
                 // every frame
-                None => noise::NOTE,
+                None => noise::PIECE,
             };
         }
 
