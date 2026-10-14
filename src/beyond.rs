@@ -456,17 +456,74 @@ pub fn mapped(stops: &[Stop], here: usize, at: Vec3, facing: Vec3, door: Vec3) -
 pub const POSED_PAST: f32 = 1.0 / 3.0;
 pub const POSED_ASIDE: f32 = 2.0 / 9.0;
 
+/// Whose shot the staged one is, and its moon.
+///
+/// Named because three places want it: the pose below, the slug the
+/// photographer asks for it by, and the file it lands in. It was written out
+/// as a string in two of them.
+pub const PAIRED: &str = "Saturn";
+pub const PAIRED_MOON: &str = "Titan";
+
 pub fn posed(door: Vec3) -> Option<(Vec3, f32, usize)> {
     let stops = stops(door);
     let at = |name: &str| stops.iter().position(|stop| stop.name == name);
-    let (planet, moon) = (at("Saturn")?, at("Titan")?);
+    let (planet, moon) = (at(PAIRED)?, at(PAIRED_MOON)?);
     let (planet, moon) = (stops[planet].at, stops[moon].at);
     let gap = moon.x - planet.x;
     let eye = vec3(moon.x + gap * POSED_PAST, 0.0, moon.z + gap * POSED_ASIDE);
     // aimed between the two, so neither is at the edge of the glass
     let look = (planet + moon) * 0.5 - eye;
 
-    Some((eye, look.x.atan2(-look.z), at("Saturn")?))
+    Some((eye, look.x.atan2(-look.z), at(PAIRED)?))
+}
+
+/// The bodies the site shows besides the staged shot, one picture each.
+///
+/// Three because one picture of this space says one thing. Saturn says a
+/// planet is not a ball, the Earth says a world is nine centimetres at this
+/// scale, the moon says how far off a moon stands, and Jupiter says what an
+/// astronomical unit is next to something you can see. The staged shot is
+/// Saturn's and lives in `media/screenshot.png`; these three are the rest.
+///
+/// **This is the list, and `refresh-screenshots` asks the game for it.** The
+/// three were taken by hand once and nothing could take them again: the
+/// script knew only `screenshot.png`, so a room that changed under them left
+/// three pictures of a building that no longer existed, on a published page,
+/// with every check green.
+pub const SHOWN: [&str; 3] = ["Earth", "the moon", "Jupiter"];
+
+/// A body's name as it goes on a command line and into a file name.
+///
+/// The one account of it. A shot is asked for by slug and lands in a file of
+/// the same slug, so the two cannot drift: `the moon` is `--screenshot=the-moon`
+/// and `media/the-moon.png` and there is nowhere else that says so.
+pub fn slugged(name: &str) -> String {
+    name.to_lowercase().replace(' ', "-")
+}
+
+/// Where a staged shot of one named body stands, and which way it looks.
+///
+/// Where the ride sets you down, which is the whole reason it is this and not
+/// a bearing of its own: a picture taken from somewhere the game never puts
+/// you is a picture of somewhere that does not exist. `arriving` is what the
+/// auto-stop uses, so this is the view the player gets on pressing Return
+/// until the name comes up.
+///
+/// Coming in from the stop before it, which for a planet is the planet inside
+/// it and so is along the line, and for a moon is its own planet and so is
+/// across it. That is the one rule and it gives both the right picture:
+/// a planet with the line running away behind it, and a moon out on its own
+/// with the planet it belongs to at your back.
+///
+/// Saturn is not done this way and has `posed` to itself, because the thing
+/// worth photographing there is a planet and its moon in one frame and no
+/// arrival pose shows two bodies at once.
+pub fn posed_at(door: Vec3, name: &str) -> Option<(Vec3, f32, usize)> {
+    let stops = stops(door);
+    let n = stops.iter().position(|stop| stop.name == name)?;
+    let (eye, along) = arriving(stops[n.saturating_sub(1)].at, &stops[n]);
+
+    Some((eye, along.x.atan2(-along.z), n))
 }
 
 /// How far apart the posts down the line stand, and how big they are.

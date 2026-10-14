@@ -458,3 +458,19 @@ Orbits, which at this scale are not a thing to walk. Moving bodies: they stand
 where they stand. Any body not in spec 0015's tables, which is to say Pluto,
 the asteroids, and the two specks round Mars that spec 0015 left out for the
 same reason they would be left out here.
+
+**Galaxies anywhere but on this sky.** The hidden room of spec 0011 is the
+other dark place in this building and its standing walls look like the obvious
+second home for them, being the one dark surface that is nowhere near your
+feet. They are also 3.2 metres high against 159 long, and a galaxy is a share
+of a picture's smaller side, so on that letterbox it comes out between eight
+and twenty-five centimetres. Built and photographed: two frames of the same
+spot, differenced, came back 91 pixels of two million changed by three code
+values or more.
+
+Sizing them off the long side instead only moves the problem, to 12.7 metres
+on a wall 3.2 high. A galaxy's whole job is saying the dark goes on past the
+stars, and a wall you can walk up to and touch says the opposite. The two
+surfaces in that room that are big whichever way you measure them are its
+floor and its lid, and a galaxy on those is the six metre smudge at your feet
+that `orrery::galaxied` already records. — `orrery::tests::a_galaxy_wants_a_surface_that_is_big_whichever_way_it_is_measured`

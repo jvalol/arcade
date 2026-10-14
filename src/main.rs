@@ -155,7 +155,48 @@ fn staged() -> bool {
 /// pose is still here behind `--screenshot=hall`: it cost two rounds to derive
 /// and the reasoning on it is still true.
 fn staged_in_the_hall() -> bool {
-    std::env::args().any(|arg| arg == "--screenshot=hall")
+    staged_as().as_deref() == Some("hall")
+}
+
+/// Which shot was asked for, if the argument named one.
+///
+/// `--screenshot` on its own is the one that lands in `media/screenshot.png`.
+/// `--screenshot=<slug>` is one of the bodies in `beyond::SHOWN`, by the slug
+/// `beyond::slugged` gives it, and `--screenshot=hall` is the hall's own pose.
+fn staged_as() -> Option<String> {
+    std::env::args().find_map(|arg| arg.strip_prefix("--screenshot=").map(str::to_owned))
+}
+
+/// Every shot this game can stage, as the argument to ask for it by and the
+/// file it belongs in.
+///
+/// `refresh-screenshots` in the project above reads this and takes them all.
+/// It knew only `screenshot.png` before, so the three pictures of this room
+/// on the site were taken by hand once and nothing could take them again: a
+/// room that changed under them left three pictures of a building that no
+/// longer existed, published, with every check green.
+///
+/// The hall's pose is not in here. It is a pose kept for its reasoning and
+/// there is no file on the site that holds it, and a shot with nowhere to go
+/// is not a shot.
+fn shots() -> Vec<(String, String)> {
+    // Every one is named, the staged shot included, and that is not tidiness.
+    // The photographer reads these lines with the tab as its separator, and a
+    // shell strips leading whitespace off a field when the separator is
+    // whitespace: a nameless first field ate the file name after it and the
+    // staged shot was quietly the one picture that did not get taken.
+    let mut out = vec![(
+        beyond::slugged(beyond::PAIRED),
+        "media/screenshot.png".to_owned(),
+    )];
+
+    for name in beyond::SHOWN.iter() {
+        let slug = beyond::slugged(name);
+
+        out.push((slug.clone(), format!("media/{}.png", slug)));
+    }
+
+    out
 }
 
 /// How far back from the cabinet the staged shot stands, and how far out of
@@ -504,8 +545,23 @@ impl Arcade {
         // The system's shot by default, because that is what
         // `media/screenshot.png` holds and `refresh-screenshots` photographs
         // whatever `--screenshot` stages. The hall's is behind
-        // `--screenshot=hall`.
-        let (posed_at, posed_yaw, posed_stop) = match beyond::posed(beyond::at(reaches)) {
+        // `--screenshot=hall`, and each of `beyond::SHOWN` behind its own slug.
+        //
+        // A slug that names nothing falls through to the default rather than
+        // failing, which is the right way round for a photographer: a shot
+        // that cannot be staged should come out as the picture that can be,
+        // and `refresh-screenshots` only ever asks for names this binary gave
+        // it.
+        let door = beyond::at(reaches);
+        let asked = staged_as()
+            .filter(|slug| !staged_in_the_hall() && *slug != beyond::slugged(beyond::PAIRED))
+            .and_then(|slug| {
+                beyond::SHOWN
+                    .iter()
+                    .find(|name| beyond::slugged(name) == slug)
+            })
+            .and_then(|name| beyond::posed_at(door, name));
+        let (posed_at, posed_yaw, posed_stop) = match asked.or_else(|| beyond::posed(door)) {
             Some((at, yaw, stop)) if !staged_in_the_hall() => (at, yaw, stop),
             _ => {
                 let (at, yaw) = posed(&room);
@@ -5832,6 +5888,16 @@ impl Game for Arcade {
 }
 
 fn main() {
+    // asked what it can photograph rather than told, so the list lives in one
+    // place and that place is the game
+    if std::env::args().any(|arg| arg == "--screenshots") {
+        for (name, file) in shots() {
+            println!("{}\t{}", name, file);
+        }
+
+        return;
+    }
+
     start("arcade", Box::new(Arcade::new()));
 }
 

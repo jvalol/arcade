@@ -948,6 +948,45 @@ pub fn starred(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
 }
 
+/// How big a galaxy is, as a share of the picture's smaller side, least and
+/// most.
+///
+/// The smaller side, so one is the same size whatever shape the surface is.
+/// Which is also, it turns out, the whole answer to which surfaces can carry
+/// one: see `galaxy_across`.
+pub const GALAXY_LEAST: f32 = 0.012;
+pub const GALAXY_MOST: f32 = 0.040;
+
+/// How big a galaxy comes out on a surface of this size, across, in the
+/// surface's own units.
+///
+/// Worked out rather than looked at, because looking at it is what wasted the
+/// round: galaxies were put on the hidden room's four standing walls and two
+/// frames of the same spot, differenced, came back 91 pixels of two million
+/// changed by three code values or more. Nothing, and this says why without
+/// anybody having to build it again.
+///
+/// Only the checks ask. `galaxied` does its own arithmetic in texels because
+/// texels are what it is laying down, and this is the same arithmetic in the
+/// units a person thinks in.
+#[cfg(test)]
+pub fn galaxy_across(size: glam::Vec2) -> (f32, f32) {
+    let wide = ((size.x * STAR_PER_UNIT) as u32).clamp(64, STAR_MOST) as f32;
+    let tall = ((size.y * STAR_PER_UNIT) as u32).clamp(64, STAR_MOST) as f32;
+    // the smaller side decides how big a galaxy is, and so it is also the
+    // side whose texels say what that is worth on the surface
+    let (least, over) = if wide <= tall {
+        (wide, size.x / wide)
+    } else {
+        (tall, size.y / tall)
+    };
+
+    (
+        least * GALAXY_LEAST * 2.0 * over,
+        least * GALAXY_MOST * 2.0 * over,
+    )
+}
+
 /// The same, with a few galaxies in it.
 ///
 /// Only the sky of spec 0018 gets these, and only because it is the one
@@ -956,6 +995,22 @@ pub fn starred(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
 /// picture across, and a picture laid on something you can walk up to puts
 /// that at a few metres. On the floor they came out as six metre smudges at
 /// your feet.
+///
+/// **The hidden room's standing walls cannot have them either**, which is the
+/// other half and is less obvious. They are the one dark surface in this
+/// building that is nowhere near your feet, so they look like the answer. They
+/// are also 3.2 metres high and 159 long, and a galaxy is a share of the
+/// *smaller* side: on a letterbox that is eight to twenty-five centimetres,
+/// which from anywhere in that room is nothing at all. Sizing them off the
+/// long side instead only moves the problem: it makes a galaxy on that wall
+/// 12.7 metres across, which runs off the top and the bottom of a wall 3.2
+/// high four times over, and the one thing a
+/// galaxy is for is saying the dark goes on past the stars. A wall you can
+/// walk up to and touch says the opposite.
+///
+/// A galaxy wants a surface that is big whichever way you measure it. This
+/// building has two, the hidden room's floor and its lid, and both of those
+/// are the six metre smudges above.
 pub fn galaxied(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
     let (wide, tall, mut pixels) = sprinkled(seed, size);
     let many = (wide as u64 * tall as u64 / 420).max(16) as u32;
@@ -980,7 +1035,8 @@ pub fn galaxied(seed: u32, size: glam::Vec2) -> blitzkit::texture::TextureData {
         let at = glam::vec2((next() % wide) as f32, (next() % tall) as f32);
         // across the long way, as a share of the smaller side, so one is the
         // same size whatever shape the surface is
-        let reach = wide.min(tall) as f32 * (0.012 + (next() % 1000) as f32 / 1000.0 * 0.028);
+        let reach = wide.min(tall) as f32
+            * (GALAXY_LEAST + (next() % 1000) as f32 / 1000.0 * (GALAXY_MOST - GALAXY_LEAST));
         let squash = 0.24 + (next() % 1000) as f32 / 1000.0 * 0.5;
         let turn = (next() % 1000) as f32 / 1000.0 * std::f32::consts::PI;
         let (sin, cos) = turn.sin_cos();
@@ -1663,6 +1719,48 @@ pub fn picture(body: &Body) -> blitzkit::texture::TextureData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0018: a galaxy wants a surface that is big whichever way it is
+    /// measured, and this building has two of them, both underfoot or
+    /// overhead.
+    ///
+    /// Written after putting galaxies on the hidden room's four standing walls
+    /// and differencing two frames of the same spot: 91 pixels of two million
+    /// changed by three code values or more. They are 3.2 metres high, a
+    /// galaxy is a share of the smaller side, and a share of 3.2 metres is
+    /// centimetres.
+    ///
+    /// Both halves are here, because either one alone reads as an argument for
+    /// turning the other dial. The floor is the surface that is big both ways
+    /// and a galaxy on it is metres across at your feet, which is why `walls`
+    /// uses `starred` for every one of them.
+    #[test]
+    fn a_galaxy_wants_a_surface_that_is_big_whichever_way_it_is_measured() {
+        for (n, (_, size, _)) in walls(9.0).into_iter().enumerate() {
+            let (_, most) = galaxy_across(size);
+
+            // the floor and the lid come first, and they are the square ones
+            if n < 2 {
+                assert!(
+                    most > 1.5,
+                    "the {}th surface is {:?} and a galaxy on it is {:.2} across, \
+                     which is small enough to be worth drawing after all",
+                    n,
+                    size,
+                    most
+                );
+            } else {
+                assert!(
+                    most < 0.3,
+                    "the {}th surface is {:?} and a galaxy on it is {:.2} across, \
+                     which is big enough to see and this test is out of date",
+                    n,
+                    size,
+                    most
+                );
+            }
+        }
+    }
 
     fn planet(name: &str) -> Planet {
         *PLANETS
