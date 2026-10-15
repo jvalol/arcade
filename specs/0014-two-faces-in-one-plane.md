@@ -39,12 +39,33 @@ throws out every pair nobody can get in front of. The body is this game's own:
 the radius `walk` slides, a step of a quarter metre, and four metres of air over
 a place to stand.
 
-**It reports 2 pairs out of 236**, over 5215 drawn boxes, with 138 instances
-turned off the axes and 814 whose shape is not a box, neither measured, and
-66348 cells of a quarter metre a body can be in. Both of the two are at the
-hall's ceiling, which is somewhere you can stand and look up, and both are five
-ten thousandths of a millimetre apart, which is what a transform leaves behind
-rather than a gap anybody put there.
+**It reports 2 pairs out of 716**, over 5911 drawn boxes, with 138 instances
+turned off the axes and about 1055 whose shape is not a box, neither measured,
+and 54856 cells of a quarter metre a body can be in, over a box 70 metres a
+side. Both of the two are at the hall's ceiling, which is somewhere you can
+stand and look up, and both are five ten thousandths of a millimetre apart,
+which is what a transform leaves behind rather than a gap anybody put there.
+
+The count of shapes that are not boxes is given as about, because it is the
+one number here that moves: the water and the steam are remade every frame and
+three presses a second apart gave 1053, 1054 and 1059.
+
+~~2 pairs out of 236, over 5215 drawn boxes, with 814 whose shape is not a
+box, and 66348 cells.~~ Taken 2026-10-15. The 2 is the same and everything
+around it had moved, in two different ways.
+
+The building has grown: 5215 drawn boxes to 5911, and the raw count of pairs
+before the narrowing from 236 to 716. That is ordinary and is what rerunning a
+measurement is for.
+
+The cells are not ordinary. They went to nought, and the narrowing with them,
+so the report was 716 of 716 for as long as nobody pressed P and read it. The
+fill is handed the drawn world, that world has held spec 0018's solar system
+at true scale since it was built, and 72 kilometres of it wants 2.4e16 cells
+of a quarter metre. The engine refused, said so, and returned an empty reach,
+which is the same shape as a reach that found nothing. Fixed in the engine's
+spec 0049 by pulling the box in around the camera until it fits, which is
+where the 70 metres and the 54856 come from.
 
 **Shut doors mean rooms it says nothing about.** The way down is a secret door
 and the way into the baths is another, so when the building opens the cellar and
