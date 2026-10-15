@@ -64,8 +64,27 @@ The lamps go through the same sorting as every other fitting, nearest first, so
 the engine keeps the ones near you and drops the rest. A vast space is the one
 room where that is not a compromise.
 
-**No note.** Every room in this building has one, per spec 0009. This has
+**No voice.** Every room in this building has one, per spec 0009. This has
 none, and the silence on walking through the wall is the loudest thing in here.
+
+It was not silent. `noise::room_at` ended by answering "the hall" for anything
+it had not been taught about, and nobody had taught it about this room, so for
+sound and for light this was the hall. The hall's hum of cabinets carries
+fourteen metres and its voice stands nine from the hole, so the first stretch
+of the room with no voice hummed. The sun was switched on in here as well, a
+sealed room with no sky, for 11,096 lit pixels of the staged shot.
+
+Found on 2026-10-14 by driving the building rather than by a picture: the
+`WHERE` log said Hall while the screen showed these columns. It is its own
+room now, `Room::Behind`, and both halves are held by tests.
+
+**It is very much larger than its floor.** `behind::inside` is "past the
+hall's reach and above the floors below", and not the drawn footprint, which
+was the first answer and was wrong by four orders of magnitude. `SPAN` and
+`DEEP` are what is built and lit; spec 0018 put the system in at true scale
+and Saturn stands ten and a half kilometres out, so the staged shot of Saturn
+came back as the hall. Nothing else in this building is out there, so being
+past the wall is the whole question.
 
 **Footsteps are the hall's.** Its floor is at the hall's height, and the one
 thing that should not change when you step through is you.
@@ -108,6 +127,8 @@ stand on.
 - And the lap is walked and not drawn. — `behind::tests::nothing_drawn_lies_in_the_halls_floor`
 - No column stands in the way in. — `behind::tests::nothing_stands_in_the_way_in`
 - You can get back out. — `behind::tests::you_can_walk_back_out`
+- It is its own room, as far out as Saturn. — `noise::tests::the_space_behind_the_wall_is_its_own_room`
+- And nothing sounds in it. — `noise::tests::nothing_sounds_in_the_space_behind_the_wall`
 
 ### Verified by hand
 

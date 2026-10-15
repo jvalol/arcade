@@ -71,6 +71,8 @@ pub enum Room {
     /// Which holds the pool, the fountain and the sauna.
     Baths,
     Garden,
+    /// The space behind the hall's near end wall, per spec 0011.
+    Behind,
 }
 
 impl Room {
@@ -95,7 +97,7 @@ impl Room {
             // the garden is open to it, and the hall looks into the garden
             // through its door
             Room::Garden | Room::Hall => true,
-            Room::Nook | Room::Stair | Room::Cellar | Room::Baths => false,
+            Room::Nook | Room::Stair | Room::Cellar | Room::Baths | Room::Behind => false,
         }
     }
 }
@@ -145,6 +147,15 @@ pub fn room_at(reaches: f32, at: Vec3) -> Room {
         return Room::Nook;
     }
 
+    // and the space behind the hall's near end wall, which is a room and was
+    // being answered as the hall. Spec 0011 gives it no voice and says the
+    // silence is the loudest thing in it; classed as the hall it was given
+    // the hall's hum of cabinets, which carries fourteen metres and so
+    // reached the first stretch of it. It was also given the hall's sky.
+    if crate::behind::inside(reaches, at) {
+        return Room::Behind;
+    }
+
     Room::Hall
 }
 
@@ -165,7 +176,10 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
         // go down to
         Room::Nook | Room::Stair | Room::Cellar => Underfoot::Boards,
         Room::Garden => Underfoot::Gravel,
-        Room::Hall => Underfoot::Carpet,
+        // and the space behind the wall is carpeted like the hall on purpose,
+        // per spec 0011: its floor is at the hall's height and the one thing
+        // that should not change when you step through is you
+        Room::Hall | Room::Behind => Underfoot::Carpet,
     }
 }
 
@@ -919,6 +933,74 @@ pub fn steam(seed: u32) -> Samples {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0011: the space behind the wall is its own room, and silent.
+    ///
+    /// It was answered as the hall, because `room_at` ended by returning the
+    /// hall for anything that was not somewhere else and nothing had ever
+    /// asked it about this room. Two things followed. The hall's hum of
+    /// cabinets carries fourteen metres and the hall's voice stands nine
+    /// metres from the hole, so the first stretch of a room whose whole point
+    /// is that it has no voice was humming. And the sun was switched on in it,
+    /// a sealed room with no sky, which cost 11,096 lit pixels in the staged
+    /// shot of it.
+    ///
+    /// Found by walking the building rather than by a picture from Jake: the
+    /// `WHERE` log said Hall while the screen showed the columns.
+    #[test]
+    fn the_space_behind_the_wall_is_its_own_room() {
+        let reaches = 9.0;
+        let middle = crate::behind::at(reaches);
+
+        assert_eq!(
+            room_at(reaches, middle + glam::Vec3::Y * crate::EYE),
+            Room::Behind
+        );
+        // and out at Saturn, which is ten and a half kilometres from the hole:
+        // spec 0018 put the system in at true scale, so this room is very much
+        // larger than the floor that is drawn for it
+        assert_eq!(
+            room_at(reaches, glam::vec3(88.84, crate::EYE, 10760.0)),
+            Room::Behind
+        );
+        // and just inside the hole, which is the stretch that was humming
+        assert_eq!(
+            room_at(reaches, glam::vec3(0.0, crate::EYE, reaches + 0.5)),
+            Room::Behind
+        );
+        // the hall is still the hall, on the other side of the same wall
+        assert_eq!(
+            room_at(reaches, glam::vec3(0.0, crate::EYE, reaches - 0.5)),
+            Room::Hall
+        );
+
+        assert!(!Room::Behind.sees_the_sky(), "it has no sky");
+    }
+
+    /// Spec 0011: and nothing sounds in it.
+    ///
+    /// "No voice. Every room in this building has one, per spec 0009. This has
+    /// none, and the silence on walking through the wall is the loudest thing
+    /// in here." That is what this holds.
+    #[test]
+    fn nothing_sounds_in_the_space_behind_the_wall() {
+        let reaches = 9.0;
+        let places: Vec<(Room, glam::Vec3)> = voices(reaches)
+            .into_iter()
+            .map(|(room, at, _, _)| (room, at))
+            .collect();
+
+        for z in [reaches + 0.5, reaches + 4.0, reaches + 40.0] {
+            let ear = glam::vec3(0.0, crate::EYE, z);
+
+            assert_eq!(
+                nearest(ear, room_at(reaches, ear), &places),
+                None,
+                "something is audible {} into the space behind the wall",
+                z - reaches
+            );
+        }
+    }
+
     /// Spec 0016: the sun is switched off in every room with no sky.
     ///
     /// The storm's flash rides on the sun because the sun is supposed not to
@@ -1242,7 +1324,7 @@ mod tests {
 
     /// Spec 0009: a voice's pieces are picked rather than cycled.
     ///
-    /// A cycle of five at two and a half notes a second is a bar of five
+    /// A cycle of five at two and a half pieces a second is a bar of five
     /// beats, and a listener catches the order long before they catch the
     /// sample. `bend`, which the floors use, cycles on purpose: you do not
     /// take two steps from the same place and the room moves between them.
@@ -1265,7 +1347,7 @@ mod tests {
 
         assert!(
             same * 3 < picks.len(),
-            "{} of {} notes repeat a bar later, which is a bar",
+            "{} of {} pieces repeat a bar later, which is a bar",
             same,
             picks.len()
         );
@@ -1274,7 +1356,7 @@ mod tests {
         for which in 0..many {
             assert!(
                 picks.contains(&which),
-                "note {} of {} never comes up",
+                "piece {} of {} never comes up",
                 which,
                 many
             );
@@ -1291,12 +1373,12 @@ mod tests {
 
             assert!(
                 (1.0 - PITCHED..=1.0 + PITCHED).contains(&pitch),
-                "a note was pitched by {}",
+                "a piece was pitched by {}",
                 pitch
             );
             assert!(
                 (1.0 - QUIETER..=1.0).contains(&quieter),
-                "a note was taken to {}",
+                "a piece was taken to {}",
                 quieter
             );
 
@@ -1304,16 +1386,16 @@ mod tests {
             quietened |= quieter < 1.0 - QUIETER * 0.5;
         }
 
-        assert!(moved, "no note was pitched much");
-        assert!(quietened, "no note was quietened much");
+        assert!(moved, "no piece was pitched much");
+        assert!(quietened, "no piece was quietened much");
     }
 
-    /// Spec 0009: each room's notes differ from one another.
+    /// Spec 0009: each room's pieces differ from one another.
     ///
-    /// Five of a note is only worth having if they are five sounds. Every one
+    /// Five of a piece is only worth having if they are five sounds. Every one
     /// of these comes off a seed, so what this really asks is that the seed
     /// reaches the sound: a generator that took one and ignored it would give
-    /// a room five copies of one note and look exactly like variety from the
+    /// a room five copies of one piece and look exactly like variety from the
     /// outside.
     ///
     /// A `Samples` is an `Iterator<Item = f32>`, so this is how you look
@@ -1337,14 +1419,14 @@ mod tests {
             for (n, one) in built.iter().enumerate() {
                 assert!(
                     one.iter().any(|sample| sample.abs() > 1e-4),
-                    "one of {} notes is silence",
+                    "one of {} pieces is silence",
                     what
                 );
 
                 for other in built.iter().skip(n + 1) {
                     assert!(
                         one != other,
-                        "two of {}'s five notes are the same sound",
+                        "two of {}'s five pieces are the same sound",
                         what
                     );
                 }
@@ -1757,10 +1839,10 @@ mod tests {
         }
     }
 
-    /// Spec 0009: one note plays at a time, and it is the nearest.
+    /// Spec 0009: one voice plays at a time, and it is the nearest.
     ///
     /// The whole of why this function exists. The engine plays what it is given
-    /// one after another, per spec 0044, and that is not a mixer. Five notes
+    /// one after another, per spec 0044, and that is not a mixer. Five pieces
     /// each a second long, each queued once a second, is a queue growing by
     /// four seconds every second: after two hours it was a gigabyte of audio
     /// waiting its turn and a machine with nothing left to draw with.

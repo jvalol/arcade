@@ -255,6 +255,27 @@ pub fn near_wall(reaches: f32) -> Vec<Aabb> {
     ]
 }
 
+/// Whether a point is in the space behind the wall.
+///
+/// Past the hall's own reach, which is where the wall with the hole in it
+/// stands, and above the floors below. Nothing else in this building is out
+/// there, so that is the whole question.
+///
+/// It is not the room's drawn footprint, which was the first answer and was
+/// wrong by four orders of magnitude. [`SPAN`] and [`DEEP`] are what is built
+/// and lit; what is in here goes a great deal further, because spec 0018 put
+/// the solar system in at true scale and Saturn stands ten and a half
+/// kilometres out. Bounded by the floor, the staged shot of Saturn came back
+/// as the hall.
+///
+/// The floor laps three metres back under the hall's, per spec 0011, and that
+/// lap is not in here: it is walked and not drawn, it is under the hall's
+/// floor rather than in this room, and anybody standing over it is standing
+/// in the hall.
+pub fn inside(reaches: f32, at: Vec3) -> bool {
+    at.y > -0.1 && at.z >= reaches
+}
+
 /// The middle of the floor, and how far it reaches from there.
 ///
 /// Its near edge is the hall's far edge, meeting it rather than lapping over
