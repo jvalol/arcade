@@ -18,7 +18,7 @@
 //! and arithmetic can be checked without a speaker.
 
 use blitzkit::sound::Samples;
-use glam::{vec3, Vec3};
+use glam::Vec3;
 
 /// How many samples a second everything here is made at.
 ///
@@ -463,6 +463,64 @@ pub fn adrift(piece: usize, many: usize) -> (usize, f32, f32) {
 /// hear from the hall.
 pub const CARRIES: f32 = 14.0;
 
+/// How much of a room-filling voice you hear, where a placed one has its
+/// distance to be quietened by.
+///
+/// **A mixed sound has no distance at all, so it has to be made quiet.** The
+/// engine's spatial output quietens by the inverse square of the distance and
+/// not the distance, so standing 1.6 metres from a thing you hear 29 per cent
+/// of it and from across a room you hear 2 to 8. Every placed voice in this
+/// building, measured where you actually stand to hear it, comes out between
+/// 0.002 and 0.004. A voice handed straight to the mixer comes out at half
+/// its own level, because the master volume rides on that path and not on the
+/// spatial one, so the hall's hum unplaced and unchanged would have been
+/// louder than the thing Jake complained about rather than quieter.
+///
+/// A fifth puts both room-filling voices in that band. It is a measured
+/// number and not a chosen one, and the thing to re-measure if either voice
+/// is ever rebuilt.
+pub const FILLS: f32 = 0.2;
+
+/// The mains, which every cabinet in the hall runs off and which is the one
+/// tone they all share.
+pub const MAINS: f32 = 60.0;
+
+/// How many cabinets the hall's hum is made of. See `hum`.
+pub const CABINETS: usize = 6;
+
+/// How far apart the cabinets' own tones sit.
+///
+/// **Wide, and that is the whole of why this number exists.** The first
+/// version of this put six tones within a hertz of 60, on the reasoning that
+/// a row of machines is a row of nearly identical machines. Tones that close
+/// add up or cancel depending on the phase they happen to start at, so each
+/// of the five pieces came out at its own level: a spread of 86 per cent
+/// across them where every other voice in the building is under five. Five
+/// pieces picked two and a half times a second, each a different loudness, is
+/// a pulse.
+///
+/// Tones further apart than the reciprocal of a piece add up to the same
+/// total whatever their phases, so 13 hertz against a piece's 2.5 is well
+/// clear. Spread and not drawn off the seed, for the same reason.
+pub const SPACING: f32 = 13.0;
+
+/// Where the cabinets' own tones start, above the mains they share: a
+/// transformer and a fan rather than the mains itself.
+pub const CABINET_FROM: f32 = MAINS * 1.5;
+
+/// How far each cabinet's flyback whine sits off 15.734 kilohertz.
+pub const FLYBACK_DRIFT: f32 = 20.0;
+
+/// The mains tone the hall shares, and one cabinet's own.
+///
+/// The shared one does not come off the seed, so the loudest thing in the
+/// hum is the same in every piece. `CABINETS` tones of amplitude `a` far
+/// enough apart carry an rms of `a * sqrt(CABINETS / 2)` between them, which
+/// is what puts the pair of these near the garden's leaves.
+pub const SHARED: f32 = 0.04;
+/// See `SHARED`.
+pub const CABINET: f32 = 0.012;
+
 /// Which voice you can hear from here, if any.
 ///
 /// One, and the nearest in your own room. The engine plays what it is given
@@ -488,21 +546,58 @@ pub const CARRIES: f32 = 14.0;
 /// the hall by the garden's opening and you hear the hall, where in life you
 /// would hear both. One voice at a time is already the rule, and a room you
 /// can see into is a harder question than the one this was wrong about.
-pub fn nearest(ear: Vec3, here: Room, voices: &[(Room, Vec3)]) -> Option<usize> {
+pub fn nearest(ear: Vec3, here: Room, voices: &[(Room, Sounds)]) -> Option<usize> {
+    // a voice that is the room itself is always in earshot of the room, and
+    // is the one that loses if something in here is nearer than it
+    let off = |sounds: &Sounds| match sounds {
+        Sounds::At(at) => ear.distance(*at),
+        Sounds::Everywhere => CARRIES,
+    };
+
     voices
         .iter()
         .enumerate()
-        .filter(|(_, (room, at))| *room == here && ear.distance(*at) <= CARRIES)
-        .min_by(|one, other| {
-            ear.distance_squared(one.1 .1)
-                .total_cmp(&ear.distance_squared(other.1 .1))
-        })
+        .filter(|(_, (room, sounds))| *room == here && off(sounds) <= CARRIES)
+        .min_by(|one, other| off(&one.1 .1).total_cmp(&off(&other.1 .1)))
         .map(|(n, _)| n)
+}
+
+/// Where a voice sounds from.
+///
+/// **A room full of machines has no direction.** Spec 0009 asks the hall for
+/// the sound a room full of cabinets makes, and that was given to one point
+/// at the middle of the hall at head height. A point is a thing you can walk
+/// up to: standing 1.6 metres from it, measured off a recording Jake made on
+/// 2026-10-15, the hum came out at an rms of 1250 where the baths' own voice
+/// reads 155, eight times the loudest other room. What should have filled the
+/// hall instead sat in it, close and placed, and a continuous sound a metre
+/// and a half away reads as somebody being there. He said it sounded like
+/// footsteps and somebody else in the building.
+///
+/// So a voice says which of the two it is. A fountain is in a corner and a
+/// tub is against a wall, and those stay where they are. A hum of cabinets,
+/// or leaves over a whole garden, is the room itself and comes from nowhere.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Sounds {
+    /// From a place in the room, and quieter the further off you stand.
+    At(Vec3),
+    /// From the room itself, at one level wherever you are in it.
+    Everywhere,
+}
+
+impl Sounds {
+    /// Where it is, for a voice that is anywhere in particular.
+    pub fn place(self) -> Option<Vec3> {
+        match self {
+            Sounds::At(at) => Some(at),
+            Sounds::Everywhere => None,
+        }
+    }
 }
 
 /// One voice: which room it is in, where it sounds from, what makes its
 /// pieces and the seed they come off.
-pub type Voice = (Room, Vec3, fn(u32) -> Samples, u32);
+pub type Voice = (Room, Sounds, fn(u32) -> Samples, u32);
 
 /// Every voice in the building.
 ///
@@ -510,28 +605,40 @@ pub type Voice = (Room, Vec3, fn(u32) -> Samples, u32);
 /// that puts it in are one account and a test can walk them.
 pub fn voices(reaches: f32) -> Vec<Voice> {
     vec![
-        (Room::Cellar, crate::cellar::hearth(reaches), fire, 0xF12E),
-        (Room::Baths, crate::spa::stream(reaches).0, trickle, 0x7121),
-        (Room::Baths, crate::spa::tub(reaches).0, bubble, 0xB0B1),
+        // a fire is in a fireplace, a stream leaves a spout, a tub is
+        // against a wall: these are things in a room and stay where they are
+        (
+            Room::Cellar,
+            Sounds::At(crate::cellar::hearth(reaches)),
+            fire,
+            0xF12E,
+        ),
         (
             Room::Baths,
-            crate::spa::sauna(reaches).center(),
+            Sounds::At(crate::spa::stream(reaches).0),
+            trickle,
+            0x7121,
+        ),
+        (
+            Room::Baths,
+            Sounds::At(crate::spa::tub(reaches).0),
+            bubble,
+            0xB0B1,
+        ),
+        (
+            Room::Baths,
+            Sounds::At(crate::spa::sauna(reaches).center()),
             steam,
             0x57EA,
         ),
-        (Room::Hall, vec3(0.0, crate::EYE, 0.0), hum, 0x4040),
-        // the garden's, from the middle of it at head height rather than from
-        // any one tree. A rustle is all round you and not over there.
-        (
-            Room::Garden,
-            {
-                let middle = crate::garden::at(reaches);
-
-                vec3(middle.x, crate::EYE, middle.z)
-            },
-            leaves,
-            0x1EA5,
-        ),
+        // and the hall's own hum is the room and not a thing in it. It was a
+        // point at the middle of the hall at head height, which is a point
+        // you can stand 1.6 metres from, and that is what it sounded like.
+        (Room::Hall, Sounds::Everywhere, hum, 0x4040),
+        // nor is the garden's rustle, which was written down as all round you
+        // and not over there and then given a point in the middle of the
+        // garden anyway
+        (Room::Garden, Sounds::Everywhere, leaves, 0x1EA5),
     ]
 }
 
@@ -897,17 +1004,50 @@ pub fn leaves(seed: u32) -> Samples {
 }
 
 /// The hum a hall full of cabinets has.
+///
+/// **Several of them, which is the whole point of it.** This was one 60 hertz
+/// sine and one flyback whine, and the sine carried 98 per cent of the
+/// energy: a single pure tone, which is the sound of a thing and not of a
+/// room. Standing 1.6 metres from where it was placed, Jake heard somebody
+/// else in the building.
+///
+/// So `CABINETS` of them, each off 60 by a little and each with its own
+/// phase, which is what a row of machines actually is. None of the detuning
+/// can be heard as a beat: two tones half a hertz apart beat over two
+/// seconds, a piece is four tenths of one, and a beat longer than the piece
+/// cannot live in it. Same trap as the gust the leaves cannot have. What it
+/// does instead is make each piece a different fixed sum, so five pieces
+/// picked adrift are five slightly different rooms rather than one tone.
 pub fn hum(seed: u32) -> Samples {
     let mut next = noise(seed);
     let count = (RATE as f32 * PIECE) as usize;
+    // each cabinet's own tone, its flyback and its phase, worked out once
+    // rather than per sample: the same arithmetic 17_640 times over is what
+    // makes a voice expensive to make. The frequencies are spread and the
+    // phases come off the seed, which is the way round that keeps every
+    // piece at one level. See `SPACING`.
+    let cabinets: Vec<(f32, f32, f32)> = (0..CABINETS)
+        .map(|k| {
+            (
+                CABINET_FROM + k as f32 * SPACING,
+                15_734.0 + k as f32 * FLYBACK_DRIFT,
+                next() * std::f32::consts::PI,
+            )
+        })
+        .collect();
     let samples: Vec<f32> = (0..count)
         .map(|n| {
             let t = n as f32 / RATE as f32;
-            // mains hum and the whine of a tube, and a little hiss over both
-            let low = (t * 60.0 * std::f32::consts::TAU).sin() * 0.1;
-            let whine = (t * 15_734.0 * std::f32::consts::TAU).sin() * 0.012;
+            // the mains every cabinet shares, each cabinet's own transformer
+            // and fan, the whine of its tube, and a little hiss over the lot
+            let mut sum = (t * MAINS * std::f32::consts::TAU).sin() * SHARED + next() * 0.01;
 
-            low + whine + next() * 0.01
+            for (own, flyback, phase) in cabinets.iter().copied() {
+                sum += (t * own * std::f32::consts::TAU + phase).sin() * CABINET;
+                sum += (t * flyback * std::f32::consts::TAU + phase).sin() * CABINET * 0.12;
+            }
+
+            sum
         })
         .collect();
 
@@ -984,9 +1124,9 @@ mod tests {
     #[test]
     fn nothing_sounds_in_the_space_behind_the_wall() {
         let reaches = 9.0;
-        let places: Vec<(Room, glam::Vec3)> = voices(reaches)
+        let places: Vec<(Room, Sounds)> = voices(reaches)
             .into_iter()
-            .map(|(room, at, _, _)| (room, at))
+            .map(|(room, sounds, _, _)| (room, sounds))
             .collect();
 
         for z in [reaches + 0.5, reaches + 4.0, reaches + 40.0] {
@@ -1026,6 +1166,45 @@ mod tests {
     }
 
     use super::*;
+
+    /// A voice as these tests ask about it: what to call it in a message,
+    /// what makes its pieces, and the seed they come off.
+    type Named = (&'static str, fn(u32) -> Samples, u32);
+
+    /// Every voice the building has, with the seed it is made off.
+    ///
+    /// Taken from `voices` rather than listed, so a voice added to the
+    /// building is a voice these tests ask about without anybody having to
+    /// remember. It needs a `reaches` to read the list and throws the places
+    /// away, which is why it takes none.
+    fn every_voice() -> Vec<Named> {
+        vec![
+            ("fire", fire as fn(u32) -> Samples, 0xF12E),
+            ("trickle", trickle, 0x7121),
+            ("bubble", bubble, 0xB0B1),
+            ("steam", steam, 0x57EA),
+            ("hum", hum, 0x4040),
+            ("leaves", leaves, 0x1EA5),
+        ]
+    }
+
+    /// How loud a run of samples is, which is the only measure of loudness
+    /// any of this uses. A peak is one sample and tells you about that one.
+    fn rms_of(samples: Samples) -> f32 {
+        let mut sum = 0.0f64;
+        let mut many = 0usize;
+
+        for v in samples {
+            sum += (v as f64) * (v as f64);
+            many += 1;
+        }
+
+        if many == 0 {
+            return 0.0;
+        }
+
+        (sum / many as f64).sqrt() as f32
+    }
 
     /// The building, for the tests that ask about where things are in it.
     fn a_room() -> crate::room::Room {
@@ -1094,11 +1273,24 @@ mod tests {
     /// Which room a voice is in and where it sounds from are one account now,
     /// and this is what holds them together: move the tub and the room it
     /// claims follows, or this fails and says so.
+    ///
+    /// Only the voices that are somewhere. A voice that is the room itself has
+    /// no place, so it has nothing to disagree with its room about, and the
+    /// hall's hum and the garden's leaves are not covered here. What is
+    /// checked instead is that there is still something to check: drop the
+    /// last placed voice and this fails rather than passing on an empty list.
     #[test]
     fn every_voice_is_in_the_room_it_says_it_is() {
         let reaches = a_room().reaches;
+        let mut placed = 0;
 
-        for (room, at, _, _) in voices(reaches) {
+        for (room, sounds, _, _) in voices(reaches) {
+            let at = match sounds.place() {
+                Some(at) => at,
+                None => continue,
+            };
+
+            placed += 1;
             assert_eq!(
                 room_at(reaches, at),
                 room,
@@ -1108,6 +1300,8 @@ mod tests {
                 room_at(reaches, at)
             );
         }
+
+        assert!(placed > 0, "no voice has a place, so this checked nothing");
     }
 
     /// Spec 0009: the garden does not hear the baths through its own floor.
@@ -1129,9 +1323,9 @@ mod tests {
     #[test]
     fn the_garden_does_not_hear_the_baths_through_its_floor() {
         let reaches = a_room().reaches;
-        let places: Vec<(Room, Vec3)> = voices(reaches)
+        let places: Vec<(Room, Sounds)> = voices(reaches)
             .into_iter()
-            .map(|(room, at, _, _)| (room, at))
+            .map(|(room, sounds, _, _)| (room, sounds))
             .collect();
         let middle = crate::garden::at(reaches);
         let mut near = 0;
@@ -1161,10 +1355,12 @@ mod tests {
 
             // and the thing that made it wrong is still true: something in the
             // baths is well inside earshot from here
-            if places
-                .iter()
-                .any(|(room, at)| *room == Room::Baths && stood.distance(*at) <= CARRIES)
-            {
+            if places.iter().any(|(room, sounds)| {
+                *room == Room::Baths
+                    && sounds
+                        .place()
+                        .is_some_and(|at| stood.distance(at) <= CARRIES)
+            }) {
                 near += 1;
             }
         }
@@ -1860,13 +2056,13 @@ mod tests {
     fn one_voice_plays_at_a_time_and_it_is_the_nearest() {
         let here = Room::Baths;
         let voices = [
-            (here, Vec3::new(0.0, 0.0, 0.0)),
-            (here, Vec3::new(3.0, 0.0, 0.0)),
-            (here, Vec3::new(40.0, 0.0, 0.0)),
+            (here, Sounds::At(Vec3::new(0.0, 0.0, 0.0))),
+            (here, Sounds::At(Vec3::new(3.0, 0.0, 0.0))),
+            (here, Sounds::At(Vec3::new(40.0, 0.0, 0.0))),
             // and one a couple of metres away in another room, which is the
             // case the garden was losing to: near enough to win on distance
             // and not yours to hear
-            (Room::Garden, Vec3::new(2.0, 0.0, 0.0)),
+            (Room::Garden, Sounds::At(Vec3::new(2.0, 0.0, 0.0))),
         ];
 
         // the nearest of the ones you can hear in your own room, and only one
@@ -1928,5 +2124,134 @@ mod tests {
 
         // and standing in it is not a splash at all
         assert!(splash(0.0, 0x51A5).len() < splash(6.0, 0x51A5).len());
+    }
+
+    /// Spec 0009: no voice pulses at the rate its pieces are picked.
+    ///
+    /// **A piece is four tenths of a second and five of them are picked two
+    /// and a half times a second, so anything that differs between pieces is
+    /// heard at 2.5 hertz.** The leaves already have this written down for
+    /// what they cannot contain: a gust is several seconds long, so a gust in
+    /// a piece is the same swell two and a half times a second, which is a
+    /// throb and not weather. The same trap caught the hall's hum from the
+    /// other side. Six cabinet tones within a hertz of each other add up or
+    /// cancel by whatever phase they start at, so the five pieces came out 86
+    /// per cent apart in level and the hall pulsed.
+    ///
+    /// Five per cent, which every voice in the building is now inside and
+    /// four of the six were already well inside. Widen `SPACING` back down
+    /// towards a hertz and this fails and names the hum.
+    #[test]
+    fn no_voice_pulses_at_the_rate_its_pieces_are_picked() {
+        let mut most: (&str, f32) = ("none", 0.0);
+
+        for (name, make, seed) in every_voice() {
+            let each: Vec<f32> = (0..PIECES)
+                .map(|n| rms_of(make(seed.wrapping_add(n as u32 * 7919))))
+                .collect();
+            let low = each.iter().copied().fold(f32::MAX, f32::min);
+            let high = each.iter().copied().fold(0.0, f32::max);
+
+            assert!(low > 0.0, "the {} is silent in one of its pieces", name);
+
+            let spread = high / low - 1.0;
+
+            assert!(
+                spread < 0.05,
+                "the {}'s pieces are {:.0}% apart in level, which is a pulse at 2.5 hertz: {:?}",
+                name,
+                spread * 100.0,
+                each
+            );
+
+            if spread > most.1 {
+                most = (name, spread);
+            }
+        }
+
+        // and this measured something rather than dividing nothing by nothing
+        assert!(
+            most.1 > 0.001,
+            "every voice came out identical piece to piece, so this checked nothing"
+        );
+    }
+
+    /// Spec 0009: a room's own sound fills it rather than standing in it.
+    ///
+    /// Jake stood still in the hall on 2026-10-15 and heard what he took for
+    /// somebody else walking about. The hall's hum was a point at the middle
+    /// of the hall at head height, which is a point you can be 1.6 metres
+    /// from, and the engine quietens by the inverse square of the distance,
+    /// so from there it came out at an rms of 1250 against the baths' 155.
+    ///
+    /// Two claims, because the fix is two things and either one alone leaves
+    /// it wrong. The hall and the garden have no place to be near, and both
+    /// come out in the band a placed voice is heard in. Put the hum back at a
+    /// point and the first fails; drop `FILLS` and the second does.
+    #[test]
+    fn a_rooms_own_sound_fills_it_rather_than_standing_in_it() {
+        let reaches = a_room().reaches;
+        // what the engine does to a voice before it reaches an ear. The
+        // master volume rides on the mixer and not on the spatial output, so
+        // only a mixed voice takes it; a placed one is quietened by the
+        // inverse square of the distance and by how far round your head it
+        // is, which runs from a half to one and is about three quarters for
+        // anything not straight ahead. See `FILLS`.
+        const MASTER: f32 = 0.5;
+        const EARS: f32 = 0.75;
+        let placed = |make: fn(u32) -> Samples, seed: u32, metres: f32| {
+            rms_of(make(seed)) * EARS * (1.0 / (metres * metres)).min(1.0)
+        };
+        let heard = |make: fn(u32) -> Samples, seed: u32| rms_of(make(seed)) * FILLS * MASTER;
+
+        // the two that are rooms and not things in rooms
+        let filling: Vec<Room> = voices(reaches)
+            .into_iter()
+            .filter(|(_, sounds, _, _)| sounds.place().is_none())
+            .map(|(room, _, _, _)| room)
+            .collect();
+
+        assert_eq!(
+            filling,
+            vec![Room::Hall, Room::Garden],
+            "the rooms whose sound is the room itself are not the two expected"
+        );
+
+        // and the level both come out at, against the band a placed voice is
+        // actually heard in. Its ends are the quietest and loudest voice in
+        // the building at the distance you stand to hear each: the fountain
+        // from four metres across the baths, and the tub from three.
+        let quietest = placed(trickle, 0x7121, 4.0);
+        let loudest = placed(bubble, 0xB0B1, 3.0);
+
+        assert!(
+            quietest < loudest,
+            "the band is the wrong way round at {:.4} and {:.4}",
+            quietest,
+            loudest
+        );
+
+        for (name, make, seed) in [
+            ("hum", hum as fn(u32) -> Samples, 0x4040u32),
+            ("leaves", leaves, 0x1EA5),
+        ] {
+            let level = heard(make, seed);
+
+            assert!(
+                level >= quietest,
+                "the {} fills the room at {:.4}, under the fountain heard across the baths \
+                 at {:.4}",
+                name,
+                level,
+                quietest
+            );
+            assert!(
+                level <= loudest,
+                "the {} fills the room at {:.4}, over the tub heard three metres off at {:.4}",
+                name,
+                level,
+                loudest
+            );
+        }
     }
 }

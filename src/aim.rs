@@ -1031,6 +1031,19 @@ pub const LIST_OFF: Vec4 = vec4(0.62, 0.64, 0.70, 1.0);
 /// against a ceiling lamp's 9.5. So the door carries its own light in its
 /// colour, which is the one thing that works in a room this dark.
 pub const BEHIND_FRAME: Vec4 = vec4(1.728, 1.872, 2.208, 1.0);
+
+/// The way out, lit from the dark side. Spec 0011.
+///
+/// Brighter than the door at the far end and bluer, so that from anywhere in
+/// the room the two ways out of it are told apart at a glance: the far door
+/// is a cool white rectangle and this is a blue one with something turning in
+/// it. The sign over it is green and stays the only thing in here with a word
+/// on it.
+///
+/// Past one on every channel, so it carries itself with no lamp. There is no
+/// lamp to give it: the room is already pushing more at the engine than it
+/// will take, which is why the frame at the far end does the same.
+pub const BEHIND_PORTAL: Vec4 = vec4(1.1, 2.3, 4.6, 1.0);
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// What burns in a stone lantern: a candle behind paper, which is warm against

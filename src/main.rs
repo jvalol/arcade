@@ -368,7 +368,7 @@ struct Arcade {
     /// It has no length. What has a length is the piece of it the engine is
     /// handed, and one played two and a half times a second is a loop, which
     /// is why there are several of each.
-    voices: Vec<(noise::Room, Vec3, Vec<Samples>)>,
+    voices: Vec<(noise::Room, noise::Sounds, Vec<Samples>)>,
     /// How many pieces have gone, which is what picks and bends the next.
     pieced: usize,
     /// How long since `WHERE` last said where you are standing.
@@ -392,6 +392,9 @@ struct Arcade {
     /// The way out of the solar system, named. See `orrery::exit_sign`.
     way_out: Option<TextureId>,
     way_out_mesh: Option<MeshId>,
+    /// The way out, lit from the dark side. See `behind::portal`.
+    portal: Option<TextureId>,
+    portal_mesh: Option<MeshId>,
     /// The solar system behind the wall, per spec 0015: a ball, a ring, one
     /// picture per body in `orrery::every_body` order, and how far the swing
     /// between lined up and in orbit has got.
@@ -686,6 +689,8 @@ impl Arcade {
             plaster_mesh: Vec::new(),
             way_out: None,
             way_out_mesh: None,
+            portal: None,
+            portal_mesh: None,
             planet_mesh: None,
             ring_mesh: None,
             worlds: Vec::new(),
@@ -2057,11 +2062,12 @@ impl Game for Arcade {
     }
 
     fn load(&mut self, renderer: &mut Renderer) {
-        // The sun's map covers the building, every room of it, because
-        // outside the map the sun comes through the roof. It was fitted to
-        // the hall alone, which was sharp and left the cellar, the baths and
-        // the space behind the wall taking full sun through solid ground.
-        // See `Room::outline`, which has the measurements.
+        // The sun's map covers the building, less the space behind the wall,
+        // because outside the map the sun comes through the roof. It was
+        // fitted to the hall alone, which was sharp and left the cellar, the
+        // baths and the space behind the wall taking full sun through solid
+        // ground. See `Room::under_the_sun`, which has the measurements and
+        // says why that one room is out of it.
         renderer.set_scene_bounds(self.room.under_the_sun());
 
         // No contact shadows in this building, per spec 0029's own limits.
@@ -2308,6 +2314,8 @@ impl Game for Arcade {
             renderer.add_texture(&blitzkit::text::drawn(orrery::WAY_OUT, orrery::SIGN_TEXELS)),
         );
         self.way_out_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
+        self.portal = Some(renderer.add_texture(&behind::swirled()));
+        self.portal_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.stars = orrery::walls(self.room.reaches)
             .into_iter()
             .enumerate()
@@ -2456,12 +2464,12 @@ impl Game for Arcade {
         // disagree.
         self.voices = noise::voices(self.room.reaches)
             .into_iter()
-            .map(|(room, at, make, seed)| {
+            .map(|(room, sounds, make, seed)| {
                 let pieces = (0..noise::PIECES)
                     .map(|n| make(seed.wrapping_add(n as u32 * 7919)))
                     .collect();
 
-                (room, at, pieces)
+                (room, sounds, pieces)
             })
             .collect();
         self.sounding = 0.0;
@@ -2715,10 +2723,10 @@ impl Game for Arcade {
         self.sounding -= dt;
         if self.sounding <= 0.0 {
             let ear = self.looking_from();
-            let places: Vec<(noise::Room, Vec3)> = self
+            let places: Vec<(noise::Room, noise::Sounds)> = self
                 .voices
                 .iter()
-                .map(|(room, at, _)| (*room, *at))
+                .map(|(room, sounds, _)| (*room, *sounds))
                 .collect();
 
             // the voice of the room you are in, which is not the same as the
@@ -2731,14 +2739,24 @@ impl Game for Arcade {
             let pieced = self.pieced;
 
             self.sounding = match heard.and_then(|n| self.voices.get(n)) {
-                Some((_, at, voice)) => {
+                Some((_, sounds, voice)) => {
                     let (which, pitch, quieter) = noise::adrift(pieced, voice.len());
 
                     match voice.get(which) {
                         Some(piece) => {
                             let bent = piece.pitched(pitch).gain(quieter);
                             let runs = bent.seconds();
-                            sound.play_at(&bent, at.to_array());
+
+                            // a voice that is the room itself is mixed rather
+                            // than placed, so it has no direction to walk up
+                            // to and no distance to be close at. `play_at`
+                            // would give it both. It takes `FILLS` in place of
+                            // the distance it no longer has, or it comes out
+                            // louder unplaced than it was placed.
+                            match sounds.place() {
+                                Some(at) => sound.play_at(&bent, at.to_array()),
+                                None => sound.play(&bent.gain(noise::FILLS)),
+                            }
 
                             runs
                         }
@@ -3226,6 +3244,25 @@ impl Game for Arcade {
                 match self.wall_grain {
                     Some(grain) => scene.push_textured(cube, grain, &stood, aim::WALL, aim::MATTE),
                     None => scene.push_colored(cube, &stood, aim::WALL),
+                }
+            }
+
+            // and the way out lit, on the dark side only. The secret is the
+            // hall's: from in here the way out has no reason to be hidden,
+            // and hiding it is what had Jake walk at the sign and hit wall.
+            if !in_the_hall {
+                if let (Some(lit), Some(mesh)) = (self.portal, self.portal_mesh) {
+                    let (at, size) = behind::portal(self.room.reaches);
+
+                    scene.push_textured(
+                        mesh,
+                        lit,
+                        &Transform::at(at)
+                            .with_rotation(room::laid_on(Vec3::Z))
+                            .with_scale(vec3(size.x, 1.0, size.y)),
+                        aim::BEHIND_PORTAL,
+                        aim::VOID,
+                    );
                 }
             }
         }
@@ -6522,27 +6559,60 @@ mod tests {
         );
     }
 
-    /// Spec 0015: the sign stands beside the way out, not across it, and
-    /// faces into the room.
+    /// Spec 0015: the sign hangs over the way out and faces into the room.
     ///
-    /// Beside and not over, because the way out is a slot the full height of
-    /// the wall and there is nothing above it to hang from. Across it and the
-    /// sign is the thing you walk into on the way out.
+    /// **Over it, which is the second answer.** It hung beside it, and the
+    /// reason written down was that the way out was a slot the full height of
+    /// the wall with nothing above it to hang from. That was true of the
+    /// geometry and beside the point. This room is black: the wall at that
+    /// end is unlit, the opening in it is invisible, and the sign carries its
+    /// own light, so it is the only thing in a hundred and fifty nine metres
+    /// you can see. It was not a label on the way out, it was the
+    /// instruction, and it pointed 1.95 metres to one side of the gap.
+    ///
+    /// Jake walked at it on 2026-10-15 and hit wall. The wall has a head over
+    /// the way out now, per `behind::WAY_HIGH`, and the sign hangs on it.
+    ///
+    /// The old reason for standing it aside is checked below rather than
+    /// dropped: a sign across the way out would be a thing to walk into, and
+    /// what keeps it from being one is that it hangs over your head.
     #[test]
-    fn the_sign_stands_beside_the_way_out_and_faces_in() {
+    fn the_sign_hangs_over_the_way_out_and_faces_in() {
         let one = Arcade::new();
         let reaches = one.room.reaches;
         let (at, looks) = orrery::exit_sign(reaches);
         let (from, to) = behind::way();
         let half = orrery::SIGN_WIDE * 0.5 + orrery::SIGN_BORDER;
 
+        // squarely over it, so walking at the sign walks through the gap.
+        // The housing is the opening's own width, to a millimetre: wider and
+        // it stands proud of each jamb, which is a sign too big for its hole.
         assert!(
-            at.x - half > to || at.x + half < from,
-            "the sign spans {:.2} to {:.2} and the way out is {:.2} to {:.2}",
+            (at.x - half - from).abs() < 1e-3 && (at.x + half - to).abs() < 1e-3,
+            "the sign spans {:.3} to {:.3} and the way out is {:.3} to {:.3}",
             at.x - half,
             at.x + half,
             from,
             to
+        );
+        assert!(
+            ((from + to) * 0.5 - at.x).abs() < 1e-3,
+            "the sign's middle is at {:.2} and the way out's at {:.2}",
+            at.x,
+            (from + to) * 0.5
+        );
+
+        // hung on the head and inside it, rather than standing proud of the
+        // wall above or hanging into the gap below
+        let housing = orrery::SIGN_TALL * 0.5 + orrery::SIGN_BORDER;
+
+        assert!(
+            at.y - housing > behind::WAY_HIGH && at.y + housing < room::TALL,
+            "the sign spans {:.2} to {:.2} and the head runs {:.2} to {:.2}",
+            at.y - housing,
+            at.y + housing,
+            behind::WAY_HIGH,
+            room::TALL
         );
 
         // on the wall and not floating in the room
@@ -6583,14 +6653,36 @@ mod tests {
         let middle = (from + to) * 0.5;
         let pieces = behind::near_wall(reaches);
 
-        // nothing of the two pieces stands in the way in
+        // nothing of the wall stands in the way in at the height of a body.
+        // Asked at a height and not in plan, because the head over the way in
+        // does span it and is meant to: it is what the sign hangs on, and it
+        // starts a good deal over your head. See `behind::WAY_HIGH`.
         for box_ in pieces.iter() {
+            let aside = box_.min.x > middle || box_.max.x < middle;
+
             assert!(
-                box_.min.x > middle || box_.max.x < middle,
-                "a piece of the near wall spans the way in at {:.2}",
-                middle
+                aside || box_.min.y >= behind::WAY_HIGH,
+                "a piece of the near wall spans the way in at {:.2}, from {:.2} up",
+                middle,
+                box_.min.y
             );
         }
+
+        // and a body walks under the head with room to spare. Read off the
+        // box rather than off the constant, so this is a question about the
+        // wall that got built and not two numbers compared in the source.
+        let head = pieces
+            .iter()
+            .filter(|box_| box_.min.x <= middle && box_.max.x >= middle)
+            .map(|box_| box_.min.y)
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            head < f32::MAX && head > EYE + 0.4,
+            "the head over the way in is at {:.2} and an eye is at {:.2}",
+            head,
+            EYE
+        );
 
         // and between them there is a gap a body fits through
         let widest = pieces
@@ -6611,7 +6703,7 @@ mod tests {
         );
         assert!(
             widest > middle && narrowest < middle,
-            "the two pieces are both on one side of the way in"
+            "the pieces of the wall are all on one side of the way in"
         );
     }
 
@@ -6973,5 +7065,32 @@ mod tests {
                 name
             );
         }
+    }
+
+    /// Spec 0013: O outlines `room.solid()` itself.
+    ///
+    /// The whole of what this feature is for is catching a drawn list and a
+    /// solid list that have come apart, and it catches nothing if it draws a
+    /// third list gathered for the purpose. Four of that spec's criteria hold
+    /// the toggle and none of them held this, which is the claim the feature
+    /// rests on.
+    ///
+    /// Read off this file, because what is guarded is which function is
+    /// called rather than any value it returns.
+    #[test]
+    fn o_outlines_the_solid_list_itself() {
+        const SOURCE: &str = include_str!("main.rs");
+
+        let from = SOURCE
+            .find("if self.showing_solid {")
+            .expect("nothing draws what is solid");
+        let block = &SOURCE[from..];
+        let to = block.find("\n        }").expect("that block does not end");
+        let block = &block[..to];
+
+        assert!(
+            block.contains("self.room.solid()"),
+            "what O outlines is not room.solid() itself"
+        );
     }
 }

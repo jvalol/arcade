@@ -233,6 +233,45 @@ have the fountain and the tub's blower. The sauna, with its door shut, has the
 stove ticking and the hiss of what is on it. The hall has the cabinets, which
 hum the way a room full of them hums.
 
+**A voice is either a thing in a room or the room itself**, and it says which.
+`noise::Sounds` is the two: `At` a place, or `Everywhere`.
+
+This paragraph was a line of prose and nothing else for as long as the hall
+was wrong. A fire is in a fireplace, a stream leaves a spout, a tub is against
+a wall, and a sauna's hiss is behind its door: those are things, and you can
+walk up to each of them. The hall's hum is not a thing. Neither is a rustle
+across a whole garden. Both were given a point at the middle of their room at
+head height anyway, and the comment above the garden's said in as many words
+that a rustle is all round you and not over there.
+
+Jake stood still in the hall on 2026-10-15 and heard what he took for somebody
+else walking about. A point at the middle of the hall is a point you can stand
+1.6 metres from, the engine quietens by the inverse square of the distance, and
+from there the hum came out at an rms of 1250 against the baths' 155. A
+continuous sound a metre and a half off, with a direction, is a presence.
+
+**A voice that is the room takes `noise::FILLS` in place of the distance it
+does not have.** Unplacing a voice makes it louder and not quieter, which is
+the trap under this: a placed voice loses the inverse square of its distance,
+2 to 8 per cent of itself from across a room, while a mixed one keeps all of
+itself and only loses the master volume. Every placed voice in this building,
+measured where you actually stand to hear it, lands between 0.002 and 0.004.
+A fifth puts the hall and the garden in that band.
+
+**And the hum is a row of machines rather than one.** It was a single 60 hertz
+sine carrying 98 per cent of its energy and one flyback whine over it, which is
+the sound of a machine and not of a hall of them. It is the mains the cabinets
+share, plus a transformer and fan apiece spread `noise::SPACING` apart, plus a
+whine apiece.
+
+Spread wide, and that is the whole of why the number is 13 hertz. The first
+version of this put the cabinets within a hertz of each other, on the
+reasoning that a row of machines is a row of nearly identical machines. Tones
+that close add or cancel by whatever phase they begin at, so each of the five
+pieces came out at its own level: 86 per cent apart where every other voice is
+inside five. That is a pulse at the rate pieces are picked, which is the rule
+below, reached from the other side.
+
 **The garden has leaves**, which is what a walled garden under a permanent
 overcast has. It had nothing and was borrowing the tub through its floor, which
 is what hid the fault above.
@@ -277,9 +316,8 @@ each one ringing at 3.26 over its radius, which is Minnaert's.
 
 **Where a sound is heard from** is the engine's business, so everything that
 comes from somewhere goes through `play_at` and the listener is moved to your
-eye and pointed where you are looking, every frame. A sound with no place goes through
-`play`. Nothing is left that has none, now the footsteps are out, but `play` is
-the engine's and stays available.
+eye and pointed where you are looking, every frame. A sound with no place goes
+through `play`, which is the hall's hum and the garden's leaves.
 
 ## Acceptance criteria
 
@@ -295,6 +333,8 @@ the engine's and stays available.
 - One voice plays at a time, and it is the nearest one within earshot in your own room. — `noise::tests::one_voice_plays_at_a_time_and_it_is_the_nearest`
 - Every voice is in the room it says it is in. — `noise::tests::every_voice_is_in_the_room_it_says_it_is`
 - The garden hears its own leaves and never the baths, wherever you stand in it. — `noise::tests::the_garden_does_not_hear_the_baths_through_its_floor`
+- A room's own sound fills it rather than standing in it, at the level a placed voice is heard at. — `noise::tests::a_rooms_own_sound_fills_it_rather_than_standing_in_it`
+- No voice pulses at the rate its pieces are picked. — `noise::tests::no_voice_pulses_at_the_rate_its_pieces_are_picked`
 - A piece of a voice does not die inside itself, and is a whole piece. — `noise::tests::a_voices_piece_does_not_die_inside_itself`
 - Every floor has footsteps and every one of them reads. — `noise::tests::every_floor_has_footsteps_that_read`
 - No two floors share a recording. — `noise::tests::no_two_floors_sound_the_same`
@@ -317,6 +357,13 @@ Run the arcade and walk from the hall to the baths.
   it cannot be heard in a test.
 - A sprint sounds like a sprint rather than a smear, with two steps' worth of
   overlap in it, and like a longer step rather than a faster one.
+- Standing still in the hall is a room you are alone in. The hum has no
+  direction, does not get louder when you walk into the middle of it, and is
+  not somebody. This is the one Jake found on 2026-10-15 and it cannot be
+  heard in a test: what a test holds is the level and the lack of a place, and
+  whether that reads as a presence is an ear's question.
+- And the same of standing in the garden, which had the same fault and nobody
+  had noticed.
 
 ## Out of scope
 
@@ -326,6 +373,9 @@ anybody made with a microphone.
 **Music.** The building has no opinion about what it sounds like beyond what is
 in it.
 
-**Mixing.** The engine takes a sound and plays it, per spec 0044. Anything about
-how loud two of them are together is a thing this game does by choosing how
-loud it makes each one.
+**Mixing.** The engine has a mixer and a spatial queue, per spec 0044, and
+this game chooses which of the two each sound goes to: the room's own voice
+and the footsteps to the mixer, everything with a place to the queue. What it
+does not have is a policy about how loud two sounds are together. That is done
+by choosing how loud each one is made, which `noise::FILLS` is and which is
+measured rather than mixed.

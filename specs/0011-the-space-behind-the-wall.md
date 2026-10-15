@@ -21,9 +21,42 @@ down the aisle. The room already points you away from this. That is the whole
 reason it goes here and not anywhere else.
 
 **The way in is a hole in the wall that the wall is drawn across.** The near
-end wall is two boxes now with a gap between them, and the drawn wall is one
-piece over the whole of it. From the hall it is a blank wall. Walk into it off
-centre and you go through.
+end wall is three boxes now with a gap between two of them, and the drawn wall
+is one piece over the whole of it. From the hall it is a blank wall. Walk into
+it off centre and you go through.
+
+Three and not two: the third is a head over the gap, at `behind::WAY_HIGH`,
+2.2 up. It changes nothing about walking through, because a body is a long way
+under 2.2 and the metre above the head was never anything anybody could use.
+What it is for is spec 0015's sign, which had nothing to hang on and so hung
+beside the opening instead, pointing at wall. See that spec.
+
+**The secret is the hall's and only the hall's.** Everything above is about
+somebody standing in the hall with their back to a blank wall. None of it is a
+reason to hide the way out from somebody already inside, and hiding it from
+them is a room you are stuck in rather than a room you found.
+
+So from the dark side the opening is filled with something that glows, up to
+the head, as wide as the gap: `behind::portal`, with `behind::swirled` on it.
+A spiral wound round a dark eye inside a bright rim, worked out rather than
+drawn, the way the stars and the carpet and the wood grain are.
+
+Not a view back into the hall, which it could have been and should not be. A
+lit rectangle of patterned carpet at the end of a hundred and fifty nine
+metres of black reads as a mistake rather than as a way out, and what the hall
+looks like from in here is a question this room has no good answer to.
+
+It is twice invisible from the hall: behind the wall that is drawn in one
+piece, and facing away from you besides.
+
+**The opening was never a hole you could see through.** Worth writing down,
+because it was a surprise and it explains the black. Spec 0015 lays a field of
+stars across every surface of this room, and the near one runs the whole width
+of this wall with the way out inside it. From in here you were looking at
+stars laid over a gap, which is why no light came through and why the first
+build of the portal, two millimetres off the wall's face, could not be seen
+from anywhere in the room at any distance. `behind::PORTAL_PROUD` is read off
+`orrery::STARS_PROUD` rather than written down again.
 
 This is deliberately the same mechanic as several faults fixed in this building
 in one day: a collider that disagrees with what is drawn. It is a fault
@@ -147,6 +180,8 @@ stand on.
 - And nothing sounds in it. — `noise::tests::nothing_sounds_in_the_space_behind_the_wall`
 - Its footsteps are the hall's. — `noise::tests::each_room_sounds_like_its_own_floor`
 - The columns run floor to ceiling. — `behind::tests::the_columns_run_floor_to_ceiling`
+- The way out is lit from the dark side, fills the opening up to the head, and stands in front of the stars. — `behind::tests::the_way_out_is_lit_from_the_dark_side`
+- And what is on it is a picture rather than a lit panel. — `behind::tests::the_portal_has_a_picture_on_it`
 - Its lamps are the faintest and coolest in the building. — `behind::tests::its_lamps_are_the_faintest_and_coolest_in_the_building`
 
 ### Verified by hand

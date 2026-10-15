@@ -880,11 +880,21 @@ pub const SWINGS: f32 = 3.0;
 /// All six, floor and ceiling included. A room with stars on four sides and
 /// grey underfoot is a room; a room with stars on all six is a place the room
 /// has stopped being.
+/// How far each starfield stands off the surface it is laid on.
+///
+/// **The one account of it**, because something else has to stand in front of
+/// the near one. The starfield on that wall runs the whole width of the room
+/// and the way out is a gap in that wall, so the stars are drawn across the
+/// gap as well: that is why the way out reads as black from inside rather
+/// than as a hole. Spec 0011's portal has to be in front of this or it is
+/// behind the stars and invisible, which is where it spent its first build.
+pub const STARS_PROUD: f32 = 0.02;
+
 pub fn walls(reaches: f32) -> Vec<(Vec3, glam::Vec2, Vec3)> {
     let middle = crate::behind::at(reaches);
     let half = crate::behind::half();
     let high = crate::behind::HIGH;
-    let proud = 0.02;
+    let proud = STARS_PROUD;
 
     vec![
         (
@@ -1167,37 +1177,57 @@ pub const WAY_OUT: &str = "WAY OUT";
 pub const SIGN_TEXELS: f32 = 64.0;
 
 /// How big the lettering is, how far the housing stands round it, how thick
-/// it is, how high it hangs, and how far it sits from the edge of the way
-/// out.
+/// it is, and how high it hangs.
 ///
 /// A metre across was plenty to read standing under it and a green smudge
 /// from forty metres, lost among stars that are brighter than it. Half again
 /// as wide and the word is a word from the far end, which is the only
 /// distance that matters: under it you already know where the door is.
-pub const SIGN_WIDE: f32 = 1.5;
+///
+/// A metre and a half is also exactly how wide the way out is, which is no
+/// longer a coincidence: the sign spans the opening it hangs over, so the
+/// lettering itself is the width of the gap to walk through.
+/// As wide as the way out, which is what makes it point at anything.
+///
+/// The housing and not the lettering, so it is `WAY_WIDE` less the border
+/// either side. At the lettering's own 1.5 the housing stood six centimetres
+/// proud of each jamb, which is a sign slightly too big for its opening.
+pub const SIGN_WIDE: f32 = crate::behind::WAY_WIDE - SIGN_BORDER * 2.0;
 pub const SIGN_TALL: f32 = 0.42;
 pub const SIGN_BORDER: f32 = 0.06;
 pub const SIGN_THICK: f32 = 0.06;
-pub const SIGN_UP: f32 = 2.4;
-pub const SIGN_BESIDE: f32 = 0.45;
+
+/// Where it hangs: the middle of the head over the way out.
+pub const SIGN_UP: f32 = (crate::behind::WAY_HIGH + crate::room::TALL) * 0.5;
 
 /// Where the sign hangs: its middle, and which way it faces.
 ///
-/// Beside the way out rather than over it, because the way out is a slot the
-/// full height of the wall and there is nothing above it to hang from. On the
-/// wider side of the two, which is the side with wall enough to carry it.
+/// **Over the way out, which took two goes.** It hung beside it, 0.45 clear
+/// of the opening's edge and a metre and a half of lettering wide, so its
+/// middle stood 1.95 metres to the side of the middle of the gap. The reason
+/// written down was that the way out was a slot the full height of the wall
+/// with nothing above it to hang from, and that was true of the geometry and
+/// beside the point.
+///
+/// The point is that this room is black. The wall at that end is unlit and
+/// invisible from inside, the opening in it is invisible, and the sign
+/// carries its own light. It is the only thing in a hundred and fifty nine
+/// metres you can see, so it is not a label on the way out, it is the
+/// instruction. Jake walked at it on 2026-10-15 and hit wall, and said he had
+/// tried to walk under it.
+///
+/// So the wall was given a head to hang it from, at `behind::WAY_HIGH`, and
+/// the sign is centred over the gap and as wide as it. Walking under it is
+/// now the way out, which is what it looked like it meant.
 pub fn exit_sign(reaches: f32) -> (Vec3, Vec3) {
     let (from, to) = crate::behind::way();
-    let side = crate::room::WALL + crate::room::CABINET.x;
-    let wider = (side - to) > (from + side);
-    let x = if wider {
-        to + SIGN_BESIDE + SIGN_WIDE * 0.5
-    } else {
-        from - SIGN_BESIDE - SIGN_WIDE * 0.5
-    };
 
     (
-        vec3(x, SIGN_UP, reaches + crate::room::THICK * 0.5),
+        vec3(
+            (from + to) * 0.5,
+            SIGN_UP,
+            reaches + crate::room::THICK * 0.5,
+        ),
         Vec3::Z,
     )
 }

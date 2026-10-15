@@ -51,7 +51,8 @@ room's light does not reach, and it takes the colour the bands throw up at it.
 on it reads as standing on it. The floor's darkness used to live in a constant;
 it lives in the weave now.
 
-**The sun's map covers the building and not just the hall.** Outside that map
+**The sun's map covers the building, less the space behind the wall.** Outside
+that map
 the engine calls a fragment lit and lets nothing cast, which is the forgiving
 answer for a world bigger than its map and the wrong one for a roofed room.
 Fitted to the hall, the map had three rooms outside it. The cellar and the
@@ -60,6 +61,16 @@ forty-four by fifty-two past the end of it. All three were taking full sun
 through solid ground, and in the room that is meant to be lit by nothing but
 its own six lamps it showed as a warm wedge on the back of the hall's end
 wall, which is the first thing you see on turning round in there.
+
+The space behind the wall is out of it again as of 2026-10-14, and for the
+opposite reason. One map over the whole building is one map over spec 0018's
+solar system as well, which took the building from forty five metres across to
+a hundred and eighty eight: nine tenths of the map spent on a room with no sky
+in it, a texel at thirteen centimetres, and daylight coming through the walls
+of the baths in bands. `Room::under_the_sun` is the bounds now. Nothing is
+lost by leaving that room out, because the sun is switched off in every room
+with no sky, per spec 0016, which is the stronger answer to the same question
+this paragraph was asking.
 
 The building is nine times the hall across, so a texel of the map goes from
 eight millimetres to thirty-six, and the old comment on these bounds argued

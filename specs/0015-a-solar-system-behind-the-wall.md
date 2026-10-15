@@ -115,6 +115,15 @@ than each fill being bounded to the part of the building it expects to reach,
 since a fill bounded to where you already expect to get cannot find the place
 you did not. See the note on `blitzkit::reach::MOST`.
 
+That holds for a fill you walk. It does not hold for every fill, and as of
+2026-10-15 the engine has a second answer: `reach::fillable` pulls a box in
+around where the fill starts until it can be built. It is for spec 0048's
+coplanar check, which fills only to ask which pairs you could stand in front
+of, and there "where you expect to get to" is the whole question rather than a
+thing to be careful of. That check had been handed this building's drawn world
+with the system in it, 72 kilometres of it, wanting 2.4e16 cells; it got a
+refusal, an empty reach, and quietly reported every pair instead of two.
+
 The price is small planets: Earth is a nine millimetre pea. If that turns out
 to disappoint, drawing the sun alone at a third of its true size and labelling
 it makes every planet two and a half times bigger in the same room. That is
@@ -463,6 +472,44 @@ residue at the poles: a body a thousandth off straight overhead came out rolled
 by a ten-thousandth, which is nothing to look at and is still a quad whose
 letters are not level.
 
+**The sign over the way out is the only instruction in this room.** It hung
+beside the slot, 0.45 clear of the edge, and the reason written down was that
+the slot was the full height of the wall and had nothing above it to hang
+from. That was true of the geometry and beside the point.
+
+The point is that this room is black. The wall at that end is unlit and
+invisible from inside, the opening in it is invisible, and nothing in the hall
+beyond it throws any light through. The sign carries its own, so it is the
+only thing in a hundred and fifty nine metres you can see at that end. A sign
+that is the only visible thing is not a label on the way out. It is the
+instruction, and it was pointing 1.95 metres to one side of the gap.
+
+Jake walked at it on 2026-10-15 with the solid outlines switched on, saw the
+box the sign was mounted on, and said he had tried to walk under it. Without
+the outlines there is nothing to say otherwise.
+
+So the wall has a head over the way out now, at `behind::WAY_HIGH`, which is
+the same 2.2 as the door at the far end. The sign hangs on the head, centred
+over the gap, and its housing is the gap's own width to a millimetre. Walking
+under it is the way out, which is what it looked like it meant.
+
+It is no longer the only thing you can see, either. Spec 0011 fills the
+opening under it with a portal, so the sign names a way out that is now lit.
+The two are a pair and the sign is the half with the word on it.
+
+**The starfield on the near wall runs across the way out.** Found while
+putting that portal in, and it is the answer to why the opening read as pure
+black from inside. `orrery::walls` lays a field over every surface of the
+room, and the near one is the full width of a wall that has a gap in it. The
+stars are drawn over the gap like everything else, so there was never a hole
+to see through: there was a hole with stars over it.
+
+Which also means anything mounted in that opening has to stand in front of the
+field rather than in front of the wall. `STARS_PROUD` is named for that, and
+`behind::PORTAL_PROUD` is read off it. A portal two millimetres off the wall
+is behind the stars and invisible from everywhere in the room, which is how it
+spent its first build.
+
 **The sun is ranked by reach and not by distance, or the engine drops it.**
 The building pushes every fitting it has and the engine carries 64 of them,
 per its spec 0020, so the arcade sorts them and the engine keeps the front of
@@ -541,7 +588,7 @@ The two arrangements and the swing:
 The room:
 
 - You can walk from the way in to the sun, and round it. — `behind::tests::you_can_walk_from_the_way_in_to_the_sun_and_round_it`
-- The way out is signed, beside the slot and facing in. — `tests::the_sign_stands_beside_the_way_out_and_faces_in`
+- The way out is signed, over the slot and facing in, and the housing is the slot's own width. — `tests::the_sign_hangs_over_the_way_out_and_faces_in`
 - The line at the top says which room you are in. — `tests::the_corner_says_the_room_you_are_in`
 
 The names:

@@ -41,6 +41,7 @@ because it sent five of them and five is odd.
 - O turns it on, and off again. — `tests::o_toggles_what_is_solid`
 - Holding O does not flicker it. — `tests::holding_o_shows_it_once`
 - Nothing else turns it on. — `tests::no_other_key_shows_what_is_solid`
+- It outlines `room.solid()` itself. — `tests::o_outlines_the_solid_list_itself`
 
 ### Verified by hand
 

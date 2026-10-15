@@ -80,6 +80,26 @@ pub const LAPS: f32 = 3.0;
 pub const WAY_WIDE: f32 = 1.5;
 pub const WAY_OFF: f32 = -1.4;
 
+/// How high the way through is, which is to say how low its head is.
+///
+/// **It had no head.** The two pieces of the wall ran floor to ceiling, so
+/// the gap between them did too, and from inside the room that is a slot 3.2
+/// metres tall. The sign could not hang over it, because there was nothing
+/// over it, so it hung beside it instead.
+///
+/// That is the fault Jake walked into on 2026-10-15. The room is black and
+/// unlit, the wall is invisible from inside, and the lit sign is the only
+/// thing in the whole of that end you can see. He walked at it, which is what
+/// anybody does with the one visible thing, and the sign was a metre and a
+/// half to the side of where the opening was. He hit wall.
+///
+/// A head is the fix, because it gives the sign the one place that cannot
+/// lie. 2.2, which is `DOOR_HIGH` at the other end of this room, so the two
+/// ways out of it are the same height. Nothing about walking through changes:
+/// a body is a good deal under 2.2, and the metre above the head was never
+/// anything you could use.
+pub const WAY_HIGH: f32 = 2.2;
+
 /// Where the way through is, as the two x it runs between.
 ///
 /// The one account of it. The wall is built round it, the test that says the
@@ -199,7 +219,7 @@ pub fn track(reaches: f32) -> Track {
 /// eighth of a unit either side of a body catches on a shoulder. A door that
 /// walks worse than the hole in the wall would be a joke at its own expense.
 pub const DOOR_WIDE: f32 = WAY_WIDE;
-pub const DOOR_HIGH: f32 = 2.2;
+pub const DOOR_HIGH: f32 = WAY_HIGH;
 
 /// How far the frame stands proud of the wall into the room, how thick its
 /// members are, and how far it is sunk into the wall behind.
@@ -234,25 +254,169 @@ pub fn door(reaches: f32) -> (f32, f32) {
     (middle.x - DOOR_WIDE * 0.5, middle.x + DOOR_WIDE * 0.5)
 }
 
-/// The hall's near end wall, in two pieces with the way in between them.
+/// The hall's near end wall, in three pieces round the way in.
 ///
-/// Only the collider is in two pieces. What is drawn is one wall across the
-/// whole of it, per spec 0011, which is the whole trick and is the one place
-/// in this building where the two are meant to disagree.
+/// Only the collider is in pieces. What is drawn is one wall across the whole
+/// of it, per spec 0011, which is the whole trick and is the one place in
+/// this building where the two are meant to disagree.
+///
+/// Three and not two, because the third is the head over the way in and the
+/// head is what the sign hangs on. See [`WAY_HIGH`]. It is a collider as well
+/// as a thing drawn, rather than a box added to the picture alone: two lists
+/// of one thing drift, and this building has paid for that often enough.
 pub fn near_wall(reaches: f32) -> Vec<Aabb> {
     let side = WALL + CABINET.x;
     let (from, to) = way();
+    let tall = crate::room::TALL;
 
     vec![
         Aabb::from_center_size(
-            vec3((-side + from) * 0.5, crate::room::TALL * 0.5, reaches),
-            vec3(from + side, crate::room::TALL, THICK),
+            vec3((-side + from) * 0.5, tall * 0.5, reaches),
+            vec3(from + side, tall, THICK),
         ),
         Aabb::from_center_size(
-            vec3((to + side) * 0.5, crate::room::TALL * 0.5, reaches),
-            vec3(side - to, crate::room::TALL, THICK),
+            vec3((to + side) * 0.5, tall * 0.5, reaches),
+            vec3(side - to, tall, THICK),
+        ),
+        Aabb::from_center_size(
+            vec3((from + to) * 0.5, (WAY_HIGH + tall) * 0.5, reaches),
+            vec3(to - from, tall - WAY_HIGH, THICK),
         ),
     ]
+}
+
+/// How far clear of the wall's own face the portal sits.
+///
+/// **Clear of the starfield and not of the wall**, which took a measurement
+/// to find. Two millimetres is plenty to keep a quad out of a wall's plane,
+/// and at two millimetres the portal could not be seen from anywhere in the
+/// room at any distance. What is in front of it is spec 0015's starfield:
+/// `orrery::walls` lays one across the whole of this wall, the way out
+/// included, and that quad stands `orrery::STARS_PROUD` off the face.
+///
+/// It is also the answer to why the way out read as black from inside. It
+/// was never a hole you were looking through. It was stars laid over a hole.
+///
+/// Twice the starfield's own, so the two cannot be level, and read from
+/// there rather than written down again.
+pub const PORTAL_PROUD: f32 = crate::orrery::STARS_PROUD * 2.0;
+
+/// How many texels across the portal is drawn.
+pub const PORTAL_TEXELS: u32 = 256;
+
+/// How many turns the swirl makes and how many bands it has.
+///
+/// A spiral and not rings, because rings read as a lamp behind a grille and a
+/// spiral reads as something going somewhere.
+pub const PORTAL_TURNS: f32 = 2.0;
+pub const PORTAL_BANDS: f32 = 5.0;
+
+/// How wide the bright rim is and where it sits, as a share of the way out.
+pub const PORTAL_RIM: f32 = 0.86;
+pub const PORTAL_RIM_SOFT: f32 = 0.09;
+
+/// How big the dark eye in the middle is.
+///
+/// A hole in the brightest thing in the room, which is the whole of what
+/// makes it read as somewhere to go rather than as a light.
+pub const PORTAL_EYE: f32 = 0.16;
+
+/// The way out, lit from the dark side: where the quad is and how big.
+///
+/// **The secret only has to hold one way.** Spec 0011 spent its whole design
+/// hiding this opening, and all of that is about the hall: you wake with your
+/// back to a blank wall and you find the gap by walking into it. None of it
+/// is a reason to hide the way out from somebody already inside, and hiding
+/// it from them is how Jake came to walk at a lit sign and hit wall.
+///
+/// So the gap is filled, on the dark side only, with something that glows. It
+/// is not a view back into the hall and is not meant to be: what the hall
+/// looks like from in here is a question this room has no answer to, and a
+/// lit rectangle of carpet at the end of a hundred and fifty nine metres of
+/// black would read as a mistake. A portal reads as the way out.
+///
+/// It fills the opening up to the head, so walking into the light is walking
+/// through. From the hall it is behind the drawn wall and facing away, so it
+/// is twice invisible.
+pub fn portal(reaches: f32) -> (Vec3, Vec2) {
+    let (from, to) = way();
+
+    (
+        vec3(
+            (from + to) * 0.5,
+            WAY_HIGH * 0.5,
+            reaches + THICK * 0.5 + PORTAL_PROUD,
+        ),
+        vec2(to - from, WAY_HIGH),
+    )
+}
+
+/// The picture on it: a spiral wound into a bright rim round a dark eye.
+///
+/// Worked out rather than drawn, like the stars, the carpet and the wood
+/// grain. Nothing here is a file.
+///
+/// The rings are circles in the quad's own space, so on an opening half as
+/// wide as it is tall they come out as ovals standing up, which is the shape
+/// of the doorway they fill.
+pub fn swirled() -> blitzkit::texture::TextureData {
+    let (wide, tall, pixels) = swirled_pixels();
+
+    blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
+}
+
+/// The same, before it is handed to the engine, so it can be measured.
+///
+/// Split the way `orrery::sprinkled` is split off `orrery::starred`, and for
+/// the same reason: a texture inside a `TextureData` is a texture nothing can
+/// ask a question about, and the cheapest thing that goes wrong with a worked
+/// out picture is that the arithmetic comes out flat.
+pub fn swirled_pixels() -> (u32, u32, Vec<u8>) {
+    let wide = PORTAL_TEXELS;
+    let tall = ((PORTAL_TEXELS as f32) * WAY_HIGH / WAY_WIDE) as u32;
+    let mut pixels = Vec::with_capacity((wide * tall * 4) as usize);
+
+    for y in 0..tall {
+        for x in 0..wide {
+            let dx = (x as f32 / (wide - 1) as f32 - 0.5) * 2.0;
+            let dy = (y as f32 / (tall - 1) as f32 - 0.5) * 2.0;
+            let r = dx.hypot(dy);
+            let turn = dy.atan2(dx) / std::f32::consts::TAU;
+
+            // the spiral, which is one band of brightness wound round the
+            // middle rather than a stack of rings
+            let wound = (r * PORTAL_BANDS - turn * PORTAL_TURNS) * std::f32::consts::TAU;
+            let band = 0.5 + 0.5 * wound.sin();
+
+            // a rim where the light gathers, falling away either side
+            let off = (r - PORTAL_RIM) / PORTAL_RIM_SOFT;
+            let rim = (-off * off).exp();
+
+            // and a dark eye in the middle, so it is a way through and not a
+            // lamp
+            let eye = (r / PORTAL_EYE).min(1.0);
+            let eye = eye * eye * (3.0 - 2.0 * eye);
+
+            // past the rim it falls to nothing, so the corners of the quad
+            // are not a lit rectangle
+            let out = (1.0 - (r - PORTAL_RIM).max(0.0) / (1.0 - PORTAL_RIM + 1e-3)).clamp(0.0, 1.0);
+            let lit = ((0.22 + 0.5 * band) * out + rim * 0.75) * eye;
+
+            // bluer at the edge and white at the heart, which is what gives
+            // it a temperature rather than a colour
+            let warm = lit * (0.45 + 0.55 * (1.0 - r).clamp(0.0, 1.0));
+            let to_byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
+
+            pixels.extend_from_slice(&[
+                to_byte(warm),
+                to_byte(lit * 0.85 + warm * 0.15),
+                to_byte(lit),
+                255,
+            ]);
+        }
+    }
+
+    (wide, tall, pixels)
 }
 
 /// Whether a point is in the space behind the wall.
@@ -1761,5 +1925,107 @@ mod tests {
         }
 
         assert!(beaten >= 5, "only {} lights are brighter than it", beaten);
+    }
+
+    /// Spec 0011: the way out is lit from the dark side.
+    ///
+    /// **The secret is the hall's and only the hall's.** Everything spec 0011
+    /// does to hide this opening is about somebody in the hall with their
+    /// back to a blank wall. None of it is a reason to hide the way out from
+    /// somebody already inside, and hiding it is what had Jake walk at a lit
+    /// sign on 2026-10-15 and hit wall.
+    ///
+    /// Three claims, and the third is the one that was wrong first. It fills
+    /// the opening, it stops at the head so walking into the light is walking
+    /// through, and it stands in front of spec 0015's starfield.
+    ///
+    /// That last one cost a measurement to find. `orrery::walls` lays a field
+    /// of stars across the whole of this wall, the way out included, standing
+    /// `orrery::STARS_PROUD` off the face. A portal two millimetres off the
+    /// wall is behind it and cannot be seen from anywhere in the room at any
+    /// distance, which is exactly how it looked: nothing drawn at all. It is
+    /// also why the opening read as black from inside before any of this. It
+    /// was never a hole you were looking through. It was stars over a hole.
+    #[test]
+    fn the_way_out_is_lit_from_the_dark_side() {
+        let reaches = room().reaches;
+        let (at, size) = portal(reaches);
+        let (from, to) = way();
+
+        // the opening's own width, so walking at the light walks through
+        assert!(
+            (at.x - size.x * 0.5 - from).abs() < 1e-3 && (at.x + size.x * 0.5 - to).abs() < 1e-3,
+            "the portal spans {:.3} to {:.3} and the way out is {:.3} to {:.3}",
+            at.x - size.x * 0.5,
+            at.x + size.x * 0.5,
+            from,
+            to
+        );
+
+        // floor to head, and no further: over the head is where the sign is
+        assert!(
+            (at.y - size.y * 0.5).abs() < 1e-3 && (at.y + size.y * 0.5 - WAY_HIGH).abs() < 1e-3,
+            "the portal runs {:.3} to {:.3} and the way out is 0 to {:.3}",
+            at.y - size.y * 0.5,
+            at.y + size.y * 0.5,
+            WAY_HIGH
+        );
+
+        // and in front of the stars, which is where it was not
+        let stars = crate::orrery::walls(reaches)
+            .into_iter()
+            .filter(|(_, _, looks)| looks.z > 0.5)
+            .map(|(at_, _, _)| at_.z)
+            .fold(f32::MIN, f32::max);
+
+        assert!(
+            stars > reaches,
+            "no starfield faces into the room off the near wall, so this checked nothing"
+        );
+        assert!(
+            at.z > stars,
+            "the portal is at z {:.3} and the stars over the way out are at {:.3}",
+            at.z,
+            stars
+        );
+    }
+
+    /// Spec 0011: and what is on it is a picture rather than a blank panel.
+    ///
+    /// The cheapest thing that can go wrong with a worked out texture is that
+    /// the arithmetic comes out flat, and a flat bright rectangle in a black
+    /// room passes every other check here. So: it has a dark middle, a bright
+    /// ring round that, and corners that fall away to nothing.
+    #[test]
+    fn the_portal_has_a_picture_on_it() {
+        let wide = PORTAL_TEXELS as usize;
+        let tall = ((PORTAL_TEXELS as f32) * WAY_HIGH / WAY_WIDE) as usize;
+        let lit = |u: f32, v: f32| {
+            // the blue channel, which is the one the picture is brightest in
+            let x = ((u * (wide - 1) as f32) as usize).min(wide - 1);
+            let y = ((v * (tall - 1) as f32) as usize).min(tall - 1);
+
+            swirled_pixels().2[(y * wide + x) * 4 + 2] as f32 / 255.0
+        };
+
+        let eye = lit(0.5, 0.5);
+        let rim = lit(0.5, 0.5 - PORTAL_RIM * 0.5);
+        let corner = lit(0.02, 0.02);
+
+        assert!(
+            eye < 0.1,
+            "the middle of the portal is at {:.2} and is meant to be a dark eye",
+            eye
+        );
+        assert!(
+            rim > 0.5,
+            "the rim of the portal is at {:.2} and is the brightest part of it",
+            rim
+        );
+        assert!(
+            corner < 0.05,
+            "the corner of the portal is at {:.2}, so it is a lit rectangle",
+            corner
+        );
     }
 }
