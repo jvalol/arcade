@@ -1467,6 +1467,16 @@ mod tests {
                 vec3(0.0, 0.0, reaches - crate::room::INSIDE),
                 Underfoot::Carpet,
             ),
+            // and through the wall, which spec 0011 wants to sound exactly
+            // like the hall: its floor is at the hall's height and the one
+            // thing that should not change when you step through is you.
+            // Every other floor in this building was named here and that one
+            // was not.
+            (
+                "the space behind the wall",
+                vec3(0.0, 0.0, reaches + 1.0),
+                Underfoot::Carpet,
+            ),
             ("the nook", vec3(nook.x, 0.0, nook.z), Underfoot::Boards),
             (
                 "the cellar",

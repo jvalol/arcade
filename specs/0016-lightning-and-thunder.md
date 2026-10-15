@@ -70,7 +70,9 @@ degrees. What is glowing is the deck, and a deck is overhead, so the light
 comes down out of it and leans toward the strike by about half.
 
 **It rides on the sun and not on the ambient**, which is the whole reason it
-can be done at all. The ambient is added everywhere and a flash riding on it
+can be done at all. Both halves of that are held now, and both were worth
+holding: the sun half was false until 2026-10-14 and cost an afternoon, and
+the ambient half was true and guarded by nothing. The ambient is added everywhere and a flash riding on it
 would light the cellar. The sun is switched off in any room with no sky
 in it, per `noise::Room::sees_the_sky`, so the one light in this building that
 can flash without getting indoors is the one that cannot get indoors.
@@ -178,7 +180,9 @@ that should already have gone.
 - What you can see and what you can hear are not the same strike. — `garden::tests::the_strike_you_see_is_not_the_strike_you_hear`
 - Every band has thunder, and every one of it reads. — `noise::tests::every_band_has_thunder_that_reads`
 - Every distance in the range lands in a band, and the bands run in order. — `noise::tests::every_strike_lands_in_a_band_and_the_bands_run_in_order`
-- The storm is heard where the sky is, and the sky is a place rather than a floor. — `noise::tests::the_storm_is_heard_where_the_sky_is_and_not_where_the_gravel_is`
+- The storm is heard where the sky is, and the sky is a place rather than a floor.
+- The flash never touches the ambient. — `garden::tests::the_flash_never_touches_the_ambient`
+- And the sun it rides on is switched off in every room with no sky. — `noise::tests::the_sun_is_switched_off_where_there_is_no_sky` — `noise::tests::the_storm_is_heard_where_the_sky_is_and_not_where_the_gravel_is`
 
 ### Verified by hand
 

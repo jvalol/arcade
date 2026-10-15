@@ -5018,4 +5018,42 @@ mod tests {
             crate::aim::FILL
         );
     }
+
+    /// Spec 0016: the flash rides on the sun and never on the ambient.
+    ///
+    /// "The ambient is added everywhere and a flash riding on it would light
+    /// the cellar." That is the whole reason a storm outside can flash at all
+    /// without getting indoors, and nothing held it. The other half of the
+    /// same sentence, that the sun cannot get indoors, turned out to be false
+    /// on 2026-10-14 and cost an afternoon, so this half is worth holding
+    /// before it goes the same way.
+    ///
+    /// Read off `main`'s own source, because what is guarded is an assignment
+    /// rather than a value: the block that leans the light toward a strike
+    /// may write the direction, the colour and the intensity, and must not
+    /// write the ambient. There is no function to call for this, and a guard
+    /// that needed one would be a refactor pretending to be a test.
+    #[test]
+    fn the_flash_never_touches_the_ambient() {
+        const SOURCE: &str = include_str!("main.rs");
+        const LEANS: &str = "if let Some((strike, fade)) = self.flashing()";
+
+        let from = SOURCE
+            .find(LEANS)
+            .expect("nothing in main leans the light toward a strike");
+        let block = &SOURCE[from..];
+        let to = block
+            .find(concat!("\n", "        }"))
+            .expect("that block does not end");
+        let block = &block[..to];
+
+        assert!(
+            block.contains("scene.light.direction") && block.contains("scene.light.intensity"),
+            "this is no longer the block that leans the light toward a strike"
+        );
+        assert!(
+            !block.contains("ambient"),
+            "the flash writes the ambient, which is added everywhere"
+        );
+    }
 }

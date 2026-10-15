@@ -36,10 +36,20 @@ Off centre, so walking straight back from where you wake meets solid wall. A
 gap in the middle would be found by everybody on their first turn round, and a
 gap at the very end would be found by nobody.
 
-**It is low and it is wide.** The ceiling is lower than the hall's and the
-floor runs further than the light reaches, in every direction. Low and vast is
-uneasy in a way that tall and vast is not: tall and vast is a cathedral, which
-is a thing somebody built on purpose and is proud of.
+**It is wide, and the ceiling is the hall's own height.** The floor runs
+further than the light reaches, in every direction. Low and vast is uneasy in
+a way that tall and vast is not: tall and vast is a cathedral, which is a
+thing somebody built on purpose and is proud of.
+
+~~The ceiling is lower than the hall's.~~ It is not, and never has been:
+`behind::HIGH` is 3.2 and `room::TALL` is 3.2. It was four and a half, which
+would have made it taller, and it came down to 3.2 because the garden's sky
+springs at 3.70 and anything above that pokes through the clouds. So the
+number is the sky's and the match with the hall is a coincidence.
+
+Which leaves the low of "low and vast" doing no work, and the floor doing all
+of it: a hundred and fifty nine metres of it. Struck 2026-10-14, by reading
+this spec against the constants rather than by anything going wrong.
 
 It spreads east, away from the garden. The garden is off the hall's left and
 reaches well past the near end, so west is taken; east of the hall is
@@ -55,8 +65,14 @@ lines up, because nothing in a furnished room ever does. This is not a
 furnished room and the regularity is what makes it feel like nobody is meant to
 be here.
 
-**Barely lit, and most of it not at all.** A few lamps far apart, dim and cool
-against every other light in the building being warm. There is no fog in this
+**Barely lit, and most of it not at all.** A few lamps far apart, and the
+faintest and coolest light in the building: 0.42, where nothing else is under
+0.62 but the cellar's glow, which ties it, and blue over red by 0.20 where the
+baths' lamps manage 0.14 and everything else is warm.
+
+~~Cool against every other light in the building being warm.~~ The baths are
+cool too, which the glazed tile wants. Coolest and faintest is what is true
+and it is what the room is for, so it is what is written and what is held. There is no fog in this
 engine and none is wanted: a point light falls off, so the far end goes black
 on its own and the camera's hundred unit far plane is never reached by eye.
 
@@ -129,6 +145,9 @@ stand on.
 - You can get back out. — `behind::tests::you_can_walk_back_out`
 - It is its own room, as far out as Saturn. — `noise::tests::the_space_behind_the_wall_is_its_own_room`
 - And nothing sounds in it. — `noise::tests::nothing_sounds_in_the_space_behind_the_wall`
+- Its footsteps are the hall's. — `noise::tests::each_room_sounds_like_its_own_floor`
+- The columns run floor to ceiling. — `behind::tests::the_columns_run_floor_to_ceiling`
+- Its lamps are the faintest and coolest in the building. — `behind::tests::its_lamps_are_the_faintest_and_coolest_in_the_building`
 
 ### Verified by hand
 

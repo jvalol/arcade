@@ -1681,4 +1681,85 @@ mod tests {
             carpet.min.z
         );
     }
+
+    /// Spec 0011: the columns run floor to ceiling.
+    ///
+    /// "Plain and square, floor to ceiling. They are what gives the size
+    /// away." A column that stopped short would read as furniture, and the
+    /// whole of what they are for is being the same thing at several
+    /// distances.
+    ///
+    /// Written 2026-10-14 from an audit of this spec rather than from
+    /// anything going wrong. Two of its claims were false when read against
+    /// the constants, and this one was true and held by nothing.
+    #[test]
+    fn the_columns_run_floor_to_ceiling() {
+        let drawn: Vec<_> = built(room().reaches)
+            .into_iter()
+            .filter(|(_, made)| matches!(made, Made::Column))
+            .collect();
+
+        assert!(!drawn.is_empty(), "there are no columns at all");
+
+        for (box_, _) in drawn {
+            assert!(
+                box_.min.y.abs() < 1e-3,
+                "a column starts {} off the floor",
+                box_.min.y
+            );
+            assert!(
+                (box_.max.y - HIGH).abs() < 1e-3,
+                "a column stops short of the ceiling by {}",
+                HIGH - box_.max.y
+            );
+        }
+    }
+
+    /// Spec 0011: the faintest and coolest light in the building.
+    ///
+    /// The spec said cool against every other light being warm, and the baths
+    /// are cool as well, which glazed tile wants. Coolest and faintest is
+    /// what is true, and it is what the room is for, so it is what is held.
+    #[test]
+    fn its_lamps_are_the_faintest_and_coolest_in_the_building() {
+        let cool = |c: glam::Vec3| c.z - c.x;
+
+        for (other, name) in [
+            (crate::aim::SPA_LAMP, "the baths"),
+            (crate::aim::SAUNA_LAMP, "the sauna"),
+            (crate::cellar::LAMP_COLOUR, "the cellar"),
+            (crate::cellar::FIRE_COLOUR, "the fire"),
+            (crate::sign::LAMP_COLOUR, "a sign"),
+        ] {
+            assert!(
+                cool(LAMP_COLOUR) > cool(other),
+                "{} is cooler than the space behind the wall",
+                name
+            );
+        }
+
+        // and nothing in the building is fainter. The cellar's glow ties it
+        // at 0.42 and is a glow rather than a lamp, so this is "no brighter
+        // than anything" rather than "dimmer than everything".
+        let mut beaten = 0;
+
+        for (lit, name) in [
+            (crate::aim::LAMP_LIT, "the engine's default"),
+            (crate::cellar::LAMP_LIT, "the cellar"),
+            (crate::cellar::FIRE_LIT, "the fire"),
+            (crate::cellar::GLOW_LIT, "the cellar's glow"),
+            (crate::sign::LAMP_LIT, "a sign"),
+            (crate::spa::LAMP_LIT, "the baths"),
+        ] {
+            assert!(
+                LAMP_LIT <= lit,
+                "{} is fainter than the space behind the wall",
+                name
+            );
+
+            beaten += usize::from(LAMP_LIT < lit);
+        }
+
+        assert!(beaten >= 5, "only {} lights are brighter than it", beaten);
+    }
 }
