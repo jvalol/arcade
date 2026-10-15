@@ -2735,8 +2735,8 @@ impl Game for Arcade {
                     let (which, pitch, quieter) = noise::adrift(pieced, voice.len());
 
                     match voice.get(which) {
-                        Some(note) => {
-                            let bent = note.pitched(pitch).gain(quieter);
+                        Some(piece) => {
+                            let bent = piece.pitched(pitch).gain(quieter);
                             let runs = bent.seconds();
                             sound.play_at(&bent, at.to_array());
 

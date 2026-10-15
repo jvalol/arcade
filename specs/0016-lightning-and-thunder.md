@@ -136,7 +136,7 @@ dials that existed would have found that.
 
 **It is mixed and not queued, and it comes from nowhere.** `play` hands a sound
 straight to the mixer and it starts now; `play_at` is a queue, and a three
-second rumble waiting its turn behind the room's note would arrive after the
+second rumble waiting its turn behind the room's voice would arrive after the
 next flash. It has nowhere to be played from in any case: the strike is a
 chosen distance and not a place, so a sound coming from a point in this garden
 would be the fiction told twice.
