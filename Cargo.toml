@@ -29,3 +29,9 @@ blitzkit-shapes = { path = "../blitzkit/shapes" }
 # was caught that way the same afternoon.
 [profile.dev.package."*"]
 opt-level = 3
+
+# What build.rs needs to shrink the games' screenshots for a browser build.
+# See build.rs: they go inside the binary there, and a cabinet screen is a few
+# hundred pixels across however big the picture on it was.
+[build-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }

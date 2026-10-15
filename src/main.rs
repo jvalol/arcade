@@ -1931,7 +1931,18 @@ fn arrow_at(key: KeyboardKey) -> Option<usize> {
 /// The names are the folders under `games`, read at build time rather than
 /// kept in a list here: a list is a thing that goes out of date, and the
 /// project already refuses to let a game exist without a folder.
+/// What `build.rs` found in `games` while this was being built. Spec 0053.
+///
+/// Only a browser build reads it, and the native one carries it unused, which
+/// is a handful of strings and no pictures: `build.rs` writes the pictures
+/// down for a browser only.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod baked {
+    include!(concat!(env!("OUT_DIR"), "/baked.rs"));
+}
+
 /// Every repo under `games`, named.
+#[cfg(not(target_arch = "wasm32"))]
 fn repos() -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1950,6 +1961,16 @@ fn repos() -> Vec<String> {
     names.sort();
 
     names
+}
+
+/// The same, in a browser, where there is no folder to read.
+///
+/// Written down by `build.rs` out of that same folder, so this cannot drift
+/// from the one above: it is the one above, frozen at the moment the thing
+/// was built.
+#[cfg(target_arch = "wasm32")]
+fn repos() -> Vec<String> {
+    baked::REPOS.iter().map(|name| name.to_string()).collect()
 }
 
 /// Where a game's built binary sits, which is beside this one.
@@ -1984,6 +2005,7 @@ fn games() -> Vec<Cabinet> {
 }
 
 /// A game's own screenshot, which is the picture on its cabinet.
+#[cfg(not(target_arch = "wasm32"))]
 fn art_of(name: &str) -> Option<TextureData> {
     let shot = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()?
@@ -1992,6 +2014,18 @@ fn art_of(name: &str) -> Option<TextureData> {
         .join("media/screenshot.png");
 
     TextureData::from_bytes(&std::fs::read(shot).ok()?).ok()
+}
+
+/// The same, in a browser, where there is no disk to read it off.
+///
+/// Carried inside the binary by `build.rs`, which costs four and a half
+/// megabytes and is what a hall of cabinets with nothing on their screens
+/// would save. A native build does not pay it.
+#[cfg(target_arch = "wasm32")]
+fn art_of(name: &str) -> Option<TextureData> {
+    let found = baked::ART.iter().find(|(whose, _)| *whose == name)?;
+
+    TextureData::from_bytes(found.1).ok()
 }
 
 impl Game for Arcade {
