@@ -49,6 +49,11 @@ looks like from in here is a question this room has no good answer to.
 It is twice invisible from the hall: behind the wall that is drawn in one
 piece, and facing away from you besides.
 
+The picture is grey and `aim::BEHIND_PORTAL` decides the colour. Spec 0017's
+door at the far end is lit the same way, and the two openings want two
+colours: a swirl with blue baked into its texels comes out blue whatever it
+is multiplied by, and that door came out as a second exit.
+
 **The opening was never a hole you could see through.** Worth writing down,
 because it was a surprise and it explains the black. Spec 0015 lays a field of
 stars across every surface of this room, and the near one runs the whole width

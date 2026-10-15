@@ -1171,9 +1171,23 @@ fn sprinkled(seed: u32, size: glam::Vec2) -> (u32, u32, Vec<u8>) {
 /// light rather than standing under a lamp, because the building is already
 /// pushing more lamps at the engine than it will take.
 ///
-/// "WAY OUT" and not "EXIT", because that is what the rest of this building
-/// calls it: the way in, the way out, in the code and in spec 0011.
-pub const WAY_OUT: &str = "WAY OUT";
+/// **"EXIT", and it used to say "WAY OUT".** The reason written down for the
+/// longer one was that the way in and the way out are what the rest of this
+/// building calls them, in the code and in spec 0011. That is the code's
+/// vocabulary and it is not a reason to put seven characters on a sign.
+///
+/// What settled it is that there are two lit openings in this room now. One
+/// goes back to the hall and one goes on to the track, and "the way out" and
+/// "the way on" are two phrases nobody tells apart at a hundred metres in the
+/// dark. One of them is an exit. The other is not labelled at all, because
+/// what is through it is the thing you came to see.
+///
+/// Shorter also reads further, which is the only distance that matters: the
+/// lettering is the width of the opening either way, so four characters are
+/// bigger letters than seven.
+///
+/// Jake's word. The code goes on saying way out, which is what it is.
+pub const WAY_OUT: &str = "EXIT";
 pub const SIGN_TEXELS: f32 = 64.0;
 
 /// How big the lettering is, how far the housing stands round it, how thick

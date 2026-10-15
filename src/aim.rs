@@ -1044,6 +1044,19 @@ pub const BEHIND_FRAME: Vec4 = vec4(1.728, 1.872, 2.208, 1.0);
 /// lamp to give it: the room is already pushing more at the engine than it
 /// will take, which is why the frame at the far end does the same.
 pub const BEHIND_PORTAL: Vec4 = vec4(1.1, 2.3, 4.6, 1.0);
+
+/// And the door at the far end, lit the same way. Spec 0017.
+///
+/// The frame's own colour and not the way out's blue, which is spec 0017's
+/// reasoning kept rather than a new one: everything in that room is the same
+/// cold blue-white hung on the same regular grid, and the door was put in by
+/// whoever hung the lamps. A warm door would say somewhere else is through
+/// there, and somewhere else through there is darker and colder than this.
+///
+/// It also keeps the two openings apart. One is an exit and is blue. The
+/// other is the way on and is the colour of everything else in the room,
+/// which is what the way on should look like.
+pub const BEHIND_DOORWAY: Vec4 = BEHIND_FRAME;
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
 /// What burns in a stone lantern: a candle behind paper, which is warm against

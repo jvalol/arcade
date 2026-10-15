@@ -497,6 +497,22 @@ It is no longer the only thing you can see, either. Spec 0011 fills the
 opening under it with a portal, so the sign names a way out that is now lit.
 The two are a pair and the sign is the half with the word on it.
 
+**It says EXIT, and it said WAY OUT.** The reason written down for the longer
+one was that the way in and the way out are what the rest of this building
+calls them, in the code and in spec 0011. That is the code's vocabulary and
+it is not a reason to put seven characters on a sign.
+
+What settled it is that there are two lit openings in this room now. One goes
+back to the hall and one goes on to spec 0018, and the way out and the way on
+are two phrases nobody tells apart at a hundred metres in the dark. One of
+them is an exit. The other is not labelled at all, because what is through it
+is the thing you came to see.
+
+Shorter reads further, which is the only distance that matters here: the
+lettering is the width of the opening either way, so four characters are
+bigger letters than seven. The code goes on saying way out, which is what it
+is.
+
 **The starfield on the near wall runs across the way out.** Found while
 putting that portal in, and it is the answer to why the opening read as pure
 black from inside. `orrery::walls` lays a field over every surface of the

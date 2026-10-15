@@ -73,6 +73,37 @@ cold blue-white, hung on the same regular grid, and the door was put in by
 whoever hung the lamps. A warm door would say somewhere else is through there,
 and somewhere else through there is darker and colder than this, not warmer.
 
+### And a portal in the opening
+
+**Two openings out of one room should look like two openings out of one
+room.** The frame glowing and nothing in the opening was right while this was
+the only lit thing at that end of the room. Spec 0011's way out is a portal
+now, so this is one too: `behind::door_portal`, with the same swirl on it.
+
+You can see through this one and you cannot see through that one, which is
+the one way they differ and is not a flourish. Behind the way out is a wall
+drawn in one piece over the hall, so there has never been anything to see
+through it. Behind this is spec 0018, and the whole approach above is built
+so that the way on appears only once you have walked the planets in to reach
+it. An opening you cannot see through takes the arrival away. So the swirl is
+alpha here: it hangs in the doorway and the dark between its arms is the
+doorway.
+
+The lamps' colour, which is the reasoning above kept rather than a new one.
+The way out is blue and this is the cold white everything else in that room
+is, so the two tell apart at a hundred metres, and the one with a word on it
+is the one that leaves.
+
+The picture is grey and the colour it is drawn in decides the colour it is.
+It carried its own temperature at first, bluer at the edge than at the heart,
+which read well enough on the way out and made this impossible: a texture
+with blue baked into it comes out blue whatever it is multiplied by, so this
+door came out as a second exit.
+
+It stands `behind::PORTAL_PROUD` off the wall rather than on it, for the same
+reason the way out's does. Spec 0015 lays a starfield across this wall as
+well, the opening included.
+
 ### What is beyond it
 
 Spec 0018, which is where this spec stops.
@@ -103,6 +134,7 @@ four centimetres short of the seam. Spec 0018 owns that lap now and
 - The door is out of sight from the way in and in sight from the sun. — `behind::tests::the_sun_is_what_shows_you_the_door`
 - Nothing stands in the way between the sun and the door. — `behind::tests::the_way_to_the_door_is_clear_of_columns`
 - The frame glows rather than lighting. — `behind::tests::the_frame_gives_off_light_and_casts_none`
+- The opening is lit the way the way out is, fills the door up to its head, stands in front of the stars, and can be seen through where the way out cannot. — `behind::tests::the_door_at_the_far_end_is_lit_the_same_way`
 - The sill is nothing to trip on, measured as the same walk over open floor
   and through the door. — `behind::tests::the_sill_costs_nothing_to_cross`
 

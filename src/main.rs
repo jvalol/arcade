@@ -395,6 +395,8 @@ struct Arcade {
     /// The way out, lit from the dark side. See `behind::portal`.
     portal: Option<TextureId>,
     portal_mesh: Option<MeshId>,
+    /// The door at the far end, lit the same way. See `behind::door_portal`.
+    doorway: Option<TextureId>,
     /// The solar system behind the wall, per spec 0015: a ball, a ring, one
     /// picture per body in `orrery::every_body` order, and how far the swing
     /// between lined up and in orbit has got.
@@ -691,6 +693,7 @@ impl Arcade {
             way_out_mesh: None,
             portal: None,
             portal_mesh: None,
+            doorway: None,
             planet_mesh: None,
             ring_mesh: None,
             worlds: Vec::new(),
@@ -2315,6 +2318,7 @@ impl Game for Arcade {
         );
         self.way_out_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.portal = Some(renderer.add_texture(&behind::swirled()));
+        self.doorway = Some(renderer.add_texture(&behind::swirled_through()));
         self.portal_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.stars = orrery::walls(self.room.reaches)
             .into_iter()
@@ -3261,6 +3265,23 @@ impl Game for Arcade {
                             .with_rotation(room::laid_on(Vec3::Z))
                             .with_scale(vec3(size.x, 1.0, size.y)),
                         aim::BEHIND_PORTAL,
+                        aim::VOID,
+                    );
+                }
+
+                // and the door at the far end, lit the same way. Two
+                // openings out of one room should look like two openings out
+                // of one room. Spec 0017.
+                if let (Some(lit), Some(mesh)) = (self.doorway, self.portal_mesh) {
+                    let (at, size) = behind::door_portal(self.room.reaches);
+
+                    scene.push_textured(
+                        mesh,
+                        lit,
+                        &Transform::at(at)
+                            .with_rotation(room::laid_on(Vec3::NEG_Z))
+                            .with_scale(vec3(size.x, 1.0, size.y)),
+                        aim::BEHIND_DOORWAY,
                         aim::VOID,
                     );
                 }

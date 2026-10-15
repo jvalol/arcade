@@ -360,7 +360,25 @@ pub fn portal(reaches: f32) -> (Vec3, Vec2) {
 /// wide as it is tall they come out as ovals standing up, which is the shape
 /// of the doorway they fill.
 pub fn swirled() -> blitzkit::texture::TextureData {
-    let (wide, tall, pixels) = swirled_pixels();
+    let (wide, tall, pixels) = swirled_pixels(false);
+
+    blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
+}
+
+/// The same picture with the dark of it left out, for the door at the far
+/// end.
+///
+/// **The way out may hide what is behind it and this one may not.** Behind
+/// the way out is a wall drawn in one piece over the hall, per spec 0011, so
+/// there has never been anything to see through it. Behind this door is spec
+/// 0018, and spec 0017 built the whole approach so that the way on appears
+/// only once you have walked the planets in to reach it. Filling that opening
+/// with something you cannot see through takes the arrival away.
+///
+/// So the swirl is alpha rather than colour here: it hangs in the opening and
+/// the dark between its arms is the doorway.
+pub fn swirled_through() -> blitzkit::texture::TextureData {
+    let (wide, tall, pixels) = swirled_pixels(true);
 
     blitzkit::texture::TextureData::from_pixels(wide, tall, pixels)
 }
@@ -371,7 +389,7 @@ pub fn swirled() -> blitzkit::texture::TextureData {
 /// the same reason: a texture inside a `TextureData` is a texture nothing can
 /// ask a question about, and the cheapest thing that goes wrong with a worked
 /// out picture is that the arithmetic comes out flat.
-pub fn swirled_pixels() -> (u32, u32, Vec<u8>) {
+pub fn swirled_pixels(through: bool) -> (u32, u32, Vec<u8>) {
     let wide = PORTAL_TEXELS;
     let tall = ((PORTAL_TEXELS as f32) * WAY_HIGH / WAY_WIDE) as u32;
     let mut pixels = Vec::with_capacity((wide * tall * 4) as usize);
@@ -402,21 +420,59 @@ pub fn swirled_pixels() -> (u32, u32, Vec<u8>) {
             let out = (1.0 - (r - PORTAL_RIM).max(0.0) / (1.0 - PORTAL_RIM + 1e-3)).clamp(0.0, 1.0);
             let lit = ((0.22 + 0.5 * band) * out + rim * 0.75) * eye;
 
-            // bluer at the edge and white at the heart, which is what gives
-            // it a temperature rather than a colour
-            let warm = lit * (0.45 + 0.55 * (1.0 - r).clamp(0.0, 1.0));
+            // Grey, and the colour it is drawn in decides the colour it is.
+            //
+            // It carried its own temperature once, bluer at the edge than at
+            // the heart, which read well enough on the way out and made the
+            // door at the far end impossible. Two openings want two colours:
+            // the exit is blue and the way on is the cold white everything
+            // else in that room is, per spec 0017. A texture with blue baked
+            // into it comes out blue whatever it is multiplied by, so the
+            // door came out as a second exit.
             let to_byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
+            let grey = to_byte(lit);
 
-            pixels.extend_from_slice(&[
-                to_byte(warm),
-                to_byte(lit * 0.85 + warm * 0.15),
-                to_byte(lit),
-                255,
-            ]);
+            // opaque for the way out, which has nothing behind it, and the
+            // swirl's own brightness for the door, which has spec 0018
+            // behind it. See `swirled_through`.
+            let veil = if through { to_byte(lit * 1.4) } else { 255 };
+
+            pixels.extend_from_slice(&[grey, grey, grey, veil]);
         }
     }
 
     (wide, tall, pixels)
+}
+
+/// The door at the far end, lit the same way the way out is.
+///
+/// Spec 0017 gave this opening a frame that glows and nothing in the opening
+/// itself, and that was right while it was the only lit thing at that end.
+/// It is not any more: the way out is a portal now, and two openings out of
+/// one room want to look like two openings out of one room rather than one
+/// portal and one empty rectangle.
+///
+/// Facing back down the room, because that is the only side anybody sees it
+/// from: through it is spec 0018, and from in there you are looking at the
+/// system rather than back at the door.
+///
+/// Inside the frame's own depth and clear of the starfield, for the same
+/// reason the way out's is. `orrery::walls` lays a field across this wall
+/// too, the opening included, so a portal on the wall's own face is behind
+/// the stars.
+pub fn door_portal(reaches: f32) -> (Vec3, Vec2) {
+    let middle = at(reaches);
+    let half = half();
+    let (from, to) = door(reaches);
+
+    (
+        vec3(
+            (from + to) * 0.5,
+            WAY_HIGH * 0.5,
+            middle.z + half.y - PORTAL_PROUD,
+        ),
+        vec2(to - from, WAY_HIGH),
+    )
 }
 
 /// Whether a point is in the space behind the wall.
@@ -2005,7 +2061,7 @@ mod tests {
             let x = ((u * (wide - 1) as f32) as usize).min(wide - 1);
             let y = ((v * (tall - 1) as f32) as usize).min(tall - 1);
 
-            swirled_pixels().2[(y * wide + x) * 4 + 2] as f32 / 255.0
+            swirled_pixels(false).2[(y * wide + x) * 4 + 2] as f32 / 255.0
         };
 
         let eye = lit(0.5, 0.5);
@@ -2026,6 +2082,103 @@ mod tests {
             corner < 0.05,
             "the corner of the portal is at {:.2}, so it is a lit rectangle",
             corner
+        );
+    }
+
+    /// Spec 0017: the door at the far end is lit the way the way out is.
+    ///
+    /// **Two openings out of one room should look like two openings out of
+    /// one room.** Spec 0017 gave this one a frame that glows and nothing in
+    /// the opening, which was right while it was the only lit thing at that
+    /// end of the room. The way out is a portal now, so this is one too.
+    ///
+    /// The same three claims the way out answers, and a fourth that is this
+    /// one's alone: you can see through it. Spec 0017 built the whole
+    /// approach so the way on appears only once you have walked the planets
+    /// in to reach it, and an opening you cannot see through takes the
+    /// arrival away.
+    #[test]
+    fn the_door_at_the_far_end_is_lit_the_same_way() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let (stood, size) = door_portal(reaches);
+        let (from, to) = door(reaches);
+
+        assert!(
+            (stood.x - size.x * 0.5 - from).abs() < 1e-3
+                && (stood.x + size.x * 0.5 - to).abs() < 1e-3,
+            "the portal spans {:.3} to {:.3} and the door is {:.3} to {:.3}",
+            stood.x - size.x * 0.5,
+            stood.x + size.x * 0.5,
+            from,
+            to
+        );
+        assert!(
+            (stood.y - size.y * 0.5).abs() < 1e-3
+                && (stood.y + size.y * 0.5 - DOOR_HIGH).abs() < 1e-3,
+            "the portal runs {:.3} to {:.3} and the door is 0 to {:.3}",
+            stood.y - size.y * 0.5,
+            stood.y + size.y * 0.5,
+            DOOR_HIGH
+        );
+
+        // in front of the stars on this wall, which is the thing that hid the
+        // way out's for a whole build
+        let stars = crate::orrery::walls(reaches)
+            .into_iter()
+            .filter(|(_, _, looks)| looks.z < -0.5)
+            .map(|(at_, _, _)| at_.z)
+            .fold(f32::MAX, f32::min);
+
+        assert!(
+            stars < middle.z + half().y + 1.0,
+            "no starfield faces into the room off the far wall, so this checked nothing"
+        );
+        assert!(
+            stood.z < stars,
+            "the portal is at z {:.3} and the stars over the door are at {:.3}",
+            stood.z,
+            stars
+        );
+
+        // and you can see through it where it is dark and not where it is
+        // bright, which is what makes the swirl hang in a doorway rather than
+        // cover one. The way out's is asked the opposite question.
+        let wide = PORTAL_TEXELS as usize;
+        let tall = ((PORTAL_TEXELS as f32) * WAY_HIGH / WAY_WIDE) as usize;
+        let through = swirled_pixels(true).2;
+        let veil = |u: f32, v: f32| {
+            let x = ((u * (wide - 1) as f32) as usize).min(wide - 1);
+            let y = ((v * (tall - 1) as f32) as usize).min(tall - 1);
+
+            through[(y * wide + x) * 4 + 3]
+        };
+
+        let corner = veil(0.02, 0.02);
+        let eye = veil(0.5, 0.5);
+        let rim = veil(0.5, 0.5 - PORTAL_RIM * 0.5);
+
+        assert!(
+            corner < 8,
+            "the corner of the door is {} and is a corner",
+            corner
+        );
+        assert!(
+            eye < 48,
+            "the eye of the door is {} and is a way through",
+            eye
+        );
+        assert!(
+            rim > 180,
+            "the rim of the door is {} and is the bright part",
+            rim
+        );
+
+        let solid = swirled_pixels(false).2;
+
+        assert!(
+            solid.chunks(4).all(|texel| texel[3] == 255),
+            "the way out is see-through, and what is behind it is a wall"
         );
     }
 }
