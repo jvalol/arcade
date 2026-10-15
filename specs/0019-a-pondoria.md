@@ -80,11 +80,31 @@ does not move at all. It opens in the late afternoon now. A minute in is
 visibly dimmer, two and the sun is nearly down, four and the lanterns are up.
 The first visit is the one that has to show the room is alive.
 
-**It changes the garden and nothing else.** The directional light is the one
+**The sun it moves is the garden's alone, and the ambient it moves is
+everyone's.**
+
+~~It changes the garden and nothing else. The directional light is the one
 light in this building that keeps the day, and `room::outline` already records
 as measured that the hall, the nook, the cellar and the baths are roofed and
 the sun reaches none of them: "a measurement of both with the sun at full and
-at nought came back the same to three places."
+at nought came back the same to three places."~~
+
+Struck 2026-10-14, on two counts.
+
+The quotation is of a measurement of two rooms, the hall and the nook, and
+this spec read it as four. The two it did not cover are the two the sun turned
+out to reach: the baths were lit through their walls by a shadow map stretched
+over the solar system, which is spec 0016's note and took an afternoon to
+find.
+
+And the day moves far more than the sun. `garden::filled` drives the scene's
+ambient, which is added everywhere by definition, and it runs from (0.03,
+0.04, 0.09) at night to (0.15, 0.18, 0.29) at noon, three to five times. The
+cellar is three storeys from any sky and its median brightness moves 23 per
+cent across a day, measured at one camera at five times of it.
+
+Whether that is right is a question for somebody looking at it: a cellar that
+dims at dusk is arguably what a cellar does. What it is not is nothing.
 
 **Noon is the garden as it was.** The garden had one state for its whole life
 and that state is now the top of the day; everything the day adds is either
@@ -148,6 +168,7 @@ not enough rather than what else would look good.
 - The lanterns come up as the sun goes down, and take their time over it. — `garden::tests::the_lanterns_come_up_as_the_sun_goes_down`
 - The sky is never black. — `garden::tests::the_sky_is_never_black`
 - Noon is the garden as it was, so the day took nothing away. — `garden::tests::noon_is_the_garden_as_it_was`
+- The sun it moves reaches no room with no sky. — `noise::tests::the_sun_is_switched_off_where_there_is_no_sky`
 
 ### Verified by hand
 

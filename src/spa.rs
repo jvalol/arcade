@@ -3104,4 +3104,76 @@ mod tests {
             "standing in the pool your eye is under the surface"
         );
     }
+
+    /// Spec 0012: both borders are mitred, the floor's included.
+    ///
+    /// Four runs each at their full length meet twice over at every corner,
+    /// which is two faces in one plane four times round the room and the
+    /// fault this building has fought seven times. The spec says a test
+    /// caught the ceiling's on its first run. No test answers to that now,
+    /// and the floor's has never had one at all.
+    ///
+    /// Found 2026-10-14 by reading spec 0012 claim by claim: eight of them,
+    /// three criteria, and this was one of the five with nothing under it.
+    #[test]
+    fn both_borders_are_mitred() {
+        let overlapping = |runs: Vec<Aabb>, what: &str| {
+            for (n, one) in runs.iter().enumerate() {
+                for other in runs.iter().skip(n + 1) {
+                    // two spans overlap when each starts before the other
+                    // ends, which is the whole of it and is not what the
+                    // first try at this said
+                    let over = |a: f32, b: f32, c: f32, d: f32| a < d - 1e-4 && c < b - 1e-4;
+
+                    assert!(
+                        !(over(one.min.x, one.max.x, other.min.x, other.max.x)
+                            && over(one.min.z, one.max.z, other.min.z, other.max.z)),
+                        "two runs of {} cross at a corner, {:?} and {:?}",
+                        what,
+                        one,
+                        other
+                    );
+                }
+            }
+        };
+
+        overlapping(
+            ceiling(REACHES)
+                .into_iter()
+                .filter(|(_, made)| matches!(made, Made::Rib))
+                .map(|(box_, _)| box_)
+                // the ribs between them are not the border
+                .filter(|box_| box_.max.x - box_.min.x > RIB * 1.5)
+                .collect(),
+            "the ceiling's border",
+        );
+
+        overlapping(
+            fittings(REACHES)
+                .into_iter()
+                .filter(|(_, made)| matches!(made, Made::Inlay))
+                .map(|(box_, _)| box_)
+                .collect(),
+            "the floor's border",
+        );
+    }
+
+    /// Spec 0012: this building draws no contact shadows.
+    ///
+    /// The bath house ceiling is thin fins lit nearly edge on, which is the
+    /// one shape blitzkit's spec 0029 march cannot answer, and what it does
+    /// there is ripple along every beam. Jake reported that in one form or
+    /// another for most of an afternoon.
+    ///
+    /// One line turns it back on, which is the point of holding it: it is
+    /// the sort of line somebody adds back wondering why a room looks flat.
+    #[test]
+    fn the_building_draws_no_contact_shadows() {
+        const SOURCE: &str = include_str!("main.rs");
+
+        assert!(
+            SOURCE.contains("renderer.set_contact_shadows(false)"),
+            "nothing turns the contact march off, so the bath house ceiling ripples"
+        );
+    }
 }
