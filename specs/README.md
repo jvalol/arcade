@@ -28,6 +28,7 @@ not a priority, and it never changes once a spec exists.
 | [0018](0018-the-system-at-true-scale.md) | The same system through that door with nothing bent but the light: one scale, a ten metre sun, Neptune 33 kilometres out, and three minutes to ride there |
 | [0019](0019-a-pondoria.md) | A room you stay in, which is the garden given a twenty minute day: the light swings and reddens, the sky goes out, and the lanterns earn their keep |
 | [0020](0020-a-track-in-the-carpet.md) | One hint that the hidden rooms are there: a lane worn across the carpet from the aisle to the hole in the near wall, which is a thing that happened rather than a thing somebody put up |
+| [0021](0021-eight-rooms-that-are-one-room.md) | A tesseract you stand inside: six walls that are six other cubes, and the wall you walk through becomes the floor you walk on |
 
 ---
 

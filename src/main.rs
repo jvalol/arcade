@@ -20,6 +20,12 @@ mod room;
 mod sign;
 mod spa;
 mod study;
+// Nothing calls this yet and that is the state of it rather than an oversight:
+// spec 0021 is a draft, and what is written is the arithmetic of the eight
+// cells and what walking out of one does to a person. It is the half that can
+// be checked without a window, and the half everything else hangs off.
+#[allow(dead_code)]
+mod tesseract;
 mod walk;
 mod wrecker;
 
