@@ -16,8 +16,19 @@ pub const TURNS: f32 = 0.35;
 /// This is what holds the row's width. The cabinets at the end of the rows
 /// stand 1.65 either side of the middle, so a row any wider than three and a
 /// bit puts its outer two behind them and the wall looks like three things
-/// rather than five.
-pub const APART: f32 = 0.72;
+/// rather than six.
+///
+/// **It came down from 0.72 when the sixth arrived**, and that is spec 0021's
+/// bill. Five shapes fitted the clear span of 3.3 with room to spare; six do
+/// not, and the span cannot grow because what bounds it is where the end
+/// cabinets stand. So the step is the largest that still fits: five steps
+/// plus one shape's width, which is `5 * APART + APART / SWEEP`, has to come
+/// in under 3.3, and that puts the step at 0.59.
+///
+/// Every shape in the nook is 18 per cent smaller for it. That is a real cost
+/// and it is paid once: the teapot, the bottle and the three fractals all
+/// come down so that the thing which turns you can stand with them.
+pub const APART: f32 = 0.59;
 pub const OFF_THE_WALL: f32 = 0.75;
 
 /// How wide each one is drawn, across its own widest way.
@@ -64,7 +75,25 @@ pub struct Display {
 }
 
 /// What each one is, in the order they are laid out along the wall.
-const SHAPES: [&str; 5] = ["teapot", "klein", "sierpinski", "menger", "hilbert"];
+const SHAPES: [&str; 6] = [
+    "teapot",
+    "klein",
+    "sierpinski",
+    "menger",
+    "hilbert",
+    // the sixth, which is a door. Spec 0021: the five before it are what
+    // teach the verb, and this is the one that spends it on you.
+    TESSERACT,
+];
+
+/// The one on the end, named because what happens when you press enter at it
+/// is not what happens at the other five.
+pub const TESSERACT: &str = "tesseract";
+
+/// Which place in the row that is.
+pub fn tesseract() -> usize {
+    SHAPES.len() - 1
+}
 
 /// Everything the engine's shape library carries, in the order it is laid out.
 ///
@@ -108,6 +137,7 @@ pub fn meshes() -> Vec<MeshData> {
         blitzkit_shapes::sierpinski::sierpinski(4),
         blitzkit_shapes::menger::menger(2),
         blitzkit_shapes::hilbert::hilbert_tube(3, 8, 0.03),
+        crate::tesseract::shape(),
     ]
 }
 
@@ -269,7 +299,14 @@ mod tests {
 
         assert_eq!(
             names,
-            ["teapot", "klein", "sierpinski", "menger", "hilbert"],
+            [
+                "teapot",
+                "klein",
+                "sierpinski",
+                "menger",
+                "hilbert",
+                "tesseract"
+            ],
             "the wall carries {:?}",
             names
         );
