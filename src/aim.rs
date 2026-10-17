@@ -640,6 +640,24 @@ pub const HELP: &str =
 pub const SYSTEM_HELP: &str =
     "Use WASD and the mouse to get about. Hold Shift to run. Press L to switch modes. Press Escape to quit.";
 pub const WINK: &str = "If you know, you know. If you don't, play with one.";
+
+/// Spec 0021's eight rooms, which have no toys in them and one thing to do.
+///
+/// The building's line offers to work the toy you are looking at, and in here
+/// there is nothing to look at but the room. It also said nothing at all
+/// about the one fact a person needs, which is that the walls are the way
+/// out.
+pub const TESSERACT_HELP: &str =
+    "[COPY - Jake] Use WASD and the mouse to get about. Each wall shows what stands in the room through it, so walk at the one you want. The floor is the room you came from. Press Escape to quit.";
+
+/// What it says once the far cell has been stood in.
+///
+/// The room had no way of telling you that you had done the thing it is for,
+/// which is most of why it read as somewhere to wander rather than somewhere
+/// to be. Spec 0021: reach the cell opposite the one you came in by, then get
+/// back to the plinth, which you cannot do by turning round.
+pub const TESSERACT_DONE: &str =
+    "[COPY - Jake] You have stood in kata, which is as far from ana as this room goes. The way back is three rooms, and not the way you came.";
 /// Out past the door of spec 0017, where walking is not how you get about.
 ///
 /// Jake's words, and the shape of them is the point: the key first and then
@@ -926,6 +944,90 @@ pub const GALLERY_LAMP: Vec3 = glam::vec3(1.0, 0.91, 0.78);
 pub const GALLERY_LIT: f32 = 1.45;
 pub const GALLERY_RANGE: f32 = 5.4;
 
+/// The tesseract's eight rooms, as colour. Spec 0021.
+///
+/// **Four colours and not eight.** A cell's name is an axis and an end, and
+/// those are shown by two different things on purpose: the colour says which
+/// of the four directions, and where the stripe sits on the panel says which
+/// end of it. Eight colours is four pairs that have to be told apart by
+/// shade, across a room, by somebody who is also trying to hold a rotation in
+/// their head. Four is as many as anybody reads at a glance.
+///
+/// It also makes the one rule of the shape visible. Two cells meet when their
+/// axes differ, so from inside a red room every panel is a colour that is not
+/// red, and the room you cannot reach is the other red one. Nobody has to be
+/// told that.
+///
+/// W is the odd one and is coloured like it: the three a person has are a
+/// warm red, a green and a blue, in that order, and the one nobody has is a
+/// violet that is not on the way between any of them.
+pub const TESSERACT_AXES: [Vec4; 4] = [
+    vec4(0.78, 0.20, 0.17, 1.0),
+    vec4(0.26, 0.66, 0.28, 1.0),
+    vec4(0.20, 0.42, 0.86, 1.0),
+    vec4(0.62, 0.26, 0.82, 1.0),
+];
+
+/// A panel's colour, which is the axis of the cell beyond it.
+pub fn tesseract_panel(axis: usize) -> Vec4 {
+    TESSERACT_AXES[axis.min(3)]
+}
+
+/// The plate a cell's name is written on, which has to read off the panel it
+/// is on rather than off the wall. Pale, so it works on all four.
+pub const TESSERACT_PLATE: Vec4 = vec4(0.88, 0.87, 0.82, 1.0);
+
+/// And the lettering on it.
+///
+/// Bright, because `text::drawn` makes an opaque texture with a dark ground
+/// and the letters picked out of it, so what this multiplies is the letters.
+/// Dark lettering on it is a black slab: that is what the first build drew,
+/// and it is what the nook's own sign would draw if `SIGN_LETTERS` were not
+/// gold and over one.
+pub const TESSERACT_WORD: Vec4 = vec4(1.22, 1.20, 1.12, 1.0);
+
+/// The small one of a thing, stood on the wall of the room it is through.
+///
+/// Pale and over one, like the lettering and for the same reason. It is drawn
+/// on a saturated panel, it has to read on all four of them, and the only
+/// light in here is the room's own lamp overhead, which a thing standing
+/// against a wall is turned away from.
+pub const TESSERACT_SIGN: Vec4 = vec4(1.30, 1.28, 1.20, 1.0);
+
+/// The dark box the panels hang in.
+///
+/// Darker than the arcade's own walls and than the floor out past the door,
+/// because there is no light in here but the room's own and a shell that
+/// takes any of it is a shell you look at.
+pub const TESSERACT_SHELL: Vec4 = vec4(0.030, 0.029, 0.036, 1.0);
+
+/// How strongly a room is tinted by the colour of the cell it is.
+///
+/// The air tells you where you are and the panels tell you where you can go,
+/// which is the division this room runs on. Standing in the red cell is
+/// standing in red light, and that is a thing you know without looking at
+/// anything.
+///
+/// **A quarter and not nearly a half**, because the ambient multiplies the
+/// surface it falls on rather than adding to it. At 0.42 of a hue and no
+/// plain fill at all, the green floor of the first cell came out at
+/// (73, 76, 89), which is a grey with a blue lean: a green multiplied by a
+/// violet is a grey, and every panel in the room was being asked to survive
+/// that.
+pub const TESSERACT_AIR: f32 = 0.20;
+
+/// And the plain fill under it, so a panel reads as its own colour.
+pub const TESSERACT_LIT: f32 = 0.13;
+
+/// The lamp the room carries, because it cannot borrow one.
+///
+/// How high it hangs as a fraction of the cell, how bright, and how far it
+/// reaches as a fraction of the cell. A closed box has no sun in it, so this
+/// is the only thing in here that makes one face differ from another.
+pub const TESSERACT_LAMP_UP: f32 = 0.82;
+pub const TESSERACT_LAMP: f32 = 1.5;
+pub const TESSERACT_LAMP_REACH: f32 = 1.8;
+
 pub const BEHIND_FLOOR: Vec4 = vec4(0.018, 0.018, 0.024, 1.0);
 pub const BEHIND_WALL: Vec4 = vec4(0.022, 0.022, 0.030, 1.0);
 pub const BEHIND_COLUMN: Vec4 = vec4(0.045, 0.045, 0.055, 1.0);
@@ -961,6 +1063,104 @@ pub const MAP_GAP: f32 = 13.0;
 pub const MAP_TICK: f32 = 7.0;
 pub const MAP_YOU: f32 = 3.0;
 pub const MAP_NAME: f32 = 13.0;
+
+/// The tesseract's map: eight boxes, four columns and two rows. Spec 0021.
+///
+/// **The one thing that made the room playable.** It was built without one,
+/// and three goes at explaining the room from inside it all failed, because
+/// a cell is a closed box with no landmark and everything in it is stated
+/// relative to the frame you happen to be standing in. The map is the only
+/// thing in here that does not move when you do.
+///
+/// **Colour says one thing and one thing only, which is the axis.** The first
+/// build had it saying two: the box was tinted its axis's hue and then a
+/// second colour was laid over it for where you are, the way out and what to
+/// find. Nothing then told you whether a colour meant a direction or a
+/// status, and Jake read it as hard to understand what it means. The fill is
+/// the axis now, the same four hues the walls use, and status is a ring round
+/// the box, which a legend under the grid names.
+/// Where the key sits: in from the left edge, and up from the bottom.
+pub const CELLS_IN: f32 = 22.0;
+pub const CELLS_UP: f32 = 96.0;
+
+/// The key under the map: how big the words are, how big the swatch beside
+/// them, how far apart the rows sit, and how much air is left round the lot.
+///
+/// **Bigger than the corner's own line, not smaller.** It was 13 against the
+/// corner's 14 with tighter leading than that, which is backwards: the
+/// corner is prose you read once and this is the thing you glance at between
+/// crossings to work out what you are looking at. Jake's reading was that it
+/// is hard to read and that this room above all needs its colour hints very
+/// clear.
+///
+/// The swatch is a bar rather than a square, because what it stands for is a
+/// bar on the shape in your hand.
+pub const CELLS_LEGEND: f32 = 18.0;
+pub const CELLS_LEGEND_STEP: f32 = 29.0;
+pub const CELLS_LEGEND_ROWS: usize = 3;
+pub const CELLS_SWATCH: Vec2 = vec2(26.0, 9.0);
+pub const CELLS_LEGEND_GAP: f32 = 11.0;
+
+/// How wide the key's plate is, worked out from the words on it.
+///
+/// Measured rather than written down. It was a constant, and a constant is a
+/// second account of how long a line of text is: at 132 the count ran off the
+/// end of its own plate and at 218 it still did with the words a size bigger.
+pub fn cells_key_wide(lines: &[String]) -> f32 {
+    let widest = lines
+        .iter()
+        .map(|line| blitzkit::text::room_for(line, CELLS_LEGEND).x)
+        .fold(0.0f32, f32::max);
+
+    CELLS_LEGEND_GAP + CELLS_SWATCH.x + CELLS_LEGEND_GAP + widest + CELLS_LEGEND_GAP
+}
+
+/// Its own plate, darker than the rest of the building's, because what is
+/// behind it is a lit panel the size of a wall.
+pub const CELLS_PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.80);
+
+/// The three colours the shape in your hand picks cells out in, and that the
+/// key names. Named, because a colour nobody is told the meaning of is the
+/// mistake this room has already made twice.
+pub const CELLS_HERE: Vec4 = vec4(1.0, 1.0, 1.0, 0.95);
+pub const CELLS_WAY: Vec4 = vec4(0.98, 0.84, 0.36, 0.95);
+pub const CELLS_GOAL: Vec4 = vec4(0.36, 0.84, 1.0, 0.95);
+
+/// What the legend says about each, in the order it lists them.
+pub const CELLS_LEGEND_SAYS: [&str; CELLS_LEGEND_ROWS] =
+    ["where you are", "the way out", "what to find"];
+
+/// The map you carry, per spec 0021: the whole frame, and the cell you are
+/// standing in picked out of it.
+///
+/// Dim enough that the eight cells read as one object rather than eight, and
+/// the lit parts bright enough to find without looking for them. The frame
+/// was 0.40 and the cell you are in did not stand out of it. The way out
+/// and what to find take the same two colours the legend names, so the thing
+/// in your hand and the words under it agree.
+pub const HELD_FRAME: Vec4 = vec4(0.20, 0.20, 0.25, 1.0);
+
+/// How big a cell's name is written on the shape you carry.
+pub const HELD_NAME: f32 = 17.0;
+
+/// How much brighter a lit bar is than the swatch that names it.
+///
+/// Past one, so it burns with no light on it the way a cabinet's band does.
+/// What it multiplies is the key's own colour rather than a second set of
+/// numbers, so the bar in your hand and the swatch under it cannot drift
+/// apart: there is one colour per meaning and the shape is the loud copy.
+pub const HELD_GLOW: f32 = 2.1;
+
+pub fn held_of(colour: Vec4) -> Vec4 {
+    (colour.truncate() * HELD_GLOW).extend(1.0)
+}
+
+/// The same thing again on a face of the map, which goes the other way about.
+///
+/// A face of the held room burns at `HELD_GLOW`, so a pale object on it is
+/// lost in it. Nearly black, and it reads as a silhouette cut in the square,
+/// which at that size is all there is room for anyway.
+pub const HELD_THING: Vec4 = vec4(0.10, 0.10, 0.12, 1.0);
 
 /// Where the map goes and how big it is, from the window.
 ///

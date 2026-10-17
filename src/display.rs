@@ -124,6 +124,11 @@ const SHAPES: [&str; 6] = [
 /// is not what happens at the other five.
 pub const TESSERACT: &str = "tesseract";
 
+/// Which place in the row that is.
+pub fn tesseract() -> usize {
+    SHAPES.len() - 1
+}
+
 /// Everything the engine's shape library carries, in the order it is laid out.
 ///
 /// The depths and step counts are the ones the examples open at. Deeper is

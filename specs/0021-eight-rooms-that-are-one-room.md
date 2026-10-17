@@ -1,10 +1,222 @@
 # 0021 Eight rooms that are one room
 
-**Status:** parked, 2026-10-16. Built, walked, and taken out again the same
-day. The arithmetic and the object on the plinth are what is left.
+**Status:** built, parked, brought back with a map, and given eight things to
+find it by, 2026-10-17.
 **Date:** 2026-10-16
 
-## Why it is parked
+## Eight rooms with eight different things in them
+
+Jake, with the third map in his hand: the map gets clipped, and it still does
+not read as a map. I am looking at green, blue and red, they have names, but
+if I walk through one, where will it take me. This is confusing to me, an
+experienced topologist, and I want it to make sense to a seven year old.
+
+**Three rewrites of the map failed for one reason and it was not the map.** A
+map can only point at places that already mean something, and these did not.
+Eight rooms alike in everything but a word on a wall and a colour stated
+relative to wherever you happen to be standing. "Through there is green" is
+not a destination. There was nothing for the map to be a map of.
+
+So the rooms change rather than the map.
+
+**Each room has its own object on its own plinth.** The five from the nook,
+which are the teapot, the Klein bottle, the Sierpinski tetrahedron, the
+Menger sponge and the Hilbert curve, and then a cube, the four dimensional
+cube and a sphere. Eight rooms, eight objects, one each, and no two alike.
+
+**Each wall shows a small one of the object in the room through it.** Walk at
+the wall with the teapot on it and you are in the room with the teapot in it.
+There is nothing to read, nothing to remember and nothing relative about it,
+which is the whole of why this works where three maps did not. It is also the
+one claim the room has to keep, so it is a test over the function the drawing
+calls rather than over a second account of the geometry.
+
+**And every face of the room cube on the map carries the same object**, in
+silhouette against the glowing square. The map says the wall on your left
+leads to the sphere, the wall on your left shows a sphere, and the room
+through it has a sphere in it. Three statements that cannot disagree, because
+all three go through one function.
+
+The four-cube goes in the cell you came in by, so finding the way out and
+finding the room with the four-cube in it are the same job. The sphere goes
+in the cell opposite, which is what there is to find: the plainest of the
+eight and the only one that looks the same from every side, which is the joke
+the far room has earned.
+
+The names stay. They are in the corner and in the gloss, because they are how
+the room is talked about, and the corner now says what is on the plinth as
+well, which is the one line that ties a room's name to its object. They are
+not what anybody navigates by any more.
+
+**What it cost:** the plinth is in all eight rooms now rather than one, so
+`solid_in_a_cell` no longer asks which cell it is. The way out is still in
+the one cell, which makes it one of the eight objects rather than the only
+furniture in here.
+
+## The map, which is what made it playable
+
+**Parked on 16 October and brought back on the 17th**, because the thing that
+was missing turned out to be the thing this spec ruled out. Jake: build the
+map idea into something playable.
+
+It changes what the room is, and that is worth saying plainly rather than
+pretending the original design survived. This spec wanted the difficulty to
+be holding the turning in your head. Ninety six states cannot be held, and
+two people have now failed to hold them. With a map it becomes reading where
+you are and working out the route, and the turning is the obstacle rather
+than the whole game. That is a better game than the one described below.
+
+**The map is the shape itself, carried in the hand.** It is the same object
+that stands on the sixth plinth, which is the thing you turned to get in
+here, so the map and the way in and the room are all one shape. The cell you
+are standing in is the part of it that is lit.
+
+That is the second map. The first was a grid of eight boxes, four columns and
+two rows, a column to an axis, and it was right about one thing and wrong
+about everything else. The right thing: two cells meet when their axes
+differ, so the one cell you cannot walk to is the box directly above or below
+you, and a reader sees that without being told. The wrong thing: it looks
+nothing like the room it is a map of, which Jake read as leaving a lot of
+questions for a new user.
+
+The shape says the same rule better. **ana and kata are the inner cube and
+the outer one**, which is why they share no bar and cannot touch, and six
+cells sit between them. Every other pair of cells does meet. That is the
+whole adjacency of a tesseract in one object you can turn over.
+
+It is drawn in the world rather than on the glass because it has to be. The
+two dimensional layer has axis aligned rectangles and nothing else, so a
+wireframe at any angle is not available to it at all, and a grid was the only
+map that layer could draw. What is left on the glass is a key naming the
+three colours, because a colour nobody is told the meaning of is the mistake
+this room has already made twice.
+
+**On the grid, colour said one thing, which was the axis.** The first build of the
+map had it saying two: the box was tinted its axis's hue and a second colour
+was laid over it for where you are, the way out and what to find, so nothing
+told you whether a colour meant a direction or a status. Jake read it as hard
+to understand what it means, which it was. The fill is the axis now, the same
+four hues the walls use, and status is a ring round the box. A legend under
+the grid names the three rings, because a ring nobody is told the meaning of
+is the thing this replaced.
+
+How much of the hue there is says whether a box has been opened, so the map
+reads as mostly dark on arrival and lights up as it is walked.
+
+It is a grid and not a graph for the same reason. The graph is eight nodes
+with six edges each, twenty four edges, and it draws as a hairball that hides
+the one thing worth seeing.
+
+**It fills in as it is walked.** A map that arrives complete answers the
+question before it is asked and turns being lost from progress back into
+nothing. You start knowing one box, the one you came in by, and a count under
+the grid says how many of the eight you have stood in.
+
+**And the room now says when you have done the thing it is for.** Reach the
+cell opposite the one you came in by, which the map puts directly under the
+way out and which is the single box that cannot be reached from it. That was
+always the goal and the room had no way of telling you that you had met it,
+which is most of why it read as somewhere to wander rather than somewhere to
+be.
+
+## Making the map mean something about the walls
+
+Jake, holding it: it is hard to tell from the tesseract map what the walls
+mean. Two things were wrong and the first was mine from the start.
+
+**It turned on its own.** A map that spins cannot line up with the room
+around it, however well it reads as an object. It is still now, and built in
+the frame of whoever is holding it rather than in the world's axes: right is
+right, up is up, ahead is the way they are facing, and the fourth way, which
+decides which cell comes out as the outer cube, is the cell they are standing
+in. So the part of the shape on your left is the cell through the wall on
+your left, and that is checked for all ninety six ways of standing.
+
+**And it named nothing.** A dot per cell in its wall's colour was tried
+first and does not work: a cell's middle is the mean of its eight corners,
+and in this projection the six between the cubes have their middles dragged
+toward the centre by the inner cube, so eight dots came out in a heap the
+size of a thumbnail.
+
+Naming the cells on the shape did not fix it either, and that was the third
+go. The six cells between the cubes are wedges, and a wedge does not read as
+the wall on your left however well it is oriented or labelled.
+
+**So there are two maps, because there are two questions.** Jake's call, when
+offered one or the other: do both, not either or.
+
+The shape says what this place is. Eight cells, the one you are standing in
+as the outer cube and the one you cannot reach inside it, with the way out
+and what to find picked out in the key's own colours. It carries no writing
+at all now, which is what it took to read as an object.
+
+The cube above it says which wall leads where, and nothing else. Six faces
+turned to the frame of whoever is holding it, each in the colour of the room
+through it, with its name on the three you can see. The face turned toward
+you is the wall you are walking at. There is nothing to decode. The two cells
+it does not show are you, which is the cube itself, and the one you cannot
+reach, and not being on it is exactly what unreachable means here.
+
+Two things went wrong building it. The camera's right, up and forward are a
+left handed set, so handing them to `from_mat3` as they come does not give a
+rotation at all, and the first build drew six slabs at angles to each other;
+`right.cross(up)` is the third axis of a proper one. And that axis points
+back at the eye, so ahead maps toward the viewer: negating it put the wall
+behind you on the face turned toward you, which is the one thing a map must
+not do.
+
+The names are written a frame behind the shape, and that is deliberate.
+Drawing has the camera and no text renderer; the writing has the text
+renderer and no camera. Working a view projection out again in the second
+would be a second account of where the camera is, and two accounts of where
+a thing is come apart. A label one frame behind a camera that has not moved
+is a label in the right place.
+
+## The key, which has to be the clearest thing on the screen
+
+Jake, having walked it with the shape in hand: the key is hard to read, and
+this experience needs as much clarity in as concise a way as possible.
+
+It was 13 point against the corner's 14, with tighter leading than that,
+which is backwards. The corner is prose you read once; the key is what you
+glance at between crossings to work out what you are looking at. It is 18
+now, on a darker plate of its own, and its swatches are bars rather than
+squares because what they stand for is a bar on the shape in your hand.
+
+**And its plate is measured rather than written down.** The width was a
+constant twice, and twice the longest line ran off the end of it: at 132, and
+again at 218 once the words went up a size. It asks `text::room_for` how wide
+the words actually are.
+
+**One colour per meaning, and the shape is the loud copy.** The bars were a
+second set of numbers that happened to look like the swatches. They are the
+swatch colours times `HELD_GLOW` now, so what is in your hand and what is
+written under it cannot come apart.
+
+## Two things the map did not fix
+
+**Half the names mean nothing to anybody.** East and west are obviously
+opposites and north and south are, and zenith and nadir and ana and kata are
+not. Three of the four pairs are directions a person already has words for;
+the fourth is a direction nobody has at all, and Hinton's names for it carry
+no meaning to a reader who has not read Hinton.
+
+So the two that need saying say what they are, in the corner, in the rooms
+they name, and the two that do not are left alone. A room that explains north
+and south is a room that thinks you are stupid. Every time rather than once,
+because this room is entered rarely and a thing explained on the first visit
+only is a thing forgotten by the second.
+
+**And the cells were cramped at 4.6.** Jake, with the map in: opening it up
+might help clarify how it works. He is right about why. The room has exactly
+one thing to understand, which is that four of its faces are the way out, and
+a box you can cross in two strides gives you no time to notice which one you
+walked at. At 6.5 there is a room between you and every wall, and `INSET`
+grew with it rather than staying put in a bigger box.
+
+## Why it was parked, and what the three failures were
+
+
 
 **Nobody could tell where they were.** The room worked, in the sense that
 every crossing landed where the arithmetic said it would. That turned out not
@@ -227,10 +439,12 @@ by there being nothing to win in the nook, and there is something to win in
 here. The nook holds the door; it does not hold the game, any more than the
 cellar's bookcase is the baths.
 
-**Coming back out** is one cell with the plinth standing in it. The goal below
-is already "get back to where you started", and the plinth is what that looks
-like from the inside: eight rooms alike in everything but their marks, and
-exactly one of them with the way out in the middle of the floor.
+**Coming back out** is one cell with the way out standing on its plinth. That
+was written when the plinth was the only furniture in here and exactly one
+room had it, which is also why those eight rooms were unnavigable. There is a
+plinth in every room now, each with a different thing on it, and the one that
+is the way out holds the four dimensional cube: the thing you turned to get
+in is the thing you touch to get out.
 
 ### What there is to do
 
@@ -398,6 +612,57 @@ And the drawing:
 - The thing on the plinth is a four dimensional cube: sixteen corners, thirty
   two edges, four at every corner, and one cube inside another. — `tesseract::tests::the_shape_on_the_plinth_is_a_four_cube`
 - There is a display for each shape on the wall, which is six now. — `display::tests::every_shape_is_on_the_wall`
+
+And the eight things:
+
+- Eight rooms, eight different things, one each, and each knows its own
+  number. — `tesseract::tests::every_room_has_its_own_thing`
+- The thing on a wall is the thing in the room you land in, and never the
+  room you are already standing in. — `tesseract::tests::a_wall_shows_the_thing_in_the_room_you_land_in`
+- A wall's thing stands in the room, proud of its own panel, near it rather
+  than out in the middle, and clear of both the plinth and what is on it. — `tesseract::tests::a_wall_sign_is_in_the_room_and_out_of_the_way`
+- A face of the map carries its thing on the outside of that face, touching
+  it, and the whole map stays nearer than it is held. — `tesseract::tests::a_map_face_carries_its_thing_on_the_outside`
+- The wall and the map face that stands for it read their sign from one
+  place, so they cannot come apart. — `tests::the_wall_and_the_map_read_the_sign_from_one_place`
+
+The second of those was written first as the thing on the face against the
+thing on the step, and passed with the eight objects permuted any way at all,
+because both sides went through the same table: it was restating
+`the_six_faces_name_the_six_neighbours`. What holds now is `sign_on`
+returning the room you are standing in, which fails on every face of every
+cell, and `sign_on` reading the opposite room, which fails too.
+
+And the map:
+
+- A cell is a cube's worth of the shape: eight of the sixteen corners and
+  twelve of the thirty two bars, it shares a square with each of its six
+  neighbours, and it shares nothing with its own opposite. — `tesseract::tests::a_cell_is_eight_corners_and_twelve_bars_of_the_shape`
+- What there is to do is the cell the way out cannot reach, which on the
+  shape is the inner cube against the outer one. — `tesseract::tests::the_goal_is_the_one_box_the_way_out_cannot_reach`
+- It starts knowing one cell and fills in as it is walked, and the far cell
+  is three steps off. — `tesseract::tests::the_map_fills_in_as_it_is_walked`
+- It lines up with the room: the part of the shape on your left is the cell
+  through the wall on your left, the cell you are standing in is the outer
+  cube, and the one you cannot reach is inside it. Checked for all ninety six
+  ways of standing. — `tesseract::tests::the_held_map_lines_up_with_the_room`
+- The room cube has a face for every wall, thin along its own way and square
+  across it, and what is through its six faces is the six cells you can walk
+  to. — `tesseract::tests::the_room_cube_has_a_face_for_every_wall`
+
+A bar belongs to three cells and not two, which that first test was written
+saying. A cube's edge is on two of its faces and that is one dimension short:
+a bar runs along one axis, so the other three of its coordinates are fixed
+and each names a cell it is in.
+
+And the crossing:
+
+- It turns the world through a right angle and both ends of it are upright,
+  with the jump at the halfway mark paid for by the room changing. — `tesseract::tests::a_crossing_turns_the_world_and_ends_upright`
+- The direction you walked becomes the direction down. — `tesseract::tests::the_way_you_walked_turns_into_the_way_down`
+- It starts and ends still. — `tesseract::tests::the_turn_starts_and_ends_still`
+- It carries you from the wall you crossed to the far side, and is at neither
+  end partway through. — `tesseract::tests::a_crossing_carries_you_from_the_wall_to_the_far_side`
 
 Still to answer, and not written:
 
