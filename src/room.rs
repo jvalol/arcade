@@ -96,6 +96,21 @@ pub const END: f32 = 2.8;
 pub const NOOK_DOOR: f32 = END - CABINET.z * 0.5;
 
 /// How far the room's walls are from its middle, how high, and how thick.
+///
+/// **It cannot grow without `REACH` growing with it**, which is worth writing
+/// down because it is not obvious and it was measured rather than reasoned.
+/// The aisle is 4.0 across and the sight carries 4.0, and those are the same
+/// number on purpose: standing by one cabinet you can work the one opposite.
+/// Widening the room by as little as 0.2 breaks that, and
+/// `room::tests::the_one_you_are_looking_at_is_the_one` fails at every width
+/// from 2.2 up.
+///
+/// Which matters because what bounds the row of shapes on the far wall is
+/// where the end cabinets stand, and that is this. At 2.0 the gap between
+/// their inner faces is 3.3, six shapes at 0.59 apart are 3.29 of row, and
+/// the row clears the gap by half a centimetre at each end. There is no more
+/// room on that wall, and there is no more room in the hall for the wall to
+/// have, unless the sight is allowed to carry further.
 pub const WALL: f32 = 2.0;
 pub const TALL: f32 = 3.2;
 
@@ -124,6 +139,90 @@ pub const THICK: f32 = 0.3;
 /// A named number because what is in front of you when you open your eyes is
 /// measured from here, and the room's own sign is hung to be in it.
 pub const INSIDE: f32 = 1.0;
+
+/// The room across the end of the aisle, per spec 0022: how wide, how deep,
+/// and how wide the way into it is.
+///
+/// **Wider than the aisle and shallower than it is wide.** The shapes stand
+/// along its far wall and the row is a little over five metres, so the width
+/// is the row plus a real margin at each end rather than the half centimetre
+/// the strip of end wall was down to. The depth is what puts the whole row in
+/// view from the back of the room: much less and you see two shapes, much
+/// more and it is a corridor with the shapes at the end of it.
+///
+/// The way in is the clear aisle exactly, `WALL - CABINET.x * 0.5` either
+/// side, so you walk out of the gap between the last two cabinets and into
+/// something broader. A gap the full width of the room would be the end wall
+/// simply stopping, which is what this is replacing.
+pub const GALLERY_WIDE: f32 = 6.8;
+
+/// How much wall is in frame per unit you stand back from it.
+///
+/// Measured off a picture rather than worked out of the camera: standing
+/// 3.65 back from the row, 4.2 of it was in the window, and 4.2 over 3.65 is
+/// this. It is here so the depth below can be derived instead of guessed,
+/// and the first guess at that depth was 4.2 and cut both ends off the row.
+pub const IN_FRAME: f32 = 1.15;
+
+/// How deep the gallery is: far enough back to see the whole row, plus room
+/// to stand in behind that.
+///
+/// Derived, so a row that grows takes the room with it rather than quietly
+/// not fitting in it, which is the whole fault this room exists to fix.
+pub fn gallery_deep() -> f32 {
+    let wants = crate::display::row() + crate::display::CLEAR * 2.0;
+
+    wants / IN_FRAME + 0.6
+}
+
+/// Where its floor is and how big, with the hall's far wall as its near edge.
+pub fn gallery(reaches: f32) -> (Vec3, Vec3) {
+    (
+        vec3(0.0, 0.0, -reaches - gallery_deep() * 0.5),
+        vec3(GALLERY_WIDE, 0.0, gallery_deep()),
+    )
+}
+
+/// The gap in what used to be the far wall, as the two x it runs between.
+pub fn gallery_way() -> (f32, f32) {
+    let clear = WALL - CABINET.x * 0.5;
+
+    (-clear, clear)
+}
+
+/// Where the gallery's lamps hang and what they are.
+///
+/// **Over the shapes rather than over the room.** The one thing in here is a
+/// row along the far wall, so the light belongs on that row: a lamp over the
+/// middle of the room would light the floor and leave the shapes against a
+/// bright wall. Three of them, which covers a row of six without making a
+/// fitting per shape.
+///
+/// They hang from the ceiling on the shapes' own line, out from the wall by
+/// the same amount the shapes are, so a shape is lit from in front and above
+/// and throws its shadow back onto the wall rather than at you.
+pub const GALLERY_LAMPS: usize = 3;
+pub const GALLERY_LAMP_UP: f32 = TALL - 0.38;
+pub const GALLERY_SHADE: Vec3 = vec3(0.34, 0.12, 0.26);
+
+pub fn gallery_lamps(reaches: f32) -> Vec<Vec3> {
+    let z = gallery_wall(reaches) + crate::display::OFF_THE_WALL;
+    let span = crate::display::row();
+    let step = span / GALLERY_LAMPS as f32;
+
+    (0..GALLERY_LAMPS)
+        .map(|n| {
+            let along = (n as f32 + 0.5) * step - span * 0.5;
+
+            vec3(along, GALLERY_LAMP_UP, z)
+        })
+        .collect()
+}
+
+/// Where the shapes stand: the gallery's far wall.
+pub fn gallery_wall(reaches: f32) -> f32 {
+    -reaches - gallery_deep()
+}
 
 /// How far the sight carries. Spec 0003.
 ///
@@ -680,11 +779,57 @@ impl Room {
             // across the whole of it. That is the one place in this building
             // where the collider and the picture are meant to disagree, and it
             // is spec 0011.
-            // and the far end, reaching across the nook too
-            Aabb::from_center_size(
-                vec3(-NOOK_DEEP * 0.5, TALL * 0.5, -reaches),
-                vec3(side * 2.0 + NOOK_DEEP, TALL, thick),
-            ),
+            // and the far end, reaching across the nook too, in two pieces
+            // round the way into the gallery. Spec 0022: the shapes used to
+            // be on this wall and are through it now, so it has a gap in it
+            // the width of the clear aisle.
+            //
+            // The right piece reaches past the hall's own right wall, because
+            // the gallery is wider than the hall and this is its near side as
+            // well as the hall's far one.
+            {
+                let (left, _) = gallery_way();
+                let from = -side - NOOK_DEEP;
+
+                Aabb::new(
+                    vec3(from, 0.0, -reaches - thick * 0.5),
+                    vec3(left, TALL, -reaches + thick * 0.5),
+                )
+            },
+            {
+                let (_, right) = gallery_way();
+                let to = GALLERY_WIDE * 0.5 + thick;
+
+                Aabb::new(
+                    vec3(right, 0.0, -reaches - thick * 0.5),
+                    vec3(to, TALL, -reaches + thick * 0.5),
+                )
+            },
+            // the gallery's own three sides, per spec 0022
+            {
+                let far = gallery_wall(reaches);
+
+                Aabb::new(
+                    vec3(-GALLERY_WIDE * 0.5 - thick, 0.0, far - thick),
+                    vec3(-GALLERY_WIDE * 0.5, TALL, -reaches),
+                )
+            },
+            {
+                let far = gallery_wall(reaches);
+
+                Aabb::new(
+                    vec3(GALLERY_WIDE * 0.5, 0.0, far - thick),
+                    vec3(GALLERY_WIDE * 0.5 + thick, TALL, -reaches),
+                )
+            },
+            {
+                let far = gallery_wall(reaches);
+
+                Aabb::new(
+                    vec3(-GALLERY_WIDE * 0.5 - thick, 0.0, far - thick),
+                    vec3(GALLERY_WIDE * 0.5 + thick, TALL, far),
+                )
+            },
         ];
 
         let benches = benches(-reaches);
@@ -692,7 +837,7 @@ impl Room {
 
         Self {
             stood,
-            displays: crate::display::all_of_them(-reaches),
+            displays: crate::display::all_of_them(gallery_wall(reaches)),
             benches,
             bookcases,
             walls,
@@ -716,7 +861,7 @@ impl Room {
     ///
     /// Its top is at nought, which is where everything else in the room already
     /// sits.
-    pub fn floors(&self) -> [Aabb; 2] {
+    pub fn floors(&self) -> [Aabb; 3] {
         let side = WALL + CABINET.x;
         // where the nook stops, which is where the floor under it stops too
         let shut = -self.reaches + NOOK_SPAN + THICK * 0.5;
@@ -743,6 +888,15 @@ impl Room {
                 ),
                 vec3(NOOK_DEEP, THICK, shut + self.reaches),
             ),
+            // and the gallery across the end, per spec 0022. Its own slab
+            // rather than the hall's reaching out, because it is wider than
+            // the hall and a slab that covered both would stick out past the
+            // hall's side walls, which is the mistake the nook's floor made.
+            {
+                let (at, size) = gallery(self.reaches);
+
+                Aabb::from_center_size(vec3(at.x, -THICK * 0.5, at.z), vec3(size.x, THICK, size.z))
+            },
         ]
     }
 
@@ -1649,7 +1803,10 @@ mod tests {
         assert_eq!(
             solid.len(),
             room.walls.len()
-                + 2
+                // the floors, counted rather than written down: there were
+                // two until spec 0022 put a room across the end of the aisle
+                // and the number here was the only thing that noticed
+                + room.floors().len()
                 + cellar::solid(room.reaches).len()
                 + crate::spa::solid(room.reaches).len()
                 + crate::garden::solid(room.reaches).len()
@@ -2360,22 +2517,65 @@ mod tests {
         }
     }
 
+    /// Spec 0022: the shapes have a room to themselves and nothing else is
+    /// in it.
+    ///
+    /// **This used to be about benches.** While the shapes were on the hall's
+    /// far wall anything standing in the aisle was in front of them from every
+    /// angle, and a bench once was. Moving the wall into a room of its own
+    /// makes that a stronger and simpler thing to ask: nothing in the building
+    /// is in there at all, except the room itself and what stands the shapes
+    /// up.
     #[test]
-    fn nothing_on_a_bench_stands_in_front_of_a_shape() {
-        // the fault that put the benches here: a bench in the aisle is in the
-        // way of the far wall from every angle, which is the one place nothing
-        // should stand
+    fn nothing_stands_in_the_gallery() {
         let room = Room::of(some(12));
+        let (at, size) = gallery(room.reaches);
 
-        for bench in &room.benches {
-            let box_ = Room::bench_box(bench);
-            for shape in &room.displays {
-                assert!(
-                    box_.max.x < shape.at.x - shape.scale || box_.min.x > shape.at.x + shape.scale,
-                    "a bench covers {}",
-                    shape.name
-                );
+        // the footprint, inside its own walls by their whole thickness so
+        // they do not count as being in it. Half of one is not enough: a wall
+        // is centred on the line it closes, so it reaches half its thickness
+        // into the room already.
+        let edge = THICK;
+        let low = vec3(at.x - size.x * 0.5 + edge, 0.0, at.z - size.z * 0.5 + edge);
+        let high = vec3(at.x + size.x * 0.5 - edge, TALL, at.z + size.z * 0.5 - edge);
+
+        let plinths: Vec<Aabb> = room.displays.iter().map(Room::plinth_box).collect();
+
+        for box_ in room.solid() {
+            // the floors are under it rather than in it
+            if box_.max.y <= 0.0 {
+                continue;
             }
+            // and the plinths are what the room is for
+            if plinths
+                .iter()
+                .any(|one| one.min == box_.min && one.max == box_.max)
+            {
+                continue;
+            }
+
+            let over = box_.min.x < high.x
+                && box_.max.x > low.x
+                && box_.min.z < high.z
+                && box_.max.z > low.z;
+
+            assert!(
+                !over,
+                "something stands in the gallery: {:?} to {:?}",
+                box_.min, box_.max
+            );
+        }
+
+        // and the shapes really are in there
+        for shape in &room.displays {
+            assert!(
+                shape.at.x > low.x && shape.at.x < high.x,
+                "{} is not in the gallery: x {:.2} against {:.2} to {:.2}",
+                shape.name,
+                shape.at.x,
+                low.x,
+                high.x
+            );
         }
     }
 
@@ -2459,7 +2659,7 @@ mod tests {
         assert_eq!(
             solid.len(),
             room.walls.len()
-                + 2
+                + room.floors().len()
                 + cellar::solid(room.reaches).len()
                 + crate::spa::solid(room.reaches).len()
                 + crate::garden::solid(room.reaches).len()

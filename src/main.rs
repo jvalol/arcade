@@ -155,22 +155,28 @@ fn staged() -> bool {
 /// picture rather than quietly replacing it with a different one. The hall's
 /// pose is still here behind `--screenshot=hall`: it cost two rounds to derive
 /// and the reasoning on it is still true.
+/// `--screenshot=shapes` stands at the back of the gallery and looks at the
+/// row, per spec 0022.
+///
+/// Its own slug because the hall's pose is worked out from a cabinet, and the
+/// shapes are through a doorway from any cabinet. Just inside the way in,
+/// which is the furthest back the room goes and the one place the whole row
+/// is in frame.
+fn staged_at_the_shapes() -> bool {
+    staged_as().as_deref() == Some("shapes")
+}
+
+/// Where that stands, and which way it looks.
+fn posed_at_the_shapes(reaches: f32) -> (Vec3, f32) {
+    (
+        vec3(0.0, 0.0, -reaches - 0.55),
+        // yaw nought faces -z, which is down the room at the far wall
+        0.0,
+    )
+}
+
 fn staged_in_the_hall() -> bool {
     staged_as().as_deref() == Some("hall")
-}
-
-/// `--screenshot=tesseract` stages spec 0021's room rather than the building.
-///
-/// It needs its own because it is nowhere in the building's coordinates: a
-/// pose is a place and a yaw in the hall, and the eight cells are not in the
-/// hall. So this is a slug that sets the mode rather than the camera.
-/// Which of the eight drawn names a cell is, in `tesseract::cells()` order.
-fn word_of(cell: tesseract::Cell) -> usize {
-    cell.axis.n() * 2 + usize::from(!cell.up)
-}
-
-fn staged_in_the_tesseract() -> bool {
-    staged_as().as_deref() == Some(tesseract::SLUG)
 }
 
 /// Which shot was asked for, if the argument named one.
@@ -267,21 +273,6 @@ fn posed(room: &Room) -> (Vec3, f32) {
     let look = stood.at - Vec3::Z * POSED_PAST - at;
 
     (Vec3::new(at.x, 0.0, at.z), look.x.atan2(-look.z))
-}
-
-/// Standing in spec 0021's tesseract: which cell, and what the building has
-/// to put back when you come out.
-///
-/// The building is one continuous space and this is the one thing in it that
-/// is not: the eight cells are the same cube drawn eight ways, so there is
-/// nowhere in the hall's coordinates to put them. Everything else about
-/// getting about stays as it was, because a cell is an ordinary room the
-/// ordinary way up.
-struct Inside {
-    frame: tesseract::Frame,
-    /// Where you stood in the nook, and which way you were looking, so coming
-    /// out puts you back at the plinth rather than at the door.
-    was: (Vec3, f32, f32),
 }
 
 struct Arcade {
@@ -527,12 +518,6 @@ struct Arcade {
     /// Which way each shape on the far wall is facing, and which one is in your
     /// hands. Spec 0004.
     spin: display::Spin,
-    /// Which cell of the tesseract you are standing in, and where you were
-    /// when you went in. `None` is the building. Spec 0021.
-    inside: Option<Inside>,
-    /// The eight cells' names, drawn into textures, in `tesseract::cells()`
-    /// order. What a wall means is written on it. Spec 0021.
-    cell_words: Vec<TextureId>,
 
     at: Vec3,
     /// How fast you are going down, which until spec 0007 was never.
@@ -593,9 +578,6 @@ impl Arcade {
         let (cradle, ropes) = cradle::strung();
 
         let reaches = room.reaches;
-        // likewise, because the tesseract's pose needs somewhere in the
-        // building to put you back down.
-        let doorway = room.doorway();
         // worked out before `room` is moved into the struct below.
         //
         // The system's shot by default, because that is what
@@ -657,10 +639,10 @@ impl Arcade {
             blew: 0.0,
             stirred: 0.0,
             steamy: 0.0,
-            at: match (staged(), staged_in_the_tesseract()) {
-                (_, true) => tesseract::posed().0,
+            at: match (staged(), staged_at_the_shapes()) {
+                (_, true) => posed_at_the_shapes(reaches).0,
                 (true, _) => posed_at,
-                _ => doorway,
+                _ => room.doorway(),
             },
             falling: 0.0,
             eye: 0.0,
@@ -672,14 +654,6 @@ impl Arcade {
             art: Vec::new(),
             glows: Vec::new(),
             signs: Vec::new(),
-            cell_words: Vec::new(),
-            // `--screenshot=tesseract` opens in the room rather than walking
-            // to it, because there is no walking to it: it is through a
-            // plinth rather than through a door.
-            inside: staged_in_the_tesseract().then(|| Inside {
-                frame: tesseract::Frame::new(),
-                was: (doorway, 0.0, 0.0),
-            }),
             cube: None,
             floor: None,
             carpet: None,
@@ -793,17 +767,17 @@ impl Arcade {
             window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
-            yaw: match (staged(), staged_in_the_tesseract()) {
-                (_, true) => tesseract::posed().1,
+            yaw: match (staged(), staged_at_the_shapes()) {
+                (_, true) => posed_at_the_shapes(reaches).1,
                 (true, _) => posed_yaw,
                 _ => 0.0,
             },
             // level out past the door, where there is no floor worth looking
             // down at, and a little down in the hall
-            pitch: match (staged() && staged_in_the_hall(), staged_in_the_tesseract()) {
-                (_, true) => tesseract::posed().2,
-                (true, _) => POSED_PITCH,
-                _ => 0.0,
+            pitch: if staged() && staged_in_the_hall() {
+                POSED_PITCH
+            } else {
+                0.0
             },
             showing_solid: false,
             wants_planes: false,
@@ -830,17 +804,6 @@ impl Arcade {
             return;
         }
 
-        // inside the tesseract the only thing to work is the plinth you came
-        // in by, and only in the cell it stands in. Spec 0021: a way out you
-        // could use from any of the eight would be a maze with eight exits.
-        if let Some(inside) = self.inside.as_ref() {
-            if tesseract::at_the_plinth(inside.frame.cell(), self.at) {
-                self.come_out();
-            }
-
-            return;
-        }
-
         // past the door of spec 0017 there is nothing to work and 33
         // kilometres to cross, so out there this key sets the ride off, or
         // takes the body the list is resting on. Spec 0018.
@@ -861,10 +824,6 @@ impl Arcade {
                     self.wants_lock = false;
                 }
             }
-            // five of them turn on their plinths while you watch. The sixth
-            // turns you instead, which is spec 0021 and is the whole reason
-            // the way in is a thing on a plinth rather than another wall.
-            Some(room::Seen::Display(n)) if n == display::tesseract() => self.go_inside(),
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
             // the book that is a handle. Spec 0007.
             Some(room::Seen::Case) => self.room.open = !self.room.open,
@@ -1002,9 +961,7 @@ impl Arcade {
     /// The building's line offers to work the toy you are looking at, and the
     /// room behind the wall has no toys in it and one key of its own.
     fn saying(&self) -> &'static str {
-        if self.inside.is_some() {
-            aim::TESSERACT_HELP
-        } else if self.in_the_deep() {
+        if self.in_the_deep() {
             aim::DEEP_HELP
         } else if self.in_the_system() {
             aim::SYSTEM_HELP
@@ -1362,194 +1319,7 @@ impl Arcade {
     /// the two halves separately does not test the choice: with the ride cut
     /// out of `update` entirely, one that drove `riding` and `beyond::ridden`
     /// by hand still passed.
-    /// Through the sixth plinth and into spec 0021's eight rooms.
-    ///
-    /// You turn it, and it turns you. The five before it are what make that a
-    /// surprise rather than a fault: the nook spends five objects teaching
-    /// that a thing on a plinth is a thing you turn and watch.
-    fn go_inside(&mut self) {
-        self.inside = Some(Inside {
-            frame: tesseract::Frame::new(),
-            was: (self.at, self.yaw, self.pitch),
-        });
-
-        self.at = tesseract::arriving();
-        self.falling = 0.0;
-        // facing the plinth you just turned, which is the one thing in here
-        // you have seen before. Yaw nought faces -z, so this is the other way.
-        self.yaw = std::f32::consts::PI;
-        self.pitch = 0.0;
-    }
-
-    /// And back out, which is the same plinth from the other side.
-    fn come_out(&mut self) {
-        if let Some(inside) = self.inside.take() {
-            let (at, yaw, pitch) = inside.was;
-
-            self.at = at;
-            self.yaw = yaw;
-            self.pitch = pitch;
-            self.falling = 0.0;
-        }
-    }
-
-    /// The room you are in, and the eight it is. Spec 0021.
-    ///
-    /// A dark box with six marks hung in it. The colour of a mark says which
-    /// of the four directions the cell beyond it lies along, and where the
-    /// stripe sits on it says which end. The air says which cell you are
-    /// standing in, so where you are is something you know without looking at
-    /// anything and where you can go is something you read off the walls.
-    fn draw_the_tesseract(&self, scene: &mut Scene, camera: &mut Camera, cube: MeshId) {
-        let (Some(inside), Some(hung)) = (self.inside.as_ref(), self.hung) else {
-            return;
-        };
-
-        let frame = inside.frame;
-
-        camera.position = self.looking_from();
-        camera.target = camera.position + self.facing();
-        camera.far = Camera::new().far;
-
-        // **There is no sun in here and there cannot be.** A cell is a closed
-        // box and the sun is outside it, so the shell shadows its own inside
-        // and the directional light contributes exactly nothing. That was
-        // measured rather than reasoned: the floor came out the same to the
-        // byte at an intensity of 0.38 and at 3.0, which is what a shadow
-        // term of nought looks like from the outside.
-        //
-        // So the room carries its own lamp, and the colour of the cell is in
-        // the air rather than in the light. Enough plain fill that a panel
-        // reads as its own colour: the first build had the air at 0.42 of the
-        // cell's hue and nothing else, which multiplied every panel by a
-        // violet and turned the green floor grey.
-        let air = aim::tesseract_panel(frame.cell().axis.n()).truncate();
-
-        scene.light.intensity = 0.0;
-        scene.light.ambient = Vec3::ONE * aim::TESSERACT_LIT + air * aim::TESSERACT_AIR;
-
-        scene.push_light(blitzkit::lighting::PointLight::new(
-            glam::vec3(0.0, tesseract::CELL * aim::TESSERACT_LAMP_UP, 0.0),
-            Vec3::ONE,
-            aim::TESSERACT_LAMP,
-            tesseract::CELL * aim::TESSERACT_LAMP_REACH,
-        ));
-
-        for (at, size) in tesseract::shell() {
-            scene.push_material(
-                cube,
-                &Transform::at(at).with_scale(size),
-                aim::TESSERACT_SHELL,
-                aim::VOID,
-            );
-        }
-
-        for face in tesseract::Face::ALL {
-            let beyond = frame.beyond(face);
-
-            let (at, size) = tesseract::panel(face);
-            scene.push_material(
-                cube,
-                &Transform::at(at).with_scale(size),
-                aim::tesseract_panel(beyond.axis.n()),
-                // nothing in here takes a highlight. `aim::MATTE` is 64,
-                // which is a broad one, and the floor faces the only light
-                // there is: it came out white, and a green floor reading as
-                // grey concrete was the first thing wrong with this room.
-                aim::VOID,
-            );
-
-            // and what it means, written on it. The bar that was here said
-            // which end of the axis by sitting high or low, which is a code
-            // with no key: the first person to walk the room asked what the
-            // white bars meant, which is the answer to whether it worked.
-            //
-            // One object and not two. A pale bar with a dark label on it and
-            // the word on that is three things stacked, and it read as a
-            // sticker stuck on a sticker. `text::drawn` already makes a dark
-            // ground with the letters picked out of it, which is a sign.
-            let (at, turn, size) = tesseract::plate(face, beyond);
-            let stood = Transform::at(at).with_rotation(turn).with_scale(size);
-
-            match self.cell_words.get(word_of(beyond)).copied() {
-                Some(word) => {
-                    scene.push_textured(hung, word, &stood, aim::TESSERACT_WORD, aim::VOID)
-                }
-                None => scene.push_colored(hung, &stood, aim::TESSERACT_WORD),
-            }
-        }
-
-        // and the way out, in the one cell that has it
-        if frame.cell() == tesseract::home() {
-            let (at, size) = tesseract::plinth();
-            scene.push_material(
-                cube,
-                &Transform::at(at).with_scale(size),
-                aim::PLINTH,
-                aim::VOID,
-            );
-
-            // the same shape that stands on the sixth plinth in the nook, at
-            // the same size the nook draws it, so the thing you turned to get
-            // here is the thing standing in front of you.
-            if let Some(mesh) = self.shown.get(display::tesseract()).copied() {
-                scene.push_material(
-                    mesh,
-                    &Transform::at(tesseract::shape_at())
-                        .with_rotation(self.spin.facing(display::tesseract(), self.since))
-                        .with_scale(Vec3::splat(
-                            // the nook worked out what multiplier draws this
-                            // mesh at `display::ACROSS`, off its own bounds.
-                            // In here it is drawn bigger, and this is that
-                            // same number asked for a bigger size.
-                            self.room.displays[display::tesseract()].scale
-                                * (tesseract::SHAPE_ACROSS / display::ACROSS),
-                        )),
-                    aim::TESSERACT_PLATE,
-                    aim::DULL,
-                );
-            }
-        }
-    }
-
     fn gone(&mut self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
-        // inside the tesseract, where the room is a cube with four ways out
-        // and the only things that stop you are the floor, the ceiling and
-        // the plinth. Spec 0021.
-        //
-        // The walk is the ordinary one and knows nothing about any of this. A
-        // crossing is an event rather than a slide: you reach a wall, the
-        // frame turns, and the room is laid out again with the new floor at y
-        // nought, so inside a cell you are always the ordinary way up.
-        if let Some(inside) = self.inside.as_ref() {
-            let cell = inside.frame.cell();
-            let (at, falling) = walk::walk(
-                self.at,
-                if wish.length_squared() > 1e-6 {
-                    wish.normalize() * pace
-                } else {
-                    Vec3::ZERO
-                },
-                self.falling,
-                RADIUS,
-                dt,
-                &tesseract::solid_in(cell),
-                // nothing in here is a step
-                false,
-            );
-
-            return match tesseract::crossing(at) {
-                Some(step) => {
-                    if let Some(inside) = self.inside.as_mut() {
-                        inside.frame = inside.frame.step(step);
-                    }
-
-                    (tesseract::arrive(at, step), 0.0)
-                }
-                None => (at, falling),
-            };
-        }
-
         // out past the door you ride rather than walk. Along the line, no
         // steering, and no collision to do: that floor is one flat slab with
         // nothing on it, and a 185 metre a second sweep through `walk` would be
@@ -2640,18 +2410,6 @@ impl Game for Arcade {
         self.stave =
             Some(renderer.add_texture(&carpet::staves(carpet::STAVE_SEED, cellar::STAVES)));
         self.says = Some(renderer.add_texture(&blitzkit::text::drawn(sign::SAYS, sign::TEXELS)));
-
-        // and the eight names the tesseract's walls carry, per spec 0021. In
-        // `cells()` order, so a cell indexes its own word.
-        self.cell_words = tesseract::cells()
-            .iter()
-            .map(|cell| {
-                renderer.add_texture(&blitzkit::text::drawn(
-                    tesseract::named(*cell),
-                    tesseract::WORD_TEXELS,
-                ))
-            })
-            .collect();
         self.named = Some(renderer.add_texture(&blitzkit::text::drawn(neon::SAYS, neon::TEXELS)));
         self.baths = Some(renderer.add_texture(&blitzkit::text::drawn(spa::SAYS, spa::TEXELS)));
         self.pool_mesh = Some(renderer.add_mesh(&self.pool.surface()));
@@ -3167,18 +2925,7 @@ impl Game for Arcade {
         }
 
         let playing = self.playing.now().map(|name| name.to_string());
-        // **Nothing in the building is in front of you while you are in the
-        // tesseract**, and this asked the building anyway. `looking_at` reads
-        // the hall's cabinets and plinths against wherever you are standing,
-        // and the tesseract's coordinates are not the hall's, so a cell three
-        // steps from the plinth sat a cabinet's prompt on a wall: slider,
-        // click or press enter to play, in a room with nothing in it. Spec
-        // 0021.
-        self.seen = if self.inside.is_some() {
-            None
-        } else {
-            self.room.looking_at(self.looking_from(), self.facing())
-        };
+        self.seen = self.room.looking_at(self.looking_from(), self.facing());
 
         // walking away lets go. Looking away cannot happen: while you hold one
         // the mouse is turning it rather than the view.
@@ -3267,13 +3014,7 @@ impl Game for Arcade {
         // the wink, once, while the sight is on any of the five. Spec 0004: it
         // was under every shape, five times, which is five times too many for
         // a joke.
-        let said: Vec<&str> = if let Some(inside) = self.inside.as_ref() {
-            // which room you are standing in, and where the way out is. Spec
-            // 0021: eight rooms alike in everything but their marks is eight
-            // rooms nobody can navigate, and the marks are on the walls you
-            // are looking away from.
-            vec![self.saying(), tesseract::standing_in(inside.frame.cell())]
-        } else if winking {
+        let said: Vec<&str> = if winking {
             vec![self.saying(), aim::WINK]
         } else if self.in_the_deep() {
             // a line to a thing you can do, because this room has twice the
@@ -3395,15 +3136,6 @@ impl Game for Arcade {
             return;
         };
 
-        // inside the tesseract, which is in none of the building's coordinates
-        // and shares none of its light. Spec 0021: the eight cells are the
-        // same cube drawn eight ways, so there is nowhere in the hall to put
-        // them and nothing of the hall to draw while you are in one.
-        if self.inside.is_some() {
-            self.draw_the_tesseract(scene, camera, cube);
-            return;
-        }
-
         camera.position = self.looking_from();
         camera.target = camera.position + self.facing();
         // and how far it sees, which is the building's hundred metres indoors
@@ -3492,6 +3224,20 @@ impl Game for Arcade {
             // grey the first time this was laid.
             Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
             None => scene.push_colored(floor, &laid, aim::FLOOR),
+        }
+
+        // and the gallery's, which is the aisle's carried through the way in.
+        // Spec 0022: the room is the end of the aisle rather than a different
+        // kind of place, so it is the same floor. It had none at all on its
+        // first build, which from inside is a room standing on black.
+        {
+            let (at, size) = room::gallery(self.room.reaches);
+            let laid = Transform::at(vec3(at.x, 0.0, at.z)).with_scale(vec3(size.x, 1.0, size.z));
+
+            match self.carpet {
+                Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
+                None => scene.push_colored(floor, &laid, aim::FLOOR),
+            }
         }
 
         // and the wear in it where feet have gone, which is the only thing in
@@ -6060,6 +5806,29 @@ impl Game for Arcade {
             }
         }
 
+        // the gallery's shades, so no lamp in here is a bright patch on a
+        // ceiling with nothing making it. Spec 0022.
+        for at in room::gallery_lamps(self.room.reaches) {
+            let shade = room::GALLERY_SHADE;
+
+            scene.push_colored(
+                cube,
+                &Transform::at(at + Vec3::Y * shade.y * 0.5).with_scale(shade),
+                aim::SHADE,
+            );
+            // and the stem up to the ceiling
+            let stem = (at.y + shade.y + room::soffit()) * 0.5;
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(at.x, stem, at.z)).with_scale(vec3(
+                    0.035,
+                    room::soffit() - at.y - shade.y,
+                    0.035,
+                )),
+                aim::SIGN_CHAIN,
+            );
+        }
+
         for (n, one) in self.room.displays.iter().enumerate() {
             let Some(mesh) = self.shown.get(n).copied() else {
                 continue;
@@ -6122,6 +5891,19 @@ impl Game for Arcade {
                 )
             })
             .collect();
+
+        // and the gallery's three, per spec 0022. The room at the end of the
+        // aisle has one thing in it and these are over that rather than over
+        // the middle of the floor.
+        for at in room::gallery_lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                aim::GALLERY_LAMP,
+                aim::GALLERY_LIT,
+                aim::GALLERY_RANGE,
+            ));
+        }
 
         // and the pendant over the sign, which is a fitting like any other.
         let lamp = sign::at(self.room.reaches)

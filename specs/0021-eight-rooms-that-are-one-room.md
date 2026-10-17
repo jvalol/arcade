@@ -1,8 +1,59 @@
 # 0021 Eight rooms that are one room
 
-**Status:** built, 2026-10-16. The room, the marks, the crossing and the way
-in and out. What it looks like is Jake's to say.
+**Status:** parked, 2026-10-16. Built, walked, and taken out again the same
+day. The arithmetic and the object on the plinth are what is left.
 **Date:** 2026-10-16
+
+## Why it is parked
+
+**Nobody could tell where they were.** The room worked, in the sense that
+every crossing landed where the arithmetic said it would. That turned out not
+to be the thing that matters.
+
+Three goes at it, in order, each of which fixed the last one's complaint and
+not the problem.
+
+The marks were a colour for the axis and a bar high or low for the end, which
+is a code with no key. Jake's question was "what are the white bars", which is
+the whole answer to whether a mark needs a legend.
+
+So the walls said it in words. That fixed the code. "Some of the labels don't
+land" came back, and the floor and ceiling ones could not be fixed, because a
+word lying flat has one reading direction and you arrive facing any of four.
+
+So the crossing was animated: the room turning through a right angle as you
+pass through the wall, which is the one thing the room had never shown and was
+the only change that could make it explain itself rather than caption itself.
+It did not. **"walk through purple, no idea where I am now."**
+
+The reason is structural and this spec should have seen it. A cell is a closed
+box with no landmark in it, and everything you can see inside one is stated
+relative to the frame you happen to be standing in. Walk through a wall and
+every colour has changed meaning and nothing you can see was there a moment
+ago. The turn can show you that something rotated. It cannot tell you where
+you are.
+
+What would have worked is a map: eight cells, a dot for where you are, a mark
+on the one with the plinth. A room that needs a map to be comprehensible is a
+room whose idea did not survive contact. This spec wanted the difficulty to be
+holding the turning in your head rather than remembering which blank wall you
+came through, and ninety six states cannot be held.
+
+**What is kept.** The arithmetic, which is correct and tested and says what a
+tesseract is. And the object: the four dimensional cube that stood on the
+sixth plinth as the way in now stands there as a sixth thing to turn and
+watch, like the five beside it. It is the best thing to come out of this.
+
+The nook keeps its cost. The step stays at 0.59 and every shape stays 18 per
+cent smaller, because the sixth object is staying. That was the price of the
+room and it is now the price of the object, which is a smaller thing to have
+bought but not nothing.
+
+**What is gone.** The room, the marks, the written names, the crossing, the
+way in and the way out, the `--screenshot=tesseract` pose, and the whole of
+the palette it needed. Everything in this spec below this section describes
+what was built, and is kept because what it found is worth more than the room
+was.
 
 ## Goal
 
@@ -337,15 +388,6 @@ The drawing is not built.
 
 And the room:
 
-- The six faces of a cell name its six neighbours, and the two they do not
-  name are the one you are in and its opposite. — `tesseract::tests::the_six_faces_name_the_six_neighbours`
-- The room you came from is under the floor, and its opposite is overhead. — `tesseract::tests::the_room_you_came_from_is_under_the_floor`
-- A crossing puts you on the floor just inside the far wall, with the way you
-  did not spend carried over. — `tesseract::tests::a_crossing_lands_you_inside_the_far_wall`
-- Standing anywhere in the room crosses nothing. — `tesseract::tests::standing_in_the_room_crosses_nothing`
-- Three crossings bring your feet back as well as your frame. — `tesseract::tests::three_steps_bring_your_feet_back_too`
-- The floor and the ceiling are solid and nothing else is, because the walls
-  are the way out. — `tesseract::tests::only_the_floor_and_the_ceiling_are_solid`
 
 The two that fail when they are broken, watched rather than assumed: swapping
 the floor and the ceiling in `Frame::beyond` fails the second, and landing
@@ -353,14 +395,6 @@ you at the near wall instead of the far one fails the third.
 
 And the drawing:
 
-- A panel hangs inside the room, standing into it and with its back inside the
-  shell, because two surfaces in one plane fight. — `tesseract::tests::the_panels_hang_inside_the_room`
-- A cell's written name hangs on the panel, stands in front of it rather than
-  behind, and the two ends of an axis put it on opposite sides. — `tesseract::tests::the_name_hangs_where_it_can_be_read`
-- A name is square to its face, stands upright on a wall, and runs across the
-  room rather than along it when it is laid flat. — `tesseract::tests::a_name_faces_into_the_room_and_stands_up`
-- A short name is drawn the shape of its own letters rather than stretched to
-  the width of a long one. — `tesseract::tests::a_short_name_is_not_stretched_to_a_long_one`
 - The thing on the plinth is a four dimensional cube: sixteen corners, thirty
   two edges, four at every corner, and one cube inside another. — `tesseract::tests::the_shape_on_the_plinth_is_a_four_cube`
 - There is a display for each shape on the wall, which is six now. — `display::tests::every_shape_is_on_the_wall`

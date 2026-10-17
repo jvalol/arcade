@@ -13,22 +13,56 @@ pub const TURNS: f32 = 0.35;
 
 /// How far apart they stand along the wall, and how far off it.
 ///
-/// This is what holds the row's width. The cabinets at the end of the rows
-/// stand 1.65 either side of the middle, so a row any wider than three and a
-/// bit puts its outer two behind them and the wall looks like three things
-/// rather than six.
+/// **The row no longer sets the room; the room sets the row.** This used to
+/// be the number that gave way: the cabinets stood 1.65 either side of the
+/// middle, so anything wider than 3.3 went behind them, and when a sixth
+/// shape arrived this came down from 0.72 to 0.59 and every shape in the row
+/// shrank by 18 per cent to pay for it. Jake read that off the screen as the
+/// plinths growing and wanting a wider berth.
 ///
-/// **It came down from 0.72 when the sixth arrived**, and that is spec 0021's
-/// bill. Five shapes fitted the clear span of 3.3 with room to spare; six do
-/// not, and the span cannot grow because what bounds it is where the end
-/// cabinets stand. So the step is the largest that still fits: five steps
-/// plus one shape's width, which is `5 * APART + APART / SWEEP`, has to come
-/// in under 3.3, and that puts the step at 0.59.
+/// Widening the hall to pay for it was tried and does not work: the aisle
+/// and the sight are the same 4.0 on purpose, so the room cannot grow by as
+/// much as 0.2 without things coming alive from further away.
 ///
-/// Every shape in the nook is 18 per cent smaller for it. That is a real cost
-/// and it is paid once: the teapot, the bottle and the three fractals all
-/// come down so that the thing which turns you can stand with them.
-pub const APART: f32 = 0.59;
+/// So the wall moved instead, into a room of its own. Spec 0022. Six shapes
+/// at 0.95 are 5.30 of row in a gallery 6.80 wide, which leaves three
+/// quarters of a metre clear at each end, and every shape is 39 per cent
+/// bigger than the squeezed ones and 32 per cent bigger than the five ever
+/// were.
+///
+/// The row is the steps plus one shape's width, and the first sizing of this
+/// forgot the shape: 4.75 was quoted where 5.30 was meant, and the test below
+/// caught it on its first run, which is the whole of what it is for.
+pub const APART: f32 = 0.95;
+
+/// How much clear wall the row has to leave at each end.
+///
+/// It was nought, and that was the finding rather than the intent: on the
+/// old wall six shapes cleared the gap by half a centimetre a side, which is
+/// a row that did not fit. The gallery of spec 0022 is sized to give them
+/// this instead, so a row that stops being able to leave it is a row that has
+/// outgrown the room rather than one to be shrunk again.
+// Measured rather than drawn: these three exist so the fit can be checked
+// and are not read by anything that renders. The check is the point, since
+// nothing said this row was bounded until the row stopped fitting.
+#[allow(dead_code)]
+pub const CLEAR: f32 = 0.6;
+
+/// The gap the row has to live in, which is the gallery's width.
+///
+/// It used to be the gap between the inner faces of the two cabinets at the
+/// end of the rows, because the row was on the wall between them. Spec 0022
+/// moved the wall.
+#[allow(dead_code)]
+pub fn span() -> f32 {
+    crate::room::GALLERY_WIDE
+}
+
+/// How wide the row actually is, from the outside of one shape to the other.
+pub fn row() -> f32 {
+    (SHAPES.len() - 1) as f32 * APART + ACROSS
+}
+
 pub const OFF_THE_WALL: f32 = 0.75;
 
 /// How wide each one is drawn, across its own widest way.
@@ -89,11 +123,6 @@ const SHAPES: [&str; 6] = [
 /// The one on the end, named because what happens when you press enter at it
 /// is not what happens at the other five.
 pub const TESSERACT: &str = "tesseract";
-
-/// Which place in the row that is.
-pub fn tesseract() -> usize {
-    SHAPES.len() - 1
-}
 
 /// Everything the engine's shape library carries, in the order it is laid out.
 ///
@@ -290,6 +319,44 @@ impl Spin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0002 and 0021: the row fits between the cabinets at the end of
+    /// the rows, with room to spare at each end.
+    ///
+    /// **The test that was missing.** What bounds this row is where those
+    /// cabinets stand, and nothing said so, so when a sixth shape arrived the
+    /// row was made to fit by shrinking every shape in it by 18 per cent and
+    /// the gate stayed green. Jake read it off the screen instead.
+    #[test]
+    fn the_row_fits_between_the_end_cabinets() {
+        let span = span();
+        let row = row();
+
+        assert!(
+            row + CLEAR * 2.0 <= span,
+            "{} shapes at {} apart is {:.2} of row in a gap of {:.2}, which leaves {:.2} at each end",
+            SHAPES.len(),
+            APART,
+            row,
+            span,
+            (span - row) * 0.5
+        );
+
+        // and the outermost shape really is inside the gap, measured off the
+        // row rather than off the arithmetic above
+        let on = all_of_them(-6.0);
+        let edge = on
+            .iter()
+            .map(|one| one.at.x.abs() + ACROSS * 0.5)
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            edge <= span * 0.5 - CLEAR,
+            "the end shape reaches {:.2} and the clear half gap is {:.2}",
+            edge,
+            span * 0.5 - CLEAR
+        );
+    }
 
     /// Spec 0002: there is a display for each shape the library carries.
     #[test]

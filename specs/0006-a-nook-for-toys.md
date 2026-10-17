@@ -616,7 +616,13 @@ nothing, because a pull is a press and not forty a second.
 ## Acceptance criteria
 
 - The nook is off the aisle, not in it. — `room::tests::the_nook_is_off_the_aisle_and_not_in_it`
-- Nothing on a bench stands in front of a shape. — `room::tests::nothing_on_a_bench_stands_in_front_of_a_shape`
+- Nothing on a bench stands in front of a shape. — `room::tests::nothing_stands_in_the_gallery`
+
+  This was about benches while the shapes were on the hall's far wall, where
+  anything in the aisle was in front of them from every angle and a bench once
+  was. Spec 0022 moved them into a room of their own, which makes it a
+  stronger and simpler thing to ask: nothing in the building is in there at
+  all.
 - The nook has a way in, wide enough to walk through. — `room::tests::the_nook_has_a_way_in`
 - And every cabinet still has a wall behind it. — `room::tests::every_cabinet_has_a_wall_behind_it`
 - The benches fit down the nook, inside it and clear of each other. — `room::tests::the_benches_fit_down_the_nook`
