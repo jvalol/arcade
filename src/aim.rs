@@ -52,6 +52,39 @@ pub fn prompt_bounds(window: (f32, f32)) -> Vec2 {
     vec2(window.0 * PROMPT_WIDTH, crate::aim::UNBOUNDED)
 }
 
+/// The two lines under the sight, wrapped as they will be drawn and stacked
+/// so the second begins under the whole of the first.
+///
+/// **Wrapped here rather than left to the renderer.** The renderer wraps to
+/// its bounds and `text::room_for` measures whatever string it is handed, so
+/// a line left to wrap itself measures as one long row: the plate behind it
+/// came out one row tall and wider than the window, and the second and third
+/// rows of a long line were drawn over the room with nothing behind them.
+/// Jake, in the browser build with the rig named under the sight: the text in
+/// the middle vertical part of the screen runs off its background. The same
+/// fault was found and fixed once already, for the lines in the room behind
+/// the wall, and this is the other place that draws over what you are
+/// looking at.
+///
+/// Stacked off the first line's measured height rather than a step a line,
+/// because a name that wraps would otherwise have the detail drawn through
+/// it.
+pub fn said(window: (f32, f32), lines: Vec<(String, f32)>) -> Vec<(Vec2, String, f32)> {
+    let wide = prompt_bounds(window).x;
+    let mut out: Vec<(Vec2, String, f32)> = Vec::with_capacity(lines.len());
+    let mut down = prompt_at(window, 0).y;
+
+    for (say, size) in lines {
+        let say = blitzkit::text::wrapped(&say, size, wide);
+        let tall = blitzkit::text::room_for(&say, size).y;
+
+        out.push((vec2(window.0 * 0.5, down), say, size));
+        down += tall.max(PROMPT_STEP);
+    }
+
+    out
+}
+
 /// What the engine calls a bound that does not bind.
 pub const UNBOUNDED: f32 = blitzkit::renderer::render_text::UNBOUNDED_F32;
 
@@ -1649,6 +1682,94 @@ mod tests {
             "{}: the line is not round the plate",
             what
         );
+    }
+
+    /// Spec 0003: a line under the sight that wraps still sits on its plate,
+    /// at every window this building gets drawn in.
+    ///
+    /// The fault this is written for, in Jake's words, from the browser
+    /// build standing at the test rig: the text in the middle vertical part
+    /// of the screen runs off its background. The renderer wrapped the line
+    /// to three rows and `room_for` measured the string it was handed, which
+    /// is one row, so the plate was one row tall and two of the three rows
+    /// were drawn over the room.
+    ///
+    /// The line here is the one he was reading, because a test written with
+    /// a short line is a test that passes on a fault this size: the one above
+    /// did.
+    #[test]
+    fn a_wrapped_line_sits_on_its_plate() {
+        let long = "13824 cubes, one mesh. Up and down change how many, enter \
+                    changes how they are drawn. 548 draws, 2.30 ms of work.";
+
+        for window in [
+            (640.0f32, 480.0f32),
+            (1280.0, 800.0),
+            (1600.0, 1200.0),
+            (2560.0, 1440.0),
+        ] {
+            let said = said(
+                window,
+                vec![
+                    (String::from("test rig"), PROMPT_SIZE),
+                    (String::from(long), DETAIL_SIZE),
+                ],
+            );
+            let laid: Vec<(Vec2, &str, f32)> = said
+                .iter()
+                .map(|(at, say, size)| (*at, say.as_str(), *size))
+                .collect();
+
+            // it does wrap at this size, or this test is checking nothing
+            assert!(
+                said[1].1.contains('\n'),
+                "{:?} does not wrap the line at all",
+                window
+            );
+
+            // and every row of it is inside the bounds the renderer wraps
+            // to, which is what makes these rows the rows it draws. A plate
+            // measured off rows nobody draws is the same fault wearing a
+            // different hat.
+            for (_, say, size) in laid.iter() {
+                assert!(
+                    blitzkit::text::room_for(say, *size).x <= prompt_bounds(window).x + 1e-3,
+                    "at {:?} the renderer will wrap this again and the plate will not know",
+                    window
+                );
+            }
+
+            inside(&laid, true, "the wrapped prompt");
+
+            // the detail begins under the whole of the name rather than a
+            // fixed step down, which is what keeps a long name off it
+            let over = blitzkit::text::room_for(&said[0].1, PROMPT_SIZE).y;
+
+            assert!(
+                said[1].0.y >= said[0].0.y + over.min(PROMPT_STEP) - 1e-4,
+                "the detail is drawn through the name"
+            );
+
+            // and the whole block is on the window, which is the other half
+            // of running off a background
+            let plate = plate_round(&laid, true).expect("a plate");
+            let low = plate.at - plate.size * 0.5;
+            let high = plate.at + plate.size * 0.5;
+
+            assert!(
+                low.x > 0.0 && high.x < window.0,
+                "at {:?} the plate runs off the side, {:.0} to {:.0}",
+                window,
+                low.x,
+                high.x
+            );
+            assert!(
+                high.y < window.1,
+                "at {:?} the plate runs off the bottom at {:.0}",
+                window,
+                high.y
+            );
+        }
     }
 
     /// Nothing to plate is no plate, rather than a dot in the corner.

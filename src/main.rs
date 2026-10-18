@@ -4414,13 +4414,13 @@ impl Game for Arcade {
             }
         }
 
-        let said: Vec<(Vec2, String, f32)> =
-            vec![(0, name, aim::PROMPT_SIZE), (1, detail, aim::DETAIL_SIZE)]
+        let said = aim::said(
+            self.window,
+            vec![(name, aim::PROMPT_SIZE), (detail, aim::DETAIL_SIZE)]
                 .into_iter()
-                .filter_map(|(line, say, size)| {
-                    say.map(|say| (aim::prompt_at(self.window, line), say, size))
-                })
-                .collect();
+                .filter_map(|(say, size)| say.map(|say| (say, size)))
+                .collect(),
+        );
 
         // a plate under the pair of them. It lands on whatever the sight has
         // just lit, which is the brightest thing in the room, and it used to
