@@ -46,17 +46,32 @@ which is the whole of why this works where three maps did not. It is also the
 one claim the room has to keep, so it is a test over the function the drawing
 calls rather than over a second account of the geometry.
 
-**And every face of the room cube on the map carries the same object**, in
-silhouette against the glowing square. The map says the wall on your left
-leads to the sphere, the wall on your left shows a sphere, and the room
-through it has a sphere in it. Three statements that cannot disagree, because
-all three go through one function.
+**And the map in your hand carries the same four objects**, in silhouette
+against four glowing squares. The map says the wall on your left leads to the
+teapot, the wall on your left shows a teapot, and the room through it has a
+teapot in it. Three statements that cannot disagree, because all three go
+through one function.
+
+That half of the map was a small cube of the room, one face per wall, turned
+to the holder's frame. It is a flat cross now: up is the wall in front of
+you, down is the one behind, left is left. Jake, in kata with seven rooms
+walked, on the cube: the map still doesn't seem clear how it corresponds to
+the room I'm in and which ways I can go. A cube drawn at an angle shows three
+of its faces at once and hides the other three, and asks you to work out
+which of the three you can see is the wall in front of you. Four squares
+facing you hide nothing and ask nothing. Both maps are still there, which is
+what he asked for when he said do both: the shape says what this place is,
+and the cross says which wall leads where.
 
 The four-cube goes in the cell you came in by, so finding the way out and
-finding the room with the four-cube in it are the same job. The sphere goes
-in the cell opposite, which is what there is to find: the plainest of the
-eight and the only one that looks the same from every side, which is the joke
-the far room has earned.
+finding the room with the four-cube in it are the same job. The trefoil knot
+goes in the cell opposite, which is what there is to find.
+
+That one was a sphere first, as the plainest of the eight and the joke the
+far room had earned. Jake, having walked all seven to reach it: one of the
+rooms is just a sphere. The room at the end of three crossings is the one
+that should be worth arriving in, and a joke that lands as an unfinished
+object is not worth the walk.
 
 The names stay. They are in the corner and in the gloss, because they are how
 the room is talked about, and the corner now says what is on the plinth as
@@ -640,8 +655,8 @@ And the eight things:
   by three quarters of its own width, because a sign is turned and the
   furthest corner of a turned box reaches 0.707 of its side rather than
   half: at a half the Klein bottle in south was inside the wall. — `tesseract::tests::a_wall_sign_is_in_the_room_and_out_of_the_way`
-- A face of the map carries its thing on the outside of that face, touching
-  it, and the whole map stays nearer than it is held. — `tesseract::tests::a_map_face_carries_its_thing_on_the_outside`
+- Each square of the cross carries its thing on the side the holder is on,
+  touching it, and the whole of it stays nearer than the map is held. — `tesseract::tests::a_square_of_the_cross_carries_its_thing_toward_you`
 - The wall and the map face that stands for it read their sign from one
   place, so they cannot come apart. — `tests::the_wall_and_the_map_read_the_sign_from_one_place`
 
@@ -665,9 +680,10 @@ And the map:
   through the wall on your left, the cell you are standing in is the outer
   cube, and the one you cannot reach is inside it. Checked for all ninety six
   ways of standing. — `tesseract::tests::the_held_map_lines_up_with_the_room`
-- The room cube has a face for every wall, thin along its own way and square
-  across it, and what is through its six faces is the six cells you can walk
-  to. — `tesseract::tests::the_room_cube_has_a_face_for_every_wall`
+- The cross lays the four walls you can walk at out flat, up for the one in
+  front of you, and the two nobody can walk at are not on it. The squares are
+  square, they face the holder rather than each standing at its own angle,
+  and no two of them overlap. — `tesseract::tests::the_cross_lays_out_the_four_walls_flat`
 
 A bar belongs to three cells and not two, which that first test was written
 saying. A cube's edge is on two of its faces and that is one dimension short:

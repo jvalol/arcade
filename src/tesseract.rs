@@ -690,7 +690,8 @@ pub fn edges_of(cell: Cell) -> Vec<(usize, usize)> {
         .collect()
 }
 
-/// The room you are standing in, as a cube you can hold beside the shape.
+/// The four walls of the room you are standing in, laid out flat beside the
+/// shape.
 ///
 /// **Two maps, because they answer two different questions.** The shape says
 /// what this place is: eight cells, the one you are in as the outer cube and
@@ -700,41 +701,82 @@ pub fn edges_of(cell: Cell) -> Vec<(usize, usize)> {
 /// does not read as the wall on your left however well it is labelled. Jake
 /// said so three times before I stopped tuning it and listened.
 ///
-/// This answers that one and nothing else. Six faces, each in the colour of
-/// the room through it and carrying its name, turned to the frame of whoever
-/// is holding it, so the face pointing the way you are looking is the wall
-/// you are looking at. There is nothing to decode.
+/// This answers that one and nothing else: four squares, each in the colour
+/// of the room through that wall and carrying the thing that stands in it.
+/// How they are laid out is in [`cross_at`], and why they are not a cube any
+/// more is there too.
 ///
-/// The two cells it does not show are you, which is the cube itself, and the
-/// one you cannot reach, which is not on it. Not being on it is exactly what
-/// unreachable means here.
-pub const ROOM_ACROSS: f32 = 0.0265;
-pub const ROOM_SKIN: f32 = 0.0029;
-pub const ROOM_UP: f32 = 0.097;
+/// It carries no writing. The walls of the room each have their name on
+/// them already, and a name on a square this size is a word nobody can read
+/// over a picture nobody can then see.
+/// Half a square, which is smaller than the cube's face was. A cube at an
+/// angle shows you three faces that each cover less than they measure, and
+/// four squares laid flat and facing you cover every pixel they are given:
+/// at the cube's own size the cross took a quarter of the window.
+pub const ROOM_ACROSS: f32 = 0.0142;
+pub const ROOM_SKIN: f32 = 0.0022;
+pub const ROOM_UP: f32 = 0.104;
 
-/// How far past a face its name is written, so it sits off the cube rather
-/// than on it.
-pub const ROOM_NAME_OUT: f32 = 2.7;
+/// Where one of the four squares sits, in the holder's own frame, and how
+/// big it is.
+///
+/// **A flat cross and not a cube.** This was a small cube of the room you
+/// are standing in, one face per wall, turned to the holder's frame so that
+/// the face pointing the way you look is the wall you are looking at. It is
+/// the third thing in this spec that was right on paper and would not read:
+/// a cube drawn at an angle shows you three faces at once and asks you to
+/// work out which of them is the wall in front of you, while the other three
+/// are hidden behind it. Jake, in kata with seven rooms walked: the map
+/// still doesn't seem clear how it corresponds to the room I'm in and which
+/// ways I can go.
+///
+/// So the four walls are laid out flat, facing you, the way a compass is
+/// drawn. Up is the wall in front of you, down is the one behind, left is
+/// left. Nothing is hidden, nothing is foreshortened, and there is no
+/// matching to do. The two that are not on it are the floor and the ceiling,
+/// which are the two you cannot walk at.
+pub fn cross_at(face: Face) -> Option<(Vec3, Vec3)> {
+    face.step()?;
 
-/// Where one of its faces sits and how big, in the holder's own frame.
-pub fn room_face(face: Face) -> (Vec3, Vec3) {
-    let half = ROOM_ACROSS;
-    let out = face.way() * half;
-    let flat = Vec3::ONE - face.way().abs();
-    let size = flat * half * 2.0 + face.way().abs() * ROOM_SKIN;
+    // in the holder's own frame, where x is right, y is up and z is ahead
+    let along = match face {
+        Face::Ahead => Vec3::Y,
+        Face::Back => Vec3::NEG_Y,
+        Face::Right => Vec3::X,
+        Face::Left => Vec3::NEG_X,
+        Face::Down | Face::Up => return None,
+    };
 
-    (out, size)
+    Some((
+        along * CROSS_STEP,
+        vec3(ROOM_ACROSS * 2.0, ROOM_ACROSS * 2.0, ROOM_SKIN),
+    ))
 }
 
-/// Where the thing for the room through one of the held room's faces sits,
-/// in the same local frame as [`room_face`], and how big across it is drawn.
+/// How far from the middle of the cross each square sits.
+///
+/// Far enough apart to read as four things rather than one shape, near
+/// enough that the whole of it is one glance. A little over a square and a
+/// quarter, which leaves a gap of about half a square between neighbours.
+pub const CROSS_STEP: f32 = ROOM_ACROSS * 2.6;
+
+/// Where the thing for the room through one of those four walls sits, in the
+/// same frame, and how big across it is drawn.
 ///
 /// Stood just off the face rather than sunk into it, so what you see is the
-/// whole object and not the half of it that cleared a glowing square.
-pub fn face_thing(face: Face) -> (Vec3, f32) {
+/// whole object and not the half of it that cleared a glowing square. Off
+/// toward the holder now rather than out along a wall's own way, because the
+/// squares all face the same direction.
+///
+/// **Toward the holder is plus z here.** The basis this is laid out in has
+/// its third axis pointing back at the eye, which is written down where the
+/// cross is drawn and was got wrong anyway: minus z put every object behind
+/// its own square, where the square hid it completely.
+pub fn face_thing(face: Face) -> Option<(Vec3, f32)> {
+    let (at, _) = cross_at(face)?;
     let across = ROOM_ACROSS * 2.0 * FACE_ACROSS;
 
-    (face.way() * (ROOM_ACROSS + across * 0.42), across)
+    Some((at + Vec3::Z * (ROOM_SKIN + across * 0.5), across))
 }
 
 /// Where the map is held, as an offset from the eye in the camera's own
@@ -915,10 +957,16 @@ pub fn standing_in(cell: Cell) -> &'static str {
 /// how the room is talked about. They are not what anybody navigates by.
 ///
 /// ana keeps the four dimensional cube, which is both its thing and the way
-/// out, so finding the four-cube room is finding the way out. kata, which is
-/// what there is to find, gets the sphere: the plainest of them, and the one
-/// that looks the same from every side, which is the joke the far room has
-/// earned.
+/// out, so finding the four-cube room is finding the way out.
+///
+/// kata, which is what there is to find, had the sphere: the plainest of
+/// them, and the one that looks the same from every side, which was meant as
+/// the joke the far room had earned. Jake, having walked all seven rooms to
+/// reach it: one of the rooms is just a sphere. The room at the end of three
+/// crossings is the one that should be worth arriving in, and a joke that
+/// lands as an unfinished object is not worth the walk. It has a trefoil
+/// knot now, which is the prettiest thing in here and the only one that
+/// cannot be untied.
 ///
 /// south had a plain cube and has a torus instead. The cube was meant as the
 /// deliberate ordinary one, a three dimensional cell standing against the
@@ -936,7 +984,7 @@ pub enum Thing {
     Hilbert,
     Torus,
     FourCube,
-    Sphere,
+    Knot,
 }
 
 impl Thing {
@@ -948,7 +996,7 @@ impl Thing {
         Thing::Hilbert,
         Thing::Torus,
         Thing::FourCube,
-        Thing::Sphere,
+        Thing::Knot,
     ];
 
     pub fn n(self) -> usize {
@@ -1003,7 +1051,8 @@ pub fn on_the_plinth(cell: Cell) -> Option<&'static str> {
         Thing::Sierpinski => Some("[COPY - Jake] A Sierpinski tetrahedron."),
         Thing::Menger => Some("[COPY - Jake] A Menger sponge."),
         Thing::Hilbert => Some("[COPY - Jake] A Hilbert curve, which is one line."),
-        Thing::Teapot | Thing::Torus | Thing::FourCube | Thing::Sphere => None,
+        Thing::Knot => Some("[COPY - Jake] A trefoil knot: one loop, and it will not come undone."),
+        Thing::Teapot | Thing::Torus | Thing::FourCube => None,
     }
 }
 
@@ -1014,7 +1063,7 @@ pub fn on_the_plinth(cell: Cell) -> Option<&'static str> {
 /// not a second copy of the room.
 pub const THING_ACROSS: f32 = 0.62;
 pub const SIGN_ACROSS: f32 = 0.95;
-pub const FACE_ACROSS: f32 = 0.45;
+pub const FACE_ACROSS: f32 = 0.62;
 
 /// Where a room's own thing stands: on the plinth in the middle.
 pub fn thing_at() -> Vec3 {
@@ -2046,34 +2095,53 @@ mod tests {
         }
     }
 
-    /// The things on the map's faces sit off the faces they belong to, on the
-    /// right side, and the whole of the map stays inside the hand it is held
-    /// in rather than reaching the eye.
+    /// Each square of the cross carries its thing on the side the holder is
+    /// on, square by square, and the whole of it stays inside the hand it is
+    /// held in rather than reaching the eye.
     #[test]
-    fn a_map_face_carries_its_thing_on_the_outside() {
+    fn a_square_of_the_cross_carries_its_thing_toward_you() {
         for face in Face::ALL {
-            let (at, across) = face_thing(face);
-            let (middle, _) = room_face(face);
+            let Some((at, across)) = face_thing(face) else {
+                assert!(
+                    cross_at(face).is_none(),
+                    "{:?} has a square and no thing on it",
+                    face
+                );
+                continue;
+            };
+            let (middle, _) = cross_at(face).expect("a square to carry it");
 
-            // further out than the face itself, along that face's own way
+            // on the square it belongs to, and nowhere near another
             assert!(
-                at.dot(face.way()) > middle.dot(face.way()),
-                "the {:?} face's thing is inside the cube",
+                (at.truncate() - middle.truncate()).length() < 1e-5,
+                "the {:?} thing sits at {:?} and its square is at {:?}",
+                face,
+                at,
+                middle
+            );
+
+            // toward the holder rather than behind the square, which in
+            // this basis is plus z, because its third axis points back at
+            // the eye. Written the other way round first, which hid every
+            // object behind the square it belonged to.
+            assert!(
+                at.z > middle.z,
+                "the {:?} thing is behind its own square",
                 face
             );
 
             // and touching it rather than floating off it
             assert!(
-                at.dot(face.way()) - ROOM_ACROSS < across,
-                "the {:?} face's thing is adrift of its face",
+                at.z - middle.z < across,
+                "the {:?} thing is adrift of its square",
                 face
             );
 
             // and the far side of it is still nearer than the map is held,
             // so nothing of it is behind your eye
             assert!(
-                ROOM_UP + ROOM_ACROSS + across < HELD_OUT,
-                "the map and the things on it reach past where it is held"
+                ROOM_UP + CROSS_STEP + across < HELD_OUT,
+                "the cross and the things on it reach past where it is held"
             );
         }
     }
@@ -2589,63 +2657,73 @@ mod tests {
         assert_eq!(seen.len(), 96, "every way of standing should be checked");
     }
 
-    /// Spec 0021: the room cube is the room, face for face.
+    /// Spec 0021: the cross is the four walls you can walk at, laid out the
+    /// way a compass is drawn.
     ///
-    /// Six faces at the six ways, each thin along its own and square across
-    /// it, so the face on the left of the cube is the wall on your left and
-    /// the one turned toward you is the wall you are walking at.
+    /// Up is the wall in front of you, down is the one behind, left is left.
+    /// Nothing is hidden behind anything, which is the whole of why this is
+    /// not a cube any more.
     #[test]
-    fn the_room_cube_has_a_face_for_every_wall() {
-        let mut seen = std::collections::HashSet::new();
+    fn the_cross_lays_out_the_four_walls_flat() {
+        let want = [
+            (Face::Ahead, Vec3::Y),
+            (Face::Back, Vec3::NEG_Y),
+            (Face::Right, Vec3::X),
+            (Face::Left, Vec3::NEG_X),
+        ];
 
-        for face in Face::ALL {
-            let (at, size) = room_face(face);
-            let way = face.way();
+        for (face, along) in want {
+            let (at, size) = cross_at(face).expect("a wall you can walk at");
 
-            // out along its own way and nowhere else
             assert!(
-                (at - way * ROOM_ACROSS).length() < 1e-5,
-                "{:?} sits at {:?} rather than out along {:?}",
+                (at - along * CROSS_STEP).length() < 1e-5,
+                "the {:?} square sits at {:?} rather than {:?} of the middle",
                 face,
                 at,
-                way
+                along
             );
 
-            // thin along that way, square across it
-            let thin = size.dot(way.abs());
-            let across = size - way.abs() * thin;
-
+            // square, and flat: all four face the holder rather than each
+            // standing at its own angle
             assert!(
-                thin < ROOM_ACROSS * 0.5,
-                "{:?} is not a face, it is a block",
-                face
+                (size.x - size.y).abs() < 1e-5 && size.z < size.x * 0.5,
+                "the {:?} square is {:?}, which is not a flat square",
+                face,
+                size
             );
-            for n in 0..3 {
-                if way.abs()[n] > 0.5 {
+
+            // and clear of its neighbours, or the cross is one shape
+            for (other, _) in want {
+                if other == face {
                     continue;
                 }
+
+                let (beside, _) = cross_at(other).expect("another wall");
+
                 assert!(
-                    (across[n] - ROOM_ACROSS * 2.0).abs() < 1e-5,
-                    "{:?} is not square across itself",
-                    face
+                    (at - beside).length() > size.x,
+                    "the {:?} and {:?} squares overlap",
+                    face,
+                    other
                 );
             }
-
-            assert!(seen.insert(face.way().to_array().map(|v| v as i32)));
         }
 
-        assert_eq!(seen.len(), 6);
+        // the floor and the ceiling are not on it, because they are the two
+        // nobody can walk at
+        for face in [Face::Down, Face::Up] {
+            assert!(cross_at(face).is_none(), "{:?} is on the cross", face);
+        }
 
-        // and what is through them is the six cells you can walk to, which
-        // leaves you and the one you cannot reach off the cube entirely
+        // and what is through the four is four different cells, none of them
+        // the one you are standing in
         let frame = Frame::new();
-        let mut through: Vec<Cell> = Face::ALL.iter().map(|f| frame.beyond(*f)).collect();
+        let mut through: Vec<Cell> = want.iter().map(|(f, _)| frame.beyond(*f)).collect();
+
         through.sort_by_key(|cell| (cell.axis, cell.up));
+        through.dedup();
 
-        let mut want = neighbours(frame.cell());
-        want.sort_by_key(|cell| (cell.axis, cell.up));
-
-        assert_eq!(through, want);
+        assert_eq!(through.len(), 4, "the four walls name four rooms");
         assert!(!through.contains(&frame.cell()));
         assert!(!through.contains(&opposite(frame.cell())));
     }
