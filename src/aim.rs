@@ -648,7 +648,7 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 /// about the one fact a person needs, which is that the walls are the way
 /// out.
 pub const TESSERACT_HELP: &str =
-    "[COPY - Jake] Use WASD and the mouse to get about. Each wall shows what stands in the room through it, so walk at the one you want. The floor is the room you came from. Press Escape to quit.";
+    "[COPY - Jake] Use WASD and the mouse to get about. Each wall shows what stands in the room through it, so walk at the one you want. The four squares in your hand are those four walls, with the one in front of you on top. The floor is the room you came from. Press Escape to quit.";
 
 /// What it says once the far cell has been stood in.
 ///
@@ -973,6 +973,16 @@ pub fn tesseract_panel(axis: usize) -> Vec4 {
     TESSERACT_AXES[axis.min(3)]
 }
 
+/// Where the frame readout sits and how big, per spec 0056.
+///
+/// Bottom left, under everything else that lives there, because it is a
+/// thing you turn on to look at rather than a thing the room is saying. Small
+/// and plain: it is numbers, and numbers want to be read rather than noticed.
+pub const COST_IN: f32 = 22.0;
+pub const COST_UP: f32 = 26.0;
+pub const COST_STEP: f32 = 21.0;
+pub const COST_SIZE: f32 = 15.0;
+
 /// The plate a cell's name is written on, which has to read off the panel it
 /// is on rather than off the wall. Pale, so it works on all four.
 pub const TESSERACT_PLATE: Vec4 = vec4(0.88, 0.87, 0.82, 1.0);
@@ -1139,9 +1149,6 @@ pub const CELLS_LEGEND_SAYS: [&str; CELLS_LEGEND_ROWS] =
 /// and what to find take the same two colours the legend names, so the thing
 /// in your hand and the words under it agree.
 pub const HELD_FRAME: Vec4 = vec4(0.20, 0.20, 0.25, 1.0);
-
-/// How big a cell's name is written on the shape you carry.
-pub const HELD_NAME: f32 = 17.0;
 
 /// How much brighter a lit bar is than the swatch that names it.
 ///

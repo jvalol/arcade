@@ -30,6 +30,7 @@ not a priority, and it never changes once a spec exists.
 | [0020](0020-a-track-in-the-carpet.md) | One hint that the hidden rooms are there: a lane worn across the carpet from the aisle to the hole in the near wall, which is a thing that happened rather than a thing somebody put up |
 | [0021](0021-eight-rooms-that-are-one-room.md) | A tesseract you stand inside, built and parked the same day: nobody could tell where they were, and what is kept is the arithmetic and the object on the sixth plinth |
 | [0022](0022-a-room-at-the-end-of-the-aisle.md) | A room across the end of the hall for the engine's own shapes, because the strip of wall between the cabinets ran out and the aisle cannot be widened without the sight carrying further |
+| [0023](0023-what-a-frame-costs-here.md) | What this building costs to draw, room by room, behind F: the engine measures itself for once, instead of a wall of cubes standing in for it |
 
 ---
 

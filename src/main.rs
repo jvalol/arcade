@@ -560,17 +560,6 @@ struct Arcade {
     /// How wide each of them comes out of its own arithmetic, so one width
     /// asked for is one width drawn.
     thing_sizes: Vec<f32>,
-    /// Where each cell's name sits on the window, worked out while the map
-    /// in your hand is drawn and written one frame later.
-    ///
-    /// **Because the two passes see different halves of what this needs.**
-    /// Drawing has the camera and no text renderer, and the writing has the
-    /// text renderer and no camera, and reconstructing a view projection in
-    /// the second would be a second account of where the camera is. A label
-    /// a frame behind a camera that has not moved is a label in the right
-    /// place.
-    map_names: Vec<(usize, glam::Vec2)>,
-
     at: Vec3,
     /// How fast you are going down, which until spec 0007 was never.
     falling: f32,
@@ -588,6 +577,18 @@ struct Arcade {
     /// Whether every collider is outlined over the scene, per spec 0013 and
     /// spec 0046 of the engine. Off until somebody asks.
     showing_solid: bool,
+    /// Whether the frame readout is up, and what the frames it has seen cost.
+    /// Spec 0056's instrument, pointed at the building rather than at a wall
+    /// of cubes.
+    showing_cost: bool,
+    costs: blitzkit::cost::Costs,
+    /// What the renderer counted for the last frame, and whether the device
+    /// agreed to time one at all, both asked of it at the top of the frame.
+    counted: (u32, u32),
+    timed: bool,
+    /// Whether a frame has gone by, since the first one has nothing to be
+    /// measured against.
+    ran: bool,
     /// Whether a coplanar check has been asked for, per spec 0048 of the
     /// engine. One press, one check: it compares every drawn thing with every
     /// other and the answer does not change between frames.
@@ -714,7 +715,6 @@ impl Arcade {
             cell_words: Vec::new(),
             cell_things: Vec::new(),
             thing_sizes: Vec::new(),
-            map_names: Vec::new(),
             // `--screenshot=tesseract` opens in the room rather than walking
             // to it, because there is no walking to it: it is through a
             // plinth rather than through a door.
@@ -851,6 +851,11 @@ impl Arcade {
                 _ => 0.0,
             },
             showing_solid: false,
+            showing_cost: false,
+            costs: blitzkit::cost::Costs::new(),
+            counted: (0, 0),
+            timed: false,
+            ran: false,
             wants_planes: false,
             fighting: Vec::new(),
             walking: [false; 4],
@@ -1240,6 +1245,72 @@ impl Arcade {
     /// questions for a new user. The shape is the map now and this is its
     /// key, because a colour nobody is told the meaning of is the mistake
     /// this room has already made twice.
+    /// What this frame cost, in the corner, behind F. Spec 0056.
+    ///
+    /// **The building measuring itself.** The engine learned to time a frame
+    /// for `load`, which is a wall of cubes with dials on it and exists
+    /// because there was nothing else to measure. This is the thing worth
+    /// measuring: the largest program anybody has built on this engine, with
+    /// shadow maps and water and a sky and eleven rooms, and the number moves
+    /// as you walk from one of them to the next.
+    ///
+    /// Work rather than the time between frames, for the reason spec 0056
+    /// gives at length: on this machine a window is redrawn when the display
+    /// says so, so the gap between frames is 8.33 in every room that fits
+    /// inside a frame and tells you nothing about which room is dear.
+    fn draw_the_cost(&self, geometry: &mut Geometry, text: &mut TextRenderer) {
+        if !self.showing_cost {
+            return;
+        }
+
+        let ms = |got: Option<f32>| match got {
+            Some(ms) => format!("{:.2} ms", ms),
+            None => String::from("--"),
+        };
+        let counted = self.counted;
+        let lines = [
+            format!(
+                "work {}   95th {}   worst {}",
+                ms(self.costs.middle_ms()),
+                ms(self.costs.tail_ms()),
+                ms(self.costs.worst_ms()),
+            ),
+            format!(
+                "between frames {}   gpu {}",
+                ms(self.costs.between_middle_ms()),
+                if self.timed {
+                    ms(self.costs.gpu_middle_ms())
+                } else {
+                    String::from("not timed here")
+                },
+            ),
+            format!("{} draws, {} triangles", counted.0, counted.1),
+        ];
+
+        let at = |line: usize| {
+            glam::vec2(
+                aim::COST_IN,
+                self.window.1 - aim::COST_UP - (lines.len() - line) as f32 * aim::COST_STEP,
+            )
+        };
+        let round: Vec<(Vec2, &str, f32)> = lines
+            .iter()
+            .enumerate()
+            .map(|(n, line)| (at(n), line.as_str(), aim::COST_SIZE))
+            .collect();
+
+        plate(geometry, aim::plate_round(&round, false));
+
+        for (n, line) in lines.iter().enumerate() {
+            text.push_render_text(RenderText {
+                position: at(n),
+                text: line.clone(),
+                size: aim::COST_SIZE,
+                ..Default::default()
+            });
+        }
+    }
+
     fn draw_the_key(&self, geometry: &mut Geometry, text: &mut TextRenderer) {
         use blitzkit::geometry::quad::Quad;
 
@@ -1277,24 +1348,6 @@ impl Arcade {
             Some(aim::CELLS_GOAL),
             None,
         ];
-
-        // and each cell's name where that cell is on the shape in your hand,
-        // which is the whole of what tells you which wall is which: a blue
-        // wall ahead and a blue name ahead on the map are the same room.
-        for (n, at) in &self.map_names {
-            let Some(cell) = tesseract::cells().get(*n).copied() else {
-                continue;
-            };
-
-            text.push_render_text(RenderText {
-                position: *at + glam::vec2(0.0, -aim::HELD_NAME * 0.5),
-                text: String::from(tesseract::named(cell)),
-                size: aim::HELD_NAME,
-                centered: true,
-                color: aim::tesseract_panel(cell.axis.n()),
-                ..Default::default()
-            });
-        }
 
         let mut y = from.y + aim::CELLS_LEGEND_GAP * 0.5;
         for (line, swatch) in lines.iter().zip(swatches) {
@@ -1612,85 +1665,55 @@ impl Arcade {
             );
         }
 
-        // and the room you are standing in, as a cube beside it, with the
-        // name of what is through each face written on the faces you can
-        // see. The shape says what this place is; this says which wall leads
-        // where, which is the question a person actually has while walking.
+        // and the four walls of the room you are standing in, laid out
+        // flat beside the shape. The shape says what this place is; this
+        // says which wall leads where, which is the question a person
+        // actually has while walking.
         //
         // **One rotation, built once and right.** The camera's right, up and
         // forward are a left handed set, so handing them to `from_mat3` as
         // they come does not give a rotation at all and the first build of
         // this drew six slabs at angles to each other. `right.cross(up)` is
         // the third axis of a proper one, and it points back at the viewer,
-        // which is why ahead is local minus z below.
-        let onto = camera.view_projection();
-        let mut named = Vec::new();
+        // which is why the things below stand at local minus z.
+        //
+        // Unspun, which the cube it replaced was not. A cross is only a
+        // compass while it is square to the eye.
         let beside = middle + up * tesseract::ROOM_UP;
-        let basis = glam::Quat::from_mat3(&glam::Mat3::from_cols(right, up, right.cross(up)));
-        let turn = basis * spun;
+        let turn = glam::Quat::from_mat3(&glam::Mat3::from_cols(right, up, right.cross(up)));
 
         for face in tesseract::Face::ALL {
+            let Some((at, size)) = tesseract::cross_at(face) else {
+                continue;
+            };
+
             let beyond = inside.frame.beyond(face);
-            let (at, size) = tesseract::room_face(face);
-            // **Ahead maps toward the viewer, not away.** The third axis of
-            // that basis points back at the eye, so leaving the sign alone
-            // puts the face you are walking at on the side of the cube you
-            // are looking at. Negated, the face turned toward you was the
-            // wall behind you, which is the one thing a map must not do.
-            let local = at;
             let put = |v: Vec3| beside + turn * v;
 
             scene.push_material(
                 cube,
-                &Transform::at(put(local))
-                    .with_rotation(turn)
-                    .with_scale(glam::vec3(size.x, size.y, size.z)),
-                // over one, so a face burns rather than taking the room's
-                // own light, which in here is ambient and would leave the
-                // cube a set of grey squares
+                &Transform::at(put(at)).with_rotation(turn).with_scale(size),
+                // over one, so a square burns rather than taking the room's
+                // own light, which in here is ambient and would leave these
+                // a set of grey patches
                 aim::held_of(aim::tesseract_panel(beyond.axis.n())),
                 aim::VOID,
             );
 
-            // only the faces turned toward you get a name and a thing, which
-            // is three of the six and is why this is not a thicket of
-            // writing. A thing stands off its face, so one on a face turned
-            // away would show round the edge of the cube.
-            let outward = turn * face.way();
-            let toward = (camera.position - beside).normalize_or(Vec3::Z);
-
-            if toward.dot(outward) <= 0.3 {
-                continue;
+            // and the thing that stands in the room through that wall, on
+            // the square that stands for it, which is the whole of how this
+            // answers where a wall goes without a key
+            if let Some((where_, across)) = tesseract::face_thing(face) {
+                self.draw_a_thing(
+                    scene,
+                    tesseract::sign_on(inside.frame, face),
+                    put(where_),
+                    turn * glam::Quat::from_rotation_y(tesseract::SIGN_TURN),
+                    across,
+                    aim::HELD_THING,
+                );
             }
-
-            // the same object that is on that wall, on the face that stands
-            // for it, so the map answers where a wall goes in the one way
-            // that needs no key at all
-            let (where_, across) = tesseract::face_thing(face);
-            self.draw_a_thing(
-                scene,
-                tesseract::sign_on(inside.frame, face),
-                put(where_),
-                turn * glam::Quat::from_rotation_y(tesseract::SIGN_TURN),
-                across,
-                aim::HELD_THING,
-            );
-
-            let on = onto * put(local * tesseract::ROOM_NAME_OUT).extend(1.0);
-            if on.w <= 1e-4 {
-                continue;
-            }
-
-            named.push((
-                tesseract::numbered(beyond),
-                glam::vec2(
-                    (on.x / on.w * 0.5 + 0.5) * self.window.0,
-                    (0.5 - on.y / on.w * 0.5) * self.window.1,
-                ),
-            ));
         }
-
-        self.map_names = named;
     }
 
     /// One of the eight things, drawn to a given width wherever it is asked
@@ -2696,6 +2719,27 @@ impl Game for Arcade {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
 
+        // what the frame that just went cost, per spec 0056, asked of the
+        // renderer rather than worked out here: the counts are the ones it
+        // actually made, and both clocks are its own. Kept whether or not the
+        // readout is up, because a window that only starts filling when you
+        // press the key shows you the cost of pressing the key.
+        let counted = renderer.counted();
+        let ran = std::mem::replace(&mut self.ran, true);
+
+        self.counted = (counted.draws, counted.triangles);
+        self.timed = renderer.times_frames();
+
+        if ran {
+            self.costs.saw(blitzkit::cost::Frame {
+                seconds: renderer.work_seconds(),
+                between: renderer.frame_seconds(),
+                gpu: renderer.gpu_seconds(),
+                drawn: counted.draws,
+                triangles: counted.triangles,
+            });
+        }
+
         // the water, written over rather than uploaded again. Spec 0042 of the
         // engine is what this is for: without it a surface that moves is a new
         // mesh every frame and a program that grows until it stops.
@@ -3073,7 +3117,10 @@ impl Game for Arcade {
                         glam::vec3(out * u.cos(), out * u.sin(), ring * v.sin())
                     }),
                     tesseract::Thing::FourCube => tesseract::shape(),
-                    tesseract::Thing::Sphere => MeshData::sphere(28, 20),
+                    // the same trefoil the engine's own example draws, so
+                    // the knot in here and the knot on the site are one
+                    // object rather than two formulas that agree today
+                    tesseract::Thing::Knot => blitzkit_shapes::knot::trefoil(160, 24),
                 };
 
                 self.thing_sizes.push(mesh.bounds().size().max_element());
@@ -3797,6 +3844,9 @@ impl Game for Arcade {
         // and what the map in your hand means, in the one room that has
         // one. Spec 0021.
         self.draw_the_key(geometry, text);
+
+        // and what this frame cost, if it was asked for. Spec 0056.
+        self.draw_the_cost(geometry, text);
 
         // the sight, per spec 0003. Not while a game is up, since there is
         // nothing in this room to point at then.
@@ -6935,6 +6985,17 @@ impl Game for Arcade {
             KeyboardKey::O if held && !input.repeat => {
                 self.showing_solid = !self.showing_solid;
             }
+            // and what the frame costs, per spec 0056. A toggle for the same
+            // reason: you walk to the room you are suspicious of and watch
+            // the number there.
+            KeyboardKey::F if held && !input.repeat => {
+                // and nothing else: the window is filled whether or not it is
+                // being looked at, and clearing it here would spend the first
+                // seconds of every look reporting the cost of looking. It is
+                // a few seconds long, so it empties itself of wherever you
+                // were before without being told.
+                self.showing_cost = !self.showing_cost;
+            }
             // the list of every body out past the door, per spec 0018. Jake
             // asked for a way to go straight to one rather than stepping
             // through sixteen to reach the seventeenth.
@@ -6992,6 +7053,18 @@ impl Game for Arcade {
 
         self.yaw += delta.x * LOOK;
         self.pitch = (self.pitch - delta.y * LOOK).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+    }
+
+    /// Spec 0056: the device's own clock, for the readout behind F.
+    ///
+    /// Always, rather than behind the key that shows it. The feature is
+    /// asked for once, before the device exists, and a key pressed later
+    /// cannot go back and ask again. What it costs is two timestamps and a
+    /// sixteen byte read a frame against a building that draws several
+    /// hundred things with shadows, which is nothing, and the alternative is
+    /// a readout that can never show the number that matters most.
+    fn timing(&self) -> bool {
+        true
     }
 
     fn is_quitting(&self) -> bool {
@@ -7054,6 +7127,66 @@ mod tests {
 
         press(&mut one, KeyboardKey::O);
         assert!(!one.showing_solid, "O did not put it away again");
+    }
+
+    /// Spec 0056: F turns the frame readout on, and off again, and the
+    /// window it reads from is none of its business either way.
+    ///
+    /// It was cleared on the way in at first, on the thinking that the
+    /// seconds before anybody asked were a different question. They are not:
+    /// they are the same building a moment ago, the window is only a few
+    /// seconds long so it empties itself of wherever you were, and clearing
+    /// spends the first seconds of every look reporting the cost of looking.
+    #[test]
+    fn f_toggles_what_a_frame_costs() {
+        let mut one = Arcade::new();
+
+        assert!(!one.showing_cost, "the building opened with it up");
+
+        one.costs.saw(blitzkit::cost::Frame {
+            seconds: 0.004,
+            ..Default::default()
+        });
+
+        press(&mut one, KeyboardKey::F);
+        assert!(one.showing_cost, "F did not show what a frame costs");
+        assert_eq!(one.costs.len(), 1, "F threw away the frames before it");
+
+        press(&mut one, KeyboardKey::F);
+        assert!(!one.showing_cost, "F did not put it away again");
+        assert_eq!(one.costs.len(), 1, "putting it away threw the window out");
+    }
+
+    /// Spec 0056: the window fills whether or not it is being looked at.
+    ///
+    /// A readout that starts measuring when the key is pressed spends its
+    /// first few seconds reporting the cost of pressing the key, which is the
+    /// one frame nobody is asking about.
+    #[test]
+    fn the_frames_are_counted_before_anybody_asks() {
+        const SOURCE: &str = include_str!("main.rs");
+
+        let before = SOURCE
+            .split_once("\nmod tests {")
+            .expect("this file has a test module")
+            .0;
+        let from = before
+            .find("fn before_frame(")
+            .expect("the frame starts somewhere");
+        let to = before[from..]
+            .find("\n    fn ")
+            .map(|at| from + at)
+            .unwrap_or(before.len());
+        let frame = &before[from..to];
+
+        assert!(
+            frame.contains("self.costs.saw("),
+            "the window is filled somewhere other than the top of the frame"
+        );
+        assert!(
+            !frame.contains("showing_cost"),
+            "the frame only measures while the readout is up"
+        );
     }
 
     /// Spec 0013: holding it does not flicker it.
