@@ -940,6 +940,69 @@ pub fn plate_round(lines: &[(Vec2, &str, f32)], centred: bool) -> Option<Plate> 
 /// Warm and close in, like a thing hung over an exhibit rather than a room
 /// light. The shapes are pale and the walls behind them are not, so this is
 /// about what falls on the row rather than about filling the room.
+/// The back room, per spec 0024. One bulb in a tin shade, and the three
+/// surfaces it lights.
+///
+/// **Colder and plainer than anywhere else in the building.** The hall is
+/// warm wood and neon, the gallery is a lit room for looking at things, and
+/// this is the room that was left over: bare block, a concrete floor, a
+/// ceiling nobody finished. The lamp is a working bulb rather than a fitting
+/// chosen to go with anything, so it is whiter than the gallery's and does
+/// not reach as far.
+pub const BACK_WALL: Vec4 = vec4(0.42, 0.41, 0.39, 1.0);
+pub const BACK_FLOOR: Vec4 = vec4(0.30, 0.30, 0.31, 1.0);
+pub const BACK_CEILING: Vec4 = vec4(0.17, 0.17, 0.18, 1.0);
+pub const BACK_SHADE: Vec4 = vec4(0.22, 0.21, 0.20, 1.0);
+pub const BACK_BULB: Vec4 = vec4(3.1, 2.9, 2.5, 1.0);
+/// The rig on the bench: the cubes under test, the jig holding them, and the
+/// board the gauges are on.
+///
+/// The cubes are the one bright thing in the room, because they are the thing
+/// the room is for and because a grey cube in a grey room is the placeholder
+/// this building keeps being told off for.
+pub const BACK_CUBE: Vec4 = vec4(0.82, 0.72, 0.30, 1.0);
+pub const BACK_JIG: Vec4 = vec4(0.26, 0.26, 0.28, 1.0);
+pub const BACK_GAUGE: Vec4 = vec4(0.10, 0.11, 0.12, 1.0);
+/// The track a bar runs in, and the three bars: what the frame costs, what
+/// its worst frame cost, and how many draws went into it.
+///
+/// Over one, so a bar burns rather than taking the room's light. A gauge
+/// that goes dim when somebody stands in front of the bulb is a gauge you
+/// read by moving your head.
+pub const BACK_TRACK: Vec4 = vec4(0.04, 0.045, 0.05, 1.0);
+/// And the clutter: galvanised buckets, tins of paint somebody started,
+/// crates, a reel, a ladder and a broom.
+///
+/// Each its own colour rather than one grey for the lot. A room full of one
+/// colour is a room full of one thing, however many shapes are in it.
+pub const CRATE: Vec4 = vec4(0.52, 0.40, 0.26, 1.0);
+pub const LADDER: Vec4 = vec4(0.58, 0.46, 0.30, 1.0);
+pub const BROOM: Vec4 = vec4(0.36, 0.28, 0.17, 1.0);
+pub const BUCKET: Vec4 = vec4(0.52, 0.55, 0.58, 1.0);
+pub const TIN: Vec4 = vec4(0.30, 0.46, 0.44, 1.0);
+pub const JAR: Vec4 = vec4(0.62, 0.60, 0.42, 1.0);
+pub const REEL: Vec4 = vec4(0.26, 0.26, 0.29, 1.0);
+
+/// Which of those one piece of clutter is.
+pub fn clutter_of(thing: crate::back::Thing) -> Vec4 {
+    match thing {
+        crate::back::Thing::Bucket => BUCKET,
+        crate::back::Thing::Tin => TIN,
+        crate::back::Thing::Jar => JAR,
+        crate::back::Thing::Reel => REEL,
+        crate::back::Thing::Crate => CRATE,
+    }
+}
+pub const BACK_READING: [Vec4; 3] = [
+    vec4(1.30, 2.10, 1.35, 1.0),
+    vec4(2.30, 1.55, 0.60, 1.0),
+    vec4(1.00, 1.45, 2.40, 1.0),
+];
+
+pub const BACK_LAMP: Vec3 = glam::vec3(1.0, 0.96, 0.88);
+pub const BACK_LIT: f32 = 1.5;
+pub const BACK_RANGE: f32 = 5.0;
+
 pub const GALLERY_LAMP: Vec3 = glam::vec3(1.0, 0.91, 0.78);
 pub const GALLERY_LIT: f32 = 1.45;
 pub const GALLERY_RANGE: f32 = 5.4;

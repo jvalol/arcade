@@ -1,6 +1,6 @@
 # 0024 The back room
 
-**Status:** not built. The design, and what it is for.
+**Status:** built, 2026-10-17.
 **Date:** 2026-10-17
 
 ## What it is, plainly
@@ -196,39 +196,54 @@ that go with them.
 
 ## Acceptance criteria
 
-Not built. These are the claims it will have to hold, and each is arithmetic
-rather than a photograph.
+- The room stands east of the gallery and nothing of the building is in its
+  air. — `back::tests::the_back_room_stands_where_nothing_else_does`
+- It is closed, and the doorway is the only way out of it. — `back::tests::the_only_way_out_is_the_door`
+- Its floor laps under the gallery's rather than meeting it, so the threshold
+  is not a face you walk into. — `back::tests::the_floors_lap_rather_than_meet`
+- You can walk in from the gallery and out again, with both rooms' colliders
+  in the walk. — `back::tests::you_can_walk_in_and_out_again`
+- The block stays over the bench at every step of the dial, above its top and
+  inside its footprint, with the gauges above the whole of it. — `back::tests::the_block_stays_over_the_bench`
+- Every step of the dial is a cube number, so what it draws is a block with
+  nothing missing off it. — `back::tests::every_step_of_the_dial_is_a_cube`
+- Nothing in the clutter stands on the way from the door to the bench,
+  nothing of it is inside anything else, and all of it is in the room. — `back::tests::the_clutter_is_against_the_walls`
+- There is room to stand at the bench, clear of it and of everything
+  else. — `back::tests::there_is_room_to_stand_at_the_bench`
+- The lamp is in its fitting. — `back::tests::the_lamp_is_in_the_shade`
+- Nothing in the room starts a process, and the gauges read the window the
+  building already fills rather than a second count of the same
+  frames. — `tests::the_back_room_starts_nothing`
 
-- The back room stands beside the gallery and nothing of it is laid over the
-  garden, the cellar, the space behind the wall or the gallery itself.
-- It is closed: a body cannot get out of it except through its door, and the
-  strip above a borrowed wall is topped, which this building has got wrong
-  twice.
-- You can walk in from the gallery and out again, from several places in each
-  room, with both rooms' colliders in the walk.
-- The rig stays over its bench: every cube of it, at every count the dial
-  reaches, is above the bench and clear of the door, the clutter and anywhere
-  a person walks.
-- Nothing in the clutter stands where somebody has to walk, and the walk from
-  the door to the bench is clear with every piece of it in the test.
-- From where a person stands to work the dial, the whole of the block and the
-  gauges above it are in front of them.
-- The dials move what is drawn, and the gauges are the same window spec 0023
-  fills rather than a second count of the same frames.
-- Nothing in the room starts a process. The building spawns a binary in one
-  place, which is a cabinet in the hall, and this room is not one.
-- Its lamp is in its fitting, which is the fault every room in here has had
-  at least once.
+Five of those were written after the thing they guard had already gone wrong
+in a picture: a block 1.5 across standing through the far wall and the bench,
+a door placed where the only way to it was a seventy centimetre gap beside
+the last plinth, a floor that stopped at the threshold, gauges drawn on the
+back of their own board, and a dial whose steps were round numbers rather
+than cube numbers.
+
+That last one is the one worth remembering. 256 cubes in a seven a side grid
+is five full layers and a sixth with a third missing, filled from the bottom,
+so what stands on the bench is a block with a bite out of the top. Every test
+here passed and the room had been photographed four times. Jake saw it in a
+picture: why aren't the cubes organised as a cube, there are more layers at
+the bottom than higher up. The dial is four, eight, twelve, sixteen and
+twenty four a side now.
 
 ### Verified by hand
 
 - The door reads as a door and not as a seam in the wall, from the middle of
   the gallery.
-- The clutter reads as clutter rather than as placeholders, which means no
-  grey blocks standing in for things.
-- You can get from the door to the bench without picking your way through
-  anything.
+- The clutter reads as clutter rather than as placeholders. The crates needed
+  a post at each corner before they stopped reading as stacks of boards.
 - The bench says what it is without a sign explaining the category.
+
+Still to look at, which is the part only Jake can answer: the room is lit by
+one bulb over the middle of the floor and the corners are dark, the clutter
+is all along two walls so the west side is bare, and nothing has been done
+to the walls at all. Bare was the thing he rejected, and a room with four
+things in one corner is bare with a pile in it.
 
 ## Out of scope
 

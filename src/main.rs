@@ -1,6 +1,7 @@
 //! arcade: a room of cabinets, one per game. See `specs/`.
 
 mod aim;
+mod back;
 mod behind;
 mod beyond;
 mod cabinet;
@@ -173,6 +174,31 @@ fn posed_at_the_shapes(reaches: f32) -> (Vec3, f32) {
         // yaw nought faces -z, which is down the room at the far wall
         0.0,
     )
+}
+
+/// `--screenshot=back` stands at the bench in spec 0024's back room.
+///
+/// Its own slug because the room is through a door off the gallery and a
+/// pose that is worked out from a cabinet cannot reach it.
+fn staged_in_the_back_room() -> bool {
+    staged_as().as_deref() == Some("back")
+}
+
+/// Where that stands, and which way it looks.
+///
+/// A couple of strides back from where somebody works the rig and off to one
+/// side, rather than at the bench itself: from the working spot the far wall
+/// is a metre away and fills the window, which is a true picture of standing
+/// at a bench and tells you nothing about the room.
+fn posed_in_the_back_room(reaches: f32) -> (Vec3, f32) {
+    // just inside the door, which is where somebody coming in stands and
+    // the one place the whole room is in front of you
+    let (from, to) = back::way(reaches);
+    let (west, _) = back::span();
+    let at = vec3(west + 0.75, 0.0, (from + to) * 0.5);
+    let look = back::bench(reaches) - at;
+
+    (at, look.x.atan2(-look.z))
 }
 
 fn staged_in_the_hall() -> bool {
@@ -581,6 +607,14 @@ struct Arcade {
     /// Spec 0056's instrument, pointed at the building rather than at a wall
     /// of cubes.
     showing_cost: bool,
+    /// Which step of the back room's dial the rig is on, and whether its
+    /// cubes are one mesh drawn many times or a mesh each. Spec 0024.
+    rig_step: usize,
+    rig_many: bool,
+    /// A cube mesh per cube, uploaded as the dial asks for them.
+    rig_meshes: Vec<MeshId>,
+    /// The back room's clutter, in `back::Thing` order where it is turned.
+    clutter: Vec<MeshId>,
     costs: blitzkit::cost::Costs,
     /// What the renderer counted for the last frame, and whether the device
     /// agreed to time one at all, both asked of it at the top of the frame.
@@ -696,7 +730,12 @@ impl Arcade {
             blew: 0.0,
             stirred: 0.0,
             steamy: 0.0,
-            at: match (staged_at_the_shapes(), staged_in_the_tesseract(), staged()) {
+            at: match (
+                staged_at_the_shapes() || staged_in_the_back_room(),
+                staged_in_the_tesseract(),
+                staged(),
+            ) {
+                (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).0,
                 (true, _, _) => posed_at_the_shapes(reaches).0,
                 (_, true, _) => tesseract::posed().0,
                 (_, _, true) => posed_at,
@@ -837,7 +876,12 @@ impl Arcade {
             window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
             // (sin yaw, 0, -cos yaw), so nought faces -z
-            yaw: match (staged_at_the_shapes(), staged_in_the_tesseract(), staged()) {
+            yaw: match (
+                staged_at_the_shapes() || staged_in_the_back_room(),
+                staged_in_the_tesseract(),
+                staged(),
+            ) {
+                (true, _, _) if staged_in_the_back_room() => posed_in_the_back_room(reaches).1,
                 (true, _, _) => posed_at_the_shapes(reaches).1,
                 (_, true, _) => tesseract::posed().1,
                 (_, _, true) => posed_yaw,
@@ -852,6 +896,10 @@ impl Arcade {
             },
             showing_solid: false,
             showing_cost: false,
+            rig_step: 2,
+            rig_many: false,
+            rig_meshes: Vec::new(),
+            clutter: Vec::new(),
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
@@ -940,6 +988,10 @@ impl Arcade {
                     }
                 }
                 wrecker::NAME => self.wrecker.rebuild_wall(),
+                // the rig: one mesh drawn many times, or a mesh each, which
+                // is the difference between four draw calls and four
+                // thousand. Spec 0024.
+                back::RIG => self.rig_many = !self.rig_many,
                 _ => cradle::set_going(&mut self.cradle, 0),
             },
             None => (),
@@ -975,6 +1027,15 @@ impl Arcade {
 
         let arrow = true;
         match name {
+            // the back room's rig: up and down are how many cubes. Spec 0024.
+            back::RIG if arrow => {
+                if !input.repeat {
+                    let by = if input.key == KeyboardKey::Up { 1 } else { -1 };
+                    let last = back::CUBES.len() as i32 - 1;
+
+                    self.rig_step = (self.rig_step as i32 + by).clamp(0, last) as usize;
+                }
+            }
             metronome::NAME if arrow => {
                 if !input.repeat {
                     // up the needle is slower, which is the thing the toy is for
@@ -1165,6 +1226,27 @@ impl Arcade {
             cascada::NAME => String::from(
                 "Dominoes. Click or press enter to play in its own window.",
             ),
+            // the rig in the back room, per spec 0024. It says the count and
+            // the two numbers that count costs, because a dial with no
+            // reading on it is a dial nobody has a reason to turn.
+            back::RIG => {
+                let count = back::CUBES[self.rig_step];
+
+                format!(
+                    "[COPY - Jake] {} cubes, {}. Up and down change how many, enter changes how they are drawn. {} draws, {} of work.",
+                    count,
+                    if self.rig_many {
+                        "a mesh each"
+                    } else {
+                        "one mesh"
+                    },
+                    self.counted.0,
+                    match self.costs.middle_ms() {
+                        Some(ms) => format!("{:.2} ms", ms),
+                        None => String::from("--"),
+                    },
+                )
+            }
             _ if cradle::stirring(&self.cradle) > 0.05 => {
                 String::from("Click or press enter to set it going again")
             }
@@ -1245,6 +1327,349 @@ impl Arcade {
     /// questions for a new user. The shape is the map now and this is its
     /// key, because a colour nobody is told the meaning of is the mistake
     /// this room has already made twice.
+    /// The back room: its floor, its three walls, its ceiling, the bench and
+    /// the one bulb. Spec 0024.
+    ///
+    /// Its fourth wall is the gallery's, which is drawn with the rest of the
+    /// building's walls and is cut for the door where `back::gallery_east`
+    /// says.
+    fn draw_the_back_room(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
+        let reaches = self.room.reaches;
+        let (west, east) = back::span();
+        let (far, near) = back::deep(reaches);
+
+        // the floor, which is concrete rather than the aisle's carpet: this
+        // is the room the building does not dress up
+        scene.push_colored(
+            floor,
+            &Transform::at(vec3((west + east) * 0.5, 0.0, (far + near) * 0.5)).with_scale(vec3(
+                east - west,
+                1.0,
+                near - far,
+            )),
+            aim::BACK_FLOOR,
+        );
+
+        for box_ in back::solid(reaches) {
+            // the floor slab is drawn above, as a plane, and the bench has
+            // its own legs and top
+            if box_.max.y <= 0.0 || box_ == back::bench_box(reaches) {
+                continue;
+            }
+
+            let colour = if box_.min.y >= back::TALL {
+                aim::BACK_CEILING
+            } else {
+                aim::BACK_WALL
+            };
+
+            scene.push_colored(
+                cube,
+                &Transform::at(box_.center()).with_scale(box_.size()),
+                colour,
+            );
+        }
+
+        // the bench: a top on four legs, the way the nook's are built
+        let at = back::bench(reaches);
+        let top = back::BENCH.y;
+
+        scene.push_colored(
+            cube,
+            &Transform::at(vec3(at.x, top - aim::BENCH_TOP * 0.5, at.z)).with_scale(vec3(
+                back::BENCH.x,
+                aim::BENCH_TOP,
+                back::BENCH.z,
+            )),
+            aim::BENCH_ON,
+        );
+
+        for along in [-1.0f32, 1.0] {
+            for across in [-1.0f32, 1.0] {
+                let leg = vec3(
+                    at.x + along * (back::BENCH.x * 0.5 - aim::BENCH_LEG),
+                    (top - aim::BENCH_TOP) * 0.5,
+                    at.z + across * (back::BENCH.z * 0.5 - aim::BENCH_LEG),
+                );
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(leg).with_scale(vec3(
+                        aim::BENCH_LEG,
+                        top - aim::BENCH_TOP,
+                        aim::BENCH_LEG,
+                    )),
+                    aim::BENCH_LEG_LOOK,
+                );
+            }
+        }
+
+        // the rig on it: a block of cubes held over the bench, and the jig
+        // holding them. Spec 0024.
+        let count = back::CUBES[self.rig_step];
+        let block = back::block(reaches);
+        let across = back::cube_across(count);
+
+        for n in 0..count {
+            let mesh = if self.rig_many {
+                self.rig_meshes.get(n as usize).copied().unwrap_or(cube)
+            } else {
+                cube
+            };
+
+            scene.push_material(
+                mesh,
+                &Transform::at(block + back::cube_at(count, n)).with_scale(Vec3::splat(across)),
+                aim::BACK_CUBE,
+                aim::MATTE,
+            );
+        }
+
+        // the jig: two posts off the bench and a bar across them, which is
+        // what the block is hanging in rather than floating over
+        for side in [-1.0f32, 1.0] {
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(
+                    block.x + side * back::BLOCK * 0.72,
+                    (back::BENCH.y + block.y + back::BLOCK * 0.5) * 0.5,
+                    block.z,
+                ))
+                .with_scale(vec3(
+                    0.05,
+                    block.y + back::BLOCK * 0.5 - back::BENCH.y,
+                    0.05,
+                )),
+                aim::BACK_JIG,
+            );
+        }
+        scene.push_colored(
+            cube,
+            &Transform::at(vec3(block.x, block.y + back::BLOCK * 0.5, block.z)).with_scale(vec3(
+                back::BLOCK * 1.44 + 0.05,
+                0.05,
+                0.05,
+            )),
+            aim::BACK_JIG,
+        );
+
+        // and the gauges on the wall over it, which are what the dial is
+        // turned for: three bars, reading the same window spec 0023 fills
+        // every frame. No highlight on any of it, or the board comes out a
+        // pale slab under the bulb hanging in front of it.
+        let gauge = back::gauge(reaches);
+
+        scene.push_material(
+            cube,
+            &Transform::at(gauge).with_scale(back::GAUGE),
+            aim::BACK_GAUGE,
+            aim::VOID,
+        );
+
+        let readings = [
+            self.costs.middle_ms().unwrap_or(0.0),
+            self.costs.worst_ms().unwrap_or(0.0),
+            self.counted.0 as f32,
+        ];
+
+        for (n, of) in readings.iter().enumerate() {
+            let (where_, long) = back::gauge_bar(n, *of);
+            let track = back::GAUGE_TRACK;
+
+            // the track it runs in, so an empty gauge is still a gauge
+            scene.push_material(
+                cube,
+                &Transform::at(gauge + where_).with_scale(vec3(track, back::GAUGE_BAR, 0.012)),
+                aim::BACK_TRACK,
+                aim::VOID,
+            );
+            scene.push_material(
+                cube,
+                &Transform::at(gauge + where_ + vec3((long - track) * 0.5, 0.0, 0.012))
+                    .with_scale(vec3(long, back::GAUGE_BAR * 0.72, 0.012)),
+                aim::BACK_READING[n],
+                aim::VOID,
+            );
+        }
+
+        // and what is standing about in here, which is half of what the room
+        // is. Spec 0024.
+        self.draw_the_clutter(scene, cube);
+
+        // and the bulb in its tin shade, on a stem up to the ceiling
+        let lamp = back::lamp(reaches);
+
+        scene.push_colored(
+            cube,
+            &Transform::at(lamp + Vec3::Y * back::SHADE.y * 0.5).with_scale(back::SHADE),
+            aim::BACK_SHADE,
+        );
+        scene.push_colored(
+            cube,
+            &Transform::at(lamp).with_scale(Vec3::splat(back::SHADE.y * 0.55)),
+            aim::BACK_BULB,
+        );
+        scene.push_colored(
+            cube,
+            &Transform::at(vec3(
+                lamp.x,
+                (lamp.y + back::SHADE.y + back::TALL) * 0.5,
+                lamp.z,
+            ))
+            .with_scale(vec3(0.03, back::TALL - lamp.y - back::SHADE.y, 0.03)),
+            aim::BACK_SHADE,
+        );
+    }
+
+    /// The back room's clutter: what is standing about in it. Spec 0024.
+    ///
+    /// A crate is drawn rather than modelled, as four boards and a lid, which
+    /// is what keeps it from being a box with a label. The rest come off the
+    /// cellar's wheel.
+    fn draw_the_clutter(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+        let turned = |thing: back::Thing| match thing {
+            back::Thing::Bucket => self.clutter.first().copied(),
+            back::Thing::Tin | back::Thing::Jar => self.clutter.get(1).copied(),
+            back::Thing::Reel => self.clutter.get(2).copied(),
+            back::Thing::Crate => None,
+        };
+
+        for stood in back::clutter(reaches) {
+            let (across, tall) = stood.thing.size();
+            let spin = glam::Quat::from_rotation_y(stood.turn);
+
+            match turned(stood.thing) {
+                Some(mesh) => {
+                    // the wheel makes a thing one unit tall about its own
+                    // foot, so this scales rather than offsets
+                    let lying = stood.thing == back::Thing::Reel;
+                    let turn = if lying {
+                        spin * glam::Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
+                    } else {
+                        spin
+                    };
+                    let at = if lying {
+                        stood.at + Vec3::Y * across * 0.5
+                    } else {
+                        stood.at
+                    };
+
+                    scene.push_material(
+                        mesh,
+                        &Transform::at(at)
+                            .with_rotation(turn)
+                            .with_scale(vec3(across, tall, across)),
+                        aim::clutter_of(stood.thing),
+                        aim::MATTE,
+                    );
+                }
+                None => {
+                    // a crate: four side boards with gaps between them, a
+                    // floor and a lid. Boards rather than one box, because a
+                    // box is what a crate looks like before it is built.
+                    let boards = 3;
+                    let board = tall / (boards as f32 * 1.5);
+                    let mut put = |at: Vec3, size: Vec3| {
+                        scene.push_material(
+                            cube,
+                            &Transform::at(stood.at + spin * at)
+                                .with_rotation(spin)
+                                .with_scale(size),
+                            aim::CRATE,
+                            aim::MATTE,
+                        );
+                    };
+
+                    for n in 0..boards {
+                        let up = board * 0.75 + n as f32 * board * 1.5;
+
+                        for side in [-1.0f32, 1.0] {
+                            put(
+                                vec3(side * across * 0.5, up, 0.0),
+                                vec3(0.03, board, across),
+                            );
+                            put(
+                                vec3(0.0, up, side * across * 0.5),
+                                vec3(across, board, 0.03),
+                            );
+                        }
+                    }
+
+                    // a post at each corner, which is what tells a crate
+                    // from a stack of boards. Without them this read as a
+                    // pallet with a lid on it.
+                    for along in [-1.0f32, 1.0] {
+                        for across_ in [-1.0f32, 1.0] {
+                            put(
+                                vec3(
+                                    along * (across * 0.5 - 0.02),
+                                    tall * 0.5,
+                                    across_ * (across * 0.5 - 0.02),
+                                ),
+                                vec3(0.05, tall, 0.05),
+                            );
+                        }
+                    }
+
+                    put(vec3(0.0, 0.02, 0.0), vec3(across, 0.04, across));
+                    put(vec3(0.0, tall - 0.02, 0.0), vec3(across, 0.04, across));
+                }
+            }
+        }
+
+        // the stepladder, leaning on the east wall: two rails and four steps
+        let foot = back::ladder(reaches);
+        let lean = glam::Quat::from_rotation_z(back::LADDER_LEAN);
+
+        for side in [-1.0f32, 1.0] {
+            scene.push_material(
+                cube,
+                &Transform::at(
+                    foot + lean
+                        * vec3(0.0, back::LADDER_TALL * 0.5, side * back::LADDER_WIDE * 0.5),
+                )
+                .with_rotation(lean)
+                .with_scale(vec3(0.05, back::LADDER_TALL, 0.05)),
+                aim::LADDER,
+                aim::MATTE,
+            );
+        }
+        for n in 0..4 {
+            let up = (n as f32 + 0.6) / 4.6 * back::LADDER_TALL;
+
+            scene.push_material(
+                cube,
+                &Transform::at(foot + lean * vec3(0.0, up, 0.0))
+                    .with_rotation(lean)
+                    .with_scale(vec3(0.06, 0.03, back::LADDER_WIDE)),
+                aim::LADDER,
+                aim::MATTE,
+            );
+        }
+
+        // and the broom in the corner, which is a handle and a head
+        let broom = back::broom(reaches);
+        let tilt = glam::Quat::from_rotation_z(-0.17);
+
+        scene.push_material(
+            cube,
+            &Transform::at(broom + tilt * vec3(0.0, 0.72, 0.0))
+                .with_rotation(tilt)
+                .with_scale(vec3(0.035, 1.44, 0.035)),
+            aim::LADDER,
+            aim::MATTE,
+        );
+        scene.push_material(
+            cube,
+            &Transform::at(broom + tilt * vec3(0.0, 0.06, 0.0))
+                .with_rotation(tilt)
+                .with_scale(vec3(0.07, 0.12, 0.34)),
+            aim::BROOM,
+            aim::MATTE,
+        );
+    }
+
     /// What this frame cost, in the corner, behind F. Spec 0056.
     ///
     /// **The building measuring itself.** The engine learned to time a frame
@@ -2590,6 +3015,8 @@ fn wanted_by(toy: &str, key: KeyboardKey, shifted: bool) -> bool {
         globe::NAME => !up_down,
         // the dial is up and down; leaning on the spindle is any way at all
         gyro::NAME => !shifted || up_down,
+        // the rig's dial is how many cubes, which is up and down
+        back::RIG => up_down,
         // winding is up and down; hauling the ball is any way at all
         wrecker::NAME => !shifted || up_down,
         _ => false,
@@ -2717,6 +3144,18 @@ impl Game for Arcade {
     fn before_frame(&mut self, renderer: &mut Renderer) {
         if self.wants_lock != self.locked {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
+        }
+
+        // and however many separate copies of the cube the rig's dial wants,
+        // uploaded as it asks for them rather than all of them at the start.
+        // Spec 0024: sixteen thousand buffers before the first frame is a
+        // building that takes a while to open for a room nobody may go into.
+        if self.rig_many {
+            let want = back::CUBES[self.rig_step] as usize;
+
+            while self.rig_meshes.len() < want {
+                self.rig_meshes.push(renderer.add_mesh(&MeshData::cube()));
+            }
         }
 
         // what the frame that just went cost, per spec 0056, asked of the
@@ -2861,6 +3300,14 @@ impl Game for Arcade {
         let (_, rug) = room::open_floor(self.room.reaches);
         self.rug = Some(renderer.add_texture(&carpet::rug(rug.z / rug.x)));
         self.boards = Some(renderer.add_texture(&carpet::boards(carpet::BOARD_SEED)));
+        // the back room's clutter, per spec 0024: a bucket, a tin, a jar and
+        // a reel, all off the cellar's wheel. A crate is boards and needs no
+        // mesh of its own.
+        self.clutter = vec![
+            renderer.add_mesh(&back::bucket_mesh()),
+            renderer.add_mesh(&back::tin_mesh()),
+            renderer.add_mesh(&back::reel_mesh()),
+        ];
         self.barrel = Some(renderer.add_mesh(&cellar::barrel_mesh()));
         self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
@@ -4021,6 +4468,9 @@ impl Game for Arcade {
                 None => scene.push_colored(floor, &laid, aim::FLOOR),
             }
         }
+
+        // and the back room through the unmarked door, per spec 0024
+        self.draw_the_back_room(scene, cube, floor);
 
         // and the wear in it where feet have gone, which is the only thing in
         // this hall that says the way through the near wall is there. Spec
@@ -6687,6 +7137,19 @@ impl Game for Arcade {
             ));
         }
 
+        // and the back room's one bulb, per spec 0024
+        {
+            let at = back::lamp(self.room.reaches);
+
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                aim::BACK_LAMP,
+                aim::BACK_LIT,
+                aim::BACK_RANGE,
+            ));
+        }
+
         // and the pendant over the sign, which is a fitting like any other.
         let lamp = sign::at(self.room.reaches)
             + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP - sign::SHADE.y);
@@ -7127,6 +7590,48 @@ mod tests {
 
         press(&mut one, KeyboardKey::O);
         assert!(!one.showing_solid, "O did not put it away again");
+    }
+
+    /// Spec 0024: nothing in the back room starts a process, and its gauges
+    /// read the window the building already fills.
+    ///
+    /// The room was designed twice around a cabinet that launches the
+    /// engine's `load` example, and twice Jake read it back as the wrong
+    /// thing: cabinets are for games, and a room that exists to open a
+    /// second window is a list of games with a door on it. The building
+    /// spawns a binary in exactly one place and this is not it.
+    ///
+    /// Read off this file, because what is guarded is which call is made
+    /// rather than any value it returns.
+    #[test]
+    fn the_back_room_starts_nothing() {
+        const WHOLE: &str = include_str!("main.rs");
+
+        let drawn = WHOLE
+            .split_once("\nmod tests {")
+            .expect("this file has a test module")
+            .0;
+        let from = drawn
+            .find("fn draw_the_back_room(")
+            .expect("the room is drawn somewhere");
+        let to = drawn[from..]
+            .find("\n    /// What this frame cost")
+            .map(|at| from + at)
+            .expect("and something is drawn after it");
+        let room = &drawn[from..to];
+
+        assert!(
+            !room.contains("playing.start") && !room.contains("Command::new"),
+            "something in the back room starts a process"
+        );
+        assert!(
+            room.contains("self.costs."),
+            "the gauges are not reading the window the building fills"
+        );
+        assert!(
+            room.contains("self.counted."),
+            "the gauges are not reading the renderer's own counts"
+        );
     }
 
     /// Spec 0056: F turns the frame readout on, and off again, and the

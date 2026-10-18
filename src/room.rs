@@ -472,11 +472,31 @@ pub fn benches(far: f32) -> Vec<Benched> {
     // and the pool table down in the cellar, which is a bench in every way that
     // matters: a thing you walk up to, point at, and press a key at. Spec 0007.
     out.push(cellar::table(-far));
+    // and the one in the back room, by the same argument. Spec 0024.
+    out.push(crate::back::benched(-far));
 
     out
 }
 
 impl Benched {
+    /// Whether this is one of the nook's row, per spec 0006.
+    ///
+    /// **Was "its top is above ground".** That was a true way of saying "not
+    /// the pool table" while the cellar held the only bench outside the nook,
+    /// and spec 0024 put one in the back room at ground level: two tests that
+    /// are about the nook's row read it as a bench standing in the nook's
+    /// doorway and worked from the wrong side. The nook is off the west of
+    /// the hall and everything else is not, which is a question about where
+    /// a thing is rather than a proxy for it.
+    ///
+    /// Asked only by the tests, which is why it is behind `cfg(test)`: four
+    /// of them are about the nook's row and were each deciding for
+    /// themselves what that meant.
+    #[cfg(test)]
+    pub fn in_the_nook(&self) -> bool {
+        self.at.y >= 0.0 && self.at.x < 0.0
+    }
+
     /// Which way is away from you, and which way is your right hand, stood at
     /// this bench to work it.
     ///
@@ -814,14 +834,11 @@ impl Room {
                     vec3(-GALLERY_WIDE * 0.5, TALL, -reaches),
                 )
             },
-            {
-                let far = gallery_wall(reaches);
-
-                Aabb::new(
-                    vec3(GALLERY_WIDE * 0.5, 0.0, far - thick),
-                    vec3(GALLERY_WIDE * 0.5 + thick, TALL, -reaches),
-                )
-            },
+            // the east one is cut for the back room's door and is built
+            // there, per spec 0024, so there is one account of where it is
+            // rather than two that drift
+            crate::back::gallery_east(reaches)[0],
+            crate::back::gallery_east(reaches)[1],
             {
                 let far = gallery_wall(reaches);
 
@@ -1107,6 +1124,7 @@ impl Room {
         // the hall's near end wall, which is two boxes with a gap between
         // them, and the space that gap leads into. Spec 0011.
         out.extend(crate::behind::near_wall(self.reaches));
+        out.extend(crate::back::solid(self.reaches));
 
         if behind_the_wall {
             out.extend(crate::behind::solid(self.reaches));
@@ -1812,6 +1830,8 @@ mod tests {
                 + crate::garden::solid(room.reaches).len()
                 + crate::behind::near_wall(room.reaches).len()
                 + crate::behind::solid(room.reaches).len()
+                // and the back room, per spec 0024
+                + crate::back::solid(room.reaches).len()
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -1921,11 +1941,13 @@ mod tests {
         let room = Room::of(some(13));
         let reaches = walkable(&room);
 
-        // the nook's own row. The flood is a grid at one height and the cellar
-        // is at another, so the one down there is not a thing this can answer.
-        // Getting to that one is `the_case_is_a_door` and
-        // `you_can_get_back_up_the_stair`, which walk it rather than flooding.
-        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
+        // the nook's own row. The flood is a grid at one height and the
+        // cellar is at another, so the one down there is not a thing this can
+        // answer: getting to that one is `the_case_is_a_door` and
+        // `you_can_get_back_up_the_stair`, which walk it rather than
+        // flooding. The back room's is through a door off the gallery and is
+        // walked by `back::tests::you_can_walk_in_and_out_again`.
+        for bench in room.benches.iter().filter(|one| one.in_the_nook()) {
             // the floor in front of it, on the side you stand to work it
             let at = bench.at + bench.worked_from * (bench.size.x * 0.5 + crate::RADIUS + 0.1);
 
@@ -2005,8 +2027,9 @@ mod tests {
         let room = Room::of(some(13));
         let door = -room.reaches + NOOK_DOOR;
 
-        // the nook's own row. The one in the cellar is under all of this.
-        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
+        // the nook's own row, which is what this is about: the pool table is
+        // under all of it and the back room's is through a door
+        for bench in room.benches.iter().filter(|one| one.in_the_nook()) {
             assert!(
                 Room::bench_box(bench).min.z > door,
                 "the {} is in the way in: it starts at {} and the way in ends at {}",
@@ -2022,7 +2045,7 @@ mod tests {
     fn a_bench_knows_which_way_your_right_hand_is() {
         let room = Room::of(some(13));
 
-        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
+        for bench in room.benches.iter().filter(|one| one.in_the_nook()) {
             // you stand on the side the rest of the room is, which is the side
             // the books are, so away from you is into the wall behind the bench
             assert!(
@@ -2508,7 +2531,7 @@ mod tests {
     fn the_nook_is_off_the_aisle_and_not_in_it() {
         let room = Room::of(some(12));
 
-        for bench in room.benches.iter().filter(|one| one.at.y >= 0.0) {
+        for bench in room.benches.iter().filter(|one| one.in_the_nook()) {
             assert!(
                 bench.at.x < -(WALL + CABINET.x),
                 "a bench stood in the aisle at {}",
@@ -2665,6 +2688,8 @@ mod tests {
                 + crate::garden::solid(room.reaches).len()
                 + crate::behind::near_wall(room.reaches).len()
                 + crate::behind::solid(room.reaches).len()
+                // and the back room, per spec 0024
+                + crate::back::solid(room.reaches).len()
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
