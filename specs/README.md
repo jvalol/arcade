@@ -32,6 +32,7 @@ not a priority, and it never changes once a spec exists.
 | [0022](0022-a-room-at-the-end-of-the-aisle.md) | A room across the end of the hall for the engine's own shapes, because the strip of wall between the cabinets ran out and the aisle cannot be widened without the sight carrying further |
 | [0023](0023-what-a-frame-costs-here.md) | What this building costs to draw, room by room, behind F: the engine measures itself for once, instead of a wall of cubes standing in for it |
 | [0024](0024-the-back-room.md) | A room off the gallery for the building's own instruments, which are neither games nor shapes: a bench with the test rig clamped over it, among the clutter, rather than a cabinet that launches one (draft) |
+| [0025](0025-nothing-behind-the-cubes.md) | A black bay at the end of the back room, with the block of cubes standing in it at arm's width under one lamp, because the engine's own load example is more stunning than the closet and the reason is composition (draft) |
 
 ---
 

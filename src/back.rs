@@ -111,18 +111,22 @@ pub fn floor(reaches: f32) -> Aabb {
     )
 }
 
-/// Everything solid in here: three walls, the floor and the ceiling.
+/// Everything solid in here: three walls, the floor, the ceiling and the
+/// bench.
 ///
 /// The fourth wall is the gallery's, which stands already and is cut for the
-/// door by [`gallery_east`]. The bench is not here either: it is a bench in
-/// the building's own list, which is what gives it a collider, a name under
-/// the sight and the arrows, the same as the pool table down in the cellar.
+/// door by [`gallery_east`]. The rig is not here: it is a bench in the
+/// building's own list, which is what gives it a collider, a name under the
+/// sight and the arrows, the same as the pool table down in the cellar. The
+/// workbench is in here because it stopped being that when the rig came off
+/// it: it is a thing in the way now, and nothing else.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = span();
     let (far, near) = deep(reaches);
 
     vec![
         floor(reaches),
+        bench_box(reaches),
         // the east wall, the whole span
         Aabb::new(
             vec3(east, 0.0, far - THICK),
@@ -152,6 +156,76 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     .collect()
 }
 
+/// The dark end of the room, which is what the rig stands in. Spec 0025.
+///
+/// **Because the example this room is copying is a black window with one
+/// bright thing in it.** The engine's own `load` is white cubes filling the
+/// frame with nothing behind them, and Jake's word for it is stunning. The
+/// same cubes in here were 62 centimetres on a bench, seen from two metres,
+/// against a card the size of a tea tray, with walls as bright as they were
+/// either side: the example is more stunning than the closet. Colour was
+/// never the difference. Composition was.
+///
+/// So the far 1.6 metres of the room is lined black, floor to ceiling and
+/// wall to wall, and the block stands inside it. 1.6 because the block is
+/// 1.2 deep as well as wide and has to stand inside the lining with room
+/// behind it and in front: anything shallower and the cubes hang out into
+/// the grey.
+pub const BAY: f32 = 1.6;
+
+/// How thick the lining is drawn.
+///
+/// A skin over the room's own surfaces rather than a wall of its own, and
+/// buried a little into each of them: a panel whose back face lands exactly
+/// on the face it covers is two drawn faces in one plane, which is the fault
+/// this building has hit seven times.
+pub const LINING: f32 = 0.04;
+pub const LINING_IN: f32 = 0.02;
+
+/// The dark end as a volume: everything from the far wall to the lip.
+pub fn bay(reaches: f32) -> Aabb {
+    let (west, east) = span();
+    let (far, _) = deep(reaches);
+
+    Aabb::new(vec3(west, 0.0, far), vec3(east, TALL, far + BAY))
+}
+
+/// The lining itself: the back wall, the two returns and the ceiling of the
+/// bay.
+///
+/// The floor is not here. A panel laid on the floor is a step at the lip,
+/// and a face at the walking surface is the fault that stops you dead and
+/// that `walk` reports as nothing at all. The bay's floor is the room's own
+/// floor drawn in the lining's colour instead, which is paint rather than
+/// geometry.
+pub fn lining(reaches: f32) -> Vec<Aabb> {
+    let (west, east) = span();
+    let (far, _) = deep(reaches);
+    let lip = far + BAY;
+
+    vec![
+        // the back wall
+        Aabb::new(
+            vec3(west, 0.0, far - LINING_IN),
+            vec3(east, TALL, far + LINING),
+        ),
+        // the two returns
+        Aabb::new(
+            vec3(west - LINING_IN, 0.0, far - LINING_IN),
+            vec3(west + LINING, TALL, lip),
+        ),
+        Aabb::new(
+            vec3(east - LINING, 0.0, far - LINING_IN),
+            vec3(east + LINING_IN, TALL, lip),
+        ),
+        // and the ceiling of it
+        Aabb::new(
+            vec3(west, TALL - LINING, far - LINING_IN),
+            vec3(east, TALL + LINING_IN, lip),
+        ),
+    ]
+}
+
 /// What the bench is called under the sight, and how big it is.
 ///
 /// A bench rather than a thing of its own, because the building already has
@@ -159,17 +233,23 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 /// is on it. The pool table in the cellar is a bench by the same argument and
 /// is not in the nook either.
 pub const RIG: &str = "test rig";
-pub const BENCH: Vec3 = vec3(3.0, 0.86, 0.72);
+pub const BENCH: Vec3 = vec3(0.72, 0.86, 2.2);
 
-/// Where the bench stands: against the far wall, in the middle of it.
+/// Where the bench stands: along the east wall, out of the bay.
+///
+/// It was across the far wall with the block clamped over it, which is where
+/// the far wall is now lined black and the rig stands on the floor. Spec
+/// 0025: the bench is furniture after that. You do not work the dial by
+/// standing at it, you work it by looking at the cubes, which is what the
+/// sight already does.
 pub fn bench(reaches: f32) -> Vec3 {
-    let (west, east) = span();
+    let (_, east) = span();
     let (far, _) = deep(reaches);
 
     vec3(
-        (west + east) * 0.5,
+        east - BENCH.x * 0.5 - 0.05,
         BENCH.y * 0.5,
-        far + BENCH.z * 0.5 + 0.08,
+        far + BAY + 0.25 + BENCH.z * 0.5,
     )
 }
 
@@ -177,30 +257,59 @@ pub fn bench_box(reaches: f32) -> Aabb {
     Aabb::from_center_size(bench(reaches), BENCH)
 }
 
-/// The same, as one of the building's benches.
+/// The rig, as one of the building's benches.
+///
+/// **The record is the block now, not the table.** A bench in this building
+/// is a thing you walk up to, point at and press a key at, and what you
+/// point at in here is the cubes: Jake, getting nothing for pointing at
+/// them, if i'm pointing at the thing demonstrated it should be
+/// interactable. That was a second box bolted onto the sight's chain while
+/// the block sat over a bench. The block stands on the floor now, so the
+/// bench the building knows about is the column the block is the top of, and
+/// there is one box again rather than two.
 pub fn benched(reaches: f32) -> crate::room::Benched {
+    let at = block(reaches);
+
     crate::room::Benched {
         name: RIG,
-        at: vec3(bench(reaches).x, 0.0, bench(reaches).z),
-        size: BENCH,
-        // out into the room, which from this wall is away from the far one
+        at: vec3(at.x, 0.0, at.z),
+        size: vec3(BLOCK + 0.3, BLOCK_UP + BLOCK * 0.5, BLOCK + 0.3),
+        // out into the room, which from the dark end is toward the door
         worked_from: Vec3::Z,
     }
 }
 
 /// Where the lamp hangs, and what its shade is.
 ///
-/// One fitting, over the middle of the floor rather than over the bench. A
-/// lamp over the bench and nothing else would leave the clutter in the dark,
-/// and the clutter is half of what this room is.
+/// One fitting, over the near half of the floor. It was over the middle of
+/// the room, which is now partly the bay: a bulb that reaches the lining
+/// makes it grey, and a grey lining is a black rectangle painted on a wall
+/// rather than a space. Spec 0025. It still has to show the door and the
+/// clutter, which is why it moved rather than went out.
 pub const SHADE: Vec3 = vec3(0.30, 0.10, 0.30);
 pub const LAMP_UP: f32 = TALL - 0.34;
 
 pub fn lamp(reaches: f32) -> Vec3 {
     let (west, east) = span();
-    let (far, near) = deep(reaches);
+    let (_, near) = deep(reaches);
 
-    vec3((west + east) * 0.5, LAMP_UP, (far + near) * 0.5 + 0.3)
+    vec3((west + east) * 0.5, LAMP_UP, near - 1.2)
+}
+
+/// And the bay's own lamp, which is the one that lights the cubes.
+///
+/// At the lip and above it, pointing at nothing because the engine's point
+/// lamps point at nothing: what keeps it off the room is its range, which
+/// dies a stride past the lip. The block is the brightest thing in here by
+/// several times, which is the third of the three things `load` gets for
+/// free.
+pub const BAY_SHADE: Vec3 = vec3(0.36, 0.10, 0.24);
+
+pub fn bay_lamp(reaches: f32) -> Vec3 {
+    let (west, east) = span();
+    let (far, _) = deep(reaches);
+
+    vec3((west + east) * 0.5, TALL - 0.22, far + BAY - 0.18)
 }
 
 /// How many cubes the rig holds, as the steps of its dial.
@@ -226,15 +335,35 @@ pub const CUBES: [u32; 6] = [0, 64, 512, 1728, 4096, 13824];
 /// and the bottom of it inside the bench top. A thing under test that
 /// reaches through the bench it is on is a wall of cubes through the room,
 /// which is the one thing the spec asks the jig to prevent.
-pub const BLOCK: f32 = 0.62;
-pub const BLOCK_UP: f32 = 0.52;
+/// **As wide as your arms, and standing on the floor.** It was 0.62 over a
+/// bench, which is a model of a thing rather than the thing: from where you
+/// work it took a fifth of the view with a lit grey room round it. 1.2
+/// across, with its middle at 1.2 off the floor, is about forty degrees from
+/// the working spot, which is roughly what the block fills in the example's
+/// window. Spec 0025.
+pub const BLOCK: f32 = 1.2;
+pub const BLOCK_UP: f32 = 1.2;
 
-/// Where the middle of the block is.
+/// The top of it, which is what the gauges hang above.
+pub const BLOCK_TOP: f32 = BLOCK_UP + BLOCK * 0.5;
+
+/// Where the middle of the block is: in the bay, with the lining behind it
+/// and a stride of it in front.
 pub fn block(reaches: f32) -> Vec3 {
-    let at = bench(reaches);
+    let (west, east) = span();
+    let (far, _) = deep(reaches);
 
-    vec3(at.x, BENCH.y + BLOCK_UP, at.z)
+    vec3(
+        (west + east) * 0.5,
+        BLOCK_UP,
+        far + LINING + 0.21 + BLOCK * 0.5,
+    )
 }
+
+/// The frame it stands in: how thick a post is, and how far off the block
+/// the two of them stand.
+pub const POST: f32 = 0.06;
+pub const POST_OUT: f32 = BLOCK * 0.5 + 0.1;
 
 /// How big one cube is drawn, for a given count.
 ///
@@ -255,31 +384,6 @@ pub fn cube_at(count: u32, n: u32) -> Vec3 {
     blitzkit::grid::at(count, n, BLOCK)
 }
 
-/// The backdrop the block stands against: a dark card hung behind the cubes
-/// and a little wider than them.
-///
-/// **Because white on black is what makes this read.** The engine's own
-/// `load` example is white cubes against an empty black window and Jake's
-/// word for it was stunning; the same block in here was brass against a grey
-/// wall under one bulb, and his word for that was that it does not land. A
-/// workshop has a dark card behind the thing on the bench for exactly this
-/// reason, which is that you cannot see an edge against its own background.
-/// Wider than the block by half its width each side, because the card is
-/// behind it and a person walks about: at a width and a half the block's
-/// far side came off the edge of it as soon as you stood anywhere but
-/// straight in front, and a cube against the grey wall is a cube you cannot
-/// see.
-pub const CARD: Vec3 = vec3(BLOCK * 2.6, BLOCK * 1.6, 0.03);
-
-/// How high the top of it comes, which is what the gauges hang above.
-pub const CARD_TOP: f32 = BENCH.y + BLOCK_UP + CARD.y * 0.5;
-
-pub fn card(reaches: f32) -> Vec3 {
-    let at = block(reaches);
-
-    vec3(at.x, at.y, at.z - BLOCK * 0.5 - CARD.z)
-}
-
 /// The board the gauges are on: where it hangs, how big it is, and how its
 /// three bars are laid out on it.
 ///
@@ -290,17 +394,17 @@ pub fn card(reaches: f32) -> Vec3 {
 /// nothing to move, and answers the question a gauge is for, which is
 /// whether the needle is near the end rather than what it says. The numbers
 /// themselves are under the sight and behind F.
-/// Over the card rather than at a height of its own, so the two cannot
-/// overlap however either of them is resized. The card went from a width and
-/// a half to two and a half and immediately covered two of the three
-/// gauges, which is the kind of thing a written down number lets happen
+/// Over the block rather than at a height of its own, so the two cannot
+/// overlap however either of them is resized. The board went from one row of
+/// three words to a heading and three rows and immediately wanted the
+/// ceiling, which is the kind of thing a written down number lets happen
 /// twice.
-pub const GAUGE_UP: f32 = CARD_TOP + GAUGE.y * 0.5 + 0.06;
+pub const GAUGE_UP: f32 = BLOCK_TOP + 0.12 + GAUGE.y * 0.5;
 
-// and that it clears the card and the ceiling, checked here rather than in a
-// test because it is arithmetic over constants: a build that got it wrong
+// and that it clears the block and the ceiling, checked here rather than in
+// a test because it is arithmetic over constants: a build that got it wrong
 // would not compile, which is a better place to find out than a picture.
-const _: () = assert!(GAUGE_UP - GAUGE.y * 0.5 > CARD_TOP);
+const _: () = assert!(GAUGE_UP - GAUGE.y * 0.5 > BLOCK_TOP);
 const _: () = assert!(GAUGE_UP + GAUGE.y * 0.5 < TALL);
 /// How big the board is.
 ///
@@ -414,33 +518,20 @@ pub fn gauge_bar(n: usize, of: f32) -> (Vec3, f32) {
 pub fn gauge(reaches: f32) -> Vec3 {
     let (far, _) = deep(reaches);
 
-    vec3(bench(reaches).x, GAUGE_UP, far + 0.04)
-}
-
-/// What the sight has to meet to be pointing at the rig, which is the block
-/// rather than the bench under it.
-///
-/// Jake, pointing at the cubes and getting nothing: if I'm pointing at the
-/// thing demonstrated it should be interactable, same as if I press enter
-/// pointing at the table. A bench in this building answers to its own box,
-/// which is right for a toy standing on one and wrong for a thing held in a
-/// jig above it.
-pub fn rig_box(reaches: f32) -> Aabb {
-    Aabb::from_center_size(block(reaches), Vec3::splat(BLOCK * 1.1))
+    vec3(block(reaches).x, GAUGE_UP, far + LINING + GAUGE.z * 0.5)
 }
 
 /// Where somebody stands to work the rig.
 ///
-/// Worked out from the bench's own `worked_from` rather than written down a
+/// Worked out from the rig's own `worked_from` rather than written down a
 /// second time, which is the fault under most of the others in this
-/// building. Asked only by the tests, which is why it is behind `cfg(test)`:
-/// the game itself never needs to know, because a person decides where to
-/// stand by standing there.
-#[cfg(test)]
+/// building. The staged picture of the room stands here too, so it is not
+/// behind `cfg(test)` any more: a pose that guesses where the working spot
+/// is, is a second account of it.
 pub fn standing(reaches: f32) -> Vec3 {
-    let bench = benched(reaches);
+    let rig = benched(reaches);
 
-    bench.at + bench.worked_from * (BENCH.z * 0.5 + crate::RADIUS + 0.3)
+    rig.at + rig.worked_from * (rig.size.z * 0.5 + crate::RADIUS + 0.35)
 }
 
 /// The meshes the clutter is made of, each off the same wheel the cellar's
@@ -542,95 +633,95 @@ pub struct Stood {
 pub fn clutter(reaches: f32) -> Vec<Stood> {
     let (west, east) = span();
     let (far, near) = deep(reaches);
+    let lip = far + BAY;
     let floor = 0.0;
 
     vec![
-        // the east wall, behind whoever stands at the bench
+        // the strip of west wall between the bay and the door, which is the
+        // only piece of wall in here that is neither lined nor benched
         Stood {
             thing: Thing::Crate,
-            at: vec3(east - 0.34, floor, far + 0.42),
+            at: vec3(west + 0.36, floor, lip + 0.32),
             turn: 0.12,
         },
         Stood {
             thing: Thing::Crate,
-            at: vec3(east - 0.36, 0.42, far + 0.46),
+            at: vec3(west + 0.38, 0.42, lip + 0.36),
             turn: -0.26,
         },
-        Stood {
-            thing: Thing::Crate,
-            at: vec3(east - 0.33, floor, far + 1.02),
-            turn: 0.41,
-        },
+        // the near wall, which is the long one nothing else wants
         Stood {
             thing: Thing::Reel,
-            at: vec3(east - 0.32, floor, far + 1.74),
+            at: vec3(west + 1.56, floor, near - 0.3),
             turn: 0.2,
         },
         Stood {
             thing: Thing::Bucket,
-            at: vec3(east - 0.28, floor, far + 2.34),
+            at: vec3(west + 2.0, floor, near - 0.26),
             turn: 0.0,
         },
         Stood {
             thing: Thing::Bucket,
-            at: vec3(east - 0.62, floor, far + 2.52),
+            at: vec3(west + 2.36, floor, near - 0.34),
             turn: 0.6,
         },
-        // the near corner, by the door
         Stood {
             thing: Thing::Tin,
-            at: vec3(east - 0.30, floor, near - 0.34),
+            at: vec3(west + 3.7, floor, near - 0.28),
             turn: 0.3,
         },
         Stood {
             thing: Thing::Tin,
-            at: vec3(east - 0.58, floor, near - 0.30),
+            at: vec3(west + 3.98, floor, near - 0.32),
             turn: -0.5,
         },
         Stood {
             thing: Thing::Tin,
-            at: vec3(east - 0.32, 0.26, near - 0.33),
+            at: vec3(west + 3.72, 0.26, near - 0.3),
             turn: 0.9,
         },
-        // and the far corner on the door side, which is the one bit of floor
-        // the bench does not reach
-        Stood {
-            thing: Thing::Bucket,
-            at: vec3(west + 0.3, floor, far + 0.34),
-            turn: 0.0,
-        },
-        Stood {
-            thing: Thing::Crate,
-            at: vec3(west + 0.36, floor, far + 0.92),
-            turn: -0.14,
-        },
-        // jars of fixings, on the bench's own far end
+        // and on the bench, which is furniture now and carries what a bench
+        // carries
         Stood {
             thing: Thing::Jar,
             at: vec3(
-                bench(reaches).x - BENCH.x * 0.5 + 0.18,
+                bench(reaches).x - 0.1,
                 BENCH.y,
-                bench(reaches).z - 0.14,
+                bench(reaches).z - BENCH.z * 0.5 + 0.2,
             ),
             turn: 0.0,
         },
         Stood {
             thing: Thing::Jar,
             at: vec3(
-                bench(reaches).x - BENCH.x * 0.5 + 0.34,
+                bench(reaches).x + 0.08,
                 BENCH.y,
-                bench(reaches).z - 0.08,
+                bench(reaches).z - BENCH.z * 0.5 + 0.34,
             ),
             turn: 0.4,
         },
         Stood {
             thing: Thing::Jar,
             at: vec3(
-                bench(reaches).x - BENCH.x * 0.5 + 0.26,
+                bench(reaches).x - 0.16,
                 BENCH.y,
-                bench(reaches).z + 0.1,
+                bench(reaches).z - BENCH.z * 0.5 + 0.44,
             ),
             turn: 0.8,
+        },
+        Stood {
+            thing: Thing::Tin,
+            at: vec3(
+                bench(reaches).x,
+                BENCH.y,
+                bench(reaches).z + BENCH.z * 0.5 - 0.3,
+            ),
+            turn: 0.2,
+        },
+        Stood {
+            thing: Thing::Bucket,
+            at: vec3(east - 0.3, floor, near - 0.34),
+            turn: 0.0,
         },
     ]
 }
@@ -688,10 +779,10 @@ pub const LADDER_WIDE: f32 = 0.42;
 pub const LADDER_LEAN: f32 = 0.22;
 
 pub fn ladder(reaches: f32) -> Vec3 {
-    let (_, east) = span();
-    let (far, _) = deep(reaches);
+    let (west, _) = span();
+    let (_, near) = deep(reaches);
 
-    vec3(east - 0.18, 0.0, far + 3.1)
+    vec3(west + 1.02, 0.0, near - 0.32)
 }
 
 /// And the broom, which leans in the corner by the door.
@@ -740,10 +831,12 @@ mod tests {
 
         for box_ in room.building() {
             // this room's own things are allowed in it, which is its shell
-            // and the bench the building keeps in its own list
+            // and the rig the building keeps in its own list
             if super::solid(reaches)
                 .iter()
-                .chain(std::iter::once(&bench_box(reaches)))
+                .chain(std::iter::once(&crate::room::Room::bench_box(&benched(
+                    reaches,
+                ))))
                 .any(|mine| (mine.min - box_.min).length() < 1e-4)
             {
                 continue;
@@ -923,17 +1016,19 @@ mod tests {
         );
     }
 
-    /// Spec 0024: the block stays over the bench at every step of the dial.
+    /// Spec 0025: the block stands inside the bay, clear on all six sides,
+    /// at every step of the dial.
     ///
-    /// Every cube of it, at every count, inside the bench's own footprint and
-    /// above its top. Written after the first build put a block 1.5 across
-    /// over a bench 0.72 deep, which stood through the far wall at the back
-    /// and through the bench at the bottom.
+    /// The lining is what the cubes are seen against, so a cube outside it
+    /// is a cube against the grey room. Written over the test that held the
+    /// block over its bench, which is where it was until the bench stopped
+    /// holding it.
     #[test]
-    fn the_block_stays_over_the_bench() {
+    fn the_block_stands_clear_inside_the_bay() {
         let reaches = reaches();
-        let bench = bench_box(reaches);
+        let bay = bay(reaches);
         let block = block(reaches);
+        let clear = 0.12;
 
         for count in CUBES {
             let across = cube_across(count);
@@ -944,20 +1039,20 @@ mod tests {
                 let high = at + Vec3::splat(across * 0.5);
 
                 assert!(
-                    low.x > bench.min.x && high.x < bench.max.x,
-                    "cube {} of {} hangs off the end of the bench",
+                    low.x > bay.min.x + clear && high.x < bay.max.x - clear,
+                    "cube {} of {} is at the side of the bay",
                     n,
                     count
                 );
                 assert!(
-                    low.z > bench.min.z && high.z < bench.max.z,
-                    "cube {} of {} stands off the front or back of the bench",
+                    low.z > bay.min.z + clear && high.z < bay.max.z - clear,
+                    "cube {} of {} is through the back of the bay or out past the lip",
                     n,
                     count
                 );
                 assert!(
-                    low.y > bench.max.y,
-                    "cube {} of {} is inside the bench top",
+                    low.y > clear && high.y < bay.max.y - clear,
+                    "cube {} of {} is in the floor or the ceiling",
                     n,
                     count
                 );
@@ -965,14 +1060,223 @@ mod tests {
         }
 
         // and the gauges are above the whole of it rather than behind it
-        let top = block.y + BLOCK * 0.5;
+        assert!(
+            gauge(reaches).y > block.y + BLOCK * 0.5,
+            "the gauges are behind the block"
+        );
+    }
+
+    /// Spec 0025: nothing grey is behind the cubes, from anywhere in the
+    /// room you can stand and look at them.
+    ///
+    /// The one that matters, and the one that is arithmetic rather than
+    /// taste: a ray from the eye through a corner of the block has to land
+    /// on the lining. Where it misses, what is behind that corner is the lit
+    /// room, and a white cube against a grey wall is the thing this whole
+    /// spec exists to stop.
+    ///
+    /// Swept over the floor rather than taken from the working spot alone. A
+    /// ray from straight in front cannot miss a bay that is as wide as the
+    /// room, so a test from there is a test that passes whatever the lining
+    /// is: that was the first version of this, and moving the block most of
+    /// a metre out past the lip did not fail it, because the working spot is
+    /// worked out from the block and moved with it.
+    #[test]
+    fn nothing_grey_is_behind_the_cubes() {
+        let reaches = reaches();
+        let bay = bay(reaches);
+        let block = block(reaches);
+        let half = BLOCK * 0.5;
+        let (west, east) = span();
+        let (_, near) = deep(reaches);
+        let mut stood = 0;
+
+        for across in 0..=8 {
+            for along in 0..=8 {
+                let at = vec3(
+                    west + crate::RADIUS
+                        + (east - west - crate::RADIUS * 2.0) * across as f32 / 8.0,
+                    1.55,
+                    bay.max.z
+                        + crate::RADIUS
+                        + (near - bay.max.z - crate::RADIUS * 2.0) * along as f32 / 8.0,
+                );
+
+                // only from where somebody could actually be, which is out
+                // of the furniture and out of the clutter
+                if clutter_solid(reaches)
+                    .iter()
+                    .chain(std::iter::once(&bench_box(reaches)))
+                    .any(|box_| box_.contains_point(vec3(at.x, 0.9, at.z)))
+                {
+                    continue;
+                }
+
+                stood += 1;
+
+                for up in [-1.0f32, 1.0] {
+                    for side in [-1.0f32, 1.0] {
+                        let corner = block + vec3(side * half, up * half, -half);
+                        let way = (corner - at).normalize();
+                        let lands = at + way * ((bay.min.z - at.z) / way.z);
+
+                        assert!(
+                            lands.x > bay.min.x && lands.x < bay.max.x,
+                            "from {:.2} {:.2} the room shows past a corner, {:.2} across",
+                            at.x,
+                            at.z,
+                            lands.x
+                        );
+                        assert!(
+                            lands.y > 0.0 && lands.y < bay.max.y,
+                            "from {:.2} {:.2} the room shows past a corner, {:.2} up",
+                            at.x,
+                            at.z,
+                            lands.y
+                        );
+                    }
+                }
+            }
+        }
+
+        assert!(stood > 40, "only {} places to stand were swept", stood);
+    }
+
+    /// Spec 0025: from the working spot the block takes forty degrees of the
+    /// view, which is about what it fills in the example's own window.
+    ///
+    /// The number this whole change is for. It was 0.62 across at two and a
+    /// bit metres, which is seventeen degrees: a model of a thing on a
+    /// bench. Jake, after the cubes had already been made white: the example
+    /// is more stunning than the closet.
+    #[test]
+    fn the_block_fills_the_view_from_where_you_work() {
+        let reaches = reaches();
+        let eye = standing(reaches) + Vec3::Y * 1.55;
+        let block = block(reaches);
+        let away = (block - eye).length();
+        let wide = 2.0 * (BLOCK * 0.5 / away).atan().to_degrees();
 
         assert!(
-            gauge(reaches).y > top,
-            "the gauges at {} are behind the block, which reaches {}",
-            gauge(reaches).y,
-            top
+            wide > 40.0,
+            "the block is {:.0} degrees of the view from {:.2} away",
+            wide,
+            away
         );
+
+        // and not so close that you are standing in it, which is the other
+        // way to fill a view
+        assert!(
+            away > BLOCK * 0.5 + crate::RADIUS,
+            "the working spot is inside the block"
+        );
+    }
+
+    /// Spec 0025: the bay is lit by its own lamp, and the room's bulb barely
+    /// reaches it.
+    ///
+    /// A black lining under a bulb is grey, and grey is a rectangle painted
+    /// on a wall rather than a space. Measured with the engine's own falloff
+    /// rather than a rule of thumb about distance, because the falloff is
+    /// what the shader does.
+    #[test]
+    fn the_rig_is_lit_by_its_own_lamp() {
+        let reaches = reaches();
+        let bay = bay(reaches);
+        let block = block(reaches);
+        let mine = blitzkit::lighting::PointLight::new(
+            bay_lamp(reaches),
+            crate::aim::BACK_BAY_LAMP,
+            crate::aim::BACK_BAY_LIT,
+            crate::aim::BACK_BAY_RANGE,
+        );
+        let theirs = blitzkit::lighting::PointLight::new(
+            lamp(reaches),
+            crate::aim::BACK_LAMP,
+            crate::aim::BACK_LIT,
+            crate::aim::BACK_RANGE,
+        );
+
+        for (what, at) in [
+            ("the middle of the block", block),
+            ("the top of it", block + Vec3::Y * BLOCK * 0.5),
+            (
+                "the lining behind it",
+                vec3(block.x, block.y, bay.min.z + LINING),
+            ),
+        ] {
+            let lit = mine.intensity * mine.falloff(mine.position.distance(at));
+            let spill = theirs.intensity * theirs.falloff(theirs.position.distance(at));
+
+            assert!(
+                lit > spill * 4.0,
+                "at {} the bay's lamp gives {:.3} and the room's gives {:.3}",
+                what,
+                lit,
+                spill
+            );
+        }
+
+        // and the room's own bulb still shows the door, or the room is a
+        // dark box with one lit thing in it and no way out
+        let (from, to) = way(reaches);
+        let door = vec3(span().0, 1.0, (from + to) * 0.5);
+
+        assert!(
+            theirs.falloff(theirs.position.distance(door)) > 0.05,
+            "the room's bulb does not reach the door"
+        );
+    }
+
+    /// Spec 0025: the bay's lamp is in a fitting, and inside the bay.
+    #[test]
+    fn the_bay_lamp_is_in_its_fitting() {
+        let reaches = reaches();
+        let at = bay_lamp(reaches);
+        let shade = Aabb::from_center_size(at + Vec3::Y * BAY_SHADE.y * 0.5, BAY_SHADE);
+
+        assert!(shade.contains_point(at), "the bay's lamp is not in a shade");
+        assert!(
+            bay(reaches).contains_point(at),
+            "the bay's lamp hangs outside the bay"
+        );
+        assert!(at.y < TALL, "the bay's lamp is above the ceiling");
+    }
+
+    /// Spec 0025: the bay holds the rig and nothing else.
+    ///
+    /// The clutter was all along the far wall and the bench was across it,
+    /// which is where the dark is now. A bucket in the bay is a bucket lit
+    /// by the one lamp that is meant to be lighting the cubes.
+    #[test]
+    fn the_bay_holds_nothing_but_the_rig() {
+        let reaches = reaches();
+        let bay = bay(reaches);
+
+        for box_ in clutter_solid(reaches) {
+            assert!(
+                !box_.intersects(&bay),
+                "a piece of clutter at {:?} is in the bay",
+                box_.center()
+            );
+        }
+
+        assert!(
+            !bench_box(reaches).intersects(&bay),
+            "the bench is in the bay"
+        );
+
+        // and the door does not open into it: walking in should not put you
+        // in the dark before you have seen the room
+        let (from, to) = way(reaches);
+
+        assert!(
+            from > bay.max.z,
+            "the doorway opens into the bay at {:.2}, which ends at {:.2}",
+            from,
+            bay.max.z
+        );
+        assert!(to > from);
     }
 
     /// Spec 0024: nothing in the clutter stands where somebody has to walk,
@@ -1097,53 +1401,15 @@ mod tests {
         }
     }
 
-    /// Spec 0024: the card is behind the whole block, and the gauges are
-    /// above the whole card.
+    /// Spec 0025: pointing at the cubes works the rig, and pointing at the
+    /// workbench does not.
     ///
-    /// Both of these have already been wrong in a picture. The card was a
-    /// width and a half and the block's far side came off the edge of it
-    /// from anywhere but straight in front. Then widening the card covered
-    /// two of the three gauges, because their height was a number rather
-    /// than the card's own top.
-    ///
-    /// The gauges clearing the card is not in here: it is arithmetic over
-    /// constants, so it is asserted where they are written and the thing
-    /// that catches it is the compiler.
-    #[test]
-    fn the_card_is_behind_the_block_and_under_the_gauges() {
-        let reaches = reaches();
-        let card = card(reaches);
-        let block = block(reaches);
-
-        assert!(
-            card.z < block.z - BLOCK * 0.5,
-            "the card is inside the block"
-        );
-        assert!(
-            block.z - card.z < BLOCK,
-            "the card is a wall away from the block rather than behind it"
-        );
-
-        // wider and taller than the block by a margin, so it still covers it
-        // from off to one side
-        for (mine, theirs, way) in [(CARD.x, BLOCK, "across"), (CARD.y, BLOCK, "up and down")] {
-            assert!(
-                mine > theirs * 1.5,
-                "the card is {:.2} {} against a block of {:.2}",
-                mine,
-                way,
-                theirs
-            );
-        }
-    }
-
-    /// Spec 0024: pointing at the cubes works the rig, not just pointing at
-    /// the bench they stand on.
-    ///
-    /// The sight answers with the bench either way, because the rig is one
-    /// of the building's benches, but the thing a person points at is the
-    /// block. Walked from where somebody stands to work it, looking at the
-    /// block, with the whole building's colliders in the way.
+    /// The rig is one of the building's benches, and what it is is the block
+    /// rather than a table: Jake, pointing at the cubes and getting nothing,
+    /// if i'm pointing at the thing demonstrated it should be interactable.
+    /// The workbench on the east wall is furniture after spec 0025 and is
+    /// the control: it is the thing in here that looks most like a bench and
+    /// it is not the one the sight answers with.
     #[test]
     fn pointing_at_the_cubes_finds_the_rig() {
         let reaches = reaches();
@@ -1156,16 +1422,32 @@ mod tests {
 
         let eye = standing(reaches) + Vec3::Y * 1.55;
 
-        for at in [block(reaches), bench(reaches) + Vec3::Y * BENCH.y] {
+        for at in [
+            block(reaches),
+            block(reaches) + Vec3::Y * BLOCK * 0.4,
+            block(reaches) - Vec3::Y * BLOCK * 0.4,
+        ] {
             let way = (at - eye).normalize();
 
             assert_eq!(
                 room.looking_at(eye, way),
                 Some(crate::room::Seen::Bench(n)),
-                "looking at {:?} from the bench found something else",
+                "looking at {:?} from the working spot found something else",
                 at
             );
         }
+
+        // and the workbench is not it, from somebody standing at the
+        // workbench
+        let bench = bench(reaches);
+        let beside = vec3(bench.x - 1.0, 1.55, bench.z);
+        let at_it = (bench + Vec3::Y * BENCH.y - beside).normalize();
+
+        assert_ne!(
+            room.looking_at(beside, at_it),
+            Some(crate::room::Seen::Bench(n)),
+            "the workbench answers as the rig"
+        );
 
         // and the sight is not answering from anywhere in the room: the far
         // corner is a wall away from it
@@ -1320,10 +1602,10 @@ mod tests {
         assert!(at.x > west && at.x < east && at.z > far && at.z < near);
     }
 
-    /// And somebody standing at the bench is in the room, clear of it, and
+    /// And somebody standing at the rig is in the room, clear of it, and
     /// not inside anything.
     #[test]
-    fn there_is_room_to_stand_at_the_bench() {
+    fn there_is_room_to_stand_at_the_rig() {
         let reaches = reaches();
         let at = standing(reaches);
         let (west, east) = span();
@@ -1341,14 +1623,20 @@ mod tests {
             );
         }
 
-        // and a body's width clear of the bench itself, which is what makes
+        // and a body's width clear of the rig itself, which is what makes
         // it somewhere to stand rather than somewhere to be wedged
-        let bench = bench_box(reaches);
+        let rig = crate::room::Room::bench_box(&benched(reaches));
 
         assert!(
-            at.z - bench.max.z > 0.6,
-            "there is {:.2} between the bench and whoever is at it",
-            at.z - bench.max.z
+            at.z - rig.max.z > 0.5,
+            "there is {:.2} between the rig and whoever is at it",
+            at.z - rig.max.z
+        );
+
+        // out of the dark, too: you work it from the room, looking in
+        assert!(
+            at.z > bay(reaches).max.z,
+            "the working spot is inside the bay"
         );
     }
 }

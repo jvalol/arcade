@@ -1369,19 +1369,6 @@ impl Room {
                 slab(from, way, &leaf).map(|far| (Seen::Case, far))
             });
 
-        // and the block of cubes the back room's bench holds up, which is
-        // the thing you are looking at when you work that one. Spec 0024: a
-        // bench answers to its own box, which is right for a toy standing on
-        // it and wrong for a thing in a jig over it.
-        let rig = self
-            .benches
-            .iter()
-            .position(|bench| bench.name == crate::back::RIG)
-            .and_then(|n| {
-                slab(from, way, &crate::back::rig_box(self.reaches))
-                    .map(|far| (Seen::Bench(n), far))
-            });
-
         // and what is in the way, because until now nothing was. The sight took
         // the nearest thing the ray met among the things you can use and a wall
         // was never one of them, so from the nook you could point through the
@@ -1399,7 +1386,6 @@ impl Room {
             .chain(glass)
             .chain(baths)
             .chain(swung)
-            .chain(rig)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
             .map(|(what, _)| what)

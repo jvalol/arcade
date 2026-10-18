@@ -966,9 +966,14 @@ pub const BACK_BULB: Vec4 = vec4(3.1, 2.9, 2.5, 1.0);
 /// the two. A little cool rather than flat white, so a face turned away from
 /// the bulb is blue grey instead of grey.
 pub const BACK_CUBE: Vec4 = vec4(0.88, 0.90, 0.94, 1.0);
-/// And the card they stand against, which is as near black as this building
-/// draws.
-pub const BACK_CARD: Vec4 = vec4(0.025, 0.025, 0.03, 1.0);
+/// And the lining of the bay they stand in, which is as near black as this
+/// building draws.
+///
+/// It was a card the size of a tea tray behind the block. Spec 0025 lines
+/// the whole far end of the room in it instead, because what the example
+/// this room is copying has behind its cubes is not a dark rectangle, it is
+/// nothing at all.
+pub const BACK_LINING: Vec4 = vec4(0.025, 0.025, 0.03, 1.0);
 pub const BACK_JIG: Vec4 = vec4(0.26, 0.26, 0.28, 1.0);
 pub const BACK_GAUGE: Vec4 = vec4(0.10, 0.11, 0.12, 1.0);
 /// The track a bar runs in, and the three bars: what the frame costs, what
@@ -1009,7 +1014,17 @@ pub const BACK_READING: [Vec4; 3] = [
 
 pub const BACK_LAMP: Vec3 = glam::vec3(1.0, 0.96, 0.88);
 pub const BACK_LIT: f32 = 1.5;
-pub const BACK_RANGE: f32 = 5.0;
+/// Short enough that it has nothing left by the time it reaches the lining.
+///
+/// A bulb that reaches the black makes it grey, and grey is a rectangle
+/// painted on a wall rather than a space you could step into. Spec 0025.
+pub const BACK_RANGE: f32 = 3.8;
+
+/// The bay's own lamp: whiter than the room's bulb, stronger, and with a
+/// range that dies a stride past the lip.
+pub const BACK_BAY_LAMP: Vec3 = glam::vec3(1.0, 0.99, 0.96);
+pub const BACK_BAY_LIT: f32 = 4.0;
+pub const BACK_BAY_RANGE: f32 = 2.4;
 
 pub const GALLERY_LAMP: Vec3 = glam::vec3(1.0, 0.91, 0.78);
 pub const GALLERY_LIT: f32 = 1.45;

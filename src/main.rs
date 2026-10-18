@@ -186,17 +186,15 @@ fn staged_in_the_back_room() -> bool {
 
 /// Where that stands, and which way it looks.
 ///
-/// A couple of strides back from where somebody works the rig and off to one
-/// side, rather than at the bench itself: from the working spot the far wall
-/// is a metre away and fills the window, which is a true picture of standing
-/// at a bench and tells you nothing about the room.
+/// At the working spot, which is where the room is arranged to be seen
+/// from.
 fn posed_in_the_back_room(reaches: f32) -> (Vec3, f32) {
-    // just inside the door, which is where somebody coming in stands and
-    // the one place the whole room is in front of you
-    let (from, to) = back::way(reaches);
-    let (west, _) = back::span();
-    let at = vec3(west + 0.75, 0.0, (from + to) * 0.5);
-    let look = back::bench(reaches) - at;
+    // at the rig, looking at it. It was just inside the door, which showed
+    // the whole room and was the right picture while the room was the
+    // point. Spec 0025 made the rig the point: what this has to show is a
+    // block of white cubes with nothing behind them.
+    let at = back::standing(reaches) + Vec3::Z * 1.1;
+    let look = back::block(reaches) - at;
 
     (at, look.x.atan2(-look.z))
 }
@@ -1340,19 +1338,40 @@ impl Arcade {
     fn draw_the_back_room(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
         let reaches = self.room.reaches;
         let (west, east) = back::span();
-        let (far, near) = back::deep(reaches);
+        let (_, near) = back::deep(reaches);
 
         // the floor, which is concrete rather than the aisle's carpet: this
-        // is the room the building does not dress up
-        scene.push_colored(
-            floor,
-            &Transform::at(vec3((west + east) * 0.5, 0.0, (far + near) * 0.5)).with_scale(vec3(
-                east - west,
-                1.0,
-                near - far,
-            )),
-            aim::BACK_FLOOR,
-        );
+        // is the room the building does not dress up. In two pieces, because
+        // the bay's floor is black: two quads side by side rather than a
+        // panel laid on top of one, since a panel is a step at the lip and a
+        // face at the walking surface stops you dead. Spec 0025.
+        let bay = back::bay(reaches);
+
+        for (from, to, colour) in [
+            (bay.min.z, bay.max.z, aim::BACK_LINING),
+            (bay.max.z, near, aim::BACK_FLOOR),
+        ] {
+            scene.push_colored(
+                floor,
+                &Transform::at(vec3((west + east) * 0.5, 0.0, (from + to) * 0.5)).with_scale(vec3(
+                    east - west,
+                    1.0,
+                    to - from,
+                )),
+                colour,
+            );
+        }
+
+        // and the lining over the back wall, the two returns and the ceiling
+        // of the bay, which is what there is nothing but behind the cubes
+        for box_ in back::lining(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(box_.center()).with_scale(box_.size()),
+                aim::BACK_LINING,
+                aim::VOID,
+            );
+        }
 
         for box_ in back::solid(reaches) {
             // the floor slab is drawn above, as a plane, and the bench has
@@ -1429,38 +1448,33 @@ impl Arcade {
             );
         }
 
-        // the card behind it, which is what the cubes are read against
-        scene.push_material(
-            cube,
-            &Transform::at(back::card(reaches)).with_scale(back::CARD),
-            aim::BACK_CARD,
-            aim::VOID,
-        );
-
-        // the jig: two posts off the bench and a bar across them, which is
-        // what the block is hanging in rather than floating over
+        // the frame it stands in: a post each side off the floor and a bar
+        // across the top of them. Spec 0025: the block is on the floor in
+        // the bay now rather than clamped over a bench.
         for side in [-1.0f32, 1.0] {
             scene.push_colored(
                 cube,
                 &Transform::at(vec3(
-                    block.x + side * back::BLOCK * 0.72,
-                    (back::BENCH.y + block.y + back::BLOCK * 0.5) * 0.5,
+                    block.x + side * back::POST_OUT,
+                    back::BLOCK_TOP * 0.5,
                     block.z,
                 ))
-                .with_scale(vec3(
-                    0.05,
-                    block.y + back::BLOCK * 0.5 - back::BENCH.y,
-                    0.05,
-                )),
+                .with_scale(vec3(back::POST, back::BLOCK_TOP, back::POST)),
+                aim::BACK_JIG,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(block.x + side * back::POST_OUT, 0.02, block.z))
+                    .with_scale(vec3(back::POST * 3.4, 0.04, back::BLOCK + 0.2)),
                 aim::BACK_JIG,
             );
         }
         scene.push_colored(
             cube,
-            &Transform::at(vec3(block.x, block.y + back::BLOCK * 0.5, block.z)).with_scale(vec3(
-                back::BLOCK * 1.44 + 0.05,
-                0.05,
-                0.05,
+            &Transform::at(vec3(block.x, back::BLOCK_TOP, block.z)).with_scale(vec3(
+                back::POST_OUT * 2.0 + back::POST,
+                back::POST,
+                back::POST,
             )),
             aim::BACK_JIG,
         );
@@ -1545,6 +1559,33 @@ impl Arcade {
         // and what is standing about in here, which is half of what the room
         // is. Spec 0024.
         self.draw_the_clutter(scene, cube);
+
+        // the bay's lamp, at the lip and over it, which is what lights the
+        // cubes. Spec 0025: a shade with a bulb in it, like every other lamp
+        // in this building, because a light with no fitting is a bright
+        // patch on a wall and no reason for it.
+        let bay = back::bay_lamp(reaches);
+
+        scene.push_colored(
+            cube,
+            &Transform::at(bay + Vec3::Y * back::BAY_SHADE.y * 0.5).with_scale(back::BAY_SHADE),
+            aim::BACK_SHADE,
+        );
+        scene.push_colored(
+            cube,
+            &Transform::at(bay).with_scale(Vec3::splat(back::BAY_SHADE.y * 0.55)),
+            aim::BACK_BULB,
+        );
+        scene.push_colored(
+            cube,
+            &Transform::at(vec3(
+                bay.x,
+                (bay.y + back::BAY_SHADE.y + back::TALL) * 0.5,
+                bay.z,
+            ))
+            .with_scale(vec3(0.03, back::TALL - bay.y - back::BAY_SHADE.y, 0.03)),
+            aim::BACK_SHADE,
+        );
 
         // and the bulb in its tin shade, on a stem up to the ceiling
         let lamp = back::lamp(reaches);
@@ -7062,6 +7103,16 @@ impl Game for Arcade {
                 continue;
             }
 
+            // and the back room's rig is a block of cubes in a frame rather
+            // than a table. Its record is a bench so that the sight names it
+            // and the arrows work it, the same as the pool table above, and
+            // what it looks like is drawn where it stands. Spec 0025: this
+            // was a bench top in wood hanging over the cubes, which is what
+            // a bench record draws if nobody says otherwise.
+            if bench.name == back::RIG {
+                continue;
+            }
+
             let top = Transform::at(bench.at + Vec3::Y * (bench.size.y - aim::BENCH_TOP * 0.5))
                 .with_scale(vec3(bench.size.x, aim::BENCH_TOP, bench.size.z));
             match self.cabinet_grain {
@@ -7192,7 +7243,8 @@ impl Game for Arcade {
             ));
         }
 
-        // and the back room's one bulb, per spec 0024
+        // and the back room's two: the bulb over its near half, per spec
+        // 0024, and the bay's own, per spec 0025
         {
             let at = back::lamp(self.room.reaches);
 
@@ -7202,6 +7254,16 @@ impl Game for Arcade {
                 aim::BACK_LAMP,
                 aim::BACK_LIT,
                 aim::BACK_RANGE,
+            ));
+
+            let bay = back::bay_lamp(self.room.reaches);
+
+            shades.push((
+                eye.distance_squared(bay),
+                bay,
+                aim::BACK_BAY_LAMP,
+                aim::BACK_BAY_LIT,
+                aim::BACK_BAY_RANGE,
             ));
         }
 

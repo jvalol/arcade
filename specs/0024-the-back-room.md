@@ -1,6 +1,8 @@
 # 0024 The back room
 
-**Status:** built, 2026-10-17.
+**Status:** implemented
+**Built:** 2026-10-17, and changed by spec 0025, which took the rig off the
+bench and stood it in a black bay at the end of the room.
 **Date:** 2026-10-17
 
 ## What it is, plainly
@@ -260,24 +262,26 @@ that go with them.
   is not a face you walk into. — `back::tests::the_floors_lap_rather_than_meet`
 - You can walk in from the gallery and out again, with both rooms' colliders
   in the walk. — `back::tests::you_can_walk_in_and_out_again`
-- The block stays over the bench at every step of the dial, above its top and
-  inside its footprint, with the gauges above the whole of it. — `back::tests::the_block_stays_over_the_bench`
+- The block stands clear inside the bay at every step of the dial, with the
+  gauges above the whole of it. Over the bench, until spec
+  0025. — `back::tests::the_block_stands_clear_inside_the_bay`
 - Every step of the dial is a cube number, so what it draws is a block with
   nothing missing off it. — `back::tests::every_step_of_the_dial_is_a_cube`
 - Nothing in the clutter stands on the way from the door to the bench,
   nothing of it is inside anything else, and all of it is in the room. — `back::tests::the_clutter_is_against_the_walls`
-- There is room to stand at the bench, clear of it and of everything
-  else. — `back::tests::there_is_room_to_stand_at_the_bench`
+- There is room to stand at the rig, clear of it and of everything
+  else. — `back::tests::there_is_room_to_stand_at_the_rig`
 - The lamp is in its fitting. — `back::tests::the_lamp_is_in_the_shade`
 - Every word on the gauge board is on the board: each name level with its own
   bar and ending before that bar's track begins, each full-scale reading level
   with its bar and starting after the track ends, the heading above every bar,
   and the three rows evenly spaced under
   it. — `back::tests::every_word_on_the_board_is_on_the_board`
-- The card stands behind the whole block with a margin each way, and is
-  behind it rather than a wall away. — `back::tests::the_card_is_behind_the_block_and_under_the_gauges`
-- Pointing at the cubes finds the rig, pointing at the bench finds it too,
-  and pointing at a wall across the room finds neither. — `back::tests::pointing_at_the_cubes_finds_the_rig`
+- Nothing grey is behind the cubes. The card this was written for is a whole
+  lined bay now, per spec
+  0025. — `back::tests::nothing_grey_is_behind_the_cubes`
+- Pointing at the cubes finds the rig, and pointing at the workbench does
+  not. — `back::tests::pointing_at_the_cubes_finds_the_rig`
 - Nothing in the room starts a process, and the gauges read the window the
   building already fills rather than a second count of the same
   frames. — `tests::the_back_room_starts_nothing`
