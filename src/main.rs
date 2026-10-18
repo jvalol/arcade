@@ -20,6 +20,7 @@ mod orrery;
 mod room;
 mod sign;
 mod spa;
+mod standing;
 mod study;
 mod tesseract;
 mod walk;
@@ -337,6 +338,10 @@ struct Arcade {
     /// And poolhall's, which stands on a table in the cellar for the same
     /// reason. Spec 0007.
     poolhall: Cabinet,
+    /// What the building has handed the engine once rather than every
+    /// frame: the rooms' shells, per spec 0026. Empty until the first frame
+    /// that has meshes to name them with.
+    standing: Vec<blitzkit::renderer::scene::Kept>,
     /// One per cabinet, in the room's own order. A game with no screenshot gets
     /// none and its screen stays blank.
     art: Vec<Option<TextureId>>,
@@ -902,6 +907,7 @@ impl Arcade {
             rig_meshes: Vec::new(),
             clutter: Vec::new(),
             gauge_words: Vec::new(),
+            standing: Vec::new(),
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
@@ -1362,36 +1368,9 @@ impl Arcade {
             );
         }
 
-        // and the lining over the back wall, the two returns and the ceiling
-        // of the bay, which is what there is nothing but behind the cubes
-        for box_ in back::lining(reaches) {
-            scene.push_material(
-                cube,
-                &Transform::at(box_.center()).with_scale(box_.size()),
-                aim::BACK_LINING,
-                aim::VOID,
-            );
-        }
-
-        for box_ in back::solid(reaches) {
-            // the floor slab is drawn above, as a plane, and the bench has
-            // its own legs and top
-            if box_.max.y <= 0.0 || box_ == back::bench_box(reaches) {
-                continue;
-            }
-
-            let colour = if box_.min.y >= back::TALL {
-                aim::BACK_CEILING
-            } else {
-                aim::BACK_WALL
-            };
-
-            scene.push_colored(
-                cube,
-                &Transform::at(box_.center()).with_scale(box_.size()),
-                colour,
-            );
-        }
+        // the shell and the lining are handed over once rather than drawn
+        // here, per spec 0026. What is left in this room's drawing is what
+        // moves or lights up.
 
         // the bench: a top on four legs, the way the nook's are built
         let at = back::bench(reaches);
@@ -1610,6 +1589,79 @@ impl Arcade {
             .with_scale(vec3(0.03, back::TALL - lamp.y - back::SHADE.y, 0.03)),
             aim::BACK_SHADE,
         );
+    }
+
+    /// Hands the engine the parts of the building that never move, once.
+    /// Spec 0026.
+    ///
+    /// **The shells and nothing else.** A room's walls are a list of boxes
+    /// that is already the one account of where that wall is, so keeping
+    /// them writes nothing down twice. Everything conditional goes on being
+    /// pushed: a cabinet that lights under the sight, a door that opens, a
+    /// leaf that swings, the water, the toys, the planets.
+    ///
+    /// Done once, on the first frame that has a mesh to name them with, and
+    /// never again: nothing in here changes shape while the game runs, and
+    /// if that stops being true the run for that room is dropped and kept
+    /// again, which is one call.
+    fn keep_the_building(&mut self, scene: &mut Scene, cube: MeshId) {
+        let keeping = self.standing.is_empty();
+
+        for run in standing::runs(self.room.reaches) {
+            // a run too small to pay for its own draw call is pushed with
+            // everything else, and batched with it. Spec 0026.
+            let keep = run.worth_keeping();
+
+            if keep && !keeping {
+                continue;
+            }
+            // which room as well as what it is made of: a wall in the hall
+            // is boards under a light and a wall of the space behind it is
+            // as near black as this building draws, and they were the same
+            // colour for exactly as long as it took to look
+            let (colour, shine) = match (run.at, run.made) {
+                (standing::Where::Hall, _) => (aim::WALL, aim::MATTE),
+                (standing::Where::Behind, standing::Made::Wall) => (aim::BEHIND_WALL, aim::VOID),
+                (_, standing::Made::Ground) => (aim::BEHIND_FLOOR, aim::VOID),
+                (_, standing::Made::Column) => (aim::BEHIND_COLUMN, aim::VOID),
+                (_, standing::Made::Frame) => (aim::BEHIND_FRAME, aim::VOID),
+                (_, standing::Made::BackWall) => (aim::BACK_WALL, aim::VOID),
+                (_, standing::Made::BackCeiling) => (aim::BACK_CEILING, aim::VOID),
+                (_, standing::Made::Lining) => (aim::BACK_LINING, aim::VOID),
+                (_, standing::Made::Wall) => (aim::WALL, aim::MATTE),
+            };
+            // the hall's walls wear the grain the hall's walls have always
+            // worn; everything else is a colour
+            let texture = match (run.at, self.wall_grain) {
+                (standing::Where::Hall, Some(grain)) => grain,
+                _ => blitzkit::renderer::scene::TextureId::WHITE,
+            };
+            if keep {
+                let instances: Vec<blitzkit::renderer::scene::Instance> = run
+                    .boxes
+                    .iter()
+                    .map(|box_| {
+                        blitzkit::renderer::scene::Instance::new(
+                            &Transform::at(box_.center()).with_scale(box_.size()),
+                            colour,
+                            shine,
+                        )
+                    })
+                    .collect();
+
+                self.standing.push(scene.keep(cube, texture, &instances));
+            } else {
+                for box_ in run.boxes.iter() {
+                    let stood = Transform::at(box_.center()).with_scale(box_.size());
+
+                    if texture == blitzkit::renderer::scene::TextureId::WHITE {
+                        scene.push_material(cube, &stood, colour, shine);
+                    } else {
+                        scene.push_textured(cube, texture, &stood, colour, shine);
+                    }
+                }
+            }
+        }
     }
 
     /// The back room's clutter: what is standing about in it. Spec 0024.
@@ -4693,38 +4745,13 @@ impl Game for Arcade {
             }
         }
 
-        // and the space it hides: its floor and lid, its walls, and the
-        // columns. Spec 0015 puts the solar system in it; this draws the room
-        // it stands in.
-        {
-            for (box_, made) in behind::built(self.room.reaches) {
-                let colour = match made {
-                    behind::Made::Ground => aim::BEHIND_FLOOR,
-                    behind::Made::Wall => aim::BEHIND_WALL,
-                    behind::Made::Column => aim::BEHIND_COLUMN,
-                    behind::Made::Frame => aim::BEHIND_FRAME,
-                };
-
-                scene.push_material(
-                    cube,
-                    &Transform::at(box_.center()).with_scale(box_.size()),
-                    colour,
-                    aim::VOID,
-                );
-            }
-        }
+        // the space the near wall hides is drawn out of what was handed
+        // over once, with the hall's own walls and the back room's shell.
+        // Spec 0026: none of it moves, and none of it is pushed.
+        self.keep_the_building(scene, cube);
 
         // the solar system in it, per spec 0015
         self.draw_the_system(scene, cube, camera);
-
-        for wall in self.room.walls.iter() {
-            let stood = Transform::at(wall.center()).with_scale(wall.size());
-
-            match self.wall_grain {
-                Some(grain) => scene.push_textured(cube, grain, &stood, aim::WALL, aim::MATTE),
-                None => scene.push_colored(cube, &stood, aim::WALL),
-            }
-        }
 
         // the engine's own shapes, turning at the end of the room
         // the toy on the first bench: the frame, the ropes and the balls. The
