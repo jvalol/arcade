@@ -12,10 +12,13 @@ Behind it is where the arcade keeps its things. Buckets, cable on a reel, a
 stepladder, paint tins, a stack of spare chairs, boxes nobody has opened.
 
 Against the far wall is a workbench. Clamped in a jig above it is a block of
-small cubes, and on the wall over the bench are some gauges. Stand at the
-bench and press a key and there are more cubes, press another and there are
-fewer. The gauges say how hard the arcade is working to draw them, and the
-numbers go up as the cubes do.
+small white cubes, standing against a black card so you can see them, and on
+the wall over the bench is a board headed what a frame costs, with three
+gauges on it: time, worst and draws, each with a bar and, past the end of its
+track, what a full bar would mean. Stand at the bench and press a key and
+there are more cubes, press another and there are fewer. The gauges say how
+hard the arcade is working to draw them, and the bars get longer as the cubes
+do.
 
 That is all it does. It is the room where you can watch the building work.
 
@@ -142,7 +145,13 @@ nobody is looking, left where somebody put them down rather than arranged.
 **Which is a trap this building has fallen into before.** Boxes are
 placeholders and Jake has said so every time: a grey block on a plinth is
 what a thing looks like before it is built. Clutter made of grey blocks is
-nine of them. Everything round or turned here comes off `cellar::turned`,
+nine of them.
+
+The wheel has its own trap, which the jars found. A profile gives the point
+along the axis and the width there, and a profile that returns nought for
+the first of those puts every ring in one plane: the three jars on the bench
+were a flat splat each until somebody looked. Jake: there's weird circles on
+the desk. Everything round or turned here comes off `cellar::turned`,
 which already makes barrels, bottles, urns and basins, and a crate is a crate
 because it has boards and a lid rather than because it is a box with a label.
 
@@ -184,10 +193,58 @@ test rather than as furniture, and the jig has to bound them: at every count
 the dial reaches they stay over the bench, or the room has a wall of cubes
 through it.
 
+**White cubes on a black card.** They were brass, against a grey wall, under
+one bulb. Jake, with the engine's own example beside it: the maintenance
+room version doesn't land as well as the example, which is a stunning bright
+white. The example is white cubes in an empty black window, and what makes
+it read is the edge between the two rather than the colour of either. A
+workshop has a dark card behind the thing on the bench for the same reason,
+which is that you cannot see an edge against its own background.
+
+The card has to be wider than the block by half its width each side, because
+it stands behind it and a person walks about: at a width and a half the far
+side of the block came off the edge of the card as soon as you stood anywhere
+but straight in front. And the gauges hang at a height worked out from the
+card's top rather than a number of their own, because widening the card
+covered two of the three of them, and that one is checked at compile time:
+both are constants, so a build that got it wrong does not build.
+
+Each gauge is a bar in a track with its name on its left and what a full bar
+would mean on its right, under a heading saying what the whole board is
+about. Three coloured bars mean nothing on their own: Jake, standing at the
+rig in the browser build, what do the bars mean. They were then named work,
+worst and draws, and he read that back as still not conveying meaning, which
+is the same fault one step along. A name without a scale is half a label: a
+bar half full of nothing in particular. So the board says what it measures,
+each row says what it measures, and the end of each track says what filling
+it would cost. Time is in milliseconds because the heading says this is a
+frame, and a frame is measured in them.
+
+All of those words are drawn into textures at startup, which the readings
+could not be. A word that never changes is one texture for the life of the
+program; a number that changes every frame is a texture a frame, and this
+building has already grown until it stopped once. Time is full at eight
+milliseconds, worst at sixteen and draws at four thousand, so a bar pinned at
+the end means off the scale.
+
+The board is sized by what is written on it rather than by eye. Every word is
+drawn at one height in a font of square cells, so a row's width is
+arithmetic: the longest name, a track, the longest reading, and a margin each
+side. At a width of one and a half metres the longest reading hung off the
+right edge, and the test below found it rather than a picture.
+
 **A dial a person can work.** The nook's toys are turned with the sight and a
 key, per spec 0004, and the dials here want the same verbs rather than new
 ones: look at the thing, press the key, the number moves. The building
 already teaches that.
+
+And the thing you look at is the block, not the bench. Every other bench in
+here answers to its own box, which is right for a toy standing on one and
+wrong for a thing held in a jig above it. Jake, pointing at the cubes and
+getting nothing: if I'm pointing at the thing demonstrated it should be
+interactable, same as if I press enter pointing at the table. The sight
+takes the block as well, and answers with the bench either way, because the
+rig is the bench.
 
 **Nothing else.** No new kind of furniture that launches a process, which is
 what the first draft of this asked for. Everything else is a room: a floor,
@@ -212,6 +269,15 @@ that go with them.
 - There is room to stand at the bench, clear of it and of everything
   else. — `back::tests::there_is_room_to_stand_at_the_bench`
 - The lamp is in its fitting. — `back::tests::the_lamp_is_in_the_shade`
+- Every word on the gauge board is on the board: each name level with its own
+  bar and ending before that bar's track begins, each full-scale reading level
+  with its bar and starting after the track ends, the heading above every bar,
+  and the three rows evenly spaced under
+  it. — `back::tests::every_word_on_the_board_is_on_the_board`
+- The card stands behind the whole block with a margin each way, and is
+  behind it rather than a wall away. — `back::tests::the_card_is_behind_the_block_and_under_the_gauges`
+- Pointing at the cubes finds the rig, pointing at the bench finds it too,
+  and pointing at a wall across the room finds neither. — `back::tests::pointing_at_the_cubes_finds_the_rig`
 - Nothing in the room starts a process, and the gauges read the window the
   building already fills rather than a second count of the same
   frames. — `tests::the_back_room_starts_nothing`

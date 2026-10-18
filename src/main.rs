@@ -615,6 +615,9 @@ struct Arcade {
     rig_meshes: Vec<MeshId>,
     /// The back room's clutter, in `back::Thing` order where it is turned.
     clutter: Vec<MeshId>,
+    /// And every word on its gauge board, drawn into textures once: the
+    /// heading, then the three names, then the three full-scale readings.
+    gauge_words: Vec<TextureId>,
     costs: blitzkit::cost::Costs,
     /// What the renderer counted for the last frame, and whether the device
     /// agreed to time one at all, both asked of it at the top of the frame.
@@ -900,6 +903,7 @@ impl Arcade {
             rig_many: false,
             rig_meshes: Vec::new(),
             clutter: Vec::new(),
+            gauge_words: Vec::new(),
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
@@ -1425,6 +1429,14 @@ impl Arcade {
             );
         }
 
+        // the card behind it, which is what the cubes are read against
+        scene.push_material(
+            cube,
+            &Transform::at(back::card(reaches)).with_scale(back::CARD),
+            aim::BACK_CARD,
+            aim::VOID,
+        );
+
         // the jig: two posts off the bench and a bar across them, which is
         // what the block is hanging in rather than floating over
         for side in [-1.0f32, 1.0] {
@@ -1465,6 +1477,44 @@ impl Arcade {
             aim::BACK_GAUGE,
             aim::VOID,
         );
+
+        // what the board says, which never changes: the heading across the
+        // top, each bar's name on the left, and what each track is full at
+        // past its right end. Drawn on the same quad the tesseract's wall
+        // plates use, turned the way a face at the far end of a room has to
+        // be turned to be read from inside it. Spec 0024.
+        if let Some(hung) = self.hung {
+            let mut written = |word: &str, texture: TextureId, at: Vec3| {
+                let shape = blitzkit::text::room_for(word, back::GAUGE_TEXELS);
+                let wide = back::GAUGE_WORD_TALL * (shape.x / shape.y.max(1e-4));
+
+                scene.push_textured(
+                    hung,
+                    texture,
+                    &Transform::at(gauge + at + vec3(wide * 0.5, 0.0, 0.0))
+                        .with_rotation(glam::Quat::from_rotation_y(-std::f32::consts::FRAC_PI_2))
+                        .with_scale(vec3(0.02, back::GAUGE_WORD_TALL, wide)),
+                    aim::TESSERACT_WORD,
+                    aim::VOID,
+                );
+            };
+
+            if let Some(texture) = self.gauge_words.first().copied() {
+                written(back::GAUGE_SAYS, texture, back::gauge_says());
+            }
+
+            for (n, word) in back::GAUGE_WORDS.iter().enumerate() {
+                if let Some(texture) = self.gauge_words.get(n + 1).copied() {
+                    written(word, texture, back::gauge_word(n));
+                }
+            }
+
+            for (n, word) in back::GAUGE_FULL_SAYS.iter().enumerate() {
+                if let Some(texture) = self.gauge_words.get(n + 4).copied() {
+                    written(word, texture, back::gauge_full_at(n));
+                }
+            }
+        }
 
         let readings = [
             self.costs.middle_ms().unwrap_or(0.0),
@@ -3308,6 +3358,11 @@ impl Game for Arcade {
             renderer.add_mesh(&back::tin_mesh()),
             renderer.add_mesh(&back::reel_mesh()),
         ];
+        self.gauge_words = std::iter::once(back::GAUGE_SAYS)
+            .chain(back::GAUGE_WORDS)
+            .chain(back::GAUGE_FULL_SAYS)
+            .map(|word| renderer.add_texture(&blitzkit::text::drawn(word, back::GAUGE_TEXELS)))
+            .collect();
         self.barrel = Some(renderer.add_mesh(&cellar::barrel_mesh()));
         self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));

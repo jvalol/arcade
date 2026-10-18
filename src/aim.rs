@@ -960,7 +960,15 @@ pub const BACK_BULB: Vec4 = vec4(3.1, 2.9, 2.5, 1.0);
 /// The cubes are the one bright thing in the room, because they are the thing
 /// the room is for and because a grey cube in a grey room is the placeholder
 /// this building keeps being told off for.
-pub const BACK_CUBE: Vec4 = vec4(0.82, 0.72, 0.30, 1.0);
+/// **White, like the example's.** They were brass, which is a colour, and
+/// the thing this is copying is not a colour: the engine's `load` example is
+/// white cubes in a black window, and what makes it read is the edge between
+/// the two. A little cool rather than flat white, so a face turned away from
+/// the bulb is blue grey instead of grey.
+pub const BACK_CUBE: Vec4 = vec4(0.88, 0.90, 0.94, 1.0);
+/// And the card they stand against, which is as near black as this building
+/// draws.
+pub const BACK_CARD: Vec4 = vec4(0.025, 0.025, 0.03, 1.0);
 pub const BACK_JIG: Vec4 = vec4(0.26, 0.26, 0.28, 1.0);
 pub const BACK_GAUGE: Vec4 = vec4(0.10, 0.11, 0.12, 1.0);
 /// The track a bar runs in, and the three bars: what the frame costs, what

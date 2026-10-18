@@ -34,7 +34,12 @@ pub const DEEP: f32 = 4.4;
 /// to go lower against a wall that is not: the fault with a borrowed wall is
 /// a room that stands *taller* than it, which leaves a strip open above.
 /// This building has got that wrong twice, both times upward.
-pub const TALL: f32 = 2.6;
+///
+/// Two and eight, which was two and six until the gauge board grew a heading
+/// and a scale for each bar and no longer fitted between the card's top and
+/// the ceiling. The compile-time assertion under `GAUGE_UP` is what said so,
+/// before anything was drawn.
+pub const TALL: f32 = 2.8;
 
 /// Where the room's inside begins, which is the far face of the gallery's
 /// east wall, and where it ends.
@@ -250,6 +255,31 @@ pub fn cube_at(count: u32, n: u32) -> Vec3 {
     blitzkit::grid::at(count, n, BLOCK)
 }
 
+/// The backdrop the block stands against: a dark card hung behind the cubes
+/// and a little wider than them.
+///
+/// **Because white on black is what makes this read.** The engine's own
+/// `load` example is white cubes against an empty black window and Jake's
+/// word for it was stunning; the same block in here was brass against a grey
+/// wall under one bulb, and his word for that was that it does not land. A
+/// workshop has a dark card behind the thing on the bench for exactly this
+/// reason, which is that you cannot see an edge against its own background.
+/// Wider than the block by half its width each side, because the card is
+/// behind it and a person walks about: at a width and a half the block's
+/// far side came off the edge of it as soon as you stood anywhere but
+/// straight in front, and a cube against the grey wall is a cube you cannot
+/// see.
+pub const CARD: Vec3 = vec3(BLOCK * 2.6, BLOCK * 1.6, 0.03);
+
+/// How high the top of it comes, which is what the gauges hang above.
+pub const CARD_TOP: f32 = BENCH.y + BLOCK_UP + CARD.y * 0.5;
+
+pub fn card(reaches: f32) -> Vec3 {
+    let at = block(reaches);
+
+    vec3(at.x, at.y, at.z - BLOCK * 0.5 - CARD.z)
+}
+
 /// The board the gauges are on: where it hangs, how big it is, and how its
 /// three bars are laid out on it.
 ///
@@ -260,11 +290,95 @@ pub fn cube_at(count: u32, n: u32) -> Vec3 {
 /// nothing to move, and answers the question a gauge is for, which is
 /// whether the needle is near the end rather than what it says. The numbers
 /// themselves are under the sight and behind F.
-pub const GAUGE_UP: f32 = 1.98;
-pub const GAUGE: Vec3 = vec3(1.5, 0.52, 0.05);
-pub const GAUGE_TRACK: f32 = 1.26;
+/// Over the card rather than at a height of its own, so the two cannot
+/// overlap however either of them is resized. The card went from a width and
+/// a half to two and a half and immediately covered two of the three
+/// gauges, which is the kind of thing a written down number lets happen
+/// twice.
+pub const GAUGE_UP: f32 = CARD_TOP + GAUGE.y * 0.5 + 0.06;
+
+// and that it clears the card and the ceiling, checked here rather than in a
+// test because it is arithmetic over constants: a build that got it wrong
+// would not compile, which is a better place to find out than a picture.
+const _: () = assert!(GAUGE_UP - GAUGE.y * 0.5 > CARD_TOP);
+const _: () = assert!(GAUGE_UP + GAUGE.y * 0.5 < TALL);
+/// How big the board is.
+///
+/// **Sized by what is written on it, not by taste.** Every word on here is
+/// drawn at a fixed height in a font whose letters are square cells, so a
+/// row is a name, a track and a reading, and the width of the two words is
+/// arithmetic rather than a guess. At a width of one and a half the longest
+/// reading hung off the right edge, and the test below is what said so.
+pub const GAUGE: Vec3 = vec3(2.0, 0.78, 0.05);
+pub const GAUGE_TRACK: f32 = 0.9;
 pub const GAUGE_BAR: f32 = 0.1;
-pub const GAUGE_STEP: f32 = 0.16;
+pub const GAUGE_STEP: f32 = 0.17;
+
+/// Where the middle of the track sits across the board, which leaves the
+/// name on its left and what the bar is full at on its right.
+///
+/// The middle, because the two words either side of it are about the same
+/// length as each other.
+pub const GAUGE_TRACK_AT: f32 = 0.0;
+
+/// What the board says: a heading, a name for each bar, and what each bar is
+/// full at.
+///
+/// **Because three coloured bars say nothing on their own, and three words
+/// barely more.** Jake asked what the bars meant, so they were labelled
+/// work, worst and draws, and his reading of that was that they still do not
+/// convey meaning. He is right, and the reason is that a name without a
+/// scale is half a label: a green bar half full of nothing in particular.
+///
+/// So the board says what it is across the top, each bar says what it
+/// measures on its left, and the right of each track says the reading that
+/// fills it. Time is in milliseconds because that is what a frame is
+/// measured in and the heading says it is a frame.
+///
+/// All of it is written into textures at startup, which the readings
+/// themselves could not be: a word that never changes is one texture for the
+/// life of the program, and a number that changes every frame is a texture a
+/// frame. Spec 0037 for the writing, and spec 0056 for why the readings
+/// stayed bars.
+pub const GAUGE_SAYS: &str = "what a frame costs";
+pub const GAUGE_WORDS: [&str; 3] = ["time", "worst", "draws"];
+pub const GAUGE_FULL_SAYS: [&str; 3] = ["8 ms", "16 ms", "4000"];
+pub const GAUGE_TEXELS: f32 = 128.0;
+pub const GAUGE_WORD_TALL: f32 = 0.075;
+
+/// Where one of those words sits, which is the board's own left edge.
+///
+/// Off the edge rather than off the track: a word set where the track begins
+/// is a word that ends where the track begins, and the first build of this
+/// had the bar drawn over the last letter of each of them.
+pub const GAUGE_WORD_IN: f32 = 0.05;
+
+pub fn gauge_word(n: usize) -> Vec3 {
+    let (at, _) = gauge_bar(n, 0.0);
+
+    vec3(-GAUGE.x * 0.5 + GAUGE_WORD_IN, at.y, at.z)
+}
+
+/// Where what a bar is full at is written, which is past the end of its own
+/// track.
+pub fn gauge_full_at(n: usize) -> Vec3 {
+    let (at, _) = gauge_bar(n, 0.0);
+
+    vec3(
+        GAUGE_TRACK_AT + GAUGE_TRACK * 0.5 + GAUGE_WORD_IN,
+        at.y,
+        at.z,
+    )
+}
+
+/// And where the heading goes, which is across the top of the board.
+pub fn gauge_says() -> Vec3 {
+    vec3(
+        -GAUGE.x * 0.5 + GAUGE_WORD_IN,
+        GAUGE.y * 0.5 - GAUGE_WORD_TALL * 0.8,
+        GAUGE.z * 0.6,
+    )
+}
 
 /// What each bar is full at: milliseconds of work, milliseconds at the worst
 /// of the window, and draw calls.
@@ -277,14 +391,22 @@ pub const GAUGE_FULL: [f32; 3] = [8.0, 16.0, 4000.0];
 
 /// Where one of the three bars sits on the board, as an offset from its
 /// middle, and how long it is for a reading.
+///
+/// The track runs from the right edge inward, so the left of the board is
+/// free for the word that names it.
 pub fn gauge_bar(n: usize, of: f32) -> (Vec3, f32) {
     let full = GAUGE_FULL[n.min(2)];
     let along = (of / full).clamp(0.0, 1.0);
+    // the three rows sit in the space under the heading rather than hard up
+    // against it: measured so the gap over the first bar and the gap under
+    // the last are the same, because a board with its rows at the top and a
+    // hand's width of nothing underneath reads as unfinished.
+    let down = GAUGE.y * 0.5 - GAUGE_WORD_TALL - 0.20;
 
     (
         // in front of the board, which is toward the room. Behind it, which
         // is what the first build drew, is inside the wall.
-        vec3(0.0, (1.0 - n as f32) * GAUGE_STEP, GAUGE.z * 0.6),
+        vec3(GAUGE_TRACK_AT, down - n as f32 * GAUGE_STEP, GAUGE.z * 0.6),
         (along * GAUGE_TRACK).max(0.012),
     )
 }
@@ -293,6 +415,18 @@ pub fn gauge(reaches: f32) -> Vec3 {
     let (far, _) = deep(reaches);
 
     vec3(bench(reaches).x, GAUGE_UP, far + 0.04)
+}
+
+/// What the sight has to meet to be pointing at the rig, which is the block
+/// rather than the bench under it.
+///
+/// Jake, pointing at the cubes and getting nothing: if I'm pointing at the
+/// thing demonstrated it should be interactable, same as if I press enter
+/// pointing at the table. A bench in this building answers to its own box,
+/// which is right for a toy standing on one and wrong for a thing held in a
+/// jig above it.
+pub fn rig_box(reaches: f32) -> Aabb {
+    Aabb::from_center_size(block(reaches), Vec3::splat(BLOCK * 1.1))
 }
 
 /// Where somebody stands to work the rig.
@@ -326,7 +460,12 @@ pub fn bucket_mesh() -> blitzkit::mesh::MeshData {
 }
 
 pub fn tin_mesh() -> blitzkit::mesh::MeshData {
-    crate::cellar::turned(24, 10, crate::cellar::lidded(|_| (0.0, 1.0)))
+    // **The first number is where along the axis, not how far up from
+    // nothing.** This was `(0.0, 1.0)`, which is a straight side at a height
+    // that never changes, so every ring of it landed in the same plane and
+    // what stood on the bench was a flat splat. Jake, looking at the three
+    // jars: there's weird circles on the desk.
+    crate::cellar::turned(24, 10, crate::cellar::lidded(|t| (t, 1.0)))
 }
 
 pub fn reel_mesh() -> blitzkit::mesh::MeshData {
@@ -954,6 +1093,208 @@ mod tests {
 
             if count > 0 {
                 assert_eq!(seen.len() as u32, wide * wide * wide);
+            }
+        }
+    }
+
+    /// Spec 0024: the card is behind the whole block, and the gauges are
+    /// above the whole card.
+    ///
+    /// Both of these have already been wrong in a picture. The card was a
+    /// width and a half and the block's far side came off the edge of it
+    /// from anywhere but straight in front. Then widening the card covered
+    /// two of the three gauges, because their height was a number rather
+    /// than the card's own top.
+    ///
+    /// The gauges clearing the card is not in here: it is arithmetic over
+    /// constants, so it is asserted where they are written and the thing
+    /// that catches it is the compiler.
+    #[test]
+    fn the_card_is_behind_the_block_and_under_the_gauges() {
+        let reaches = reaches();
+        let card = card(reaches);
+        let block = block(reaches);
+
+        assert!(
+            card.z < block.z - BLOCK * 0.5,
+            "the card is inside the block"
+        );
+        assert!(
+            block.z - card.z < BLOCK,
+            "the card is a wall away from the block rather than behind it"
+        );
+
+        // wider and taller than the block by a margin, so it still covers it
+        // from off to one side
+        for (mine, theirs, way) in [(CARD.x, BLOCK, "across"), (CARD.y, BLOCK, "up and down")] {
+            assert!(
+                mine > theirs * 1.5,
+                "the card is {:.2} {} against a block of {:.2}",
+                mine,
+                way,
+                theirs
+            );
+        }
+    }
+
+    /// Spec 0024: pointing at the cubes works the rig, not just pointing at
+    /// the bench they stand on.
+    ///
+    /// The sight answers with the bench either way, because the rig is one
+    /// of the building's benches, but the thing a person points at is the
+    /// block. Walked from where somebody stands to work it, looking at the
+    /// block, with the whole building's colliders in the way.
+    #[test]
+    fn pointing_at_the_cubes_finds_the_rig() {
+        let reaches = reaches();
+        let room = crate::room::Room::of(crate::games());
+        let n = room
+            .benches
+            .iter()
+            .position(|bench| bench.name == RIG)
+            .expect("the rig is one of the benches");
+
+        let eye = standing(reaches) + Vec3::Y * 1.55;
+
+        for at in [block(reaches), bench(reaches) + Vec3::Y * BENCH.y] {
+            let way = (at - eye).normalize();
+
+            assert_eq!(
+                room.looking_at(eye, way),
+                Some(crate::room::Seen::Bench(n)),
+                "looking at {:?} from the bench found something else",
+                at
+            );
+        }
+
+        // and the sight is not answering from anywhere in the room: the far
+        // corner is a wall away from it
+        let (west, _) = span();
+        let (_, near) = deep(reaches);
+        let corner = vec3(west + 0.4, 1.55, near - 0.4);
+        let away = (vec3(west, 1.2, near) - corner).normalize();
+
+        assert_ne!(
+            room.looking_at(corner, away),
+            Some(crate::room::Seen::Bench(n)),
+            "the rig answers from across the room, facing a wall"
+        );
+    }
+
+    /// Spec 0024: every word on the gauge board is on the board, and clear
+    /// of the tracks and of the other words.
+    ///
+    /// Written after the words were set where the track begins, which is
+    /// where they end: the bar was drawn over the last letter of each of
+    /// them. Then widened, after Jake read the board back as three names
+    /// conveying nothing: worst and draws still don't really convey meaning.
+    /// A heading and a full-scale reading per bar is three more places a
+    /// word can run off the board, so all seven are measured here.
+    ///
+    /// Measured at the width the font will actually make them rather than at
+    /// a guess, so a longer word later fails here instead of on the wall.
+    #[test]
+    fn every_word_on_the_board_is_on_the_board() {
+        let wide_as = |says: &str| {
+            let shape = blitzkit::text::room_for(says, GAUGE_TEXELS);
+
+            GAUGE_WORD_TALL * (shape.x / shape.y.max(1e-4))
+        };
+        let on_the_board = |says: &str, at: Vec3| {
+            assert!(
+                at.x > -GAUGE.x * 0.5,
+                "{} starts off the left of the board",
+                says
+            );
+            assert!(
+                at.x + wide_as(says) < GAUGE.x * 0.5,
+                "{} runs off the right of the board",
+                says
+            );
+            assert!(
+                at.y - GAUGE_WORD_TALL * 0.5 > -GAUGE.y * 0.5
+                    && at.y + GAUGE_WORD_TALL * 0.5 < GAUGE.y * 0.5,
+                "{} is off the top or bottom of the board",
+                says
+            );
+            assert!(at.z > 0.0, "{} is drawn behind the board", says);
+        };
+
+        // the heading, which is above every bar
+        let says = gauge_says();
+
+        on_the_board(GAUGE_SAYS, says);
+
+        for n in 0..GAUGE_WORDS.len() {
+            let (bar, _) = gauge_bar(n, 0.0);
+
+            assert!(
+                says.y - GAUGE_WORD_TALL * 0.5 > bar.y + GAUGE_BAR * 0.5,
+                "the heading sits on bar {}",
+                n
+            );
+        }
+
+        // and the rows are not all crowded under it: what is over the first
+        // bar and what is under the last come out the same
+        let (first, _) = gauge_bar(0, 0.0);
+        let (last, _) = gauge_bar(GAUGE_WORDS.len() - 1, 0.0);
+        let over = says.y - GAUGE_WORD_TALL * 0.5 - (first.y + GAUGE_WORD_TALL * 0.5);
+        let under = last.y - GAUGE_WORD_TALL * 0.5 + GAUGE.y * 0.5;
+
+        assert!(
+            (over - under).abs() < 0.03,
+            "{:.3} over the first bar and {:.3} under the last",
+            over,
+            under
+        );
+
+        for (n, says) in GAUGE_WORDS.iter().enumerate() {
+            let word = gauge_word(n);
+            let full = gauge_full_at(n);
+            let (bar, _) = gauge_bar(n, 0.0);
+            let (begins, ends) = (bar.x - GAUGE_TRACK * 0.5, bar.x + GAUGE_TRACK * 0.5);
+
+            on_the_board(says, word);
+            on_the_board(GAUGE_FULL_SAYS[n], full);
+
+            // the name stops before its track, and the reading starts after
+            // it, which is the fault this test was written for
+            assert!(
+                word.x + wide_as(says) < begins,
+                "{} ends at {:.3} and its track begins at {:.3}",
+                says,
+                word.x + wide_as(says),
+                begins
+            );
+            assert!(
+                full.x > ends,
+                "{} starts at {:.3} and its track ends at {:.3}",
+                GAUGE_FULL_SAYS[n],
+                full.x,
+                ends
+            );
+
+            // and both of them read as belonging to that bar, which they
+            // only do level with it
+            for (what, at) in [(says, word), (&GAUGE_FULL_SAYS[n], full)] {
+                assert!(
+                    (at.y - bar.y).abs() < 1e-5,
+                    "{} is not level with its own bar",
+                    what
+                );
+            }
+
+            // the rows do not touch each other either
+            if n + 1 < GAUGE_WORDS.len() {
+                let (under, _) = gauge_bar(n + 1, 0.0);
+
+                assert!(
+                    bar.y - GAUGE_BAR * 0.5 > under.y + GAUGE_BAR * 0.5,
+                    "bars {} and {} overlap",
+                    n,
+                    n + 1
+                );
             }
         }
     }
