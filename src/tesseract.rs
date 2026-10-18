@@ -1047,11 +1047,11 @@ pub fn sign_on(frame: Frame, face: Face) -> Thing {
 /// and this one is a draft of mine.
 pub fn on_the_plinth(cell: Cell) -> Option<&'static str> {
     match thing(cell) {
-        Thing::Klein => Some("[COPY - Jake] A Klein bottle: one surface, and no inside."),
-        Thing::Sierpinski => Some("[COPY - Jake] A Sierpinski tetrahedron."),
-        Thing::Menger => Some("[COPY - Jake] A Menger sponge."),
-        Thing::Hilbert => Some("[COPY - Jake] A Hilbert curve, which is one line."),
-        Thing::Knot => Some("[COPY - Jake] A trefoil knot: one loop, and it will not come undone."),
+        Thing::Klein => Some("A Klein bottle: one surface, and no inside."),
+        Thing::Sierpinski => Some("A Sierpinski tetrahedron."),
+        Thing::Menger => Some("A Menger sponge."),
+        Thing::Hilbert => Some("A Hilbert curve, which is one line."),
+        Thing::Knot => Some("A trefoil knot: one loop, and it will not come undone."),
         Thing::Teapot | Thing::Torus | Thing::FourCube => None,
     }
 }

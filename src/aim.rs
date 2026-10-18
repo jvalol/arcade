@@ -648,7 +648,7 @@ pub const WINK: &str = "If you know, you know. If you don't, play with one.";
 /// about the one fact a person needs, which is that the walls are the way
 /// out.
 pub const TESSERACT_HELP: &str =
-    "[COPY - Jake] Use WASD and the mouse to get about. Each wall shows what stands in the room through it, so walk at the one you want. The four squares in your hand are those four walls, with the one in front of you on top. The floor is the room you came from. Press Escape to quit.";
+    "Use WASD and the mouse to get about. Each wall shows what stands in the room through it, so walk at the one you want. The four squares in your hand are those four walls, with the one in front of you on top. The floor is the room you came from. Press Escape to quit.";
 
 /// What it says once the far cell has been stood in.
 ///
@@ -657,7 +657,7 @@ pub const TESSERACT_HELP: &str =
 /// to be. Spec 0021: reach the cell opposite the one you came in by, then get
 /// back to the plinth, which you cannot do by turning round.
 pub const TESSERACT_DONE: &str =
-    "[COPY - Jake] You have stood in kata, which is as far from ana as this room goes. The way back is three rooms, and not the way you came.";
+    "You have stood in kata, which is as far from ana as this room goes. The way back is three rooms, and not the way you came.";
 /// Out past the door of spec 0017, where walking is not how you get about.
 ///
 /// Jake's words, and the shape of them is the point: the key first and then

@@ -1233,7 +1233,7 @@ impl Arcade {
                 let count = back::CUBES[self.rig_step];
 
                 format!(
-                    "[COPY - Jake] {} cubes, {}. Up and down change how many, enter changes how they are drawn. {} draws, {} of work.",
+                    "{} cubes, {}. Up and down change how many, enter changes how they are drawn. {} draws, {} of work.",
                     count,
                     if self.rig_many {
                         "a mesh each"
