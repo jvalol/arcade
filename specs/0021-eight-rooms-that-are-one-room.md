@@ -21,11 +21,26 @@ So the rooms change rather than the map.
 
 **Each room has its own object on its own plinth.** The five from the nook,
 which are the teapot, the Klein bottle, the Sierpinski tetrahedron, the
-Menger sponge and the Hilbert curve, and then a cube, the four dimensional
+Menger sponge and the Hilbert curve, and then a torus, the four dimensional
 cube and a sphere. Eight rooms, eight objects, one each, and no two alike.
+
+south held a plain cube first, meant as the deliberate ordinary one standing
+against the four dimensional one in ana. Jake, walking into it: what is this
+block. In a building where a box is what a thing looks like before it is
+built, a box is a placeholder whatever it was meant to be. The torus that
+replaced it had to be stood on its edge rather than laid flat, or it is seen
+nearly edge on from anywhere in the room and comes out as a bar, which is the
+same fault wearing a different shape.
 
 **Each wall shows a small one of the object in the room through it.** Walk at
 the wall with the teapot on it and you are in the room with the teapot in it.
+Four walls and not six: the floor and the ceiling had one too, set into their
+own surface so nobody would walk through a metre of Menger sponge, and sunk
+they read as exactly what they looked like. Jake, with a four dimensional
+cube coming out of the floor in the corner of his picture: things can get
+clipped. A sign says where walking at that wall puts you, and those two are
+the faces nobody can walk at. The floor's plate still names the room you came
+from, and the map still carries all six.
 There is nothing to read, nothing to remember and nothing relative about it,
 which is the whole of why this works where three maps did not. It is also the
 one claim the room has to keep, so it is a test over the function the drawing
@@ -620,7 +635,11 @@ And the eight things:
 - The thing on a wall is the thing in the room you land in, and never the
   room you are already standing in. — `tesseract::tests::a_wall_shows_the_thing_in_the_room_you_land_in`
 - A wall's thing stands in the room, proud of its own panel, near it rather
-  than out in the middle, and clear of both the plinth and what is on it. — `tesseract::tests::a_wall_sign_is_in_the_room_and_out_of_the_way`
+  than out in the middle, and clear of both the plinth and what is on it, and
+  the two faces nobody can walk at have none at all. It stands off its wall
+  by three quarters of its own width, because a sign is turned and the
+  furthest corner of a turned box reaches 0.707 of its side rather than
+  half: at a half the Klein bottle in south was inside the wall. — `tesseract::tests::a_wall_sign_is_in_the_room_and_out_of_the_way`
 - A face of the map carries its thing on the outside of that face, touching
   it, and the whole map stays nearer than it is held. — `tesseract::tests::a_map_face_carries_its_thing_on_the_outside`
 - The wall and the map face that stands for it read their sign from one

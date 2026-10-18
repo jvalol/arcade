@@ -1829,14 +1829,20 @@ impl Arcade {
             // of the four ways and the word says which end, and neither of
             // those is a place: this is. Walk at the teapot and you are in
             // the room with the teapot in it.
-            self.draw_a_thing(
-                scene,
-                tesseract::sign_on(frame, face),
-                tesseract::sign_at(face),
-                glam::Quat::from_rotation_y(tesseract::SIGN_TURN),
-                tesseract::SIGN_ACROSS,
-                aim::TESSERACT_SIGN,
-            );
+            //
+            // Four of the six, because the floor and the ceiling are the
+            // faces nobody can walk at and a sign on them points nowhere you
+            // can go.
+            if let Some(stands) = tesseract::sign_at(face) {
+                self.draw_a_thing(
+                    scene,
+                    tesseract::sign_on(frame, face),
+                    stands,
+                    glam::Quat::from_rotation_y(tesseract::SIGN_TURN),
+                    tesseract::SIGN_ACROSS,
+                    aim::TESSERACT_SIGN,
+                );
+            }
         }
 
         // and the map in your hand, which is the same shape as the room
@@ -3046,7 +3052,26 @@ impl Game for Arcade {
                     tesseract::Thing::Sierpinski => blitzkit_shapes::sierpinski::sierpinski(4),
                     tesseract::Thing::Menger => blitzkit_shapes::menger::menger(2),
                     tesseract::Thing::Hilbert => blitzkit_shapes::hilbert::hilbert_tube(3, 8, 0.03),
-                    tesseract::Thing::Cube => MeshData::cube(),
+                    // a torus from its own formula, per spec 0016, because
+                    // this one had to be a shape rather than a box and the
+                    // engine has no torus of its own.
+                    //
+                    // **Standing on its edge and not lying flat.** The ring
+                    // is in `xy` with its thickness through `z`, so what you
+                    // see from eye height is the hole. Lying flat, which is
+                    // how it was written first, it is seen nearly edge on
+                    // from anywhere in the room and comes out as a bar: the
+                    // same fault as the cube it replaced, which is being a
+                    // shape nobody can name from where they are standing.
+                    tesseract::Thing::Torus => MeshData::surface(56, 28, |u, v| {
+                        use std::f32::consts::TAU;
+
+                        let (u, v) = (u * TAU, v * TAU);
+                        let ring = 0.34;
+                        let out = 1.0 + ring * v.cos();
+
+                        glam::vec3(out * u.cos(), out * u.sin(), ring * v.sin())
+                    }),
                     tesseract::Thing::FourCube => tesseract::shape(),
                     tesseract::Thing::Sphere => MeshData::sphere(28, 20),
                 };
@@ -3685,13 +3710,14 @@ impl Game for Arcade {
         let said: Vec<&str> = if let Some(inside) = self.inside.as_ref() {
             // which room you are standing in, and where the way out is. The
             // map at the foot of the screen says the rest.
-            let mut out = vec![
-                self.saying(),
-                tesseract::standing_in(inside.frame.cell()),
-                // and what is on the plinth, so the name of the room and the
-                // object in it arrive together
-                tesseract::on_the_plinth(inside.frame.cell()),
-            ];
+            let mut out = vec![self.saying(), tesseract::standing_in(inside.frame.cell())];
+
+            // and what is on the plinth, in the rooms where that is worth
+            // saying, which is the ones whose object has a name nobody can
+            // work out by looking at it
+            if let Some(said) = tesseract::on_the_plinth(inside.frame.cell()) {
+                out.push(said);
+            }
 
             // and what the room's two odd pairs of names mean, in the two
             // rooms they name. East and west are obviously opposites and

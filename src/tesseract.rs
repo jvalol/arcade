@@ -919,6 +919,14 @@ pub fn standing_in(cell: Cell) -> &'static str {
 /// what there is to find, gets the sphere: the plainest of them, and the one
 /// that looks the same from every side, which is the joke the far room has
 /// earned.
+///
+/// south had a plain cube and has a torus instead. The cube was meant as the
+/// deliberate ordinary one, a three dimensional cell standing against the
+/// four dimensional one in ana, which is a joke that needs explaining. What
+/// Jake saw was a grey block on a plinth in a room full of carved shapes,
+/// and what he asked was what is this block. In a building where a box is
+/// what a thing looks like before it is built, a box is a placeholder
+/// whatever it was meant to be.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Thing {
     Teapot,
@@ -926,7 +934,7 @@ pub enum Thing {
     Sierpinski,
     Menger,
     Hilbert,
-    Cube,
+    Torus,
     FourCube,
     Sphere,
 }
@@ -938,7 +946,7 @@ impl Thing {
         Thing::Sierpinski,
         Thing::Menger,
         Thing::Hilbert,
-        Thing::Cube,
+        Thing::Torus,
         Thing::FourCube,
         Thing::Sphere,
     ];
@@ -971,25 +979,31 @@ pub fn sign_on(frame: Frame, face: Face) -> Thing {
     thing(frame.beyond(face))
 }
 
-/// What is standing on the plinth in here, named once.
+/// What is standing on the plinth in here, where that is worth saying.
 ///
-/// The objects do the navigating and need no words at all, so this is not
-/// that. It is the one line that ties the name of a room to the thing in it,
-/// which is what makes the names on the map and the pictures on the walls
-/// one vocabulary rather than two.
+/// **Only what cannot be seen.** The first draft captioned all eight, and
+/// Jake read it back: on the plinth here is repetitive and not that
+/// informative, the player can see what is there. He is right. A teapot, a
+/// cube and a sphere are what they look like and a line under them is noise,
+/// so those three say nothing at all.
+///
+/// What is left is a name a person cannot work out by looking, which is the
+/// four carved shapes and nothing else.
+///
+/// Not the four dimensional cube either, though that one was drafted. It
+/// stands in ana and nowhere else, and [`standing_in`] already says the way
+/// out is here in exactly that room, so a line about it is the same sentence
+/// twice.
 ///
 /// Separate from [`standing_in`] because that line is Jake's own and struck,
 /// and this one is a draft of mine.
-pub fn on_the_plinth(cell: Cell) -> &'static str {
+pub fn on_the_plinth(cell: Cell) -> Option<&'static str> {
     match thing(cell) {
-        Thing::Teapot => "[COPY - Jake] A teapot stands on the plinth here.",
-        Thing::Klein => "[COPY - Jake] A Klein bottle stands on the plinth here.",
-        Thing::Sierpinski => "[COPY - Jake] A Sierpinski tetrahedron stands on the plinth here.",
-        Thing::Menger => "[COPY - Jake] A Menger sponge stands on the plinth here.",
-        Thing::Hilbert => "[COPY - Jake] A Hilbert curve stands on the plinth here.",
-        Thing::Cube => "[COPY - Jake] A cube stands on the plinth here.",
-        Thing::FourCube => "[COPY - Jake] The four dimensional cube stands on the plinth here, and it is the way out.",
-        Thing::Sphere => "[COPY - Jake] A sphere stands on the plinth here.",
+        Thing::Klein => Some("[COPY - Jake] A Klein bottle: one surface, and no inside."),
+        Thing::Sierpinski => Some("[COPY - Jake] A Sierpinski tetrahedron."),
+        Thing::Menger => Some("[COPY - Jake] A Menger sponge."),
+        Thing::Hilbert => Some("[COPY - Jake] A Hilbert curve, which is one line."),
+        Thing::Teapot | Thing::Torus | Thing::FourCube | Thing::Sphere => None,
     }
 }
 
@@ -1007,6 +1021,21 @@ pub fn thing_at() -> Vec3 {
     shape_at()
 }
 
+/// How far a sign stands off its own wall, as a fraction of its width.
+///
+/// **Half of it is not enough.** Every one of these is scaled so its widest
+/// way is [`SIGN_ACROSS`], which puts it inside a cube of that side, and
+/// then turned by [`SIGN_TURN`]. A cube turned about its upright reaches
+/// furthest along a horizontal axis at forty five degrees, where the
+/// half-extent is not half the side but half its diagonal, which is 0.707 of
+/// it. At a half, the corner of that box is inside the wall: Jake, looking
+/// at the Klein bottle on a wall in south, said it was embedded in it.
+///
+/// Three quarters, so the furthest corner of the furthest turn still stands
+/// a little clear and the sign reads as a thing in the room rather than a
+/// shape painted on the wall.
+pub const SIGN_OUT: f32 = 0.75;
+
 /// Which way every small one is turned.
 ///
 /// Still, and all of them the same way, so the one on a wall and the one on
@@ -1015,7 +1044,8 @@ pub fn thing_at() -> Vec3 {
 /// from a sphere at the size these are drawn.
 pub const SIGN_TURN: f32 = 0.78;
 
-/// And where the sign for the room beyond a wall sits.
+/// And where the sign for the room beyond a wall sits, for the four walls
+/// that have one.
 ///
 /// In the middle of its panel, which is where somebody looking at a wall is
 /// already looking. It was high on the panel above the name first, and from
@@ -1023,20 +1053,25 @@ pub const SIGN_TURN: f32 = 0.78;
 /// picture: the name plate is at the top or the bottom of a panel already,
 /// so the middle was free and is the one place on a wall you cannot miss.
 ///
-/// The floor and the ceiling are the two you cannot walk at, and theirs are
-/// handled differently twice over. They step aside along `x`, because the
-/// middle of the floor is where the plinth stands and the middle of the
-/// ceiling is straight above it, and `x` rather than `z` because those two
-/// plates run along `z`. And they are set into their own surface rather than
-/// stood on it: a metre of Menger sponge standing on the floor of a room you
-/// walk about in is furniture, and you would walk through it.
-pub fn sign_at(face: Face) -> Vec3 {
+/// **The floor and the ceiling have none.** They had one briefly, set into
+/// their own surface, because a metre of Menger sponge standing on the floor
+/// of a room you walk about in is furniture you would walk through. Sunk, it
+/// read as exactly what it looked like: Jake, with a four dimensional cube
+/// coming out of the floor in the corner of his picture, said things can get
+/// clipped, and he is right.
+///
+/// Taking them out is better than hiding them better. A sign on a wall says
+/// where walking at that wall puts you, and these two are the faces nobody
+/// can walk at: whatever is through them, you cannot get there this way. The
+/// floor's own plate still names the room you came from, which is the one
+/// thing about the floor worth knowing, and the map in your hand still
+/// carries all six.
+pub fn sign_at(face: Face) -> Option<Vec3> {
+    face.step()?;
+
     let (at, _) = panel(face);
 
-    match face {
-        Face::Down | Face::Up => at + Vec3::X * (CELL * 0.25),
-        _ => at - face.way() * (SIGN_ACROSS * 0.5),
-    }
+    Some(at - face.way() * (SIGN_ACROSS * SIGN_OUT))
 }
 
 /// What an axis's pair of names means, for the two pairs that need saying.
@@ -1947,10 +1982,18 @@ mod tests {
     fn a_wall_sign_is_in_the_room_and_out_of_the_way() {
         let (plinth_at, plinth_size) = plinth();
         let plinth = Aabb::from_center_size(plinth_at, plinth_size);
-        let half = SIGN_ACROSS * 0.5;
 
         for face in Face::ALL {
-            let at = sign_at(face);
+            // the floor and the ceiling have none, because they are the two
+            // faces nobody can walk at
+            let Some(at) = sign_at(face) else {
+                assert!(
+                    face.step().is_none(),
+                    "the {:?} wall can be walked at and has no sign",
+                    face
+                );
+                continue;
+            };
             let sign = Aabb::from_center_size(at, Vec3::splat(SIGN_ACROSS));
 
             // inside the cell, which is the cube between the floor and the
@@ -1962,32 +2005,22 @@ mod tests {
                 at
             );
 
-            // and proud of its own panel rather than in it, and near it
-            // rather than out in the middle of the room.
-            //
-            // Per face, because the floor is at y nought and the ceiling at
-            // `CELL` while the four walls are at plus and minus `HALF`: one
-            // reading for all six put the ceiling's sign six metres into its
-            // own wall.
-            let depth = match face {
-                Face::Down => at.y,
-                Face::Up => CELL - at.y,
-                _ => HALF - at.dot(face.way()),
-            };
-
-            // the four walls stand theirs in the room, and the floor and the
-            // ceiling set theirs into the surface, which is the one way a
-            // sign and a person can share a floor
-            let want = match face {
-                Face::Down | Face::Up => 0.0,
-                _ => half * 0.9,
-            };
+            // and proud of its own panel rather than in it, by enough that
+            // the furthest corner of its own bounding cube clears the wall
+            // at the angle it is turned to. Half the width is not that
+            // number: a cube turned about its upright reaches 0.707 of its
+            // side along a horizontal axis, not 0.5.
+            let depth = HALF - at.dot(face.way());
+            let corner = SIGN_ACROSS * std::f32::consts::FRAC_1_SQRT_2;
 
             assert!(
-                depth >= want,
-                "the {:?} sign at {:?} is sunk into its own wall",
+                depth > corner,
+                "the {:?} sign at {:?} stands {} off its wall and its own \
+                 corner reaches {}",
                 face,
-                at
+                at,
+                depth,
+                corner
             );
             assert!(
                 depth < SIGN_ACROSS * 2.0,
