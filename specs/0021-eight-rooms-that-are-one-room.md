@@ -1,7 +1,8 @@
 # 0021 Eight rooms that are one room
 
-**Status:** built, parked, brought back with a map, and given eight things to
-find it by, 2026-10-17.
+**Status:** implemented
+**Built:** parked, brought back with a map, and given eight things to find it
+by, 2026-10-17.
 **Date:** 2026-10-16
 
 ## Eight rooms with eight different things in them

@@ -1,6 +1,7 @@
 # 0022 A room at the end of the aisle
 
-**Status:** built, 2026-10-16
+**Status:** implemented
+**Built:** 2026-10-16
 **Supersedes nothing.** Spec 0002 put the shapes on the far wall and this
 moves the wall.
 

@@ -1,6 +1,7 @@
 # 0023 What a frame costs here
 
-**Status:** built, 2026-10-17
+**Status:** implemented
+**Built:** 2026-10-17
 **Date:** 2026-10-17
 
 ## Goal
