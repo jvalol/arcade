@@ -77,18 +77,38 @@ Four rooms: the hall, the nook, the garden and the back room. Each is one
 call naming where to stand and what to look at, and each reference was
 looked at before it was committed.
 
-**Three rooms are not in it, and that is a judgement rather than a
-shortfall.** The cellar, the baths and the space behind the wall were posed
-from the anchors their modules expose and all three came out wrong: the
-cellar was a black frame with a floor edge in it, the baths were a view of
-the garden's trees, and `behind::at` of this building's reach lands at
-(76.8, 0, 87.8), which is nowhere a person stands. Committing a reference
-of the wrong room is worse than having none, because it passes.
+**Three rooms are not in it.** The cellar, the baths and the space behind
+the wall were posed from the anchors their modules expose and all three
+came out wrong, so they were walked into instead: a body dropped inside
+each room's own boxes and left to settle, then photographed four ways from
+where it landed. That is the method this project already has written down
+and it is cheaper than asking anybody to stand anywhere.
 
-The way to get those three is the one this project already has written
-down: Jake stands in the room, `WHERE` prints the line, and the pose is
-read off it rather than guessed. Each is then one call, in the same shape
-as the four that are in.
+Walking found two faults in this harness and did not produce three
+pictures.
+
+- **A room drawn without `update` has its lights off.** The lamps are
+  worked out from where you are standing, and a frame drawn straight after
+  `initialize` has none of them. One `update` at `dt` of nought is in the
+  harness now, which is what this spec said to do and what the first build
+  did not.
+- **A point off a room's bounding box is not a place to stand.** The
+  cellar's was inside its own floor slab, and dropping from the top of the
+  box landed in the hall above it. Dropping from a quarter up the box
+  settles on the cellar's floor at -3.0.
+
+What walking did not give is a view worth committing. From the middle of
+the cellar's floor the four axes are four pictures of panelling; aimed at
+its pool table the frame is a dark wall. The baths from their own floor
+look up at the garden's trees through what should be a ceiling, which is
+either a fault worth somebody's eye or the light well working as intended,
+and this file cannot tell. And `behind::solid` is not the space behind the
+wall at all: it is the far space with the orrery in it, which is why that
+pose landed ninety metres out.
+
+**Choosing a view that shows a room is a judgement**, and three attempts at
+each of these did not make it. The five seconds it takes to stand in the
+room and read the line back is worth more than another hour of guessing.
 
 ## What each room's picture is of
 
@@ -123,6 +143,8 @@ as the four that are in.
 - The back room's first blessing was a picture of the ceiling lamp, because
   the thing being looked at had standing height added to it as well as to
   the camera. Looking at it is how that was found.
+- The three rooms walked, four ways each, twice over as the harness was
+  fixed. Twelve pictures looked at and none of them kept.
 
 ## Out of scope
 
@@ -135,7 +157,12 @@ spec 0021 already says it is measured differently.
 **Anything timed.** One frame, standing still. The same rule spec 0062 set
 for the engine.
 
-**The three rooms above**, until somebody stands in them.
+**The three rooms above**, until somebody stands in them and says where.
+
+**The readout.** `update` fills the help text and the 2D overlay, and at
+320 by 240 the help fills the frame. These pictures are of the building, so
+the quads and the text are left out of them, which also means a reference
+does not change when a line of help does.
 
 **A picture per pose.** One a room. A room that needs two pictures to say
 whether it is right is a room that wants a test, not a second photograph.

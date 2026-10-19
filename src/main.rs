@@ -7731,13 +7731,26 @@ mod tests {
         arcade.yaw = look.x.atan2(-look.z);
         arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
 
+        // **One update, at no time at all.** A room's lamps are worked out
+        // from where you are standing, so a frame drawn without this is a
+        // room with the lights off: the cellar came out black the first
+        // time. `dt` of nought is what keeps the pool's surface, the neon
+        // and the metronome where they started.
+        arcade.update(0.0, &mut geometry, &mut text, &sound);
+
         let mut scene = Scene::new();
         let mut camera = Camera::new();
 
         arcade.draw(&mut scene, &mut camera);
         renderer.set_camera(camera);
 
-        Some(renderer.picture(&scene, &geometry, &text))
+        // **The room, and not the readout.** `update` fills the help text
+        // and the 2D overlay as well as the lamps, and at 320 by 240 the
+        // help fills the frame and leaves no room for the building. What
+        // these pictures are of is the 3D, so the quads and the text are
+        // left out of them, which also means a reference does not change
+        // when a line of help does.
+        Some(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()))
     }
 
     /// Where a room's reference lives.
@@ -7849,12 +7862,13 @@ mod tests {
         let mut scene = Scene::new();
         let mut camera = Camera::new();
 
+        arcade.update(0.0, &mut geometry, &mut text, &sound);
         arcade.draw(&mut scene, &mut camera);
         scene.light.intensity = 0.0;
         scene.light.ambient = Vec3::ZERO;
         renderer.set_camera(camera);
 
-        Some(renderer.picture(&scene, &geometry, &text))
+        Some(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()))
     }
 
     /// Spec 0027: a room drawn twice is the same room, which is what makes
