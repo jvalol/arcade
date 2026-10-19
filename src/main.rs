@@ -338,10 +338,6 @@ struct Arcade {
     /// And poolhall's, which stands on a table in the cellar for the same
     /// reason. Spec 0007.
     poolhall: Cabinet,
-    /// What the building has handed the engine once rather than every
-    /// frame: the rooms' shells, per spec 0026. Empty until the first frame
-    /// that has meshes to name them with.
-    standing: Vec<blitzkit::renderer::scene::Kept>,
     /// One per cabinet, in the room's own order. A game with no screenshot gets
     /// none and its screen stays blank.
     art: Vec<Option<TextureId>>,
@@ -907,7 +903,6 @@ impl Arcade {
             rig_meshes: Vec::new(),
             clutter: Vec::new(),
             gauge_words: Vec::new(),
-            standing: Vec::new(),
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
@@ -1605,16 +1600,14 @@ impl Arcade {
     /// if that stops being true the run for that room is dropped and kept
     /// again, which is one call.
     fn keep_the_building(&mut self, scene: &mut Scene, cube: MeshId) {
-        let keeping = self.standing.is_empty();
+        /// What the building tells the engine about itself: that it is the
+        /// same building it was last frame. Spec 0064 takes a version and
+        /// this one never moves, because nothing in these runs changes
+        /// shape while the game runs. If that stops being true, this is
+        /// the number to bump.
+        const STILL_THE_SAME_BUILDING: u64 = 0;
 
-        for run in standing::runs(self.room.reaches) {
-            // a run too small to pay for its own draw call is pushed with
-            // everything else, and batched with it. Spec 0026.
-            let keep = run.worth_keeping();
-
-            if keep && !keeping {
-                continue;
-            }
+        for (n, run) in standing::runs(self.room.reaches).into_iter().enumerate() {
             // which room as well as what it is made of: a wall in the hall
             // is boards under a light and a wall of the space behind it is
             // as near black as this building draws, and they were the same
@@ -1636,31 +1629,26 @@ impl Arcade {
                 (standing::Where::Hall, Some(grain)) => grain,
                 _ => blitzkit::renderer::scene::TextureId::WHITE,
             };
-            if keep {
-                let instances: Vec<blitzkit::renderer::scene::Instance> = run
-                    .boxes
-                    .iter()
-                    .map(|box_| {
+            // **One call a run, every frame.** Spec 0064: the version
+            // never changes because the building never does, so the boxes
+            // are walked once and the engine decides the rest. It keeps a
+            // run worth its own draw and pushes one that is not, which is
+            // the decision `standing::worth_keeping` used to make here.
+            scene.standing(
+                blitzkit::renderer::scene::Name(n as u64),
+                STILL_THE_SAME_BUILDING,
+                cube,
+                texture,
+                |into| {
+                    into.extend(run.boxes.iter().map(|box_| {
                         blitzkit::renderer::scene::Instance::new(
                             &Transform::at(box_.center()).with_scale(box_.size()),
                             colour,
                             shine,
                         )
-                    })
-                    .collect();
-
-                self.standing.push(scene.keep(cube, texture, &instances));
-            } else {
-                for box_ in run.boxes.iter() {
-                    let stood = Transform::at(box_.center()).with_scale(box_.size());
-
-                    if texture == blitzkit::renderer::scene::TextureId::WHITE {
-                        scene.push_material(cube, &stood, colour, shine);
-                    } else {
-                        scene.push_textured(cube, texture, &stood, colour, shine);
-                    }
-                }
-            }
+                    }));
+                },
+            );
         }
     }
 

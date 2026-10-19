@@ -58,27 +58,14 @@ pub struct Run {
     pub boxes: Vec<Aabb>,
 }
 
-impl Run {
-    /// Whether this one is worth handing over rather than pushing.
-    ///
-    /// **Because a kept run is a draw call of its own.** What is pushed is
-    /// batched with everything else of the same mesh and texture, so three
-    /// boxes kept are three boxes taken out of a batch and given a draw
-    /// call, a sphere, a question and a range. The first build of this kept
-    /// everything and the hall went from 227 draws to 246 for no saving at
-    /// all.
-    ///
-    /// Thirty two because the lists in this building are one, three, four,
-    /// six, thirteen, and three hundred and fifty one: the columns in the
-    /// space behind the wall are the one shell worth keeping and the number
-    /// only has to fall between.
-    pub fn worth_keeping(&self) -> bool {
-        self.boxes.len() >= KEPT_AT
-    }
-}
-
-/// How many boxes a run needs before it is worth its own draw call.
-pub const KEPT_AT: usize = 32;
+// **Which run is worth a draw call of its own is no longer asked here.**
+// This file carried a `worth_keeping` and a `KEPT_AT` of 32, with a
+// comment reasoning that the lists in this building are one, three, four,
+// six, thirteen and three hundred and fifty one, so the threshold only had
+// to fall between. Engine spec 0064 took that decision into the engine,
+// where it is one number with one account of itself rather than one per
+// game. Every run is handed over now and the engine keeps the ones worth
+// keeping.
 
 /// Every run the building hands over once.
 ///
@@ -262,34 +249,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    /// Spec 0026: a run is kept only when it is big enough to pay for the
-    /// draw call it costs, and something is.
-    #[test]
-    fn only_a_run_worth_a_draw_is_kept() {
-        let runs = runs(reaches());
-        let kept: Vec<&Run> = runs.iter().filter(|run| run.worth_keeping()).collect();
-
-        assert!(!kept.is_empty(), "nothing at all is worth keeping");
-
-        for run in runs.iter() {
-            assert_eq!(
-                run.worth_keeping(),
-                run.boxes.len() >= KEPT_AT,
-                "{:?} of the {:?} is kept on something other than its size",
-                run.made,
-                run.at
-            );
-        }
-
-        // and the one that is worth it is the one the measurement found:
-        // the columns in the space behind the wall
-        assert!(
-            kept.iter()
-                .any(|run| run.at == Where::Behind && run.made == Made::Column),
-            "the columns stopped being worth keeping"
-        );
     }
 
     /// And there is something in each room to keep, or this spec has quietly

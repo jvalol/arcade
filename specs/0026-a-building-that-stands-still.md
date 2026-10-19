@@ -79,6 +79,16 @@ call.
   the lists that are kept are the same lists the colliders come
   from. — `room::tests::the_building_is_where_it_was`
 
+**Which run is worth a draw call is no longer decided here.** This spec
+built a `worth_keeping` and a `KEPT_AT` of 32, reasoning that the lists in
+this building are one, three, four, six, thirteen and three hundred and
+fifty one, so the threshold only had to fall between. Engine spec 0064 took
+that decision into the engine, which asks the same question with one number
+and one account of itself rather than one per game. Every run is handed over
+now, through `Scene::standing`, and the engine keeps the one worth keeping
+and pushes the rest. The building draws the same and the test that held the
+threshold went with it.
+
 ## What it came to
 
 The hall, same pose, with the cost readout up:
