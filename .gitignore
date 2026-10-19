@@ -1,1 +1,6 @@
 target/
+
+# What a failed room picture writes beside the reference, which is there to
+# be looked at and not to be committed. Spec 0027.
+tests/rooms/*-drawn.png
+tests/rooms/*-diff.png

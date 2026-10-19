@@ -7692,6 +7692,198 @@ fn main() {
 mod tests {
     use super::*;
 
+    /// How big a room's picture is.
+    ///
+    /// Small, because every one of these is committed and read by a person,
+    /// and the same size the engine's own pictures are, per its spec 0062.
+    const WIDE: u32 = 320;
+    const TALL: u32 = 240;
+
+    /// Draws the building from one place, looking one way, with the clock
+    /// at nought. Spec 0027.
+    ///
+    /// **Nothing in the picture may move.** The pool has a surface, the
+    /// neon flickers, the metronome swings and the toys run, so a picture
+    /// of any of them is a picture of what time it was. This builds the
+    /// game, loads it, stands it somewhere and draws one frame. There is no
+    /// `update`, so nothing has been given any time to happen in.
+    ///
+    /// Nothing at all on a machine with no adapter, which is a skip rather
+    /// than a failure, the same as the engine's pictures.
+    fn drawn_from(at: Vec3, looking_at: Vec3) -> Option<blitzkit::renderer::Picture> {
+        let mut renderer = pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))?;
+        let mut arcade = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+
+        arcade.load(&mut renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+        arcade.before_frame(&mut renderer);
+
+        // where it stands and which way it looks, set on the game's own
+        // three fields rather than on the camera: `draw` works the camera
+        // out from these, and two ways of saying where somebody is standing
+        // would come apart
+        let look = looking_at - at;
+
+        arcade.at = at;
+        arcade.yaw = look.x.atan2(-look.z);
+        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+
+        let mut scene = Scene::new();
+        let mut camera = Camera::new();
+
+        arcade.draw(&mut scene, &mut camera);
+        renderer.set_camera(camera);
+
+        Some(renderer.picture(&scene, &geometry, &text))
+    }
+
+    /// Where a room's reference lives.
+    fn reference(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/rooms")
+            .join(format!("{}.png", name))
+    }
+
+    /// Draws a room and holds it against the picture that was right.
+    fn looks_right(name: &str, at: Vec3, looking_at: Vec3) {
+        let Some(picture) = drawn_from(at, looking_at) else {
+            eprintln!("no adapter here, so the {} was not drawn", name);
+
+            return;
+        };
+
+        if let Err(why) = blitzkit::picture::looks_right(&picture, &reference(name)) {
+            panic!("{}", why);
+        }
+    }
+
+    /// How far the building reaches, which every room is measured from.
+    fn reaches() -> f32 {
+        room::Room::of(games()).reaches
+    }
+
+    /// Standing height, so a room is seen from where a person sees it.
+    fn eye(at: Vec3) -> Vec3 {
+        vec3(at.x, at.y + EYE, at.z)
+    }
+
+    /// Spec 0027: the hall, from the door, down the aisle.
+    ///
+    /// Where the building opens, which is the view `media/arcade.png` has
+    /// always been.
+    #[test]
+    fn the_hall_is_drawn() {
+        let reaches = reaches();
+        let doorway = room::Room::of(games()).doorway();
+
+        looks_right("hall", eye(doorway), eye(vec3(0.0, 0.0, -reaches * 0.5)));
+    }
+
+    /// Spec 0027: the nook, which is where the toys are.
+    #[test]
+    fn the_nook_is_drawn() {
+        let reaches = reaches();
+        let (at, _) = room::nook_floor(reaches);
+
+        looks_right("nook", eye(at + Vec3::X * 1.6), eye(at - Vec3::X * 1.0));
+    }
+
+    /// Spec 0027: the garden, looking at the pond.
+    #[test]
+    fn the_garden_is_drawn() {
+        let reaches = reaches();
+        let at = garden::at(reaches);
+
+        looks_right("garden", eye(at), eye(garden::pond(reaches).0));
+    }
+
+    /// Spec 0027: the back room, from the spot it is arranged to be seen
+    /// from.
+    #[test]
+    fn the_back_room_is_drawn() {
+        let reaches = reaches();
+        let (at, _) = posed_in_the_back_room(reaches);
+
+        looks_right("back-room", eye(at), back::block(reaches));
+    }
+
+    /// Spec 0027: the comparison can fail.
+    ///
+    /// The hall with its lamps out, held against the hall with them on. A
+    /// picture test that cannot fail is a file nobody reads.
+    #[test]
+    fn a_room_picture_can_fail() {
+        let reaches = reaches();
+        let doorway = room::Room::of(games()).doorway();
+        let Some(dark) = drawn_dark(eye(doorway), eye(vec3(0.0, 0.0, -reaches * 0.5))) else {
+            return;
+        };
+
+        assert!(
+            blitzkit::picture::looks_right(&dark, &reference("hall")).is_err(),
+            "the hall with its lights off matches the hall with them on"
+        );
+    }
+
+    /// The same frame with nothing lighting it, for the control above.
+    fn drawn_dark(at: Vec3, looking_at: Vec3) -> Option<blitzkit::renderer::Picture> {
+        let mut renderer = pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))?;
+        let mut arcade = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+
+        arcade.load(&mut renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+        arcade.before_frame(&mut renderer);
+
+        let look = looking_at - at;
+
+        arcade.at = at;
+        arcade.yaw = look.x.atan2(-look.z);
+        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+
+        let mut scene = Scene::new();
+        let mut camera = Camera::new();
+
+        arcade.draw(&mut scene, &mut camera);
+        scene.light.intensity = 0.0;
+        scene.light.ambient = Vec3::ZERO;
+        renderer.set_camera(camera);
+
+        Some(renderer.picture(&scene, &geometry, &text))
+    }
+
+    /// Spec 0027: a room drawn twice is the same room, which is what makes
+    /// a reference worth keeping at all.
+    #[test]
+    fn a_room_drawn_twice_is_the_same() {
+        let reaches = reaches();
+        let at = eye(garden::at(reaches));
+        let looking_at = eye(garden::pond(reaches).0);
+        let (Some(once), Some(twice)) = (drawn_from(at, looking_at), drawn_from(at, looking_at))
+        else {
+            return;
+        };
+
+        assert_eq!(
+            once.pixels, twice.pixels,
+            "the same room drawn twice came out differently"
+        );
+    }
+
+    /// Spec 0027: a machine with no adapter skips rather than failing.
+    #[test]
+    fn no_device_is_not_a_failure() {
+        match pollster::block_on(blitzkit::renderer::Renderer::offscreen(16, 16)) {
+            Some(_) => (),
+            None => eprintln!("no adapter here, which is a skip and not a failure"),
+        }
+    }
+
     /// A key going down, then coming back up, which is what a press is.
     fn press(arcade: &mut Arcade, key: KeyboardKey) {
         for state in [KeyboardKeyState::Pressed, KeyboardKeyState::Released] {

@@ -175,6 +175,7 @@ dependencies = [
  "blitzkit-shapes",
  "glam",
  "image",
+ "pollster",
 ]
 
 [[package]]

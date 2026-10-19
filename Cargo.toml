@@ -30,6 +30,11 @@ blitzkit-shapes = { path = "../blitzkit/shapes" }
 [profile.dev.package."*"]
 opt-level = 3
 
+# What the room pictures need to wait on a device with no window. Spec 0027:
+# the engine's own `pollster` is not this crate's to borrow.
+[dev-dependencies]
+pollster = "1"
+
 # What build.rs needs to shrink the games' screenshots for a browser build.
 # See build.rs: they go inside the binary there, and a cabinet screen is a few
 # hundred pixels across however big the picture on it was.

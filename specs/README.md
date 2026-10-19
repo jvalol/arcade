@@ -34,6 +34,7 @@ not a priority, and it never changes once a spec exists.
 | [0024](0024-the-back-room.md) | A room off the gallery for the building's own instruments, which are neither games nor shapes: a bench with the test rig clamped over it, among the clutter, rather than a cabinet that launches one (draft) |
 | [0025](0025-nothing-behind-the-cubes.md) | A black bay at the end of the back room, with the block of cubes standing in it at arm's width under one lamp, because the engine's own load example is more stunning than the closet and the reason is composition (draft) |
 | [0026](0026-a-building-that-stands-still.md) | Handing the engine the rooms' shells once instead of every frame: it bought nothing in the hall, because what this building spends a frame on is the fittings |
+| [0027](0027-a-picture-of-each-room.md) | A picture of each room, held against one that was right, because 455 tests here had never looked at anything: four rooms in, and three left out because the poses guessed for them photographed the wrong room |
 
 ---
 
