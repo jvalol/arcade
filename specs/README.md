@@ -35,6 +35,7 @@ not a priority, and it never changes once a spec exists.
 | [0025](0025-nothing-behind-the-cubes.md) | A black bay at the end of the back room, with the block of cubes standing in it at arm's width under one lamp, because the engine's own load example is more stunning than the closet and the reason is composition (draft) |
 | [0026](0026-a-building-that-stands-still.md) | Handing the engine the rooms' shells once instead of every frame: it bought nothing in the hall, because what this building spends a frame on is the fittings |
 | [0027](0027-a-picture-of-each-room.md) | A picture of each of the seven rooms, held against one that was right, because 455 tests here had never looked at anything: three of them waited on a photograph Jake took, which showed the building was fine and the harness was standing on the wrong floor |
+| [0028](0028-the-fittings-stay-pushed.md) | Not built, deliberately: the whole of this building's draw is 0.74 ms out of a frame with four to spare, so keeping the fittings would buy a share of that against a version field on every cabinet that lights, door that opens and leaf that swings |
 
 ---
 
