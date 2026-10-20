@@ -663,6 +663,11 @@ pub enum Seen {
     Sauna,
     /// The door between the cellar and the baths. Spec 0008.
     Baths,
+    /// One of the hotel's doors, by its room number. Spec 0029.
+    ///
+    /// The one thing in that corridor you can work, and the only way there is
+    /// to put somebody in a room or take them out of one.
+    Hotel(u64),
 }
 
 pub struct Room {
@@ -690,6 +695,14 @@ pub struct Room {
     /// And the door to the baths, which is a third thing that swings.
     pub baths_open: bool,
     pub baths_swing: f32,
+    /// How far each of the hotel's doors stands open, room 1 first. Spec
+    /// 0029.
+    ///
+    /// Held here rather than worked out from the hotel's own state, because
+    /// what the sight needs is where a leaf *is*, and the game owns who is in
+    /// which room. The game writes this each frame, the way it does the
+    /// baths' swing.
+    pub hotel_open: Vec<f32>,
     /// How far it actually is, nought shut and one open, which follows `open`
     /// rather than being it. The box follows this too: a door drawn halfway
     /// open that stops you where it was shut is a worse thing than one that
@@ -825,15 +838,12 @@ impl Room {
                     vec3(to, TALL, -reaches + thick * 0.5),
                 )
             },
-            // the gallery's own three sides, per spec 0022
-            {
-                let far = gallery_wall(reaches);
-
-                Aabb::new(
-                    vec3(-GALLERY_WIDE * 0.5 - thick, 0.0, far - thick),
-                    vec3(-GALLERY_WIDE * 0.5, TALL, -reaches),
-                )
-            },
+            // the gallery's own three sides, per spec 0022. The west one is
+            // cut for the hotel's door and is built there, per spec 0029, the
+            // same way the east one is built in the back room: one account of
+            // where a wall is rather than two that drift.
+            crate::aleph::gallery_west(reaches)[0],
+            crate::aleph::gallery_west(reaches)[1],
             // the east one is cut for the back room's door and is built
             // there, per spec 0024, so there is one account of where it is
             // rather than two that drift
@@ -864,6 +874,7 @@ impl Room {
             sauna_swing: 0.0,
             baths_open: false,
             baths_swing: 0.0,
+            hotel_open: vec![0.0; crate::aleph::DRAWN as usize],
             swing: 0.0,
         }
     }
@@ -1112,10 +1123,17 @@ impl Room {
         self.built(true)
     }
 
-    /// The same, with the space behind the wall left out when asked.
+    /// The same, with the rooms the sun cannot reach left out when asked.
     ///
     /// One list either way, because two lists of one thing drift.
-    fn built(&self, behind_the_wall: bool) -> Vec<Aabb> {
+    ///
+    /// Two rooms are out of it now rather than one. The hotel of spec 0029
+    /// joined the space behind the wall on 2026-10-20 for exactly the same
+    /// reason, and it was caught the same way: its corridor outruns the far
+    /// plane by design, which is a hundred and ten metres of building added
+    /// west, and the sun's one map stretched over it until the garden's
+    /// shadows went coarse. A picture test caught that before anybody looked.
+    fn built(&self, lit_by_the_sun: bool) -> Vec<Aabb> {
         let mut out = self.walls.clone();
         out.extend(self.floors());
         out.extend(crate::cellar::solid(self.reaches));
@@ -1126,11 +1144,25 @@ impl Room {
         out.extend(crate::behind::near_wall(self.reaches));
         out.extend(crate::back::solid(self.reaches));
 
-        if behind_the_wall {
+        if lit_by_the_sun {
             out.extend(crate::behind::solid(self.reaches));
+            out.extend(crate::aleph::solid(self.reaches));
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
+        // and every leaf in the hotel's corridor, per spec 0029. A door that
+        // is drawn and not solid is a door you walk through, which is what
+        // the first build of that room shipped and what Jake found by
+        // walking into one.
+        out.extend(
+            (1..=crate::aleph::DRAWN)
+                .map(|n| {
+                    let open = self.hotel_open.get(n as usize - 1).copied().unwrap_or(0.0);
+
+                    crate::aleph::leaf_box(self.reaches, n, open)
+                })
+                .collect::<Vec<_>>(),
+        );
         out.extend(
             self.stood
                 .iter()
@@ -1262,8 +1294,8 @@ impl Room {
         Self::round(self.building())
     }
 
-    /// What the sun has to cover, which is the building without the space
-    /// behind the wall.
+    /// What the sun has to cover, which is the building without the rooms the
+    /// sun cannot reach.
     ///
     /// The sun gets one shadow map over whatever it is given, so what it is
     /// given decides how coarse a texel is. Given the whole building it is
@@ -1277,6 +1309,11 @@ impl Room {
     /// Nothing is lost by leaving that room out. It is lit by its own lamps
     /// and by planets that glow, and the frame is identical pixel for pixel
     /// with it in the bounds and with it out.
+    ///
+    /// The hotel of spec 0029 is out for the same reason and was a worse
+    /// case: a corridor built to outrun the far plane is a hundred and ten
+    /// metres of indoor building, and with it in the bounds the garden's
+    /// shadows moved in half a per cent of that room's pixels.
     pub fn under_the_sun(&self) -> Aabb {
         Self::round(self.built(false))
     }
@@ -1354,6 +1391,18 @@ impl Room {
             slab(from, way, &leaf).map(|far| (Seen::Baths, far))
         };
 
+        // and the hotel's doors, per spec 0029. Every drawn one, because a
+        // corridor where only the near few can be worked is a corridor with
+        // an invisible edge in it.
+        let hotel: Vec<(Seen, f32)> = (1..=crate::aleph::DRAWN)
+            .filter_map(|n| {
+                let open = self.hotel_open.get(n as usize - 1).copied().unwrap_or(0.0);
+                let leaf = crate::aleph::leaf_box(self.reaches, n, open);
+
+                slab(from, way, &leaf).map(|far| (Seen::Hotel(n), far))
+            })
+            .collect();
+
         // and, once it is moving, the leaves themselves. Hunting for the one
         // book again to shut the wall is the same needle in the same haystack,
         // and there is nothing secret left to keep: the hole is standing open.
@@ -1385,6 +1434,7 @@ impl Room {
             .chain(case)
             .chain(glass)
             .chain(baths)
+            .chain(hotel)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
@@ -1399,6 +1449,40 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0029: the gallery has a doorway either side, and they are a pair.
+    ///
+    /// The back room's is spec 0024's and the hotel's is spec 0029's, and
+    /// the second takes its `z` from the first rather than keeping its own
+    /// account. Two lists of one thing drift, and a pair that drifts is two
+    /// doors in a room rather than a choice.
+    #[test]
+    fn the_gallery_has_a_doorway_either_side() {
+        let reaches = Room::of(crate::games()).reaches;
+        let east = crate::back::way(reaches);
+        let west = crate::aleph::way(reaches);
+
+        assert_eq!(east, west, "the two doorways are at different z");
+
+        // and each wall is in two pieces with the gap between them
+        for (name, pieces) in [
+            ("east", crate::back::gallery_east(reaches)),
+            ("west", crate::aleph::gallery_west(reaches)),
+        ] {
+            assert_eq!(pieces.len(), 2, "the {} wall is not cut for a door", name);
+
+            let (from, to) = east;
+            let gap = pieces[0].max.z.max(pieces[1].min.z) - pieces[0].max.z.min(pieces[1].min.z);
+
+            assert!(
+                (gap - (to - from)).abs() < 1e-3,
+                "the {} wall's gap is {} and the doorway is {}",
+                name,
+                gap,
+                to - from
+            );
+        }
+    }
+
     /// Spec 0015: the sun's bounds leave out the space behind the wall.
     ///
     /// The sun gets one shadow map over whatever it is given, so a room with
@@ -1832,6 +1916,10 @@ mod tests {
                 + crate::behind::solid(room.reaches).len()
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
+                // and the hotel through the other wall, per spec 0029,
+                // with a leaf for every drawn room
+                + crate::aleph::solid(room.reaches).len()
+                + crate::aleph::DRAWN as usize
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -2690,6 +2778,10 @@ mod tests {
                 + crate::behind::solid(room.reaches).len()
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
+                // and the hotel through the other wall, per spec 0029,
+                // with a leaf for every drawn room
+                + crate::aleph::solid(room.reaches).len()
+                + crate::aleph::DRAWN as usize
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid

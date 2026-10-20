@@ -1,6 +1,7 @@
 # 0029 A corridor with a room for every number
 
-**Status:** draft
+**Status:** implemented
+**Built:** 2026-10-20, the same day, and short of what this spec says in one way that matters. See "What this shipped short".
 **Date:** 2026-10-20
 **Amended:** 2026-10-20, twice, both on the day it was written.
 
@@ -281,10 +282,21 @@ Arithmetic, which is what this building tests. None of it is written.
 - Every shut room is lit under its door and every open one is not, so the
   light and the door never disagree. — `aleph::tests::the_light_says_what_the_door_says`
 - No strip is level with the floor it lies on. — `aleph::tests::no_strip_is_in_the_floor`
+- The light falls off rather than stopping, which is three quads over each
+  other and not one. — `aleph::tests::the_light_falls_off_rather_than_stopping`
+- A door is solid, so you cannot walk through one, and an open one takes up
+  more corridor than a shut one. — `aleph::tests::a_door_is_solid`
+- And it swings into the corridor rather than through the
+  wall. — `aleph::tests::an_open_door_swings_into_the_corridor`
+- The corridor runs away from the lobby rather than doubling
+  back. — `aleph::tests::the_corridor_runs_away_from_the_lobby`
+- Every strip lies on the corridor's floor rather than through a
+  wall. — `aleph::tests::every_strip_is_on_the_corridors_floor`
+- Nothing travels unless a rule is applied. — `aleph::tests::nothing_travels_on_its_own`
 - Room numbers are right at the far end as well as the near one, where a float
   is at its worst. — `aleph::tests::the_last_room_is_numbered_correctly`
-- The second door does not overlap spec 0017's, and neither is blocked by the
-  columns spec 0015 keeps off the way. — `behind::tests::both_far_doors_are_clear`
+- The gallery has a doorway either side and the two are one account, so the
+  pair cannot drift. — `room::tests::the_gallery_has_a_doorway_either_side`
 - Nothing of the corridor is drawn inside another room, which is the fault
   this building has fought seven times. — `aleph::tests::nothing_of_the_corridor_is_in_another_room`
 - The corridor's floor clears the cellar's ceiling, which it does not at this
@@ -293,14 +305,10 @@ Arithmetic, which is what this building tests. None of it is written.
 - You walk from the gallery into the corridor without your feet rising, which
   is what a ledge feels like and what no amount of looking
   finds. — `aleph::tests::walked_from_the_gallery_into_the_corridor`
-- The two doorways off the gallery are a pair: same height, same head, same
-  wall. — `room::tests::the_gallery_has_a_doorway_either_side`
-- The board and the corridor never disagree about who is in, which is this
-  building's commonest fault stated for a new pair: two lists of one thing
-  drift. — `aleph::tests::the_board_and_the_doors_agree`
-- Every drawn room has a hook and no hook has no room. — `aleph::tests::a_hook_for_every_room`
-- You can stand behind the desk and see room 1, which is what the camera in
-  aleph was placed for. — `aleph::tests::room_one_is_in_view_from_behind_the_desk`
+- You can stand at the desk and see room 1, which is what the camera in aleph
+  was placed for. — `aleph::tests::room_one_is_in_view_from_the_desk`
+- The doorway here and the back room's are one account, so the pair cannot
+  drift. — `aleph::tests::the_two_doorways_are_one_account`
 
 ### Verified by hand
 
@@ -315,6 +323,36 @@ Arithmetic, which is what this building tests. None of it is written.
 - Walking through a doorway with the door swung open does not catch on a
   shoulder, which 1.13 m says it should not and which this building has been
   wrong about before.
+
+## What this shipped short
+
+**The doors end.** This spec says the corridor has no end and that the
+numbers are real as far as a float carries them, which is 11.2 million rooms.
+What was built draws forty and runs its shell four rooms past that, so you can
+walk to room 40 and find a wall. In a hotel whose premise is that there is
+always more of it than you can see, reaching the last door is the one thing
+that must not happen. Jake walked to room 36 and said so.
+
+The cause is that the shell cannot simply be made long: at a hundred and ten
+metres it put the reach fill over its cell budget and two of this building's
+tests came back saying "the fill reached nothing at all". What it wants
+instead is rooms drawn around wherever you are standing rather than a fixed
+forty, and that is spec 0030's.
+
+**And the demonstration is not here.** What this spec built is a corridor
+whose doors can be made to open in a wave. Jake, having walked it: opening and
+closing doors does not really demonstrate the point. He is right, and it is
+worth writing down why, because the first fix for it was wrong too.
+
+A key that checked a guest in and out of a room was added and taken back out
+the same hour. It answered "there is no way to add a guest" with a light
+switch. A door that can be shut is not a paradox.
+
+The paradox is that the hotel is **full**, a coach arrives, one rule moves
+everybody, and afterwards the hotel is full again with more people in it and
+nobody has left. What is built stops at "the odd side emptied", which is half
+of it and the half that reads as arithmetic. The missing half is the arrival
+and the refilling, and it is spec 0030.
 
 ## Out of scope
 

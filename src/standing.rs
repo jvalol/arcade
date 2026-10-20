@@ -36,6 +36,8 @@ pub enum Where {
     Behind,
     /// The back room through the gallery's door, per spec 0024.
     Back,
+    /// The hotel through the gallery's other door, per spec 0029.
+    Hotel,
 }
 
 /// What a piece is made of, which is the colour it is drawn in.
@@ -48,6 +50,9 @@ pub enum Made {
     BackWall,
     BackCeiling,
     Lining,
+    HotelWall,
+    HotelCeiling,
+    HotelEnd,
 }
 
 /// One run: where it is, what it is made of, and the boxes in it.
@@ -121,6 +126,30 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     put(Where::Back, Made::BackCeiling, ceiling);
     put(Where::Back, Made::Lining, crate::back::lining(reaches));
 
+    // and the hotel: its shell, and nothing of the doors, the plaques, the
+    // strips or the desk. A door swings and a strip goes out, and spec 0026
+    // keeps what stands still.
+    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::aleph::solid(reaches)
+        .into_iter()
+        // the floors are drawn as planes and the desk is furniture, the same
+        // two kinds of thing the back room's drawing skips. The far end is
+        // its own run, because it is the one piece in here that is not the
+        // colour of a wall.
+        .filter(|box_| {
+            box_.max.y > 0.0
+                && *box_ != crate::aleph::desk(reaches)
+                && *box_ != crate::aleph::end(reaches)
+        })
+        .partition(|box_| box_.min.y < crate::aleph::TALL);
+
+    put(Where::Hotel, Made::HotelWall, walls);
+    put(Where::Hotel, Made::HotelCeiling, ceiling);
+    put(
+        Where::Hotel,
+        Made::HotelEnd,
+        vec![crate::aleph::end(reaches)],
+    );
+
     out
 }
 
@@ -157,6 +186,21 @@ mod tests {
             ),
         );
 
+        // the hotel, which is a lobby and a corridor leaving it, so its box
+        // is both and runs west as far as the corridor's shell does
+        let hotel = Aabb::new(
+            glam::vec3(
+                crate::aleph::corridor_west() - crate::room::THICK * 2.0,
+                -1.0,
+                crate::aleph::across(reaches).0 - crate::room::THICK * 2.0,
+            ),
+            glam::vec3(
+                -crate::room::GALLERY_WIDE * 0.5 + crate::room::THICK * 2.0,
+                crate::aleph::LOBBY_TALL + crate::room::THICK * 2.0,
+                crate::aleph::across(reaches).1 + crate::room::THICK * 2.0,
+            ),
+        );
+
         for run in runs(reaches) {
             for box_ in run.boxes.iter() {
                 let inside = match run.at {
@@ -166,6 +210,7 @@ mod tests {
                         .any(|wall| (wall.min - box_.min).length() < 1e-4),
                     Where::Behind => behind.iter().any(|room| room.intersects(box_)),
                     Where::Back => back.contains_point(box_.center()),
+                    Where::Hotel => hotel.contains_point(box_.center()),
                 };
 
                 assert!(
