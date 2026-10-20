@@ -2,8 +2,8 @@
 
 **Status:** implemented
 **Date:** 2026-10-19
-**Built:** 2026-10-19, four rooms of seven. The other three are waiting on
-poses, for the reason under **What was built**.
+**Built:** 2026-10-19 as four rooms of seven, and finished 2026-10-20 when
+Jake sent a photograph of the baths with a ceiling in it.
 
 ## Goal
 
@@ -77,7 +77,43 @@ Four rooms: the hall, the nook, the garden and the back room. Each is one
 call naming where to stand and what to look at, and each reference was
 looked at before it was committed.
 
-**Three rooms are not in it.** The cellar, the baths and the space behind
+### All seven, and three faults in the harness that took them
+
+The cellar, the baths and the space behind the wall were left out on the
+first build because every pose tried for them photographed the wrong
+thing. The building was never wrong. The harness was, three times.
+
+**A room drawn without `update` has its lights off.** The lamps are worked
+out from where you are standing and a frame drawn straight after
+`initialize` has none of them, which is why the cellar came out black.
+
+**A point off a room's bounding box is not a place to stand.** The
+cellar's was inside its own floor slab, and dropping in from the top of
+the box landed in the hall above it. Dropping from a quarter up settles on
+the cellar's floor.
+
+**And the camera's height is not `at.y`.** It is `eye`, which eases toward
+`at.y` over `EYE_LAGS` seconds so that walking down a step is not a jump.
+With `dt` at nought it never eases at all, so every pose set through `at`
+alone stood at whatever height the game opened on. That is why the baths
+showed the garden's trees: the camera was on the hall's floor, above the
+baths' ceiling, looking out. The four rooms that did work are all at ground
+level, where the fault is invisible.
+
+What settled it was a photograph. Jake stood in the baths and sent one,
+and it has a ceiling in it, which is a thing no amount of looking at my own
+pictures would have told me.
+
+Three more things came out of finishing it. The angles are worked out from
+where the eyes are rather than where the feet are, or a target on the floor
+a few paces off is a picture of the floor. The control was comparing the
+darkened hall against the reference **file**, so on a run where that file
+did not exist it blessed the dark hall as the reference: it draws both and
+compares them now, and `blitzkit::picture::how_far_apart` exists for that.
+And the garden is aimed level at the pond rather than down at it, which is
+the difference between the room and two fish.
+
+**The three rooms that were not in it.** The cellar, the baths and the space behind
 the wall were posed from the anchors their modules expose and all three
 came out wrong, so they were walked into instead: a body dropped inside
 each room's own boxes and left to settle, then photographed four ways from
@@ -125,7 +161,9 @@ room and read the line back is worth more than another hour of guessing.
 ## Acceptance criteria
 
 - Each room matches its reference. — `tests::the_hall_is_drawn`,
-  `tests::the_nook_is_drawn`, `tests::the_garden_is_drawn`,
+  `tests::the_nook_is_drawn`, `tests::the_cellar_is_drawn`,
+  `tests::the_baths_are_drawn`, `tests::the_garden_is_drawn`,
+  `tests::what_is_behind_the_wall_is_drawn`,
   `tests::the_back_room_is_drawn`
 - The comparison can fail: the same room with its lights turned off does
   not match. — `tests::a_room_picture_can_fail`
@@ -143,8 +181,11 @@ room and read the line back is worth more than another hour of guessing.
 - The back room's first blessing was a picture of the ceiling lamp, because
   the thing being looked at had standing height added to it as well as to
   the camera. Looking at it is how that was found.
-- The three rooms walked, four ways each, twice over as the harness was
-  fixed. Twelve pictures looked at and none of them kept.
+- The three rooms walked, four ways each, three times over as the harness
+  was fixed. Something over twenty pictures looked at, and the last three
+  of them kept.
+- The baths against Jake's own photograph of the room, which is what says
+  the view is of the thing the room is for.
 
 ## Out of scope
 
@@ -156,8 +197,6 @@ spec 0021 already says it is measured differently.
 
 **Anything timed.** One frame, standing still. The same rule spec 0062 set
 for the engine.
-
-**The three rooms above**, until somebody stands in them and says where.
 
 **The readout.** `update` fills the help text and the 2D overlay, and at
 320 by 240 the help fills the frame. These pictures are of the building, so

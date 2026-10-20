@@ -7722,12 +7722,24 @@ mod tests {
         arcade.before_frame(&mut renderer);
 
         // where it stands and which way it looks, set on the game's own
-        // three fields rather than on the camera: `draw` works the camera
-        // out from these, and two ways of saying where somebody is standing
-        // would come apart
-        let look = looking_at - at;
+        // fields rather than on the camera: `draw` works the camera out
+        // from these, and two ways of saying where somebody is standing
+        // would come apart.
+        //
+        // `at` is where the feet are. The angles are worked out from where
+        // the eyes are, which is `EYE` above that, or a target on the floor
+        // nearby comes out looking at the floor.
+        let look = looking_at - vec3(at.x, at.y + EYE, at.z);
 
         arcade.at = at;
+        // **And the height, which is not `at.y`.** The camera stands at
+        // `eye`, which eases toward `at.y` over `EYE_LAGS` seconds so that
+        // walking down a step is not a jump. With `dt` at nought it never
+        // eases at all, so a pose set only through `at` is a pose at
+        // whatever height the game opened on: the cellar came out black
+        // and the baths came out looking at the garden, both from a camera
+        // standing on the hall's floor.
+        arcade.eye = at.y;
         arcade.yaw = look.x.atan2(-look.z);
         arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
 
@@ -7742,6 +7754,7 @@ mod tests {
         let mut camera = Camera::new();
 
         arcade.draw(&mut scene, &mut camera);
+
         renderer.set_camera(camera);
 
         // **The room, and not the readout.** `update` fills the help text
@@ -7778,11 +7791,6 @@ mod tests {
         room::Room::of(games()).reaches
     }
 
-    /// Standing height, so a room is seen from where a person sees it.
-    fn eye(at: Vec3) -> Vec3 {
-        vec3(at.x, at.y + EYE, at.z)
-    }
-
     /// Spec 0027: the hall, from the door, down the aisle.
     ///
     /// Where the building opens, which is the view `media/arcade.png` has
@@ -7792,7 +7800,7 @@ mod tests {
         let reaches = reaches();
         let doorway = room::Room::of(games()).doorway();
 
-        looks_right("hall", eye(doorway), eye(vec3(0.0, 0.0, -reaches * 0.5)));
+        looks_right("hall", doorway, vec3(0.0, EYE, -reaches * 0.5));
     }
 
     /// Spec 0027: the nook, which is where the toys are.
@@ -7801,7 +7809,7 @@ mod tests {
         let reaches = reaches();
         let (at, _) = room::nook_floor(reaches);
 
-        looks_right("nook", eye(at + Vec3::X * 1.6), eye(at - Vec3::X * 1.0));
+        looks_right("nook", at + Vec3::X * 1.6, vec3(at.x - 1.0, EYE, at.z));
     }
 
     /// Spec 0027: the garden, looking at the pond.
@@ -7810,7 +7818,53 @@ mod tests {
         let reaches = reaches();
         let at = garden::at(reaches);
 
-        looks_right("garden", eye(at), eye(garden::pond(reaches).0));
+        let pond = garden::pond(reaches).0;
+
+        // looked at level with the eye rather than down at it: the pond is
+        // on the ground a few paces off, and aimed at where it lies this
+        // is a picture of fish
+        looks_right("garden", at, vec3(pond.x, EYE, pond.z));
+    }
+
+    /// Spec 0027: the baths, from the corner by the tub, down the pool.
+    #[test]
+    fn the_baths_are_drawn() {
+        let reaches = reaches();
+        let middle = spa::at(reaches);
+        let pool = spa::pool(reaches).0;
+        let at = vec3(middle.x + 7.5, middle.y, middle.z + 4.5);
+
+        looks_right("baths", at, vec3(pool.x, at.y + EYE, pool.z));
+    }
+
+    /// Spec 0027: the cellar, from the middle of its floor.
+    ///
+    /// Where a body dropped into the room from a quarter up its own boxes
+    /// settles, which is what put the camera on the cellar's floor at -3.0
+    /// rather than inside the slab or on the hall above it.
+    #[test]
+    fn the_cellar_is_drawn() {
+        let at = vec3(-16.325, -cellar::DOWN, -4.6);
+
+        looks_right("cellar", at, vec3(at.x - 5.0, at.y + EYE, at.z));
+    }
+
+    /// Spec 0027: the space behind the wall, which is the one run this
+    /// building hands over.
+    #[test]
+    fn what_is_behind_the_wall_is_drawn() {
+        let reaches = reaches();
+        let mut least = Vec3::splat(f32::MAX);
+        let mut most = Vec3::splat(f32::MIN);
+
+        for (box_, _) in behind::built(reaches) {
+            least = least.min(box_.min);
+            most = most.max(box_.max);
+        }
+
+        let at = vec3(least.x + 2.0, least.y, (least.z + most.z) * 0.5);
+
+        looks_right("behind", at, vec3(most.x, at.y + EYE, at.z));
     }
 
     /// Spec 0027: the back room, from the spot it is arranged to be seen
@@ -7820,24 +7874,32 @@ mod tests {
         let reaches = reaches();
         let (at, _) = posed_in_the_back_room(reaches);
 
-        looks_right("back-room", eye(at), back::block(reaches));
+        looks_right("back-room", at, back::block(reaches));
     }
 
     /// Spec 0027: the comparison can fail.
     ///
-    /// The hall with its lamps out, held against the hall with them on. A
-    /// picture test that cannot fail is a file nobody reads.
+    /// The hall with its lamps out, held against the hall with them on,
+    /// both drawn here and neither read from disc. **This used to compare
+    /// against the reference file**, and on a run where that file did not
+    /// exist yet it blessed the dark hall as the reference. A control that
+    /// can write what it is checking against is a control that can poison
+    /// it.
     #[test]
     fn a_room_picture_can_fail() {
         let reaches = reaches();
         let doorway = room::Room::of(games()).doorway();
-        let Some(dark) = drawn_dark(eye(doorway), eye(vec3(0.0, 0.0, -reaches * 0.5))) else {
+        let looking_at = vec3(0.0, EYE, -reaches * 0.5);
+        let (Some(lit), Some(dark)) = (
+            drawn_from(doorway, looking_at),
+            drawn_dark(doorway, looking_at),
+        ) else {
             return;
         };
 
         assert!(
-            blitzkit::picture::looks_right(&dark, &reference("hall")).is_err(),
-            "the hall with its lights off matches the hall with them on"
+            blitzkit::picture::how_far_apart(&lit, &dark) > blitzkit::picture::SHARE,
+            "the hall with its lights off looks like the hall with them on"
         );
     }
 
@@ -7853,9 +7915,17 @@ mod tests {
         arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
         arcade.before_frame(&mut renderer);
 
-        let look = looking_at - at;
+        let look = looking_at - vec3(at.x, at.y + EYE, at.z);
 
         arcade.at = at;
+        // **And the height, which is not `at.y`.** The camera stands at
+        // `eye`, which eases toward `at.y` over `EYE_LAGS` seconds so that
+        // walking down a step is not a jump. With `dt` at nought it never
+        // eases at all, so a pose set only through `at` is a pose at
+        // whatever height the game opened on: the cellar came out black
+        // and the baths came out looking at the garden, both from a camera
+        // standing on the hall's floor.
+        arcade.eye = at.y;
         arcade.yaw = look.x.atan2(-look.z);
         arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
 
@@ -7876,8 +7946,8 @@ mod tests {
     #[test]
     fn a_room_drawn_twice_is_the_same() {
         let reaches = reaches();
-        let at = eye(garden::at(reaches));
-        let looking_at = eye(garden::pond(reaches).0);
+        let at = garden::at(reaches);
+        let looking_at = garden::pond(reaches).0;
         let (Some(once), Some(twice)) = (drawn_from(at, looking_at), drawn_from(at, looking_at))
         else {
             return;
