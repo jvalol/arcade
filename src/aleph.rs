@@ -32,6 +32,15 @@ pub const TALL: f32 = 2.4;
 pub const DOOR_WIDE: f32 = 1.05;
 pub const DOOR_TALL: f32 = 1.9;
 pub const DOOR_THICK: f32 = 0.07;
+
+/// The gap under the leaf, which is the thing the light comes under.
+///
+/// **The first build had none.** The leaf stood on the floor and the light
+/// was a strip starting at the middle of the door's thickness, so half of
+/// every strip was buried inside the leaf and the rest came out from under a
+/// door that was shut to the ground. Jake walked it and said the lights clip,
+/// which is what that is.
+pub const DOOR_GAP: f32 = 0.012;
 pub const SWINGS_TO: f32 = 1.75;
 
 /// The plaque beside each doorway, and where it sits.
@@ -46,14 +55,61 @@ pub const PLAQUE_UP: f32 = 1.35;
 /// forty small textures, which is less than one cabinet's screenshot.
 pub const PLAQUE_TEXELS: f32 = 64.0;
 
-/// How many rooms are drawn.
+/// How many rooms are drawn at once.
 ///
-/// Spec 0029 says the corridor has no end and the numbers are real as far as
-/// a float can carry them. What is *drawn* is another matter: past the
-/// fortieth a door is smaller than a pixel and the strip under it is what
-/// carries, per the same spec. This is the count the geometry is built for,
-/// and the corridor's shell runs past it.
+/// **A window and not a count.** The first build drew rooms 1 to 40 at fixed
+/// places and walled off what was past them, and Jake walked to room 36 and
+/// found the doors stop while the hallway goes on. In a hotel whose premise
+/// is that there is always more of it than you can see, reaching the last
+/// door is the one thing that must not happen.
+///
+/// So this is how many are drawn around wherever you are standing. Which
+/// forty they are is [`window`] below. The arithmetic for where room `n`
+/// stands always took any `n`; all that was ever fixed was the range.
 pub const DRAWN: u64 = 40;
+
+/// Which rooms are drawn from where you are standing.
+///
+/// Centred on the nearest room, so the corridor is always the same depth of
+/// doors ahead of you and behind you, and never runs out in either
+/// direction. Room numbers start at 1, so near the lobby the window simply
+/// starts there.
+pub fn window(at: Vec3) -> std::ops::RangeInclusive<u64> {
+    let near = nearest(at);
+    let half = DRAWN / 2;
+    let from = near.saturating_sub(half).max(1);
+
+    from..=(from + DRAWN - 1)
+}
+
+/// Which room you are nearest, by where you are along the corridor.
+///
+/// The other half of [`at`], which puts room `n` at an `x`. This takes an `x`
+/// back to an `n`, and the two have to agree or the corridor is numbered one
+/// way and drawn another.
+pub fn nearest(at: Vec3) -> u64 {
+    let (west, _) = span();
+    let along = (west - at.x) / APART;
+
+    // two rooms share each step along, one either side, and `at` puts room n
+    // at (n - 1) / 2 steps. So a step along is two rooms.
+    let n = (along * 2.0).round();
+
+    if n < 1.0 {
+        1
+    } else if n > MOST as f32 {
+        MOST
+    } else {
+        n as u64
+    }
+}
+
+/// The highest room this corridor can number.
+///
+/// Where a float stops resolving a metre is 16,777,216, which at 1.5 metres a
+/// room is this. Spec 0029 says eleven million is not infinity and to say so
+/// on the plaque rather than hide it.
+pub const MOST: u64 = 11_184_810;
 
 /// Where the light under a shut door lies, as a strip on the floor.
 ///
@@ -209,8 +265,20 @@ pub fn floor(reaches: f32) -> Aabb {
 pub fn corridor_west() -> f32 {
     let (west, _) = span();
 
-    west - (DRAWN as f32 + 4.0) * APART
+    west - RUNS
 }
+
+/// How long the corridor's shell actually is.
+///
+/// Long enough that nobody walks to the end of it: two thousand metres is
+/// eight minutes at this building's 4.2 m/s, and the drawn rooms follow you
+/// the whole way.
+///
+/// It is not eleven million rooms of shell and it does not pretend to be.
+/// What stops it being longer is written in `room::building`: the reach fill
+/// has a cell budget and the hotel is left out of the box it is given, which
+/// is the price of this length and is named there.
+pub const RUNS: f32 = 2000.0;
 
 /// The corridor's floor, which laps into the lobby's for the same reason the
 /// lobby's laps into the gallery's.
@@ -260,7 +328,9 @@ pub fn strip(reaches: f32, n: u64, out: f32) -> Aabb {
     let stands = at(reaches, n);
     let inward = if on_the_left(n) { -1.0 } else { 1.0 };
     let (near, far) = {
-        let face = stands.z;
+        // the leaf's outer face and not its middle. A strip measured from the
+        // middle has half its length inside the door.
+        let face = stands.z + inward * DOOR_THICK * 0.5;
         let reaches = face + inward * out;
 
         (face.min(reaches), face.max(reaches))
@@ -414,6 +484,59 @@ pub fn desk(reaches: f32) -> Aabb {
 /// The corridor itself is arithmetic. This is the one thing about it that is
 /// a state, and it is kept apart from the drawing so a rule can be applied
 /// without a window.
+/// Who is at the desk wanting a room.
+///
+/// **The arrival sets the difficulty rather than the dials setting the
+/// answer.** aleph asked the player to find a rule that works, and its own
+/// parked note says that fails because every rule works: three right answers
+/// and a player has them in two minutes. Here the move is the same key every
+/// time and what changes is whether it is enough.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arrival {
+    /// One guest. A shuffle of one along is enough, and the room should not
+    /// pretend otherwise by doubling the whole hotel to seat one person.
+    One,
+    /// A coach of this many. A shuffle of that many along.
+    Coach(u64),
+    /// A coach with a room for every counting number, which is the one that
+    /// cannot be done by shuffling at all and is what doubling is for.
+    Endless,
+}
+
+impl Arrival {
+    /// How many are at the door, said the way the desk says it.
+    pub fn says(&self) -> String {
+        match self {
+            Arrival::One => String::from("One guest is at the door"),
+            Arrival::Coach(n) => format!("A coach of {} is at the door", n),
+            Arrival::Endless => String::from("A coach with a room for every number is at the door"),
+        }
+    }
+
+    /// The move that houses them: room n becomes room a*n + b.
+    ///
+    /// Shuffling along frees as many rooms as you shuffle, and no shuffle
+    /// frees infinitely many. Doubling frees every odd room, which is
+    /// endlessly many, and is the only answer to the last of these.
+    pub fn move_for(&self) -> (u64, u64) {
+        match self {
+            Arrival::One => (1, 1),
+            Arrival::Coach(n) => (1, *n),
+            Arrival::Endless => (2, 0),
+        }
+    }
+}
+
+/// Which half of a move is running.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Doing {
+    /// Everybody already housed moving up, which frees rooms.
+    Freeing,
+    /// And the arrivals walking into them, which is the half that makes this
+    /// a paradox rather than a subtraction.
+    Filling,
+}
+
 #[derive(Clone, Debug)]
 pub struct Hotel {
     /// Whether each drawn room has somebody in it, room 1 first.
@@ -427,6 +550,16 @@ pub struct Hotel {
     /// starts at room 1 and runs away from you at a speed you can watch, so
     /// what you see is a wave going somewhere you cannot see the end of.
     front: f32,
+    /// Which half of the move is running.
+    doing: Doing,
+    /// And what the rooms look like once the arrivals are in, held until the
+    /// freeing wave has finished so the two run one after the other.
+    then_filled: Option<Vec<bool>>,
+    /// Who is at the desk.
+    at_the_door: Option<Arrival>,
+    /// How many have been housed since the building opened, which is the
+    /// number that says nobody left.
+    housed: u64,
 }
 
 /// How fast the change runs down the corridor, in rooms a second.
@@ -449,7 +582,75 @@ impl Hotel {
             taken: vec![true; DRAWN as usize],
             going: None,
             front: 0.0,
+            doing: Doing::Freeing,
+            then_filled: None,
+            // somebody is always at the door, because a hotel with nobody
+            // wanting a room has nothing to demonstrate and this is the
+            // resting state rather than a thing you set up
+            at_the_door: Some(Arrival::One),
+            housed: 0,
         }
+    }
+
+    /// Who is at the desk, and nothing while a move is running.
+    pub fn at_the_door(&self) -> Option<Arrival> {
+        if self.going.is_some() {
+            return None;
+        }
+
+        self.at_the_door
+    }
+
+    /// How many have been housed since the building opened.
+    pub fn housed(&self) -> u64 {
+        self.housed
+    }
+
+    /// Whether every drawn room has somebody in it.
+    pub fn full(&self) -> bool {
+        (1..=DRAWN).all(|n| self.taken(n))
+    }
+
+    /// House whoever is at the door.
+    ///
+    /// Two waves, one after the other. The first moves everybody already
+    /// housed up by the move the arrival needs, which frees rooms. The second
+    /// is the arrivals walking into them.
+    ///
+    /// **The second is the point.** A hotel that frees rooms and leaves them
+    /// free has done a subtraction. A hotel that frees them and fills them
+    /// and is full again, with more people in it and nobody gone, has done
+    /// the thing this room is about.
+    pub fn house(&mut self) {
+        let Some(arrival) = self.at_the_door() else {
+            return;
+        };
+
+        let (stride, shift) = arrival.move_for();
+
+        self.apply(stride, shift);
+
+        // and who is in once the arrivals are in: whatever the move leaves,
+        // plus the rooms they take
+        let mut filled = self.going.clone().unwrap_or_default();
+        let mut came = 0u64;
+
+        for n in 1..=DRAWN {
+            if filled[n as usize - 1] {
+                continue;
+            }
+
+            filled[n as usize - 1] = true;
+            came += 1;
+        }
+
+        self.then_filled = Some(filled);
+        self.housed += came;
+        self.at_the_door = Some(match arrival {
+            Arrival::One => Arrival::Coach(42),
+            Arrival::Coach(_) => Arrival::Endless,
+            Arrival::Endless => Arrival::One,
+        });
     }
 
     /// Whether room `n` has somebody in it, as it stands this instant.
@@ -509,10 +710,29 @@ impl Hotel {
 
         self.front += dt * TRAVELS_AT;
 
-        if self.front >= DRAWN as f32 {
-            self.taken = self.going.take().unwrap();
-            self.front = 0.0;
+        if self.front < DRAWN as f32 {
+            return;
         }
+
+        self.taken = self.going.take().unwrap();
+        self.front = 0.0;
+
+        // the freeing wave has reached the end, so the arrivals set off
+        if self.doing == Doing::Freeing {
+            if let Some(filled) = self.then_filled.take() {
+                self.going = Some(filled);
+                self.doing = Doing::Filling;
+
+                return;
+            }
+        }
+
+        self.doing = Doing::Freeing;
+    }
+
+    /// Which half of a move is running, for what the desk says while it does.
+    pub fn filling(&self) -> bool {
+        self.going.is_some() && self.doing == Doing::Filling
     }
 
     /// How far the change has got, in rooms, and nothing when none is
@@ -1100,6 +1320,156 @@ mod tests {
             "the furthest step reaches {}, which is barely past the first",
             last_out
         );
+    }
+
+    /// Spec 0030: after a move the hotel is full again.
+    ///
+    /// This is the whole point and the thing both earlier builds missed.
+    /// Freeing rooms and leaving them free is a subtraction. Freeing them,
+    /// filling them, and being full again with more people in it is the
+    /// paradox.
+    #[test]
+    fn the_hotel_is_full_again() {
+        for arrival in [Arrival::One, Arrival::Coach(9), Arrival::Endless] {
+            let mut hotel = Hotel::new();
+
+            hotel.at_the_door = Some(arrival);
+            assert!(hotel.full(), "{:?}: it did not start full", arrival);
+
+            hotel.house();
+            // both waves all the way through
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+
+            assert!(hotel.full(), "{:?}: it is not full again", arrival);
+        }
+    }
+
+    /// And more people are in it, with nobody having left.
+    #[test]
+    fn nobody_left_and_more_arrived() {
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Coach(9));
+        hotel.house();
+
+        assert_eq!(
+            hotel.housed(),
+            9,
+            "nine arrived and {} were housed",
+            hotel.housed()
+        );
+    }
+
+    /// One guest does not need the doubling, because a shuffle of one is
+    /// enough and the room should not say otherwise.
+    #[test]
+    fn one_guest_does_not_need_the_doubling() {
+        assert_eq!(Arrival::One.move_for(), (1, 1));
+        assert_eq!(Arrival::Coach(42).move_for(), (1, 42));
+    }
+
+    /// And a coach with a room for every number is the one that cannot be
+    /// shuffled and has to be doubled.
+    #[test]
+    fn an_endless_coach_is_housed() {
+        assert_eq!(Arrival::Endless.move_for(), (2, 0));
+
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Endless);
+        hotel.house();
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+
+        // the freeing wave is through: every odd room stands open
+        for n in 1..=DRAWN {
+            if on_the_left(n) {
+                assert!(!hotel.taken(n), "room {} is odd and still taken", n);
+            }
+        }
+
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+
+        assert!(hotel.full(), "the endless coach did not fill the odd side");
+        assert!(
+            hotel.housed() >= DRAWN / 2,
+            "only {} were housed",
+            hotel.housed()
+        );
+    }
+
+    /// Spec 0030: the filling follows the freeing rather than happening with
+    /// it, so the two waves are two.
+    #[test]
+    fn the_filling_follows_the_freeing() {
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Endless);
+        hotel.house();
+
+        assert!(
+            !hotel.filling(),
+            "it is filling before it has freed anything"
+        );
+
+        hotel.tick(2.0 / TRAVELS_AT);
+        assert!(!hotel.filling(), "it is filling while still freeing");
+        assert!(
+            !hotel.taken(1),
+            "room 1 did not empty behind the first wave"
+        );
+
+        hotel.tick(DRAWN as f32 / TRAVELS_AT);
+        assert!(hotel.filling(), "the second wave never set off");
+    }
+
+    /// Spec 0030: there is no last door. Wherever you stand, there are rooms
+    /// drawn past you.
+    ///
+    /// Jake found the first build's last door by walking to room 36. In a
+    /// hotel whose premise is that there is always more of it than you can
+    /// see, reaching the end is the one thing that must not happen.
+    #[test]
+    fn there_is_always_another_door() {
+        let reaches = reaches();
+
+        for n in [1u64, 2, 40, 41, 500, 10_000, 1_000_000] {
+            let stood = at(reaches, n);
+            let drawn = window(stood);
+
+            assert!(
+                drawn.contains(&n),
+                "standing at room {} and it is not among the drawn",
+                n
+            );
+
+            let past = drawn.clone().filter(|m| *m > n).count();
+
+            assert!(
+                past >= (DRAWN / 2) as usize - 1,
+                "standing at room {} there are only {} doors past it",
+                n,
+                past
+            );
+        }
+    }
+
+    /// And the numbers are right wherever you stand, not only near the lobby.
+    #[test]
+    fn the_numbers_are_right_far_from_the_desk() {
+        let reaches = reaches();
+
+        for n in [1u64, 2, 39, 40, 41, 999, 100_000] {
+            let stood = at(reaches, n);
+
+            assert_eq!(
+                nearest(stood),
+                n,
+                "room {} stands where the corridor calls room {}",
+                n,
+                nearest(stood)
+            );
+        }
     }
 
     /// Drives a body your size from one place to another with the game's own

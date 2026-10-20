@@ -1540,7 +1540,10 @@ mod tests {
                 tall: 4.0,
             },
             &caught.boxes,
-            room.outline().expanded(Vec3::ONE),
+            // `fillable` and not `outline`: the hotel's corridor is two
+            // kilometres long, per spec 0029, and the whole outline puts the
+            // fill over its cell budget so it refuses and comes back empty.
+            room.fillable().expanded(Vec3::ONE),
             blitzkit::reach::STEP,
         );
 

@@ -1,7 +1,11 @@
 # 0030 The hotel is full again
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-20
+**Built:** 2026-10-20, the same day it was written, because Jake walked spec
+0029's corridor again and the four things he found were this spec: the lights
+clip, the doors stop while the hallway goes on, opening a door does not seem
+to work, and there is no obvious way to check a customer in.
 
 ## Goal
 
@@ -94,9 +98,26 @@ fill reached nothing at all". A shell that follows the camera is a shell that
 is never long, which is why this is the way through rather than simply
 building more of it.
 
-## Acceptance criteria
+## What building it found
 
-None of this is written.
+**The desk had to become the thing you work.** The only thing you could point
+at in that corridor was a door, which is why there was no obvious way to check
+anybody in: there was nothing to check them in *at*. The desk names itself
+under the sight now and says who is at the door.
+
+**Somebody is always at the door**, which is the resting state rather than a
+thing you set up. One guest, then a coach of forty two, then a coach with a
+room for every number, and round again. You do not choose the move; you find
+out whether shuffling is enough, and for the third one it is not.
+
+**And the corridor's length cost something, which is named in `room::fillable`.**
+The shell is two kilometres so the doors never stop, and the reach fill has a
+cell budget that length puts it over. The fill is given the building with the
+corridor pulled back out of it, so it does not reach down there, and spec
+0048's coplanar narrowing does not narrow inside the hotel. What is in there
+is forty doors of one shape repeated.
+
+## Acceptance criteria
 
 - A coach of `n` is housed by the move, and after it the hotel is as full as
   it was. — `aleph::tests::the_hotel_is_full_again`

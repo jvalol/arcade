@@ -621,10 +621,20 @@ struct Arcade {
     /// And every word on its gauge board, drawn into textures once: the
     /// heading, then the three names, then the three full-scale readings.
     gauge_words: Vec<TextureId>,
-    /// And the number on each of the hotel's doors, drawn into a texture
-    /// once. Spec 0029: a corridor of *numbered* doors, so a blank plaque is
-    /// the room not being what it says it is.
-    plaques: Vec<TextureId>,
+    /// And the number on each of the hotel's doors, drawn into a texture the
+    /// first time that room comes into view.
+    ///
+    /// **By room number and not by place in a list.** They were made once for
+    /// rooms 1 to 40, which was right while only those forty were ever drawn
+    /// and wrong the moment the drawn rooms began following you: Jake walked
+    /// to room 104 and its plaque was blank. Spec 0029 says a corridor of
+    /// *numbered* doors, and a blank plaque is the room not being what it
+    /// says it is.
+    ///
+    /// Kept rather than evicted. The shell is two kilometres, so the most
+    /// this can hold is the rooms along it, and each is a number a few
+    /// characters wide.
+    plaques: std::collections::HashMap<u64, TextureId>,
     costs: blitzkit::cost::Costs,
     /// What the renderer counted for the last frame, and whether the device
     /// agreed to time one at all, both asked of it at the top of the frame.
@@ -912,7 +922,7 @@ impl Arcade {
             rig_meshes: Vec::new(),
             clutter: Vec::new(),
             gauge_words: Vec::new(),
-            plaques: Vec::new(),
+            plaques: std::collections::HashMap::new(),
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
@@ -983,13 +993,11 @@ impl Arcade {
             // Spec 0008.
             Some(room::Seen::Sauna) => self.room.sauna_open = !self.room.sauna_open,
             Some(room::Seen::Baths) => self.room.baths_open = !self.room.baths_open,
-            // a hotel door names itself under the sight and does nothing
-            // when you press this. **That is deliberate and it is not
-            // finished.** It was a key that checked a guest in and out, which
-            // Jake walked and said does not demonstrate the point, and he is
-            // right: a door that can be shut is not a paradox. What belongs
-            // here is an arrival, a rule and the freed rooms filling, which
-            // is spec 0030.
+            // the desk: house whoever is at the door. Spec 0030, and the
+            // only thing in the hotel you work. A door names its room and
+            // does nothing, because a door that can be shut is not a paradox
+            // and that was the first wrong answer to this.
+            Some(room::Seen::Desk) => self.hotel.house(),
             Some(room::Seen::Hotel(_)) => (),
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
@@ -1454,10 +1462,9 @@ impl Arcade {
             );
         }
 
-        for n in 1..=aleph::DRAWN {
+        for (n, open) in self.room.hotel_doors.iter().copied() {
             let stands = aleph::at(reaches, n);
             let inward = if aleph::on_the_left(n) { -1.0 } else { 1.0 };
-            let open = self.hotel.open_by(n);
 
             // the leaf, swung into the corridor by however far it is open.
             // Hinged at one edge, so it turns about that rather than about
@@ -1469,9 +1476,19 @@ impl Arcade {
 
             scene.push_colored(
                 cube,
-                &Transform::at(vec3(at.x, aleph::DOOR_TALL * 0.5, at.z))
-                    .with_rotation(glam::Quat::from_rotation_y(-inward * swing))
-                    .with_scale(vec3(aleph::DOOR_WIDE, aleph::DOOR_TALL, aleph::DOOR_THICK)),
+                // lifted off the floor by the gap the light comes under,
+                // which the first build did not have
+                &Transform::at(vec3(
+                    at.x,
+                    aleph::DOOR_GAP + (aleph::DOOR_TALL - aleph::DOOR_GAP) * 0.5,
+                    at.z,
+                ))
+                .with_rotation(glam::Quat::from_rotation_y(-inward * swing))
+                .with_scale(vec3(
+                    aleph::DOOR_WIDE,
+                    aleph::DOOR_TALL - aleph::DOOR_GAP,
+                    aleph::DOOR_THICK,
+                )),
                 aim::HOTEL_DOOR,
             );
 
@@ -1521,7 +1538,7 @@ impl Arcade {
             ))
             .with_scale(vec3(aleph::PLAQUE_WIDE, aleph::PLAQUE_TALL, 0.02));
 
-            match self.plaques.get(n as usize - 1).copied() {
+            match self.plaques.get(&n).copied() {
                 Some(texture) => {
                     scene.push_textured(cube, texture, &plaque, aim::HOTEL_PLAQUE, aim::MATTE)
                 }
@@ -3285,7 +3302,7 @@ impl Arcade {
                 tall: ROOM_TALL,
             },
             &self.room.solid(),
-            self.room.outline().expanded(Vec3::splat(REACH_PAST)),
+            self.room.fillable().expanded(Vec3::splat(REACH_PAST)),
             reach::STEP,
         )
     }
@@ -3497,6 +3514,16 @@ impl Game for Arcade {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
 
+        // a number for every plaque about to be drawn, made the first time
+        // that room comes into view. This is here rather than in `load`
+        // because which rooms those are follows wherever you are standing,
+        // and `load` runs once.
+        for n in aleph::window(self.at) {
+            self.plaques.entry(n).or_insert_with(|| {
+                renderer.add_texture(&blitzkit::text::drawn(&n.to_string(), aleph::PLAQUE_TEXELS))
+            });
+        }
+
         // and however many separate copies of the cube the rig's dial wants,
         // uploaded as it asks for them rather than all of them at the start.
         // Spec 0024: sixteen thousand buffers before the first frame is a
@@ -3663,11 +3690,6 @@ impl Game for Arcade {
             .chain(back::GAUGE_WORDS)
             .chain(back::GAUGE_FULL_SAYS)
             .map(|word| renderer.add_texture(&blitzkit::text::drawn(word, back::GAUGE_TEXELS)))
-            .collect();
-        self.plaques = (1..=aleph::DRAWN)
-            .map(|n| {
-                renderer.add_texture(&blitzkit::text::drawn(&n.to_string(), aleph::PLAQUE_TEXELS))
-            })
             .collect();
         self.barrel = Some(renderer.add_mesh(&cellar::barrel_mesh()));
         self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
@@ -4101,9 +4123,9 @@ impl Game for Arcade {
         self.hotel.tick(dt);
         // and where each of its leaves is, told to the room so the sight and
         // the colliders read one account of it rather than two
-        for n in 1..=aleph::DRAWN {
-            self.room.hotel_open[n as usize - 1] = self.hotel.open_by(n);
-        }
+        self.room.hotel_doors = aleph::window(self.at)
+            .map(|n| (n, self.hotel.open_by(n)))
+            .collect();
 
         // `WHERE=1` says where you are standing, twice a second, on stderr.
         //
@@ -4501,12 +4523,35 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            (None, Some(room::Seen::Desk)) => (
+                // the name carries the point of the room: full again, with
+                // more people in it than there were, and nobody gone
+                Some(match (self.hotel.full(), self.hotel.housed()) {
+                    (_, 0) => String::from("The desk"),
+                    (true, housed) => format!("The hotel is full. {} housed.", housed),
+                    (false, housed) => format!("The hotel has room. {} housed.", housed),
+                }),
+                Some(match self.hotel.at_the_door() {
+                    Some(who) => format!("{}. Enter to house them.", who.says()),
+                    None if self.hotel.filling() => String::from("They are walking in."),
+                    None => match self.hotel.travelling() {
+                        Some(front) => {
+                            format!("Everybody is moving up, past room {}.", front as u64)
+                        }
+                        None => String::from("Everybody is moving up."),
+                    },
+                }),
+            ),
             (None, Some(room::Seen::Hotel(n))) => (
                 Some(format!("Room {}", n)),
+                // and a door says what it is and not what to do about it.
+                // Enter does nothing here: the desk is where somebody is
+                // housed, and a door you can open and shut was the first
+                // wrong answer to that.
                 Some(String::from(if self.hotel.taken(n) {
-                    "has somebody in it. Enter to let them out."
+                    "has somebody in it."
                 } else {
-                    "is empty. Enter to put somebody in."
+                    "stands empty."
                 })),
             ),
             (None, Some(room::Seen::Cabinet(n))) => {
@@ -7858,18 +7903,6 @@ impl Game for Arcade {
                     None => None,
                 };
             }
-            // everybody in the hotel moves to room 2n, per spec 0029.
-            //
-            // **One rule and not the dials.** aleph's third parked reason is
-            // that its two dials are a menu with extra steps: three right
-            // answers and a player has them in a couple of minutes. What the
-            // rule is and how it is chosen in a building you walk is its own
-            // question and spec 0029 puts it out of scope. Doubling is the
-            // one this room is built to show, because it frees the whole
-            // left wall in one move.
-            KeyboardKey::H if held && !input.repeat && self.hotel.travelling().is_none() => {
-                self.hotel.apply(2, 0);
-            }
             // the solar system, between lined up and in orbit. Spec 0015.
             KeyboardKey::L if held && !input.repeat => {
                 self.swinging_out = !self.swinging_out;
@@ -8033,6 +8066,57 @@ mod tests {
         // left out of them, which also means a reference does not change
         // when a line of help does.
         Some(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()))
+    }
+
+    /// Spec 0029: every drawn door has its number on it, wherever you stand.
+    ///
+    /// **Not only near the lobby.** The plaques were made once for rooms 1 to
+    /// 40 and looked up by place in that list, so the moment the drawn rooms
+    /// began following you every door past the fortieth had a blank plaque.
+    /// Jake walked to room 104 and found it.
+    ///
+    /// This drives the real frame rather than the arithmetic around it. A
+    /// test of `aleph::window` alone passes with the old cache still in,
+    /// because the window was never what was broken: the lookup was.
+    #[test]
+    fn every_drawn_door_has_its_number() {
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
+        else {
+            eprintln!("no adapter here, so the plaques were not made");
+
+            return;
+        };
+
+        let mut arcade = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+        let reaches = arcade.room.reaches;
+
+        arcade.load(&mut renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+
+        for stand_at in [1u64, 40, 104, 999] {
+            arcade.at = aleph::at(reaches, stand_at);
+            arcade.before_frame(&mut renderer);
+            arcade.update(0.0, &mut geometry, &mut text, &sound);
+
+            assert!(
+                !arcade.room.hotel_doors.is_empty(),
+                "standing at room {} and no doors are drawn",
+                stand_at
+            );
+
+            for (n, _) in arcade.room.hotel_doors.iter() {
+                assert!(
+                    arcade.plaques.contains_key(n),
+                    "room {} is drawn with no number on its plaque, standing at {}",
+                    n,
+                    stand_at
+                );
+            }
+        }
     }
 
     /// Where a room's reference lives.

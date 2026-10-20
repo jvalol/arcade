@@ -154,6 +154,12 @@ pub const INSIDE: f32 = 1.0;
 /// side, so you walk out of the gap between the last two cabinets and into
 /// something broader. A gap the full width of the room would be the end wall
 /// simply stopping, which is what this is replacing.
+/// How much of the hotel's corridor the reach fill is asked to cover.
+///
+/// Not two kilometres of it. See [`Room::fillable`].
+#[cfg(test)]
+pub const CORRIDOR_FILLED: f32 = 24.0;
+
 pub const GALLERY_WIDE: f32 = 6.8;
 
 /// How much wall is in frame per unit you stand back from it.
@@ -663,6 +669,8 @@ pub enum Seen {
     Sauna,
     /// The door between the cellar and the baths. Spec 0008.
     Baths,
+    /// The hotel's desk, which is where somebody is housed. Spec 0030.
+    Desk,
     /// One of the hotel's doors, by its room number. Spec 0029.
     ///
     /// The one thing in that corridor you can work, and the only way there is
@@ -695,14 +703,19 @@ pub struct Room {
     /// And the door to the baths, which is a third thing that swings.
     pub baths_open: bool,
     pub baths_swing: f32,
-    /// How far each of the hotel's doors stands open, room 1 first. Spec
-    /// 0029.
+    /// Which of the hotel's doors are drawn and how far each stands open.
+    /// Spec 0029.
+    ///
+    /// The room number as well as the swing, because which forty are drawn
+    /// follows wherever you are standing: the corridor has no last door, so
+    /// a list that started at room 1 would be a list of the wrong doors the
+    /// moment you walked past the fortieth.
     ///
     /// Held here rather than worked out from the hotel's own state, because
-    /// what the sight needs is where a leaf *is*, and the game owns who is in
-    /// which room. The game writes this each frame, the way it does the
-    /// baths' swing.
-    pub hotel_open: Vec<f32>,
+    /// what the sight and the colliders need is where a leaf *is*, and the
+    /// game owns who is in which room. The game writes this each frame, the
+    /// way it does the baths' swing.
+    pub hotel_doors: Vec<(u64, f32)>,
     /// How far it actually is, nought shut and one open, which follows `open`
     /// rather than being it. The box follows this too: a door drawn halfway
     /// open that stops you where it was shut is a worse thing than one that
@@ -874,7 +887,7 @@ impl Room {
             sauna_swing: 0.0,
             baths_open: false,
             baths_swing: 0.0,
-            hotel_open: vec![0.0; crate::aleph::DRAWN as usize],
+            hotel_doors: Vec::new(),
             swing: 0.0,
         }
     }
@@ -1123,6 +1136,53 @@ impl Room {
         self.built(true)
     }
 
+    /// The box the reach fill is given, which is the building's outline with
+    /// the hotel's corridor pulled back out of it.
+    ///
+    /// **The corridor is two kilometres long so that its doors never stop**,
+    /// per spec 0029, and the fill has a cell budget. Given the whole thing
+    /// it goes over, refuses, and comes back empty, and an empty reach is
+    /// indistinguishable from one that found nothing: two of this building's
+    /// own tests said "the fill reached nothing at all" the first time that
+    /// length was tried.
+    ///
+    /// Pulled back rather than left out of the colliders. The corridor's
+    /// walls still stop you, which they must, and all that is cut is how far
+    /// the fill is asked to look. What is lost is that it does not reach down
+    /// the corridor, so spec 0048's coplanar narrowing does not narrow in
+    /// there: forty doors of one shape repeated, whose pairs this building's
+    /// own tests already hold.
+    /// Only the tests ask for this, the same as `Arcade::reachable` which is
+    /// the one thing that calls it. Nothing the game does while it runs fills
+    /// the building.
+    #[cfg(test)]
+    pub fn fillable(&self) -> Aabb {
+        let lobby = crate::aleph::span().0;
+        // the corridor's own long boxes and nothing else. Nothing real in
+        // this building reaches fifty metres west of the lobby: the furthest
+        // is the cellar at -23.7, and the corridor starts two kilometres out.
+        // An `x` clamp alone cut the cellar with it, which is how this was
+        // found.
+        let reaching = lobby - 50.0;
+        let rest: Vec<Aabb> = self
+            .built(true)
+            .into_iter()
+            .filter(|box_| box_.min.x > reaching)
+            .collect();
+        let whole = Self::round(rest);
+
+        // and a stub of corridor, so the fill still covers the part of it
+        // anybody stands in on the way down
+        Aabb::new(
+            vec3(
+                whole.min.x.min(lobby - CORRIDOR_FILLED),
+                whole.min.y,
+                whole.min.z,
+            ),
+            whole.max,
+        )
+    }
+
     /// The same, with the rooms the sun cannot reach left out when asked.
     ///
     /// One list either way, because two lists of one thing drift.
@@ -1155,12 +1215,9 @@ impl Room {
         // the first build of that room shipped and what Jake found by
         // walking into one.
         out.extend(
-            (1..=crate::aleph::DRAWN)
-                .map(|n| {
-                    let open = self.hotel_open.get(n as usize - 1).copied().unwrap_or(0.0);
-
-                    crate::aleph::leaf_box(self.reaches, n, open)
-                })
+            self.hotel_doors
+                .iter()
+                .map(|(n, open)| crate::aleph::leaf_box(self.reaches, *n, *open))
                 .collect::<Vec<_>>(),
         );
         out.extend(
@@ -1391,15 +1448,22 @@ impl Room {
             slab(from, way, &leaf).map(|far| (Seen::Baths, far))
         };
 
+        // the desk, which is the one thing in the hotel you work. Spec 0030:
+        // Jake walked the corridor and said there is no obvious way to check
+        // a customer in, and there was not, because the only thing you could
+        // point at was a door.
+        let desk = slab(from, way, &crate::aleph::desk(self.reaches)).map(|far| (Seen::Desk, far));
+
         // and the hotel's doors, per spec 0029. Every drawn one, because a
         // corridor where only the near few can be worked is a corridor with
         // an invisible edge in it.
-        let hotel: Vec<(Seen, f32)> = (1..=crate::aleph::DRAWN)
-            .filter_map(|n| {
-                let open = self.hotel_open.get(n as usize - 1).copied().unwrap_or(0.0);
-                let leaf = crate::aleph::leaf_box(self.reaches, n, open);
+        let hotel: Vec<(Seen, f32)> = self
+            .hotel_doors
+            .iter()
+            .filter_map(|(n, open)| {
+                let leaf = crate::aleph::leaf_box(self.reaches, *n, *open);
 
-                slab(from, way, &leaf).map(|far| (Seen::Hotel(n), far))
+                slab(from, way, &leaf).map(|far| (Seen::Hotel(*n), far))
             })
             .collect();
 
@@ -1434,6 +1498,7 @@ impl Room {
             .chain(case)
             .chain(glass)
             .chain(baths)
+            .chain(desk)
             .chain(hotel)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
@@ -1919,7 +1984,7 @@ mod tests {
                 // and the hotel through the other wall, per spec 0029,
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
-                + crate::aleph::DRAWN as usize
+                + room.hotel_doors.len()
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -2781,7 +2846,7 @@ mod tests {
                 // and the hotel through the other wall, per spec 0029,
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
-                + crate::aleph::DRAWN as usize
+                + room.hotel_doors.len()
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid

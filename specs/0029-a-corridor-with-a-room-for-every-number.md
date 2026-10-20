@@ -282,6 +282,9 @@ Arithmetic, which is what this building tests. None of it is written.
 - Every shut room is lit under its door and every open one is not, so the
   light and the door never disagree. — `aleph::tests::the_light_says_what_the_door_says`
 - No strip is level with the floor it lies on. — `aleph::tests::no_strip_is_in_the_floor`
+- Every drawn door has its number on it, wherever you are standing, which is
+  not the same claim as the window being
+  right. — `tests::every_drawn_door_has_its_number`
 - The light falls off rather than stopping, which is three quads over each
   other and not one. — `aleph::tests::the_light_falls_off_rather_than_stopping`
 - A door is solid, so you cannot walk through one, and an open one takes up
@@ -325,6 +328,10 @@ Arithmetic, which is what this building tests. None of it is written.
   wrong about before.
 
 ## What this shipped short
+
+Both of these were fixed the same day by spec 0030, which was written for
+them and then built. What follows is what shipped first and why, kept rather
+than deleted because the reasons are the useful part.
 
 **The doors end.** This spec says the corridor has no end and that the
 numbers are real as far as a float carries them, which is 11.2 million rooms.
