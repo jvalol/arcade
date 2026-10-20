@@ -2,6 +2,15 @@
 
 **Status:** draft
 **Date:** 2026-10-20
+**Amended:** 2026-10-20, twice, both on the day it was written.
+
+Jake, having read the first draft: where is the hotel. It specified a corridor
+and called it a hotel, which is the fault aleph has and which this was
+supposed to be the fix for. That is "What you arrive in" below.
+
+Then, having been shown the walk: it is unfindable and no hints lead to it.
+That one took the whole placement with it. See "Why it is off the gallery",
+which replaces an argument for putting it behind the wall.
 
 ## Goal
 
@@ -12,43 +21,126 @@ not in a cabinet, because it is not a game, but in the wing of this building
 that already exists to make a quantity too large to picture into something you
 can walk at.
 
-## Why it is through that door and not in the hall
+## Why it is off the gallery
 
 Spec 0001 gives the hall a cabinet per game. aleph is not a game and its own
 spec says so in its first paragraph, so a cabinet that launched it would be a
 cabinet that lies about what is behind it.
 
-The back room of spec 0024 is the near miss. It holds the building's own
-instruments, which are neither games nor shapes, and that sounds like the
-slot. But an instrument is a thing the building uses on itself, and this is an
-exhibit. On a bench beside the test rig it reads as tooling.
+**It goes through the gallery's west wall**, which is spec 0022's room across
+the end of the aisle.
 
-The wing behind the wall is already this. Spec 0011 put a vast dark space
-there with no door and no sign. Spec 0015 filled it with a solar system that
-fits by telling one lie, written down and admitted to, and spec 0018 put the
-true proportions through a door in the far wall: one scale, Neptune thirty
-three kilometres out, and three minutes to ride there. That is the same move.
-You cannot hold an astronomical unit in your head and you cannot hold
-aleph-null in your head, so the building lets you walk at one until the size
-stops being a number and starts being a distance.
+### What the first draft said, and why it was wrong
 
-And the clinching reason is structural. **A corridor is not a thing you put in
-a room.** Everything else in this building is an object with a room round it.
-This is architecture, so it should be the way through rather than a stop on
-the way: a second doorway beside spec 0017's, where one leads to a distance
-too big to picture and the other to a count that is.
+~~A second door in the far wall of the hidden room, beside spec 0017's.~~
+
+Struck 2026-10-20, on two counts, both found by looking at the building
+instead of reasoning about it.
+
+**Nothing leads there.** The argument was that spec 0011's wing is where a
+quantity too large to picture already lives: spec 0015's orrery, and spec
+0018's true scale through the far door, Neptune thirty three kilometres out.
+That is true and it is not the only thing that is true about the wing. It is
+also where things go to not be found, and spec 0020's own goal says so in as
+many words: the wing is "most of what has been built in this building and the
+part nobody finds."
+
+The walk is worse than that sentence. The way in is signposted and works, a
+lane worn across the carpet with the gap it runs to visible in the same view.
+What has no hint of any kind is the crossing. One step inside, there is no
+horizon, no wall, no direction, nothing but Neptune's label floating in black
+and a scatter of columns. A hundred and fifty nine metres of that, and the
+far wall is a hundred and seventy seven metres off against a far plane of a
+hundred, so the way on is not merely unmarked, it is not drawn.
+
+The solar system was designed around that cost and is worth it anyway. A
+hotel cannot be. A thing nobody can find is a thing nobody arrives at, and
+arriving is what a hotel is.
+
+**And the far wall is already spoken for.** From the sun, that wall is a
+colonnade running away to one lit rectangle dead centre, and the rectangle is
+a galaxy in a pale frame. It is the vanishing point of the longest sightline
+in this building. The draft said "a pair is the point". It is not: a second
+opening beside it does not read as a choice, it turns the one composed image
+in that room into two holes in a wall.
+
+### What the gallery has that the wing does not
+
+You cannot miss the gallery. You start in the doorway under the sign, the
+aisle runs away in front of you, and this is what it runs to. No hint is
+needed because nothing is hidden.
+
+And the pair is already half built there. The **east** wall has the doorway
+to spec 0024's back room, lit, with the test rig's bench visible through it.
+The **west** wall is brick, blank, with a spotlight already falling on it, and
+it is the most conspicuous empty surface in the arcade.
+
+That also sorts what each side is for. The back room holds the building's own
+instruments, things it uses on itself. Opposite it belongs the other kind of
+thing, which is not a tool but an arrival.
+
+### Space is not the constraint
+
+The first draft sited this around sixteen thousand kilometres of corridor
+needing somewhere to go, and concluded only the wing was long enough. That is
+reasoning about a building as though it were made of land. It is not. The
+corridor does not have to fit anywhere. It needs a door in a wall people
+reach, and then it runs west through space nothing is using.
+
+What is actually west, measured rather than assumed, with the gallery's west
+wall at x -3.40 running z -14.55 to -8.30:
+
+| | |
+| --- | --- |
+| the garden, the baths, the back room, the wing, the tesseract | nothing across that line at all |
+| the hall | only its own shell, the wall and the floor it straddles |
+| the cellar | 10.00 m west, and below: y -3.30 to -0.15 |
+
+So at the gallery's own level the way west is clear, and the one thing to
+watch is underfoot. **The cellar runs 10.30 m of itself under that line,
+starting ten metres out, and its top is at y -0.15 against a gallery floor at
+0.** Fifteen centimetres. A corridor floor slab of this building's usual 0.3
+goes straight through the cellar's ceiling.
+
+That is the ledge fault, which this building has had before and which no
+amount of looking finds: you walk and your feet rise, or you stop dead on a
+face at the walking surface. It is arithmetic and it belongs in a test before
+anything is drawn.
 
 ## Behavior
 
-### The second door
+### The doorway
 
-In the far wall of spec 0011's room, beside the one spec 0017 hung. That one
-sits on the room's own axis, dead opposite the sun and 79.5 metres past it,
-`DOOR_WIDE` at 1.5. This one is its pair, off the axis by enough that the two
-read as a choice rather than as one wide opening.
+In the gallery's west wall, opposite the back room's. The two are a pair and
+should be built as one thing so they cannot drift: a doorway either side of a
+room, at the same height, in walls the same thickness.
 
-A pair is the point. You arrive at the far wall having walked a hundred and
-fifty nine metres of nothing, and there are two ways on.
+The gallery's spotlight already falls on that wall. A doorway cut into a lit
+wall is a dark rectangle in a bright field, which is as much signposting as
+this needs and is the opposite of the wing, where the way on is not drawn at
+all until you are on top of it.
+
+### What you arrive in
+
+Not the corridor. You come through the door into the place the corridor runs
+away from, and it has to say what this is before you are in it.
+
+There is no such place in aleph and that is the hole. `desk.rs` draws nothing:
+its own first line says it is "kept apart from the drawing, so a night can be
+played without a window", and what it holds is the dials, the rule and how far
+each door has swung. The only other trace is `corridor::eye`, a camera parked
+two and a bit rooms back so rooms 1 and 2 are both in frame. That position is
+called the desk and there is nothing at it. No counter, no lobby, no way you
+came in. The hotel is one sentence in that spec's goal and a module name.
+
+So: a desk, standing where that camera stands, with the corridor running away
+from it. A counter you walk up to and stand behind, which is the side of it
+the clerk is on and the side this is played from.
+
+The furnishing rules of this building apply and are not a detail. A fitting
+needs a reason, a box is a placeholder and Jake will say so, and the room is
+twice as small as whoever builds it thinks. Everything turned comes off
+`cellar::turned`.
 
 ### The corridor
 
@@ -102,7 +194,7 @@ far down and it arrives.
 ## The thing to settle before any of this is built
 
 **There are no guests.** That is the first of aleph's three parked reasons and
-it is the one that moving the thing into a building makes worse, not better.
+the one that moving the thing into a building makes worse, not better.
 
 A shut door is the only evidence anyone is in there. In a game seen down a
 camera that is thin. In a building you walk, with your own footsteps, it is
@@ -110,13 +202,33 @@ thinner: now there is visibly one person in the hotel and every door is shut.
 
 This building has never drawn a person. That is the same wall the hall of
 mirrors idea runs into, and it is not a thing to discover again halfway
-through building a corridor. The options are to draw guests and walk them,
-which is the largest piece of work anywhere in this repo, or to settle on what
-stands for a guest without being one: light under a door, a sound behind it,
-a shadow crossing it.
+through building a corridor.
 
-**Nothing below is worth building until that is decided**, because it changes
-what a door is.
+**The missing desk and the missing guests are one fault and not two.** The
+first draft of this spec did not notice, which is how it managed to specify a
+corridor and call it a hotel. The corridor is the only thing aleph ever built,
+so there is nobody in the rooms and nowhere you are standing, and the doubling
+rule reads as arithmetic rather than as an act because there is no one it is
+done to and nowhere it is done from.
+
+Which is also the way out, and it is cheaper than drawing people. **Give the
+desk a board of keys, one hook per drawn room, numbered to match the
+plaques.** A key on its hook is a room standing empty. A key gone is somebody
+upstairs. Then occupancy has a second account of itself that you can hold in
+one glance, instead of forty doors you have to walk to read, and the rule
+becomes a thing you watch happen twice: the keys land on their hooks at the
+desk and the wave of doors leaves down the corridor.
+
+It is not guests. Nobody is drawn and the paradox is still about people who
+are never shown. But it is evidence of them that is not a shut door, and it
+gives the player the one thing the game never gave them, which is a job and a
+place to do it from.
+
+**This is a proposal and not a decision.** The alternatives are still light
+under a door, a sound behind it, a shadow crossing it, or drawing guests and
+walking them, which is the largest piece of work anywhere in this repo.
+Nothing below is worth building until somebody picks, because the answer
+changes what a door is and whether there is a desk to put a board behind.
 
 ## Acceptance criteria
 
@@ -133,11 +245,27 @@ Arithmetic, which is what this building tests. None of it is written.
   is at its worst. — `aleph::tests::the_last_room_is_numbered_correctly`
 - The second door does not overlap spec 0017's, and neither is blocked by the
   columns spec 0015 keeps off the way. — `behind::tests::both_far_doors_are_clear`
-- Nothing of the corridor is drawn inside the hidden room, which is the fault
-  this building has fought seven times. — `aleph::tests::nothing_of_the_corridor_is_in_the_room`
+- Nothing of the corridor is drawn inside another room, which is the fault
+  this building has fought seven times. — `aleph::tests::nothing_of_the_corridor_is_in_another_room`
+- The corridor's floor clears the cellar's ceiling, which it does not at this
+  building's usual slab: 0.15 m of headroom against 0.3 of slab, from ten
+  metres west. — `aleph::tests::the_corridor_clears_the_cellar`
+- You walk from the gallery into the corridor without your feet rising, which
+  is what a ledge feels like and what no amount of looking
+  finds. — `aleph::tests::walked_from_the_gallery_into_the_corridor`
+- The two doorways off the gallery are a pair: same height, same head, same
+  wall. — `room::tests::the_gallery_has_a_doorway_either_side`
+- The board and the corridor never disagree about who is in, which is this
+  building's commonest fault stated for a new pair: two lists of one thing
+  drift. — `aleph::tests::the_board_and_the_doors_agree`
+- Every drawn room has a hook and no hook has no room. — `aleph::tests::a_hook_for_every_room`
+- You can stand behind the desk and see room 1, which is what the camera in
+  aleph was placed for. — `aleph::tests::room_one_is_in_view_from_behind_the_desk`
 
 ### Verified by hand
 
+- You can tell it is a hotel before you are in the corridor.
+- The doorway reads from the aisle, without anybody being told it is there.
 - The corridor reads as having no end rather than as being long.
 - The wave is worth standing still for.
 - Walking through a doorway with the door swung open does not catch on a
@@ -157,6 +285,15 @@ launched from here.
 
 **Guests.** Named above because it blocks this, not because this spec answers
 it.
+
+**The hidden wing.** Nothing here touches it. Spec 0017's door keeps the far
+wall to itself and stays the one lit thing at the end of that sightline.
+
+**Moving the cellar.** The headroom above it is fifteen centimetres and the
+corridor has to deal with that, by running over it on a thinner slab, by
+stepping, or by leaving the floor's height alone and taking the cellar's
+ceiling down. Which of those is a question for whoever builds it, and the
+test is the same either way.
 
 ---
 
