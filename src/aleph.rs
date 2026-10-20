@@ -688,6 +688,9 @@ pub struct Hotel {
     /// How many have been housed since the building opened, which is the
     /// number that says nobody left.
     housed: u64,
+    /// And how many are on their way in, which join the count when the
+    /// filling wave has run rather than when the key was pressed.
+    arriving: u64,
 }
 
 /// How fast the change runs down the corridor, in rooms a second.
@@ -695,7 +698,22 @@ pub struct Hotel {
 /// Slow enough to watch and fast enough that the near end is not a wait: a
 /// body walks at 4.2 and the rooms are 1.5 apart, so this is a little under
 /// walking pace and the wave pulls away from you only if you stand still.
-pub const TRAVELS_AT: f32 = 2.4;
+pub const TRAVELS_AT: f32 = 6.0;
+
+/// How many rooms either side of the front have their doors open.
+///
+/// **This is what makes the move visible at all.** Spec 0029's wave moved
+/// which rooms were taken, and for the move that houses one guest that is
+/// nearly nothing to look at: everybody shifts up a room, every room is full
+/// before and full after, and a shut door that stays shut shows none of it.
+/// Jake pressed Enter and said the doors all looked closed. They were.
+///
+/// aleph's own parked note is the same sentence: the guests do not travel, so
+/// the transformation is invisible and only its result shows. A wave of
+/// occupancy is a wave of re-evaluation. This is a wave of people: a door
+/// stands open while the front is passing it, because somebody is going
+/// through it, and shuts behind them.
+pub const RIPPLE: f32 = 2.0;
 
 impl Default for Hotel {
     fn default() -> Self {
@@ -717,6 +735,7 @@ impl Hotel {
             // resting state rather than a thing you set up
             at_the_door: Some(Arrival::One),
             housed: 0,
+            arriving: 0,
         }
     }
 
@@ -773,7 +792,11 @@ impl Hotel {
         }
 
         self.then_filled = Some(filled);
-        self.housed += came;
+        // **Counted when they are in, not when they are asked for.** This
+        // said `housed += came` here, so the desk read "1 housed" the instant
+        // you pressed, before either wave had moved a door. Jake pressed and
+        // read the outcome of something he had not watched happen.
+        self.arriving = came;
         self.at_the_door = Some(match arrival {
             Arrival::One => Arrival::Coach(42),
             Arrival::Coach(_) => Arrival::Endless,
@@ -855,6 +878,8 @@ impl Hotel {
             }
         }
 
+        // and they are in, which is when they count
+        self.housed += std::mem::take(&mut self.arriving);
         self.doing = Doing::Freeing;
     }
 
@@ -873,6 +898,16 @@ impl Hotel {
     ///
     /// A taken room is shut. A free one stands open and dark.
     pub fn open_by(&self, n: u64) -> f32 {
+        // a door the wave is passing stands open, because somebody is going
+        // through it. Eased, so it swings rather than snapping.
+        if let Some(front) = self.travelling() {
+            let near = (n as f32 - front).abs();
+
+            if near < RIPPLE {
+                return (1.0 - near / RIPPLE).clamp(0.0, 1.0);
+            }
+        }
+
         if self.taken(n) {
             0.0
         } else {
@@ -1167,26 +1202,72 @@ mod tests {
         }
     }
 
-    /// Spec 0029: the light and the door never disagree.
+    /// Spec 0029: the light and the door never disagree, once nothing is
+    /// moving.
+    ///
+    /// **While a wave is passing they do, and that is the point.** A door
+    /// the front is going through stands open because somebody is going
+    /// through it, and the room behind it is still somebody's. The light
+    /// says who is in and the door says who is moving, so they only have to
+    /// agree when nobody is.
     #[test]
     fn the_light_says_what_the_door_says() {
         let mut hotel = Hotel::new();
 
         hotel.apply(2, 1);
 
-        // all the way through the wave, a step at a time
-        for _ in 0..200 {
+        for _ in 0..400 {
             hotel.tick(0.05);
+
+            if hotel.travelling().is_some() {
+                continue;
+            }
 
             for n in 1..=DRAWN {
                 assert_eq!(
                     hotel.lit_under(n),
                     hotel.open_by(n) == 0.0,
-                    "room {} has a door and a light that disagree",
+                    "room {} has a door and a light that disagree at rest",
                     n
                 );
             }
         }
+    }
+
+    /// And while a wave is passing, a door it is going through stands open
+    /// even though somebody is in that room.
+    ///
+    /// Without this the move that houses one guest shows nothing at all:
+    /// everybody shifts up a room, every room is full before and after, and a
+    /// shut door that stays shut says none of it. Jake pressed Enter and said
+    /// the doors all looked closed. They were.
+    #[test]
+    fn a_door_the_wave_is_passing_stands_open() {
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::One);
+        hotel.house();
+
+        let mut ever_open = 0;
+
+        for _ in 0..600 {
+            hotel.tick(0.02);
+
+            let Some(front) = hotel.travelling() else {
+                continue;
+            };
+
+            let at = front.round().max(1.0) as u64;
+
+            if at <= DRAWN && hotel.taken(at) && hotel.open_by(at) > 0.4 {
+                ever_open += 1;
+            }
+        }
+
+        assert!(
+            ever_open > 0,
+            "no taken room ever opened, so the guests never looked like they moved"
+        );
     }
 
     /// Spec 0029: no strip is level with the floor it lies on.
@@ -1512,6 +1593,14 @@ mod tests {
 
         hotel.at_the_door = Some(Arrival::Coach(9));
         hotel.house();
+
+        // **Not yet.** They are counted when they are in, not when they are
+        // asked for: the desk used to read the outcome the instant you
+        // pressed, before either wave had moved a door.
+        assert_eq!(hotel.housed(), 0, "they were counted before they walked in");
+
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
 
         assert_eq!(
             hotel.housed(),

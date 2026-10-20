@@ -117,6 +117,30 @@ corridor pulled back out of it, so it does not reach down there, and spec
 0048's coplanar narrowing does not narrow inside the hotel. What is in there
 is forty doors of one shape repeated.
 
+## What the first build of it got wrong
+
+**A wave of occupancy is not a wave of people.** This spec said the arrivals
+walk in after the rule, and what got built moved *which rooms were taken*
+along the corridor. For the move that houses one guest that is nearly nothing
+to look at: everybody shifts up a room, every room is full before and full
+after, and a shut door that stays shut shows none of it. Jake pressed Enter
+and said the doors all looked closed. They were.
+
+That is aleph's own parked reason, word for word: the guests do not travel
+from room n to room a*n + b, so the transformation is invisible and only its
+result shows. Spec 0029's wave was read as fixing it and did not.
+
+A door the front is passing stands open now, because somebody is going
+through it, and shuts behind them. So the light says who is in and the door
+says who is *moving*, and the two only have to agree when nobody is.
+
+**And the count moved before anything did.** `housed` went up inside the key
+press rather than when the filling wave finished, so the desk read the
+outcome the instant you pressed, of something you had not watched happen.
+
+**Both waves took thirty three seconds**, which is too long to hold a cause
+and its effect together. Six rooms a second rather than two and a bit.
+
 ## Acceptance criteria
 
 - A coach of `n` is housed by the move, and after it the hotel is as full as
@@ -128,6 +152,11 @@ is forty doors of one shape repeated.
   only doubling answers. — `aleph::tests::an_endless_coach_is_housed`
 - The arrivals walk in after the rule rather than with it, so the two waves
   are two. — `aleph::tests::the_filling_follows_the_freeing`
+- A door the wave is passing stands open even though somebody is in that
+  room, which is the whole of what makes the move
+  visible. — `aleph::tests::a_door_the_wave_is_passing_stands_open`
+- And they are counted when they are in rather than when they are asked
+  for. — `aleph::tests::nobody_left_and_more_arrived`
 - There is no last door: whatever room you stand outside, there are rooms
   drawn past it. — `aleph::tests::there_is_always_another_door`
 - And the numbers on them are right wherever you stand, not only near the
