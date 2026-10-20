@@ -36,6 +36,7 @@ not a priority, and it never changes once a spec exists.
 | [0026](0026-a-building-that-stands-still.md) | Handing the engine the rooms' shells once instead of every frame: it bought nothing in the hall, because what this building spends a frame on is the fittings |
 | [0027](0027-a-picture-of-each-room.md) | A picture of each of the seven rooms, held against one that was right, because 455 tests here had never looked at anything: three of them waited on a photograph Jake took, which showed the building was fine and the harness was standing on the wrong floor |
 | [0028](0028-the-fittings-stay-pushed.md) | Not built, deliberately: the whole of this building's draw is 0.74 ms out of a frame with four to spare, so keeping the fittings would buy a share of that against a version field on every cabinet that lights, door that opens and leaf that swings |
+| [0029](0029-a-corridor-with-a-room-for-every-number.md) | aleph's hotel put where it belongs: a second door in the far wall of the hidden room, onto a corridor of numbered doors that runs 11.2 million rooms before a float gives out. Not built, and not to be until somebody decides what stands for a guest (draft) |
 
 ---
 
