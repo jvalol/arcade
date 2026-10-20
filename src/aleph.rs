@@ -457,9 +457,97 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 }
 
 /// How big the desk is and where it stands.
+///
+/// **Built rather than blocked out.** The first one was a single box in the
+/// wall's own colour, which is what a thing looks like before it is built:
+/// Jake stood at it and said it does not make sense to a user, and from close
+/// to it filled half the frame and read as a wall. A counter is a body, a top
+/// that oversails it and a bead under that, which is what the cellar's bar
+/// and the pool table's rails are, and the shadow lines do the rest.
 pub const DESK_WIDE: f32 = 2.6;
 pub const DESK_DEEP: f32 = 0.7;
 pub const DESK_TALL: f32 = 1.1;
+
+/// How far the top oversails the body, and how thick it and the bead are.
+pub const DESK_OVER: f32 = 0.06;
+pub const DESK_TOP: f32 = 0.055;
+pub const DESK_BEAD: f32 = 0.022;
+
+/// Where the board of pigeonholes hangs: on the wall the desk stands
+/// against, which is the low `z` side.
+///
+/// **Not on the desk's far face.** The first build put it at the counter's
+/// `max.z`, which is the side facing into the room, so the board floated in
+/// front of the desk between it and whoever was standing there.
+pub fn board(reaches: f32) -> Vec3 {
+    let counter = desk(reaches);
+
+    vec3(
+        counter.center().x,
+        BOARD_UP,
+        across(reaches).0 + BOARD_THICK * 0.5,
+    )
+}
+
+/// The board of pigeonholes behind the desk, one hook to a room.
+///
+/// **Furniture and not a record.** Spec 0029 struck a board of keys that was
+/// a second account of who is in, because two lists of one thing drift. This
+/// is the same object with no job: it says what kind of place this is, and
+/// what is in it tells you nothing.
+pub const BOARD_WIDE: f32 = 2.2;
+pub const BOARD_TALL: f32 = 1.15;
+pub const BOARD_UP: f32 = 1.3;
+pub const BOARD_THICK: f32 = 0.08;
+pub const HOLES_ACROSS: u32 = 8;
+pub const HOLES_DOWN: u32 = 4;
+
+/// The bell on the counter, which is the one turned thing in here.
+pub const BELL_WIDE: f32 = 0.11;
+pub const BELL_TALL: f32 = 0.08;
+
+/// Its profile, for `cellar::turned`: a dome on a little foot.
+pub fn bell_profile(v: f32) -> (f32, f32) {
+    // a quarter circle, so the dome meets the counter square and closes at
+    // the top rather than coming to a point
+    let along = v * BELL_TALL;
+    let round = (v * std::f32::consts::FRAC_PI_2).cos();
+
+    (along, BELL_WIDE * round.max(0.04))
+}
+
+/// Where the sign hangs, which is over the corridor's mouth.
+///
+/// It is the one place a person is looking when they walk in, and what it
+/// says is the premise: without it the desk's numbers are reported to
+/// somebody who has not been told what is unusual about them.
+pub const SIGN_WIDE: f32 = 2.4;
+pub const SIGN_TALL: f32 = 0.42;
+pub const SIGN_THICK: f32 = 0.06;
+pub const SIGN_UP: f32 = 2.02;
+
+/// What the sign says, which is the premise.
+///
+/// **Nothing in this room stated it.** A person walked in, saw a corridor,
+/// and was then told "The hotel is full. 1 housed", which only means anything
+/// to somebody who already knows the hotel has a room for every counting
+/// number and that it being full is supposed to leave no space. Jake stood at
+/// the desk and said it does not make sense to a user, and this is most of
+/// why.
+///
+/// Two lines, because the paradox needs both halves: every room is taken, and
+/// the rooms do not run out.
+pub const SIGN_SAYS: [&str; 2] = ["EVERY ROOM TAKEN", "THE ROOMS DO NOT RUN OUT"];
+
+/// What the desk says while a move runs and after one.
+///
+/// Reporting the event rather than the state. "1 housed" is a counter, and
+/// what happened was that a full hotel took another guest and nobody left,
+/// which is a sentence.
+pub const DESK_FULL: &str = "Full, and nobody has left.";
+pub const DESK_FREEING: &str = "Everybody is moving up a room.";
+pub const DESK_FILLING: &str = "The new ones are taking the rooms that opened.";
+pub const DESK_HOUSED: &str = "housed since you came in";
 
 /// The counter you stand at.
 ///
@@ -821,10 +909,36 @@ pub fn sconces(reaches: f32) -> Vec<Vec3> {
     out
 }
 
+/// The lobby's own fittings: one over the desk and one over the sign.
+///
+/// **The lobby had none.** The corridor was given sconces and the room you
+/// arrive in was left with nothing, so the sign stating the premise and the
+/// desk you work both stood in the dark. That is the same fault the corridor
+/// had one round earlier, and this building has now had it three times.
+pub fn lobby_sconces(reaches: f32) -> Vec<Vec3> {
+    let counter = desk(reaches);
+    let (west, _) = span();
+    let middle = middle_z(reaches);
+    let _ = counter;
+
+    vec![
+        // over the desk, on the wall it stands against, which is the low
+        // `z` side: the desk faces the room and the wall is behind it
+        vec3(
+            counter.center().x,
+            SCONCE_UP + 0.24,
+            across(reaches).0 + SCONCE_OUT,
+        ),
+        // and over the sign, which nobody can read unlit
+        vec3(west + SIGN_THICK * 2.0 + SCONCE_OUT, SIGN_UP + 0.5, middle),
+    ]
+}
+
 /// And the lamps, which are those lifted a little into the shade's mouth.
 pub fn lamps(reaches: f32) -> Vec<Vec3> {
     sconces(reaches)
         .into_iter()
+        .chain(lobby_sconces(reaches))
         .map(|at| at + Vec3::Y * SCONCE.y * 0.3)
         .collect()
 }

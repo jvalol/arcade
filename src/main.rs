@@ -385,6 +385,10 @@ struct Arcade {
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
     peg: Option<MeshId>,
+    /// The bell on the hotel's counter, turned on `cellar::turned`'s wheel.
+    bell: Option<MeshId>,
+    /// The two lines on the hotel's sign, which state its premise.
+    sign_says: Vec<TextureId>,
     /// A pocket's net. Spec 0007.
     bag: Option<MeshId>,
     /// The turned pieces in the baths. Spec 0008.
@@ -802,6 +806,8 @@ impl Arcade {
             hoop: None,
             bottle: None,
             peg: None,
+            bell: None,
+            sign_says: Vec::new(),
             bag: None,
             urn: None,
             sconce: None,
@@ -1397,14 +1403,127 @@ impl Arcade {
             );
         }
 
-        // the desk, which is a counter and nothing else yet
+        // the desk: a body, a top that oversails it, a bead under that, the
+        // board behind and the bell on it. One box was a wall with a line of
+        // text in front of it.
         let counter = aleph::desk(reaches);
+        let body = counter.size();
+        let top = counter.max.y;
 
         scene.push_colored(
             cube,
-            &Transform::at(counter.center()).with_scale(counter.size()),
-            aim::HOTEL_WALL,
+            &Transform::at(vec3(
+                counter.center().x,
+                (top - aleph::DESK_TOP) * 0.5,
+                counter.center().z,
+            ))
+            .with_scale(vec3(body.x, top - aleph::DESK_TOP, body.z)),
+            aim::HOTEL_TRIM,
         );
+
+        // the bead, set back under the top so its shadow line reads
+        scene.push_colored(
+            cube,
+            &Transform::at(vec3(
+                counter.center().x,
+                top - aleph::DESK_TOP - aleph::DESK_BEAD * 0.5,
+                counter.center().z,
+            ))
+            .with_scale(vec3(
+                body.x + aleph::DESK_OVER,
+                aleph::DESK_BEAD,
+                body.z + aleph::DESK_OVER,
+            )),
+            aim::HOTEL_DOOR,
+        );
+
+        scene.push_colored(
+            cube,
+            &Transform::at(vec3(
+                counter.center().x,
+                top - aleph::DESK_TOP * 0.5,
+                counter.center().z,
+            ))
+            .with_scale(vec3(
+                body.x + aleph::DESK_OVER * 2.0,
+                aleph::DESK_TOP,
+                body.z + aleph::DESK_OVER * 2.0,
+            )),
+            aim::HOTEL_DOOR,
+        );
+
+        // the bell, the one turned thing in here
+        if let Some(bell) = self.bell {
+            scene.push_colored(
+                bell,
+                &Transform::at(vec3(
+                    counter.center().x + body.x * 0.32,
+                    top,
+                    counter.center().z,
+                )),
+                aim::HOTEL_PLAQUE,
+            );
+        }
+
+        // the board of pigeonholes on the wall behind, which is furniture and
+        // not a record: spec 0029 struck the one that was a second account of
+        // who is in, because two lists of one thing drift
+        let board = aleph::board(reaches);
+
+        scene.push_colored(
+            cube,
+            &Transform::at(board).with_scale(vec3(
+                aleph::BOARD_WIDE,
+                aleph::BOARD_TALL,
+                aleph::BOARD_THICK,
+            )),
+            aim::HOTEL_DOOR,
+        );
+
+        for down in 0..aleph::HOLES_DOWN {
+            for across in 0..aleph::HOLES_ACROSS {
+                let step = vec3(
+                    aleph::BOARD_WIDE / aleph::HOLES_ACROSS as f32,
+                    aleph::BOARD_TALL / aleph::HOLES_DOWN as f32,
+                    1.0,
+                );
+                let at = vec3(
+                    board.x - aleph::BOARD_WIDE * 0.5 + (across as f32 + 0.5) * step.x,
+                    board.y - aleph::BOARD_TALL * 0.5 + (down as f32 + 0.5) * step.y,
+                    board.z + aleph::BOARD_THICK * 0.3,
+                );
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(at).with_scale(vec3(
+                        step.x * 0.74,
+                        step.y * 0.66,
+                        aleph::BOARD_THICK * 0.5,
+                    )),
+                    aim::HOTEL_CEILING,
+                );
+            }
+        }
+
+        // the sign over the corridor's mouth, which is the one place a
+        // person is looking when they walk in. Without it the desk reports
+        // numbers to somebody who has not been told what is unusual about
+        // them, which is most of why this room did not make sense.
+        for (n, texture) in self.sign_says.iter().copied().enumerate() {
+            let up = aleph::SIGN_UP + (1.0 - n as f32) * aleph::SIGN_TALL * 0.62;
+
+            scene.push_textured(
+                cube,
+                texture,
+                &Transform::at(vec3(west + aleph::SIGN_THICK, up, middle)).with_scale(vec3(
+                    aleph::SIGN_THICK,
+                    aleph::SIGN_TALL,
+                    aleph::SIGN_WIDE,
+                )),
+                aim::HOTEL_PLAQUE,
+                aim::MATTE,
+            );
+        }
 
         // the runner down the middle, which is what tells this floor from
         // these walls. A room is a floor, walls, a ceiling and fittings, and
@@ -1442,8 +1561,13 @@ impl Arcade {
             }
         }
 
-        // the sconces, which are the only reason there is any light in here
-        for at in aleph::sconces(reaches) {
+        // the sconces, which are the only reason there is any light in here.
+        // The lobby's two are in this list so there is no lamp anywhere in
+        // the hotel that is not in a fitting.
+        for at in aleph::sconces(reaches)
+            .into_iter()
+            .chain(aleph::lobby_sconces(reaches))
+        {
             scene.push_colored(
                 cube,
                 &Transform::at(at).with_scale(aleph::SCONCE),
@@ -3695,6 +3819,11 @@ impl Game for Arcade {
         self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
         self.peg = Some(renderer.add_mesh(&cellar::peg_mesh()));
+        self.bell = Some(renderer.add_mesh(&cellar::turned(24, 12, aleph::bell_profile)));
+        self.sign_says = aleph::SIGN_SAYS
+            .iter()
+            .map(|line| renderer.add_texture(&blitzkit::text::drawn(line, aleph::PLAQUE_TEXELS)))
+            .collect();
         self.bag = Some(renderer.add_mesh(&cellar::bag_mesh()));
         self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
         self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
@@ -4524,22 +4653,21 @@ impl Game for Arcade {
                 Some(String::from("is playing. Quit to come back.")),
             ),
             (None, Some(room::Seen::Desk)) => (
-                // the name carries the point of the room: full again, with
-                // more people in it than there were, and nobody gone
-                Some(match (self.hotel.full(), self.hotel.housed()) {
-                    (_, 0) => String::from("The desk"),
-                    (true, housed) => format!("The hotel is full. {} housed.", housed),
-                    (false, housed) => format!("The hotel has room. {} housed.", housed),
+                // the event and not the state. "1 housed" is a counter, and
+                // what happened is that a full hotel took another guest and
+                // nobody left, which is a sentence.
+                Some(match (self.hotel.housed(), self.hotel.full()) {
+                    (0, _) => String::from("The desk"),
+                    (housed, true) => {
+                        format!("{} {}.", housed, aleph::DESK_HOUSED)
+                    }
+                    (housed, false) => format!("{} {}.", housed, aleph::DESK_HOUSED),
                 }),
                 Some(match self.hotel.at_the_door() {
                     Some(who) => format!("{}. Enter to house them.", who.says()),
-                    None if self.hotel.filling() => String::from("They are walking in."),
-                    None => match self.hotel.travelling() {
-                        Some(front) => {
-                            format!("Everybody is moving up, past room {}.", front as u64)
-                        }
-                        None => String::from("Everybody is moving up."),
-                    },
+                    None if self.hotel.filling() => String::from(aleph::DESK_FILLING),
+                    None if self.hotel.travelling().is_some() => String::from(aleph::DESK_FREEING),
+                    None => String::from(aleph::DESK_FULL),
                 }),
             ),
             (None, Some(room::Seen::Hotel(n))) => (
