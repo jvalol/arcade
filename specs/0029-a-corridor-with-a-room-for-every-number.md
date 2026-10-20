@@ -12,6 +12,10 @@ Then, having been shown the walk: it is unfindable and no hints lead to it.
 That one took the whole placement with it. See "Why it is off the gallery",
 which replaces an argument for putting it behind the wall.
 
+**Unblocked** the same day: light under the door is what stands for a guest.
+Jake's call, and it is cheaper and carries further than what this spec had
+proposed.
+
 ## Goal
 
 A second door in the far wall of the hidden room, opening onto a corridor of
@@ -191,44 +195,77 @@ corridor at a speed you can watch, so what you see is a wave going somewhere
 you cannot see the end of. Stand near the door and it leaves you behind. Stand
 far down and it arrives.
 
-## The thing to settle before any of this is built
+## What stands for a guest: light under the door
 
-**There are no guests.** That is the first of aleph's three parked reasons and
-the one that moving the thing into a building makes worse, not better.
+**Light under the door.** Jake, 2026-10-20, which unblocks this.
 
-A shut door is the only evidence anyone is in there. In a game seen down a
-camera that is thin. In a building you walk, with your own footsteps, it is
-thinner: now there is visibly one person in the hotel and every door is shut.
+A shut door with a line of light under it is somebody in. A door standing
+open on a dark room is nobody. Nothing is drawn that is a person, the paradox
+stays about people who are never shown, and the building keeps its record of
+never having drawn one.
 
-This building has never drawn a person. That is the same wall the hall of
-mirrors idea runs into, and it is not a thing to discover again halfway
-through building a corridor.
+It is also the right thing for this hotel in particular. aleph's own spec is
+called "The night". A corridor of shut doors at night with light under some of
+them is what a hotel is when everybody is in.
 
-**The missing desk and the missing guests are one fault and not two.** The
-first draft of this spec did not notice, which is how it managed to specify a
-corridor and call it a hotel. The corridor is the only thing aleph ever built,
-so there is nobody in the rooms and nowhere you are standing, and the doubling
-rule reads as arithmetic rather than as an act because there is no one it is
-done to and nowhere it is done from.
+### Why it is cheap, which matters at this length
 
-Which is also the way out, and it is cheaper than drawing people. **Give the
-desk a board of keys, one hook per drawn room, numbered to match the
-plaques.** A key on its hook is a room standing empty. A key gone is somebody
-upstairs. Then occupancy has a second account of itself that you can hold in
-one glance, instead of forty doors you have to walk to read, and the rule
-becomes a thing you watch happen twice: the keys land on their hooks at the
-desk and the wave of doors leaves down the corridor.
+It is not a light. It is a bright strip on the floor at the threshold, drawn
+and not lit.
 
-It is not guests. Nobody is drawn and the paradox is still about people who
-are never shown. But it is evidence of them that is not a shut door, and it
-gives the player the one thing the game never gave them, which is a job and a
-place to do it from.
+This engine grants two shadow casting point lights and a short list of plain
+ones, per `lighting::MAX_SHADOWING_POINT_LIGHTS`, so a lamp in every occupied
+room is not a thing that can be asked for at forty doors, let alone at eleven
+million. A strip is one more instance per door in a corridor that is instanced
+already, and this building's own habit covers the rest: colour is an unclamped
+multiplier and anything past one glows with no light falling on it, which is
+how the neon works at 3.2.
 
-**This is a proposal and not a decision.** The alternatives are still light
-under a door, a sound behind it, a shadow crossing it, or drawing guests and
-walking them, which is the largest piece of work anywhere in this repo.
-Nothing below is worth building until somebody picks, because the answer
-changes what a door is and whether there is a desk to put a board behind.
+### What it buys that the doors do not
+
+**The corridor stays readable after the doors stop being.** A door at the far
+end is smaller than a pixel. A bright strip against a dark floor is still
+there, because what carries at distance is contrast and not size. So the
+corridor reads as a column of lights running away, and the thing you watch
+when the rule fires is a wave of them going out.
+
+That is the half aleph never had, and it turns out the light is what delivers
+it rather than the doors. The doors are the near-field version of the same
+fact.
+
+### Two ways it can go wrong, both of which this building has had
+
+**Laid in the floor rather than on it.** A glowing quad coplanar with the
+floor is two faces in one plane, which is the fault this building has fought
+seven times, and it speckles as you move. Spec 0012 says it of a border and
+the answer is the same: lay it on, not in.
+
+**A long shallow edge at a glancing angle.** Spec 0012 found that is the worst
+case there is for putting a straight line on a grid of pixels, that
+multisampling shades the pixel at each drop and cannot move the boundary, and
+that eight samples took eight per cent off what four left. Its fix was to drop
+the contrast until the staircase stopped reading.
+
+**That fix is not available here**, because the contrast is the point: a dim
+line under a door is not light under a door. The near strips are the ones to
+watch, since the far ones foreshorten to a mark. Whoever builds this should
+expect to measure it and should not expect spec 0012's answer to work twice.
+
+### What this does to the desk
+
+The desk stays. It is where you arrive, where the rule is set, and what the
+corridor runs away from, and none of that was ever about the guests.
+
+~~Give the desk a board of keys, one hook per drawn room. A key on its hook is
+a room standing empty, a key gone is somebody upstairs.~~
+
+Struck 2026-10-20, the day it was proposed. It was an answer to the guest
+question and the guest question has a better one. Keeping both would be two
+accounts of who is in, and two lists of one thing drift, which is the fault
+under most of the others in this building.
+
+A board of keys is still good furniture for a hotel desk and may well end up
+on the wall behind it. What it must not be is a second record of occupancy.
 
 ## Acceptance criteria
 
@@ -241,6 +278,9 @@ Arithmetic, which is what this building tests. None of it is written.
   1.13 m of a 3.2 m corridor, against a body of 0.9 and this building's usual
   1.05 of clearance. — `aleph::tests::walked_with_every_door_open`
 - The wave moves away from room 1 rather than arriving everywhere at once. — `aleph::tests::the_change_travels`
+- Every shut room is lit under its door and every open one is not, so the
+  light and the door never disagree. — `aleph::tests::the_light_says_what_the_door_says`
+- No strip is level with the floor it lies on. — `aleph::tests::no_strip_is_in_the_floor`
 - Room numbers are right at the far end as well as the near one, where a float
   is at its worst. — `aleph::tests::the_last_room_is_numbered_correctly`
 - The second door does not overlap spec 0017's, and neither is blocked by the
@@ -267,6 +307,10 @@ Arithmetic, which is what this building tests. None of it is written.
 - You can tell it is a hotel before you are in the corridor.
 - The doorway reads from the aisle, without anybody being told it is there.
 - The corridor reads as having no end rather than as being long.
+- The lights carry further than the doors do, which is what this choice is
+  for. Walk until the doors stop reading and check the strips still do.
+- The near strips at a glancing angle, for the staircase spec 0012 describes
+  and cannot fix twice.
 - The wave is worth standing still for.
 - Walking through a doorway with the door swung open does not catch on a
   shoulder, which 1.13 m says it should not and which this building has been
