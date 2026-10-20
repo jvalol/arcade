@@ -1509,16 +1509,34 @@ impl Arcade {
         // person is looking when they walk in. Without it the desk reports
         // numbers to somebody who has not been told what is unusual about
         // them, which is most of why this room did not make sense.
+        // how tall a line can be and still have the longest of them fit the
+        // corridor's mouth. Worked out from the words rather than named, so
+        // a line that grows shrinks the sign instead of running off it.
+        let widest = aleph::SIGN_SAYS
+            .iter()
+            .map(|line| {
+                let shape = blitzkit::text::room_for(line, aleph::PLAQUE_TEXELS);
+
+                shape.x / shape.y.max(1e-4)
+            })
+            .fold(1e-4f32, f32::max);
+        let line_tall = aleph::SIGN_TALL.min(aleph::SIGN_FITS / widest);
+
         for (n, texture) in self.sign_says.iter().copied().enumerate() {
-            let up = aleph::SIGN_UP + (1.0 - n as f32) * aleph::SIGN_TALL * 0.62;
+            // each board as wide as its own words want, so the letters come
+            // out the same size on both lines. One width for both stretched
+            // sixteen characters and twenty four to fit the same board.
+            let shape = blitzkit::text::room_for(aleph::SIGN_SAYS[n], aleph::PLAQUE_TEXELS);
+            let wide = line_tall * (shape.x / shape.y.max(1e-4));
+            let up = aleph::sign_top() - line_tall * 0.5 - n as f32 * (line_tall + aleph::SIGN_GAP);
 
             scene.push_textured(
                 cube,
                 texture,
                 &Transform::at(vec3(west + aleph::SIGN_THICK, up, middle)).with_scale(vec3(
                     aleph::SIGN_THICK,
-                    aleph::SIGN_TALL,
-                    aleph::SIGN_WIDE,
+                    line_tall,
+                    wide,
                 )),
                 aim::HOTEL_PLAQUE,
                 aim::MATTE,
@@ -4656,15 +4674,19 @@ impl Game for Arcade {
                 // the event and not the state. "1 housed" is a counter, and
                 // what happened is that a full hotel took another guest and
                 // nobody left, which is a sentence.
+                // the standing fact on the name and the situation under it.
+                // `DESK_FULL` used to be unreachable: somebody is always at
+                // the door, so the one line carrying the point of the room
+                // never showed at all.
                 Some(match (self.hotel.housed(), self.hotel.full()) {
                     (0, _) => String::from("The desk"),
                     (housed, true) => {
-                        format!("{} {}.", housed, aleph::DESK_HOUSED)
+                        format!("{} {} {}.", aleph::DESK_FULL, housed, aleph::DESK_HOUSED)
                     }
                     (housed, false) => format!("{} {}.", housed, aleph::DESK_HOUSED),
                 }),
                 Some(match self.hotel.at_the_door() {
-                    Some(who) => format!("{}. Enter to house them.", who.says()),
+                    Some(who) => who.says(),
                     None if self.hotel.filling() => String::from(aleph::DESK_FILLING),
                     None if self.hotel.travelling().is_some() => String::from(aleph::DESK_FREEING),
                     None => String::from(aleph::DESK_FULL),

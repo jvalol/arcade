@@ -521,10 +521,41 @@ pub fn bell_profile(v: f32) -> (f32, f32) {
 /// It is the one place a person is looking when they walk in, and what it
 /// says is the premise: without it the desk's numbers are reported to
 /// somebody who has not been told what is unusual about them.
-pub const SIGN_WIDE: f32 = 2.4;
-pub const SIGN_TALL: f32 = 0.42;
-pub const SIGN_THICK: f32 = 0.06;
-pub const SIGN_UP: f32 = 2.02;
+/// How tall a line of it is, how thick the board is, and the gap between the
+/// two lines.
+///
+/// **No width.** The first build gave both lines one width of 2.4, which is
+/// three quarters of the corridor, and stretched each line's texture to fill
+/// it: sixteen characters and twenty four at the same width means two sizes
+/// of letter, and Jake's picture has the top line half again as large as the
+/// bottom. Each board takes its width from its own text now, through
+/// `blitzkit::text::room_for`, the way the back room's gauge words do.
+///
+/// It also hung them 0.26 apart while each was 0.42 tall, so they overlapped.
+pub const SIGN_TALL: f32 = 0.17;
+
+/// How much of the corridor's mouth the longest line may take.
+///
+/// The board hangs in the opening, so a line wider than the opening has its
+/// ends behind the wall: the second line came out as "E ROOMS DO NOT RUN O T"
+/// with THE and OUT lost behind the jambs. The letters are sized down from
+/// here rather than up from a height, so a longer line shrinks the sign
+/// instead of running off it.
+pub const SIGN_FITS: f32 = ACROSS - 0.55;
+pub const SIGN_THICK: f32 = 0.05;
+pub const SIGN_GAP: f32 = 0.05;
+
+/// How far under the corridor's head the board hangs.
+///
+/// Tucked up against it rather than hung in the opening. At 2.02 it was below
+/// the door heads and across the middle of the view from the lobby, which is
+/// what made it read as filling the room.
+pub const SIGN_UNDER: f32 = 0.06;
+
+/// Where the top of the sign is, which is the head over the corridor's mouth.
+pub fn sign_top() -> f32 {
+    TALL - SIGN_UNDER
+}
 
 /// What the sign says, which is the premise.
 ///
@@ -592,12 +623,21 @@ pub enum Arrival {
 }
 
 impl Arrival {
-    /// How many are at the door, said the way the desk says it.
+    /// Who wants a room, said to the person standing at the desk.
+    ///
+    /// **Not "at the door".** There is no door in that room: you come in
+    /// through the gallery and nothing in the fiction is a front door, so
+    /// "at the door" points at nothing. And the player is the clerk, so the
+    /// line is the situation in front of them rather than a narration of it.
+    /// Jake read the first draft and said the language does not land.
     pub fn says(&self) -> String {
         match self {
-            Arrival::One => String::from("One guest is at the door"),
-            Arrival::Coach(n) => format!("A coach of {} is at the door", n),
-            Arrival::Endless => String::from("A coach with a room for every number is at the door"),
+            // Jake's, so no marker. It is the guest speaking rather than
+            // the room narrating them, which is what the other two had to
+            // follow.
+            Arrival::One => String::from("I would like a room."),
+            Arrival::Coach(n) => format!("We would like {} rooms.", n),
+            Arrival::Endless => String::from("We would like a room for every number."),
         }
     }
 
@@ -929,8 +969,14 @@ pub fn lobby_sconces(reaches: f32) -> Vec<Vec3> {
             SCONCE_UP + 0.24,
             across(reaches).0 + SCONCE_OUT,
         ),
-        // and over the sign, which nobody can read unlit
-        vec3(west + SIGN_THICK * 2.0 + SCONCE_OUT, SIGN_UP + 0.5, middle),
+        // and one lighting the sign.
+        //
+        // **Above it and not in front of it.** The first one hung 0.55 out
+        // into the lobby at the sign's own height, which put the fitting
+        // between the reader and the board: Jake's picture has a grey box
+        // through the middle of "DO NOT". A light that blocks the thing it
+        // lights is worse than no light.
+        vec3(west + 0.3, sign_top() + SCONCE.y * 0.5 + 0.06, middle),
     ]
 }
 
