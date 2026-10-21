@@ -38,6 +38,7 @@ not a priority, and it never changes once a spec exists.
 | [0028](0028-the-fittings-stay-pushed.md) | Not built, deliberately: the whole of this building's draw is 0.74 ms out of a frame with four to spare, so keeping the fittings would buy a share of that against a version field on every cabinet that lights, door that opens and leaf that swings |
 | [0029](0029-a-corridor-with-a-room-for-every-number.md) | aleph's hotel, through the gallery's west wall, opposite the back room: a desk you arrive at and a corridor of numbered doors, lit at night by sconces, with the light under a shut door standing for the guest nobody draws. Sited behind the hidden wall first, which was wrong, because nothing leads there. Built short in two ways it names: the doors end at forty, and opening them is not yet the paradox |
 | [0030](0030-the-hotel-is-full-again.md) | Somebody at the desk, one move, and the freed rooms filling, so the hotel ends up full again with more people in it and nobody gone. Opening doors was half a subtraction. Kills the last door with it: the drawn rooms follow you now |
+| [0031](0031-the-one-door-with-no-number.md) | Cantor's diagonal, walked: the one door in the hotel's corridor with a blank plaque, a register with no last row, and a guest you write yourself that the desk cannot house. The exception to the sign next door (draft) |
 
 ---
 
