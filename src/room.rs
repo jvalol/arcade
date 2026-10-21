@@ -671,6 +671,8 @@ pub enum Seen {
     Baths,
     /// The hotel's desk, which is where somebody is housed. Spec 0030.
     Desk,
+    /// The register on the far wall behind the blank door. Spec 0031.
+    Book,
     /// One of the hotel's doors, by its room number. Spec 0029.
     ///
     /// The one thing in that corridor you can work, and the only way there is
@@ -1207,6 +1209,8 @@ impl Room {
         if lit_by_the_sun {
             out.extend(crate::behind::solid(self.reaches));
             out.extend(crate::aleph::solid(self.reaches));
+            // and the register behind the blank door, per spec 0031
+            out.extend(crate::register::solid(self.reaches));
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
@@ -1220,6 +1224,15 @@ impl Room {
                 .map(|(n, open)| crate::aleph::leaf_box(self.reaches, *n, *open))
                 .collect::<Vec<_>>(),
         );
+        // **and the blank one**, which is not in that list because it is not
+        // a room, so it had no collider at all and you walked straight
+        // through it. Spec 0031, and Jake found it by doing exactly that. It
+        // stands open and never moves.
+        out.push(crate::aleph::leaf_box(
+            self.reaches,
+            crate::aleph::BLANK,
+            1.0,
+        ));
         out.extend(
             self.stood
                 .iter()
@@ -1392,8 +1405,18 @@ impl Room {
     /// The walls, and only the walls. Not the benches, the cabinets or the
     /// bookcases: those are the things being looked at, and a bookcase that
     /// blocks the sight blocks the one book in it that is a handle.
-    pub fn opaque(&self) -> &[Aabb] {
-        &self.walls
+    pub fn opaque(&self) -> Vec<Aabb> {
+        let mut out = self.walls.clone();
+
+        // **and the hotel's and the register's.** Those two rooms were built
+        // after this and their walls were never in the list, so the sight
+        // went straight through them: standing in the register you could
+        // point at the wall and the building named a corridor door behind
+        // it, "Room 8 has somebody in it". Jake walked it and found that.
+        out.extend(crate::aleph::solid(self.reaches));
+        out.extend(crate::register::solid(self.reaches));
+
+        out
     }
 
     /// What you are looking at: the nearest thing the line of sight meets, said
@@ -1454,6 +1477,29 @@ impl Room {
         // point at was a door.
         let desk = slab(from, way, &crate::aleph::desk(self.reaches)).map(|far| (Seen::Desk, far));
 
+        // the book on the register's far wall, per spec 0031
+        let book = {
+            // **Only where the book is written**, not the whole wall. It was
+            // the wall, so pointing at a bare stretch of it still said "The
+            // register", which Jake found by looking at nothing and being
+            // told what it was.
+            let (back, _) = crate::register::across(self.reaches);
+            let left = crate::register::page_left(self.reaches);
+            let cell = crate::register::CELL;
+            let low = crate::register::cell_at(self.reaches, crate::register::ROWS - 1, 0);
+            let high = crate::register::cell_at(self.reaches, 0, 0);
+            let wall = Aabb::new(
+                vec3(left - cell * 2.0, low.y - cell, back),
+                vec3(
+                    left + crate::register::columns(self.reaches) as f32 * cell,
+                    high.y + cell * 2.5,
+                    back + THICK,
+                ),
+            );
+
+            slab(from, way, &wall).map(|far| (Seen::Book, far))
+        };
+
         // and the hotel's doors, per spec 0029. Every drawn one, because a
         // corridor where only the near few can be worked is a corridor with
         // an invisible edge in it.
@@ -1488,8 +1534,8 @@ impl Room {
         // back of a cabinet in the hall and the room offered to play it.
         let through = self
             .opaque()
-            .iter()
-            .filter_map(|box_| slab(from, way, box_))
+            .into_iter()
+            .filter_map(|box_| slab(from, way, &box_))
             .fold(f32::INFINITY, f32::min);
 
         cabinets
@@ -1499,6 +1545,7 @@ impl Room {
             .chain(glass)
             .chain(baths)
             .chain(desk)
+            .chain(book)
             .chain(hotel)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
@@ -1984,7 +2031,10 @@ mod tests {
                 // and the hotel through the other wall, per spec 0029,
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
+                + crate::register::solid(room.reaches).len()
                 + room.hotel_doors.len()
+                // and the blank door's leaf, per spec 0031
+                + 1
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -2846,7 +2896,10 @@ mod tests {
                 // and the hotel through the other wall, per spec 0029,
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
+                + crate::register::solid(room.reaches).len()
                 + room.hotel_doors.len()
+                // and the blank door's leaf, per spec 0031
+                + 1
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid

@@ -38,6 +38,8 @@ pub enum Where {
     Back,
     /// The hotel through the gallery's other door, per spec 0029.
     Hotel,
+    /// The register behind the hotel's one unnumbered door, per spec 0031.
+    Register,
 }
 
 /// What a piece is made of, which is the colour it is drawn in.
@@ -53,6 +55,8 @@ pub enum Made {
     HotelWall,
     HotelCeiling,
     HotelEnd,
+    RegisterWall,
+    RegisterCeiling,
 }
 
 /// One run: where it is, what it is made of, and the boxes in it.
@@ -150,6 +154,16 @@ pub fn runs(reaches: f32) -> Vec<Run> {
         vec![crate::aleph::end(reaches)],
     );
 
+    // and the register behind the blank door, per spec 0031. Its floor is
+    // drawn as a plane, the same as every other floor in this building.
+    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::register::solid(reaches)
+        .into_iter()
+        .filter(|box_| box_.max.y > 0.0)
+        .partition(|box_| box_.min.y < crate::register::TALL);
+
+    put(Where::Register, Made::RegisterWall, walls);
+    put(Where::Register, Made::RegisterCeiling, ceiling);
+
     out
 }
 
@@ -201,6 +215,25 @@ mod tests {
             ),
         );
 
+        // and the register, which is its own room off that corridor
+        let register = {
+            let (west, east) = crate::register::along(reaches);
+            let (far, near) = crate::register::across(reaches);
+
+            Aabb::new(
+                glam::vec3(
+                    west - crate::room::THICK * 2.0,
+                    -1.0,
+                    far - crate::room::THICK * 2.0,
+                ),
+                glam::vec3(
+                    east + crate::room::THICK * 2.0,
+                    crate::register::TALL + crate::room::THICK * 2.0,
+                    near + crate::room::THICK * 2.0,
+                ),
+            )
+        };
+
         for run in runs(reaches) {
             for box_ in run.boxes.iter() {
                 let inside = match run.at {
@@ -211,6 +244,7 @@ mod tests {
                     Where::Behind => behind.iter().any(|room| room.intersects(box_)),
                     Where::Back => back.contains_point(box_.center()),
                     Where::Hotel => hotel.contains_point(box_.center()),
+                    Where::Register => register.contains_point(box_.center()),
                 };
 
                 assert!(

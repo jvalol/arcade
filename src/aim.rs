@@ -1021,6 +1021,69 @@ pub const HOTEL_SCONCE: Vec4 = vec4(0.30, 0.27, 0.22, 1.0);
 /// And the shade's mouth, which is the lit part and the only thing in the
 /// corridor besides the door strips that is past one.
 pub const HOTEL_SHADE: Vec4 = vec4(2.4, 1.9, 1.25, 1.0);
+
+/// The register behind the blank door. Spec 0031.
+///
+/// Paler and colder than the corridor it is off, because it is an office
+/// rather than somewhere anybody sleeps, and because what is on its far wall
+/// has to be read.
+pub const REGISTER_WALL: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
+pub const REGISTER_FLOOR: Vec4 = vec4(0.22, 0.21, 0.20, 1.0);
+pub const REGISTER_CEILING: Vec4 = vec4(0.16, 0.16, 0.17, 1.0);
+
+/// A character in the book, and the one on the diagonal, which is the only
+/// thing in that room past one.
+/// The one door with no number, which is not a bedroom door. Spec 0031.
+///
+/// **It had a blank plaque and read as a fault**, because that is exactly
+/// what a fault looked like: the morning this was built, room 104's plaque
+/// came out blank because its texture was never made. Jake walked the
+/// corridor and reported the deliberate one as a bug. The same pixels cannot
+/// mean "this is the register" and "the number failed to draw".
+///
+/// So it has no plaque at all now and is painted rather than veneered, which
+/// is what a door that is not a room looks like in a building like this.
+pub const REGISTER_DOOR: Vec4 = vec4(0.30, 0.33, 0.33, 1.0);
+
+/// The room number at the start of each row of the register, which is what
+/// says the rows are rooms. Spec 0031.
+pub const REGISTER_ROOM: Vec4 = vec4(0.58, 0.62, 0.70, 1.0);
+
+pub const REGISTER_MARK: Vec4 = vec4(0.72, 0.73, 0.78, 1.0);
+
+/// What the hotel's guests are. Spec 0033.
+///
+/// **Four, so a corridor of them is not one person repeated.** Dark enough
+/// to be shapes in a corridor lit by sconces rather than figures standing in
+/// a studio, which is the difference between somebody being there and
+/// somebody being presented.
+///
+/// **Darker than they look like they should be.** At 0.3 they came out
+/// near white, because the corridor's sconces are 1.85 at the red end and a
+/// colour here is a multiplier rather than a paint: a hallway of pale
+/// figures reads as mannequins in a shop window. These are about a tenth,
+/// which puts them in the dark the corridor is actually in.
+pub const GUESTS: [Vec4; 4] = [
+    vec4(0.11, 0.115, 0.145, 1.0),
+    vec4(0.15, 0.125, 0.115, 1.0),
+    vec4(0.10, 0.125, 0.13, 1.0),
+    vec4(0.135, 0.11, 0.14, 1.0),
+];
+pub const REGISTER_DIAGONAL: Vec4 = vec4(1.9, 1.42, 0.72, 1.0);
+
+/// And the part of it the walk has not reached yet.
+///
+/// **A path rather than a trail.** Spec 0031 lit the whole diagonal from the
+/// moment you walked in, so walking the room changed nothing on the wall and
+/// Jake said he could see no actions in it. Ahead of the walk a cell is only
+/// marked out, enough to show there is a way through the page. Behind it the
+/// cell is `REGISTER_DIAGONAL` and plainly taken.
+pub const REGISTER_AHEAD: Vec4 = vec4(0.62, 0.55, 0.40, 1.0);
+
+/// What the register's one sconce is made of, which is the same brass as the
+/// hotel's next door.
+pub const REGISTER_SCONCE: Vec4 = vec4(0.42, 0.33, 0.17, 1.0);
+pub const REGISTER_SHADE: Vec4 = vec4(1.85, 1.3, 0.7, 1.0);
 pub const BACK_SHADE: Vec4 = vec4(0.22, 0.21, 0.20, 1.0);
 pub const BACK_BULB: Vec4 = vec4(3.1, 2.9, 2.5, 1.0);
 /// The rig on the bench: the cubes under test, the jig holding them, and the

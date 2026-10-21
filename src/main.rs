@@ -18,6 +18,8 @@ mod metronome;
 mod neon;
 mod noise;
 mod orrery;
+mod people;
+mod register;
 mod room;
 mod sign;
 mod spa;
@@ -382,6 +384,10 @@ struct Arcade {
     boards: Option<TextureId>,
     boards_mesh: Option<MeshId>,
     barrel: Option<MeshId>,
+    /// A guest's body and a guest's leg, turned on the same wheel as the
+    /// barrels and the bell. Spec 0033.
+    body: Option<MeshId>,
+    leg: Option<MeshId>,
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
     peg: Option<MeshId>,
@@ -389,6 +395,17 @@ struct Arcade {
     bell: Option<MeshId>,
     /// The two lines on the hotel's sign, which state its premise.
     sign_says: Vec<TextureId>,
+    /// And the two words over the register's columns, which say what its
+    /// numbers are. Spec 0031.
+    headings: Vec<TextureId>,
+    /// The ten characters the register is written in. Ten textures for the
+    /// whole wall, where the corridor's plaques are one a door: a register is
+    /// the same handful of marks over and over. Spec 0031.
+    marks: Vec<TextureId>,
+    /// And what you are carrying out of it, which grows as you walk the
+    /// diagonal and is the guest the desk cannot house.
+    carried: register::Carried,
+    book: register::Book,
     /// A pocket's net. Spec 0007.
     bag: Option<MeshId>,
     /// The turned pieces in the baths. Spec 0008.
@@ -803,11 +820,17 @@ impl Arcade {
             boards: None,
             boards_mesh: None,
             barrel: None,
+            body: None,
+            leg: None,
             hoop: None,
             bottle: None,
             peg: None,
             bell: None,
             sign_says: Vec::new(),
+            headings: Vec::new(),
+            marks: Vec::new(),
+            carried: register::Carried::new(),
+            book: register::Book::new(),
             bag: None,
             urn: None,
             sconce: None,
@@ -1003,6 +1026,19 @@ impl Arcade {
             // only thing in the hotel you work. A door names its room and
             // does nothing, because a door that can be shut is not a paradox
             // and that was the first wrong answer to this.
+            // the book is read by looking at it and worked by walking, so
+            // this does nothing to it. Spec 0031: the diagonal is not a
+            // riddle and there is nothing here to press.
+            Some(room::Seen::Book) => (),
+            // **And the one you carried is housed like anybody else.** Spec
+            // 0031 had this arm do nothing, so the desk could refuse. Spec
+            // 0032: one guest can always be housed, the desk says yes, and
+            // what it costs is that the book now has them in it. Walk it
+            // again and the diagonal will have found somebody else.
+            Some(room::Seen::Desk) if !self.carried.is_empty() => {
+                self.hotel.house_carried();
+                self.book.write_in(self.carried.taken());
+            }
             Some(room::Seen::Desk) => self.hotel.house(),
             Some(room::Seen::Hotel(_)) => (),
             // a toy: enter does the one thing that toy's enter does
@@ -1368,12 +1404,305 @@ impl Arcade {
     /// Its fourth wall is the gallery's, which is drawn with the rest of the
     /// building's walls and is cut for the door where `back::gallery_east`
     /// says.
+    /// A door's panels and its handle, which is what makes it read as a door
+    /// rather than a slab. Spec 0031's note, and it is true of all of them.
+    #[allow(clippy::too_many_arguments)]
+    fn dress_a_door(
+        &self,
+        scene: &mut Scene,
+        cube: MeshId,
+        at: Vec3,
+        swing: f32,
+        inward: f32,
+        colour: glam::Vec4,
+    ) {
+        let turn = glam::Quat::from_rotation_y(-inward * swing);
+        let tall = aleph::DOOR_TALL - aleph::DOOR_GAP;
+        // two panels, an upper and a lower, sunk a little into the face
+        let high = tall * 0.5 - aleph::PANEL_GAP;
+
+        for (up, deep) in [
+            (aleph::DOOR_GAP + high * 0.5 + aleph::PANEL_GAP, high * 0.52),
+            (
+                aleph::DOOR_GAP + tall - high * 0.5 - aleph::PANEL_GAP,
+                high * 0.6,
+            ),
+        ] {
+            scene.push_colored(
+                cube,
+                &Transform::at(at + Vec3::Y * up)
+                    .with_rotation(turn)
+                    .with_scale(vec3(
+                        aleph::DOOR_WIDE - aleph::PANEL_IN * 2.0,
+                        deep,
+                        aleph::DOOR_THICK + aleph::PANEL_DEEP,
+                    )),
+                colour * vec4(0.82, 0.82, 0.82, 1.0),
+            );
+        }
+
+        // and the thing you turn, on the side away from the hinge
+        let along = vec3(swing.cos(), 0.0, inward * swing.sin());
+        let out = vec3(-inward * swing.sin(), 0.0, swing.cos());
+
+        scene.push_colored(
+            cube,
+            &Transform::at(
+                at + Vec3::Y * aleph::HANDLE_UP
+                    + along * (aleph::DOOR_WIDE * 0.5 - aleph::HANDLE_IN)
+                    + out * aleph::HANDLE_IN * 0.3,
+            )
+            .with_rotation(turn)
+            .with_scale(aleph::HANDLE),
+            aim::HOTEL_PLAQUE,
+        );
+    }
+
     /// The hotel: its two floors, the doors, the plaques, the light under the
     /// shut ones, and the desk. Spec 0029.
     ///
     /// Its shell is handed over once per spec 0026 and is not here. What is
     /// here is what moves or lights up, which is the same division the back
     /// room opposite uses.
+    /// Whether you are standing in the register behind the blank door.
+    fn in_the_register(&self) -> bool {
+        let reaches = self.room.reaches;
+        let (west, east) = register::along(reaches);
+        let (far, near) = register::across(reaches);
+
+        self.at.x > west && self.at.x < east && self.at.z > far && self.at.z < near
+    }
+
+    /// The register: its floor, and the book on its far wall. Spec 0031.
+    ///
+    /// Its shell is handed over once per spec 0026 and is not here.
+    fn draw_the_register(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
+        let reaches = self.room.reaches;
+        let (west, east) = register::along(reaches);
+        let (far, near) = register::across(reaches);
+
+        scene.push_colored(
+            floor,
+            &Transform::at(vec3((west + east) * 0.5, 0.0, (far + near) * 0.5)).with_scale(vec3(
+                east - west,
+                1.0,
+                near - far,
+            )),
+            aim::REGISTER_FLOOR,
+        );
+
+        // the one fitting in here, over the head of the page. A lamp with no
+        // fitting is a bright patch on a wall and no reason for it, which
+        // the cellar was told once and the baths did again worse.
+        for at in register::sconces(reaches) {
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(register::SCONCE),
+                aim::REGISTER_SCONCE,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(at + vec3(0.0, register::SCONCE.y * 0.3, 0.0)).with_scale(vec3(
+                    register::SCONCE.x * 0.7,
+                    register::SCONCE.y * 0.3,
+                    register::SCONCE.z * 0.7,
+                )),
+                aim::REGISTER_SHADE,
+            );
+        }
+
+        if self.marks.is_empty() {
+            return;
+        }
+
+        // the book: a page of the register, scrolling across the wall as
+        // you walk, with the cell on the diagonal lit. The diagonal runs
+        // corner to corner through what is on the wall, which is what a
+        // diagonal looks like when it is written on something.
+        // what the two columns are, over them. Without this the wall is
+        // numbers and nothing else, which is what Jake said it was.
+        for (which, texture) in self.headings.iter().copied().enumerate() {
+            let shape = blitzkit::text::room_for(register::HEADINGS[which], aleph::PLAQUE_TEXELS);
+            let aspect = shape.x / shape.y.max(1e-4);
+            // capped at what is left of the wall, so a heading shrinks
+            // rather than running off the end and being clipped by it
+            let wide = register::heading_wide(reaches, which, aspect);
+            let tall = wide / aspect;
+
+            scene.push_textured(
+                cube,
+                texture,
+                &Transform::at(
+                    // `heading_at` gives the bottom left of it, the same way
+                    // it gives the left rather than the middle
+                    register::heading_at(reaches, which) + vec3(wide * 0.5, tall * 0.5, 0.0),
+                )
+                .with_scale(vec3(wide, tall, 0.02)),
+                aim::REGISTER_ROOM,
+                aim::MATTE,
+            );
+        }
+
+        // every row, in the same place every time. There is no window: a
+        // window following the reader is what made the wall seem to move.
+        for down in 0..register::ROWS {
+            // which room's entry this row is, written at the near end of it.
+            // This is the whole of what connects the wall to the hotel.
+            let room = register::room_of(down);
+
+            if let Some(texture) = self.plaques.get(&room).copied() {
+                scene.push_textured(
+                    cube,
+                    texture,
+                    &Transform::at(register::label_at(reaches, down)).with_scale(vec3(
+                        register::CELL * 1.5,
+                        register::CELL * 0.8,
+                        register::MARK_DEEP,
+                    )),
+                    aim::REGISTER_ROOM,
+                    aim::MATTE,
+                );
+            }
+
+            // **Out to the end wall, which cuts the last one.** The row
+            // used to stop at a flat twenty four, five metres short of that
+            // wall, so every entry on the page had a visible last digit.
+            // Spec 0032: an entry with a last digit is a number, and the
+            // hotel has a room for every number.
+            for along_by in 0..register::columns(reaches) {
+                let row = down;
+                let column = along_by;
+                let mark = self.book.at(row, column) as usize;
+                let Some(texture) = self.marks.get(mark).copied() else {
+                    continue;
+                };
+                // **Lit where it is read and falling away after.** Spec
+                // 0032 ran the entries to the end wall so that none of them
+                // ends, and drawing all of that at one brightness is what
+                // made the wall unreadable.
+                let colour = if row == column {
+                    // **Lit behind the walk, marked out ahead of it.** The
+                    // whole diagonal used to be lit before you took a step,
+                    // so walking the room changed nothing on the wall.
+                    if row < self.carried.reach() {
+                        aim::REGISTER_DIAGONAL
+                    } else {
+                        aim::REGISTER_AHEAD
+                    }
+                } else {
+                    aim::REGISTER_MARK * register::lit_at(column)
+                };
+
+                scene.push_textured(
+                    cube,
+                    texture,
+                    &Transform::at(register::cell_at(reaches, down, along_by)).with_scale(vec3(
+                        // **A row is a line, not a grid of tiles.** Each
+                        // mark carries its own dark backing, so marks that
+                        // touch along a row make one band and the gap
+                        // between rows becomes the only gap there is. At
+                        // 0.74 square the wall was an even mesh of tiles
+                        // with no line in it anywhere, which is most of what
+                        // Jake meant by unintelligible.
+                        register::CELL * 0.99,
+                        register::CELL * 0.78,
+                        register::MARK_DEEP,
+                    )),
+                    colour,
+                    aim::MATTE,
+                );
+            }
+        }
+    }
+
+    /// Everybody the wave is passing, and whoever is waiting at the desk.
+    ///
+    /// Spec 0033. **The light under the door stays**: this draws the ones
+    /// who are out of their rooms, and a guest at rest is still a strip,
+    /// because there is nothing to see in a room you cannot go into.
+    fn draw_the_people(&self, scene: &mut Scene) {
+        let (Some(body), Some(leg)) = (self.body, self.leg) else {
+            return;
+        };
+
+        let reaches = self.room.reaches;
+        let mut stand = |at: Vec3, facing: f32, along: Option<f32>, shade: usize| {
+            let turn = glam::Quat::from_rotation_y(facing);
+            let colour = aim::GUESTS[shade % aim::GUESTS.len()];
+            // which way is their right, for hanging the legs off
+            let side = vec3(facing.cos(), 0.0, facing.sin());
+            // and which way they are walking, for swinging them along
+            let ahead = vec3(facing.sin(), 0.0, -facing.cos());
+
+            scene.push_colored(
+                body,
+                &Transform::at(at + vec3(0.0, people::BODY_FROM, 0.0)).with_rotation(turn),
+                colour,
+            );
+
+            for which in 0..2 {
+                let out = if which == 0 { 1.0 } else { -1.0 };
+                let (fore, up) = match along {
+                    Some(along) => (people::swing(along, which), people::lift(along, which)),
+                    None => (0.0, 0.0),
+                };
+
+                scene.push_colored(
+                    leg,
+                    &Transform::at(
+                        at + side * (people::LEGS_APART * out) + ahead * fore + vec3(0.0, up, 0.0),
+                    )
+                    .with_rotation(turn),
+                    colour,
+                );
+
+                // an arm is the same leg, thinner and shorter, hung off the
+                // shoulder. One mesh for both is the point of a wheel.
+                //
+                // **Stood on its hand rather than scaled upside down.** The
+                // first build hung it from the shoulder with a y scale of
+                // minus one, which turns every triangle in it inside out: a
+                // face wound away from you is drawn nowhere, so what was on
+                // screen was the inside of an arm, a pale slab flapping off
+                // each shoulder. The limb is wide at the top anyway, so it
+                // only had to start lower.
+                scene.push_colored(
+                    leg,
+                    &Transform::at(
+                        at + side * (people::ARMS_APART * out)
+                            + ahead * (-fore * 0.55)
+                            + vec3(0.0, people::ARM_FROM - people::ARM_TALL, 0.0),
+                    )
+                    .with_rotation(turn)
+                    .with_scale(vec3(
+                        0.58,
+                        people::ARM_TALL / people::LEG_TALL,
+                        0.58,
+                    )),
+                    colour,
+                );
+            }
+        };
+
+        // the ones the wave is passing, crossing to the next number
+        let window = aleph::window(self.at);
+
+        for who in people::crossing(
+            reaches,
+            self.hotel.travelling(),
+            *window.start(),
+            *window.end(),
+        ) {
+            stand(who.at, who.facing, Some(who.along), who.from as usize);
+        }
+
+        // and whoever is at the desk wanting a room, who has never been
+        // anything but a line of text
+        if self.hotel.at_the_door().is_some() {
+            stand(aleph::waiting(reaches), std::f32::consts::PI, None, 0);
+        }
+    }
+
     fn draw_the_hotel(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
         let reaches = self.room.reaches;
         let (west, east) = aleph::span();
@@ -1555,13 +1884,28 @@ impl Arcade {
             aim::HOTEL_RUNNER,
         );
 
-        // the skirting and the rail, a run each side. A long wall with
-        // nothing breaking it is one slab.
-        let far = aleph::corridor_west() + aleph::THICK_TRIM;
-        let length = west - far;
+        // the skirting and the rail, in the stretches of wall between the
+        // doors. A long wall with nothing breaking it is one slab.
+        //
+        // **Not one run the length of the corridor.** It was, so both ran
+        // straight across every doorway, which nobody could see while the
+        // doors were shut and flush and was a bar across the open one into
+        // the register. Jake walked in and found it.
+        let gap = aleph::APART - aleph::DOOR_WIDE;
 
-        for side in [-1.0f32, 1.0] {
-            let z = middle + side * (aleph::ACROSS * 0.5 - aleph::SKIRTING_OUT * 0.5);
+        for stands in self
+            .room
+            .hotel_doors
+            .iter()
+            .map(|(n, _)| aleph::at(reaches, *n))
+            .chain(std::iter::once(aleph::blank_door(reaches)))
+        {
+            let z = stands.z
+                + if stands.z > middle {
+                    -aleph::SKIRTING_OUT * 0.5
+                } else {
+                    aleph::SKIRTING_OUT * 0.5
+                };
 
             for (up, tall) in [
                 (aleph::SKIRTING * 0.5, aleph::SKIRTING),
@@ -1569,8 +1913,8 @@ impl Arcade {
             ] {
                 scene.push_colored(
                     cube,
-                    &Transform::at(vec3((far + west) * 0.5, up, z)).with_scale(vec3(
-                        length,
+                    &Transform::at(vec3(stands.x + aleph::APART * 0.5, up, z)).with_scale(vec3(
+                        gap,
                         tall,
                         aleph::SKIRTING_OUT,
                     )),
@@ -1604,6 +1948,75 @@ impl Arcade {
             );
         }
 
+        // the one door with no number, per spec 0031, drawn with the numbered
+        // ones because it is one of them to look at until you read its
+        // plaque and find nothing on it.
+        {
+            // **Standing open, and hung on its hinge like the others.** It
+            // was shut and painted, and Jake walked past it and said it was
+            // not obviously a door you could go through. A shut door among
+            // forty shut doors is forty one shut doors. This one is the way
+            // into somewhere, so it is open, and what is past it is lit.
+            let stands = aleph::blank_door(reaches);
+            let inward = if aleph::on_the_left(aleph::BLANK) {
+                -1.0
+            } else {
+                1.0
+            };
+            let swing = aleph::SWINGS_TO;
+            let hinge = vec3(stands.x - aleph::DOOR_WIDE * 0.5, 0.0, stands.z);
+            let leaf =
+                hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * (aleph::DOOR_WIDE * 0.5);
+
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(
+                    leaf.x,
+                    aleph::DOOR_GAP + (aleph::DOOR_TALL - aleph::DOOR_GAP) * 0.5,
+                    leaf.z,
+                ))
+                .with_rotation(glam::Quat::from_rotation_y(-inward * swing))
+                .with_scale(vec3(
+                    aleph::DOOR_WIDE,
+                    aleph::DOOR_TALL - aleph::DOOR_GAP,
+                    aleph::DOOR_THICK,
+                )),
+                aim::REGISTER_DOOR,
+            );
+
+            self.dress_a_door(
+                scene,
+                cube,
+                vec3(leaf.x, 0.0, leaf.z),
+                swing,
+                inward,
+                aim::REGISTER_DOOR,
+            );
+
+            for along in [-1.0f32, 1.0] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(
+                        stands.x + along * (aleph::DOOR_WIDE * 0.5 + aleph::JAMB * 0.5),
+                        aleph::DOOR_TALL * 0.5,
+                        stands.z + inward * aleph::JAMB_OUT * 0.5,
+                    ))
+                    .with_scale(vec3(
+                        aleph::JAMB,
+                        aleph::DOOR_TALL + aleph::JAMB,
+                        aleph::JAMB_OUT,
+                    )),
+                    aim::HOTEL_TRIM,
+                );
+            }
+
+            // **and no plaque at all.** It had a blank one, which is exactly
+            // what a plaque whose texture was never made looks like: that
+            // bug shipped this morning and Jake reported the deliberate door
+            // as the same thing. A door with no plaque is not a room. A door
+            // with an empty plaque is a room that is broken.
+        }
+
         for (n, open) in self.room.hotel_doors.iter().copied() {
             let stands = aleph::at(reaches, n);
             let inward = if aleph::on_the_left(n) { -1.0 } else { 1.0 };
@@ -1631,6 +2044,15 @@ impl Arcade {
                     aleph::DOOR_TALL - aleph::DOOR_GAP,
                     aleph::DOOR_THICK,
                 )),
+                aim::HOTEL_DOOR,
+            );
+
+            self.dress_a_door(
+                scene,
+                cube,
+                vec3(at.x, 0.0, at.z),
+                swing,
+                inward,
                 aim::HOTEL_DOOR,
             );
 
@@ -2000,6 +2422,8 @@ impl Arcade {
                 (_, standing::Made::HotelWall) => (aim::HOTEL_WALL, aim::MATTE),
                 (_, standing::Made::HotelCeiling) => (aim::HOTEL_CEILING, aim::VOID),
                 (_, standing::Made::HotelEnd) => (aim::BEHIND_WALL, aim::VOID),
+                (_, standing::Made::RegisterWall) => (aim::REGISTER_WALL, aim::MATTE),
+                (_, standing::Made::RegisterCeiling) => (aim::REGISTER_CEILING, aim::VOID),
                 (_, standing::Made::Wall) => (aim::WALL, aim::MATTE),
             };
             // the hall's walls wear the grain the hall's walls have always
@@ -3660,7 +4084,17 @@ impl Game for Arcade {
         // that room comes into view. This is here rather than in `load`
         // because which rooms those are follows wherever you are standing,
         // and `load` runs once.
-        for n in aleph::window(self.at) {
+        let mut want: Vec<u64> = aleph::window(self.at).collect();
+
+        // and a number for every row of the register on the wall, because
+        // the rows are rooms: row n is room n's entry, and it borrows that
+        // room's plaque rather than having a second account of what the
+        // number looks like. Spec 0031.
+        if self.in_the_register() {
+            want.extend((0..register::ROWS).map(register::room_of));
+        }
+
+        for n in want {
             self.plaques.entry(n).or_insert_with(|| {
                 renderer.add_texture(&blitzkit::text::drawn(&n.to_string(), aleph::PLAQUE_TEXELS))
             });
@@ -3838,6 +4272,24 @@ impl Game for Arcade {
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
         self.peg = Some(renderer.add_mesh(&cellar::peg_mesh()));
         self.bell = Some(renderer.add_mesh(&cellar::turned(24, 12, aleph::bell_profile)));
+        // **Enough steps to have a skin.** A turned mesh with too few draws
+        // two points and nothing between them, which is how the candles, the
+        // clock dial and the fire's coals all went missing at once.
+        self.body = Some(renderer.add_mesh(&cellar::turned(18, 28, people::body_profile)));
+        self.leg = Some(renderer.add_mesh(&cellar::turned(12, 10, people::limb_profile)));
+        self.marks = register::MARKS
+            .iter()
+            .map(|mark| {
+                renderer.add_texture(&blitzkit::text::drawn(
+                    &mark.to_string(),
+                    aleph::PLAQUE_TEXELS,
+                ))
+            })
+            .collect();
+        self.headings = register::HEADINGS
+            .iter()
+            .map(|says| renderer.add_texture(&blitzkit::text::drawn(says, aleph::PLAQUE_TEXELS)))
+            .collect();
         self.sign_says = aleph::SIGN_SAYS
             .iter()
             .map(|line| renderer.add_texture(&blitzkit::text::drawn(line, aleph::PLAQUE_TEXELS)))
@@ -4270,6 +4722,14 @@ impl Game for Arcade {
         self.hotel.tick(dt);
         // and where each of its leaves is, told to the room so the sight and
         // the colliders read one account of it rather than two
+        // the diagonal, taken as far as you have walked the book. Spec 0031:
+        // it grows while you move and stops when you stop, because a thing
+        // that writes itself while you stand there is a cutscene.
+        if self.in_the_register() {
+            self.carried
+                .walked_to(&self.book, register::walked(self.room.reaches, self.at));
+        }
+
         self.room.hotel_doors = aleph::window(self.at)
             .map(|n| (n, self.hotel.open_by(n)))
             .collect();
@@ -4670,6 +5130,21 @@ impl Game for Arcade {
                 Some(name.clone()),
                 Some(String::from("is playing. Quit to come back.")),
             ),
+            // the book: what you have taken off the diagonal so far. Spec
+            // 0031, and it is the guest the desk cannot house.
+            (None, Some(room::Seen::Book)) => (
+                Some(String::from("The register")),
+                Some(if self.carried.is_empty() {
+                    // **"Walk it" says nothing about what walking does.**
+                    // Jake read it and said so. The room asks one thing of a
+                    // reader and it is not obvious from a wall of digits:
+                    // start at the near end and go along, and a mark comes
+                    // off each line as you pass it.
+                    String::from(register::BOOK_SAYS)
+                } else {
+                    format!("You are carrying {}", self.carried.says())
+                }),
+            ),
             (None, Some(room::Seen::Desk)) => (
                 // the event and not the state. "1 housed" is a counter, and
                 // what happened is that a full hotel took another guest and
@@ -4686,6 +5161,23 @@ impl Game for Arcade {
                     (housed, false) => format!("{} {}.", housed, aleph::DESK_HOUSED),
                 }),
                 Some(match self.hotel.at_the_door() {
+                    // **The one it cannot house.** This desk has taken every
+                    // arrival since the building opened, by shuffling and by
+                    // doubling. Spec 0031: you wrote this guest yourself, one
+                    // line at a time, out of the register that was supposed
+                    // to have everybody in it.
+                    _ if !self.carried.is_empty() => {
+                        format!("{} {}", self.carried.says(), register::DESK_TAKES)
+                    }
+                    // **Only while the waves it caused are running.** A line
+                    // that stays up for ever is a scoreboard, and spec 0030's
+                    // cycle has to get the desk back when this one is done.
+                    _ if self.book.written() >= 2 && self.hotel.moving() => {
+                        String::from(register::DESK_AGAIN)
+                    }
+                    _ if self.book.written() == 1 && self.hotel.moving() => {
+                        String::from(register::DESK_WROTE_IN)
+                    }
                     Some(who) => who.says(),
                     None if self.hotel.filling() => String::from(aleph::DESK_FILLING),
                     None if self.hotel.travelling().is_some() => String::from(aleph::DESK_FREEING),
@@ -5046,6 +5538,8 @@ impl Game for Arcade {
         // and the back room through the unmarked door, per spec 0024
         self.draw_the_back_room(scene, cube, floor);
         self.draw_the_hotel(scene, cube, floor);
+        self.draw_the_people(scene);
+        self.draw_the_register(scene, cube, floor);
 
         // and the wear in it where feet have gone, which is the only thing in
         // this hall that says the way through the near wall is there. Spec
@@ -7697,6 +8191,18 @@ impl Game for Arcade {
             ));
         }
 
+        // and the register's one, over the head of the page, which is the
+        // only thing in that room telling you where the walk starts
+        for at in register::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                aim::REGISTER_SHADE.truncate().normalize_or(Vec3::ONE),
+                register::SCONCE_LIT,
+                register::SCONCE_RANGE,
+            ));
+        }
+
         // and the gallery's three, per spec 0022. The room at the end of the
         // aisle has one thing in it and these are over that rather than over
         // the middle of the floor.
@@ -8267,6 +8773,155 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Spec 0031: one door in that corridor has no number and every other
+    /// one in view does.
+    ///
+    /// The blank plaque is the whole of the signposting, so a corridor where
+    /// a second door were blank, or where the blank one were numbered, would
+    /// be a room nobody could find or a joke nobody could read.
+    #[test]
+    fn one_door_in_the_corridor_has_no_number() {
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
+        else {
+            eprintln!("no adapter here");
+
+            return;
+        };
+
+        let mut arcade = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+        let reaches = arcade.room.reaches;
+
+        arcade.load(&mut renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+        arcade.at = aleph::at(reaches, 4);
+        arcade.before_frame(&mut renderer);
+        arcade.update(0.0, &mut geometry, &mut text, &sound);
+
+        // every drawn door is a numbered room and has a plaque made for it
+        for (n, _) in arcade.room.hotel_doors.iter() {
+            assert_ne!(*n, aleph::BLANK, "the blank door is in the numbered list");
+            assert!(
+                arcade.plaques.contains_key(n),
+                "room {} has no number on its plaque",
+                n
+            );
+        }
+
+        // and the blank one is not among them and never gets a texture
+        assert!(
+            !arcade.plaques.contains_key(&aleph::BLANK),
+            "the one door with no number has a number"
+        );
+    }
+
+    /// Spec 0031: the desk refuses this one and has refused no other.
+    #[test]
+    fn the_desk_houses_the_diagonal() {
+        let mut arcade = Arcade::new();
+
+        // it houses everything, over and over, while you carry nothing
+        for _ in 0..3 {
+            assert!(
+                arcade.hotel.at_the_door().is_some(),
+                "nobody is at the door"
+            );
+
+            arcade.hotel.house();
+            arcade.hotel.tick(60.0);
+            arcade.hotel.tick(60.0);
+        }
+
+        assert!(arcade.hotel.housed() > 0, "it housed nobody at all");
+        assert!(arcade.hotel.full(), "it is not full again");
+
+        // and then you come back from the register carrying one
+        arcade.carried.walked_to(&arcade.book, 0);
+        arcade.carried.walked_to(&arcade.book, register::ROWS);
+
+        assert!(!arcade.carried.is_empty(), "the walk wrote nothing");
+
+        arcade.seen = Some(room::Seen::Desk);
+
+        let was = arcade.hotel.housed();
+
+        arcade.use_what_i_see();
+        arcade.hotel.tick(60.0);
+        arcade.hotel.tick(60.0);
+
+        // **It says yes.** Spec 0031 had this assert the opposite, on the
+        // grounds that what you carry is on no line of the book. Jake stood
+        // at the desk and pointed out that a number is a number and the rooms
+        // are the numbers, and he is right: one guest can always be housed.
+        assert!(
+            arcade.hotel.housed() > was,
+            "the desk refused a guest it can always take"
+        );
+
+        // and the cost of saying yes is that the book has them in it now
+        assert_eq!(arcade.book.written(), 1, "nobody was written in");
+        assert!(
+            arcade.carried.is_empty(),
+            "it was handed over and is still in your hand"
+        );
+    }
+
+    /// Spec 0031: every row of the register carries the room number whose
+    /// entry it is.
+    ///
+    /// **This is what connects the wall to the hotel.** Without it the
+    /// register is an anonymous grid of digits that could be a timetable,
+    /// and the diagonal is a lit line through nothing in particular. Jake
+    /// walked the room and asked where Cantor's diagonalization fits, which
+    /// is what that looks like from inside.
+    #[test]
+    fn every_row_of_the_register_is_a_room() {
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
+        else {
+            eprintln!("no adapter here");
+
+            return;
+        };
+
+        let mut arcade = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+        let reaches = arcade.room.reaches;
+
+        arcade.load(&mut renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+
+        let (west, east) = register::along(reaches);
+        let (far, near) = register::across(reaches);
+
+        for along in [0.9f32, 4.0, 8.0] {
+            arcade.at = vec3(east - along, 0.0, (far + near) * 0.5);
+            arcade.before_frame(&mut renderer);
+            arcade.update(0.0, &mut geometry, &mut text, &sound);
+
+            assert!(arcade.in_the_register(), "not in the register at {}", along);
+
+            for down in 0..register::ROWS {
+                let room = register::room_of(down);
+
+                assert!(room >= 1, "a row is room {}, and rooms start at one", room);
+                assert!(
+                    arcade.plaques.contains_key(&room),
+                    "row {} is room {} and has no number to write",
+                    down,
+                    room
+                );
+            }
+        }
+
+        let _ = west;
     }
 
     /// Where a room's reference lives.
