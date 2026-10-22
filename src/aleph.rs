@@ -456,10 +456,38 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         floor(reaches),
         corridor_floor(reaches),
         desk(reaches),
-        // the lobby's north and south walls
+        // the lobby's far wall, in two pieces with the other corridor's
+        // mouth between them. Spec 0035: a second hall leaves this room,
+        // east of the desk, so the desk stands between the two of them.
         Aabb::new(
             vec3(west - THICK, 0.0, from - THICK),
+            vec3(
+                crate::twine::middle_x() - crate::twine::ACROSS * 0.5,
+                LOBBY_TALL,
+                from,
+            ),
+        ),
+        Aabb::new(
+            vec3(
+                crate::twine::middle_x() + crate::twine::ACROSS * 0.5,
+                0.0,
+                from - THICK,
+            ),
             vec3(east, LOBBY_TALL, from),
+        ),
+        // and the head over that mouth, since the hall through it is the
+        // corridor's height and this room is taller
+        Aabb::new(
+            vec3(
+                crate::twine::middle_x() - crate::twine::ACROSS * 0.5,
+                TALL,
+                from - THICK,
+            ),
+            vec3(
+                crate::twine::middle_x() + crate::twine::ACROSS * 0.5,
+                LOBBY_TALL,
+                from,
+            ),
         ),
         Aabb::new(
             vec3(west - THICK, 0.0, to),

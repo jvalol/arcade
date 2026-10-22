@@ -40,6 +40,8 @@ pub enum Where {
     Hotel,
     /// The register behind the hotel's one unnumbered door, per spec 0031.
     Register,
+    /// The other corridor off the hotel's lobby, per spec 0035.
+    Twine,
 }
 
 /// What a piece is made of, which is the colour it is drawn in.
@@ -57,6 +59,8 @@ pub enum Made {
     HotelEnd,
     RegisterWall,
     RegisterCeiling,
+    TwineWall,
+    TwineCeiling,
 }
 
 /// One run: where it is, what it is made of, and the boxes in it.
@@ -164,6 +168,16 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     put(Where::Register, Made::RegisterWall, walls);
     put(Where::Register, Made::RegisterCeiling, ceiling);
 
+    // and the other corridor off the hotel's lobby, per spec 0035. Its
+    // floor is drawn as a plane like every other floor in this building.
+    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::twine::solid(reaches)
+        .into_iter()
+        .filter(|box_| box_.max.y > 0.0)
+        .partition(|box_| box_.min.y < crate::aleph::TALL);
+
+    put(Where::Twine, Made::TwineWall, walls);
+    put(Where::Twine, Made::TwineCeiling, ceiling);
+
     out
 }
 
@@ -234,6 +248,26 @@ mod tests {
             )
         };
 
+        // and spec 0035's corridor, which leaves the hotel's lobby and runs
+        // two kilometres away from it
+        let twine = {
+            let middle = crate::twine::middle_x();
+            let half = crate::twine::ACROSS * 0.5 + crate::room::THICK * 2.0;
+
+            Aabb::new(
+                glam::vec3(
+                    middle - half,
+                    -1.0,
+                    crate::twine::end(reaches) - crate::room::THICK * 2.0,
+                ),
+                glam::vec3(
+                    middle + half,
+                    crate::aleph::TALL + crate::room::THICK * 2.0,
+                    crate::twine::mouth(reaches) + crate::room::THICK * 2.0,
+                ),
+            )
+        };
+
         for run in runs(reaches) {
             for box_ in run.boxes.iter() {
                 let inside = match run.at {
@@ -245,6 +279,7 @@ mod tests {
                     Where::Back => back.contains_point(box_.center()),
                     Where::Hotel => hotel.contains_point(box_.center()),
                     Where::Register => register.contains_point(box_.center()),
+                    Where::Twine => twine.contains_point(box_.center()),
                 };
 
                 assert!(

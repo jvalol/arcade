@@ -26,6 +26,7 @@ mod spa;
 mod standing;
 mod study;
 mod tesseract;
+mod twine;
 mod walk;
 mod wrecker;
 
@@ -1467,6 +1468,41 @@ impl Arcade {
     /// here is what moves or lights up, which is the same division the back
     /// room opposite uses.
     /// Whether you are standing in the register behind the blank door.
+    /// Whether you are in the other corridor off the hotel's lobby.
+    fn in_the_twine(&self) -> bool {
+        let reaches = self.room.reaches;
+        let middle = twine::middle_x();
+        let half = twine::ACROSS * 0.5;
+
+        self.at.x > middle - half
+            && self.at.x < middle + half
+            && self.at.z < twine::mouth(reaches)
+            && self.at.z > twine::end(reaches)
+    }
+
+    /// What that corridor says about where you have got to.
+    ///
+    /// **Not hung on the sight.** Everything else in this building answers
+    /// when you point at it, which is right for a cabinet and wrong for a
+    /// hall: the thing you want to know here changes with every step and
+    /// nobody is going to stop and aim at a wall to find it out. Jake walked
+    /// it and said it is a long hall with doors you cannot open, and a hall
+    /// that says nothing while you walk it is exactly that.
+    fn what_the_long_hall_says(&self) -> (String, String) {
+        let reaches = self.room.reaches;
+        let gone = twine::walked(reaches, self.at);
+
+        (
+            String::from(twine::NAME),
+            format!(
+                "{} doors in {:.0} metres. The hotel does {} in the same walk.",
+                twine::passed(reaches, self.at),
+                gone,
+                twine::the_hotel_in(gone),
+            ),
+        )
+    }
+
     fn in_the_register(&self) -> bool {
         let reaches = self.room.reaches;
         let (west, east) = register::along(reaches);
@@ -1787,6 +1823,206 @@ impl Arcade {
             // and said the shadowy figure is creepy, and it was: a guest
             // waiting for a room does not watch the entrance.
             stand(aleph::waiting(reaches), 0.0, None, 0);
+        }
+    }
+
+    /// The other corridor off the hotel's lobby. Spec 0035.
+    ///
+    /// **Its doors never open**, because no arrival comes down here: spec
+    /// 0030's moves are the hotel's. So this draws a shut door sixteen
+    /// times, which is the whole corridor, and the light under each one is
+    /// spec 0029's settlement about what stands for a guest.
+    ///
+    /// None of the hotel's door drawing could be reused. That corridor runs
+    /// along `x` with its doors in the `z` walls, and this one is turned a
+    /// quarter: every scale and every offset is the other way about.
+    fn draw_the_twine(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
+        let reaches = self.room.reaches;
+        let middle = twine::middle_x();
+        let from = twine::mouth(reaches);
+        let to = twine::end(reaches);
+
+        scene.push_colored(
+            floor,
+            &Transform::at(vec3(middle, 0.0, (from + to) * 0.5)).with_scale(vec3(
+                twine::ACROSS,
+                1.0,
+                from - to,
+            )),
+            aim::HOTEL_FLOOR,
+        );
+
+        // the runner, which the hotel's corridor has and this one is the
+        // same hall as
+        scene.push_colored(
+            floor,
+            &Transform::at(vec3(middle, 0.002, (from + to) * 0.5)).with_scale(vec3(
+                aleph::RUNNER_WIDE.min(twine::ACROSS - 0.5),
+                1.0,
+                from - to,
+            )),
+            aim::HOTEL_RUNNER,
+        );
+
+        // **A skirting and a rail, the whole length, cut at the doors.**
+        // Without them this is a featureless tube: past door eight the next
+        // one is fifty five metres on and a sconce reaches two and a half,
+        // so what you walk through is black with nothing sliding past to say
+        // you are moving at all. Two lines down each wall is what the hotel
+        // uses and what tells you the distance is going by.
+        //
+        // Cut at the doors, because one box the length of the hall runs
+        // across every doorway, which Jake saw in the other corridor and
+        // called a bar across the room.
+        let mut edges: Vec<(f32, f32)> = Vec::new();
+        let mut was = from;
+
+        for n in 1..=twine::doors() {
+            let stands = twine::at(reaches, n);
+
+            edges.push((was, stands.z + aleph::DOOR_WIDE * 0.5 + aleph::JAMB));
+            was = stands.z - aleph::DOOR_WIDE * 0.5 - aleph::JAMB;
+        }
+
+        edges.push((was, to));
+
+        for out in [-1.0f32, 1.0] {
+            for (near, far) in edges.iter().copied() {
+                if near - far < 0.05 {
+                    continue;
+                }
+
+                for (up, tall) in [
+                    (aleph::SKIRTING * 0.5, aleph::SKIRTING),
+                    (aleph::RAIL_UP, aleph::RAIL_TALL),
+                ] {
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(vec3(
+                            middle + out * (twine::ACROSS * 0.5 - aleph::SKIRTING_OUT * 0.5),
+                            up,
+                            (near + far) * 0.5,
+                        ))
+                        .with_scale(vec3(
+                            aleph::SKIRTING_OUT,
+                            tall,
+                            near - far,
+                        )),
+                        aim::HOTEL_TRIM,
+                    );
+                }
+            }
+        }
+
+        // the fittings, which the lamps above come from
+        for at in twine::sconces(reaches) {
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(aleph::SCONCE),
+                aim::HOTEL_TRIM,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(at + vec3(0.0, aleph::SCONCE.y * 0.3, 0.0)).with_scale(vec3(
+                    aleph::SCONCE.x * 0.7,
+                    aleph::SCONCE.y * 0.3,
+                    aleph::SCONCE.z * 0.7,
+                )),
+                aim::HOTEL_SHADE,
+            );
+        }
+
+        for n in 1..=twine::doors() {
+            let stands = twine::at(reaches, n);
+            let out = if twine::on_the_left(n) { -1.0 } else { 1.0 };
+
+            // the leaf, shut, lifted off the floor by the gap the light
+            // comes under
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(
+                    stands.x - out * aleph::DOOR_THICK * 0.5,
+                    aleph::DOOR_GAP + (aleph::DOOR_TALL - aleph::DOOR_GAP) * 0.5,
+                    stands.z,
+                ))
+                .with_scale(vec3(
+                    aleph::DOOR_THICK,
+                    aleph::DOOR_TALL - aleph::DOOR_GAP,
+                    aleph::DOOR_WIDE,
+                )),
+                aim::HOTEL_DOOR,
+            );
+
+            // its two jambs and the head over it
+            for along in [-1.0f32, 1.0] {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(
+                        stands.x - out * aleph::JAMB_OUT * 0.5,
+                        aleph::DOOR_TALL * 0.5,
+                        stands.z + along * (aleph::DOOR_WIDE * 0.5 + aleph::JAMB * 0.5),
+                    ))
+                    .with_scale(vec3(
+                        aleph::JAMB_OUT,
+                        aleph::DOOR_TALL + aleph::JAMB,
+                        aleph::JAMB,
+                    )),
+                    aim::HOTEL_TRIM,
+                );
+            }
+
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(
+                    stands.x - out * aleph::JAMB_OUT * 0.5,
+                    aleph::DOOR_TALL + aleph::JAMB * 0.5,
+                    stands.z,
+                ))
+                .with_scale(vec3(
+                    aleph::JAMB_OUT,
+                    aleph::JAMB,
+                    aleph::DOOR_WIDE + aleph::JAMB * 2.0,
+                )),
+                aim::HOTEL_TRIM,
+            );
+
+            // the number on it, which is the thing that bites: two hundred
+            // metres in and the door says twelve
+            if let Some(texture) = self.plaques.get(&n).copied() {
+                scene.push_textured(
+                    cube,
+                    texture,
+                    &Transform::at(vec3(
+                        stands.x - out * (aleph::DOOR_THICK + 0.02),
+                        aleph::PLAQUE_UP,
+                        stands.z + aleph::PLAQUE_BESIDE,
+                    ))
+                    .with_rotation(glam::Quat::from_rotation_y(
+                        std::f32::consts::FRAC_PI_2 * out,
+                    ))
+                    .with_scale(vec3(
+                        aleph::PLAQUE_WIDE,
+                        aleph::PLAQUE_TALL,
+                        0.02,
+                    )),
+                    aim::HOTEL_PLAQUE,
+                    aim::MATTE,
+                );
+            }
+
+            // and the light under it, which is spec 0029's guest
+            for (reach, strength) in aleph::STRIP_STEPS {
+                scene.push_colored(
+                    floor,
+                    &Transform::at(vec3(
+                        stands.x - out * (aleph::DOOR_THICK + reach * 0.5),
+                        aleph::STRIP_UP,
+                        stands.z,
+                    ))
+                    .with_scale(vec3(reach, 1.0, aleph::STRIP_WIDE)),
+                    aim::HOTEL_LIGHT * vec4(strength, strength, strength, 1.0),
+                );
+            }
         }
     }
 
@@ -2514,6 +2750,10 @@ impl Arcade {
                 (_, standing::Made::HotelEnd) => (aim::BEHIND_WALL, aim::VOID),
                 (_, standing::Made::RegisterWall) => (aim::REGISTER_WALL, aim::MATTE),
                 (_, standing::Made::RegisterCeiling) => (aim::REGISTER_CEILING, aim::VOID),
+                // spec 0035's corridor is the hotel's corridor with the
+                // doors moved, so it is made of what that one is made of
+                (_, standing::Made::TwineWall) => (aim::HOTEL_WALL, aim::MATTE),
+                (_, standing::Made::TwineCeiling) => (aim::HOTEL_CEILING, aim::VOID),
                 (_, standing::Made::Wall) => (aim::WALL, aim::MATTE),
             };
             // the hall's walls wear the grain the hall's walls have always
@@ -4176,6 +4416,11 @@ impl Game for Arcade {
         // and `load` runs once.
         let mut want: Vec<u64> = aleph::window(self.at).collect();
 
+        // and one for every door in the other corridor, which are the same
+        // numbers and therefore the same textures. Spec 0035: a door there
+        // is a door here, down to what is screwed to it.
+        want.extend(1..=twine::doors());
+
         // and a number for every row of the register on the wall, because
         // the rows are rooms: row n is room n's entry, and it borrows that
         // room's plaque rather than having a second account of what the
@@ -5333,6 +5578,14 @@ impl Game for Arcade {
 
                 (Some(String::from(what)), Some(String::from(how)))
             }
+            // the long hall counts for you while you walk it, per spec
+            // 0035, which is the one readout here that is not an answer to
+            // pointing at something
+            (None, None) if self.in_the_twine() => {
+                let (name, detail) = self.what_the_long_hall_says();
+
+                (Some(name), Some(detail))
+            }
             (None, None) => (None, None),
         };
 
@@ -5618,6 +5871,7 @@ impl Game for Arcade {
         // and the back room through the unmarked door, per spec 0024
         self.draw_the_back_room(scene, cube, floor);
         self.draw_the_hotel(scene, cube, floor);
+        self.draw_the_twine(scene, cube, floor);
         self.draw_the_people(scene);
         self.draw_the_register(scene, cube, floor);
 
@@ -8283,6 +8537,18 @@ impl Game for Arcade {
 
         // and the register's one, over the head of the page, which is the
         // only thing in that room telling you where the walk starts
+        // and spec 0035's corridor, one beside every door, so the light
+        // thins out the way the doors do
+        for at in twine::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                aim::HOTEL_SHADE.truncate().normalize_or(Vec3::ONE),
+                aleph::SCONCE_LIT,
+                aleph::SCONCE_RANGE,
+            ));
+        }
+
         for at in register::lamps(self.room.reaches) {
             shades.push((
                 eye.distance_squared(at),
@@ -8959,6 +9225,75 @@ mod tests {
             arcade.carried.is_empty(),
             "it was handed over and is still in your hand"
         );
+    }
+
+    /// Spec 0035: the long hall counts for you while you walk it, and it
+    /// does so without being pointed at.
+    ///
+    /// **It is the one readout here that answers to standing somewhere.**
+    /// Everything else answers to aiming, which is right for a cabinet and
+    /// wrong for a hall whose whole content changes with every step.
+    #[test]
+    fn the_long_hall_counts_while_you_walk() {
+        let mut arcade = Arcade::new();
+        let reaches = arcade.room.reaches;
+        let mouth = twine::mouth(reaches);
+
+        // outside it, it says nothing
+        arcade.at = vec3(0.0, 0.0, 7.3);
+        arcade.seen = None;
+
+        assert!(
+            !arcade.in_the_twine(),
+            "the hall reaches the hall you spawn in"
+        );
+
+        // and inside it, with nothing under the sight, it counts
+        let mut was = (0u64, 0u64);
+
+        for metres in [1.0f32, 30.0, 120.0, 300.0] {
+            arcade.at = vec3(twine::middle_x(), 0.0, mouth - metres);
+            arcade.seen = None;
+
+            assert!(
+                arcade.in_the_twine(),
+                "{:.0} metres in is not in the hall",
+                metres
+            );
+
+            let (name, detail) = arcade.what_the_long_hall_says();
+
+            assert!(!name.is_empty());
+            assert!(
+                detail.contains(&format!("{:.0} metres", metres)),
+                "at {:.0} metres it says {:?}",
+                metres,
+                detail
+            );
+
+            // both numbers climb, and the hotel's climbs faster
+            let now = (
+                twine::passed(reaches, arcade.at),
+                twine::the_hotel_in(metres),
+            );
+
+            assert!(now.0 >= was.0 && now.1 >= was.1, "the count went backwards");
+
+            // **Not at the very first metre.** Door 1 here is at 1 metre and
+            // the hotel's is at 0.75, so after one step they are both on one
+            // and neither is ahead. The hall only falls behind once it has
+            // somewhere to fall behind from.
+            if was != (0, 0) {
+                assert!(
+                    now.1 - was.1 > now.0 - was.0,
+                    "the hotel did not outpace the hall between {:?} and {:?}",
+                    was,
+                    now
+                );
+            }
+
+            was = now;
+        }
     }
 
     /// Spec 0034: every line the desk has is one you can actually see.

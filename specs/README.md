@@ -42,6 +42,7 @@ not a priority, and it never changes once a spec exists.
 | [0032](0032-the-desk-says-yes-and-it-does-not-help.md) | What 0031 should have been. The entries never end, what you carry is a prefix rather than a finished thing, and the desk houses them, because one guest can always be housed. Then you are a row, and you walk it again. Tried changing the alphabet first, which is a trick and not a proof |
 | [0033](0033-somebody-to-move.md) | The building's first people, because forty lamps blinking is not forty guests changing rooms. One figure standing still is the whole of the first build: a bad human is worse than a lamp, and whatever a person looks like here is what one looks like everywhere else in this arcade |
 | [0034](0034-endlessly-many-endless-coaches.md) | The arrival the desk cannot take, and the rule that takes it: everybody to a prime power, which is the first move here that is a scatter rather than a wave. The corridor empties because most of them go somewhere too far to walk to, and what is left lit afterwards is exactly the prime powers |
+| [0035](0035-the-same-rooms-further-apart.md) | A second corridor off the hotel's lobby with door n at the nth Fibonacci metre. The same endless list of rooms, re-spaced: both corridors are two kilometres long and one holds two thousand six hundred rooms while the other holds sixteen. The first room here whose decision is made by giving up |
 
 ---
 

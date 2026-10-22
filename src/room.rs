@@ -1160,26 +1160,33 @@ impl Room {
     #[cfg(test)]
     pub fn fillable(&self) -> Aabb {
         let lobby = crate::aleph::span().0;
-        // the corridor's own long boxes and nothing else. Nothing real in
-        // this building reaches fifty metres west of the lobby: the furthest
-        // is the cellar at -23.7, and the corridor starts two kilometres out.
-        // An `x` clamp alone cut the cellar with it, which is how this was
-        // found.
+        // **Both corridors, not one.** The long boxes and nothing else.
+        // Nothing real in this building reaches fifty metres west of the
+        // lobby: the furthest is the cellar at -23.7, and the hotel's
+        // corridor starts two kilometres out. An `x` clamp alone cut the
+        // cellar with it, which is how that was found.
+        //
+        // Spec 0035 then put a second two kilometre hall off the same lobby
+        // running in `z` instead, which an `x` clamp does not see at all:
+        // the fill went over its cell budget, refused, and came back empty,
+        // and the test that reads it says so rather than passing on nothing.
+        let along = crate::twine::mouth(self.reaches);
         let reaching = lobby - 50.0;
+        let reaching_z = along - 50.0;
         let rest: Vec<Aabb> = self
             .built(true)
             .into_iter()
-            .filter(|box_| box_.min.x > reaching)
+            .filter(|box_| box_.min.x > reaching && box_.min.z > reaching_z)
             .collect();
         let whole = Self::round(rest);
 
-        // and a stub of corridor, so the fill still covers the part of it
-        // anybody stands in on the way down
+        // and a stub of each, so the fill still covers the part anybody
+        // stands in on the way down
         Aabb::new(
             vec3(
                 whole.min.x.min(lobby - CORRIDOR_FILLED),
                 whole.min.y,
-                whole.min.z,
+                whole.min.z.min(along - CORRIDOR_FILLED),
             ),
             whole.max,
         )
@@ -1211,6 +1218,7 @@ impl Room {
             out.extend(crate::aleph::solid(self.reaches));
             // and the register behind the blank door, per spec 0031
             out.extend(crate::register::solid(self.reaches));
+            out.extend(crate::twine::solid(self.reaches));
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
@@ -1415,6 +1423,8 @@ impl Room {
         // it, "Room 8 has somebody in it". Jake walked it and found that.
         out.extend(crate::aleph::solid(self.reaches));
         out.extend(crate::register::solid(self.reaches));
+        // and spec 0035's, the other corridor off that lobby
+        out.extend(crate::twine::solid(self.reaches));
 
         out
     }
@@ -2032,6 +2042,8 @@ mod tests {
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
                 + crate::register::solid(room.reaches).len()
+                // and the other corridor off that lobby, per spec 0035
+                + crate::twine::solid(room.reaches).len()
                 + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
@@ -2897,6 +2909,8 @@ mod tests {
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
                 + crate::register::solid(room.reaches).len()
+                // and the other corridor off that lobby, per spec 0035
+                + crate::twine::solid(room.reaches).len()
                 + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
