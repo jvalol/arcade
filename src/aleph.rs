@@ -43,6 +43,30 @@ pub const DOOR_THICK: f32 = 0.07;
 pub const DOOR_GAP: f32 = 0.012;
 pub const SWINGS_TO: f32 = 1.75;
 
+/// How wide the one door with no number is.
+///
+/// **Wider than a bedroom door, because it is the only one you walk
+/// through.** The other forty are scenery: they open and shut and nobody
+/// passes them. This one is the only way into the register, and at
+/// `DOOR_WIDE` its opening was 1.04 against a body 0.90 across, which is
+/// 0.07 of room either side. Driving an approach into it a frame at a time,
+/// 65, 66 and 67 got through, 68 and 69 did not, and 70 did. A player who
+/// bounces off it twice concludes the room is not there.
+///
+/// It is a hall of records through there, and an archway to one has no
+/// reason to be the size of a bedroom door.
+pub const BLANK_WIDE: f32 = 1.4;
+
+/// How wide door `n` is, which is the one above for the blank and
+/// `DOOR_WIDE` for every room.
+pub fn door_wide(n: u64) -> f32 {
+    if n == BLANK {
+        BLANK_WIDE
+    } else {
+        DOOR_WIDE
+    }
+}
+
 /// The plaque beside each doorway, and where it sits.
 pub const PLAQUE_WIDE: f32 = 0.3;
 pub const PLAQUE_TALL: f32 = 0.22;
@@ -399,22 +423,22 @@ pub fn end(reaches: f32) -> Aabb {
 pub fn leaf_box(reaches: f32, n: u64, open: f32) -> Aabb {
     let stands = at(reaches, n);
     let inward = if on_the_left(n) { -1.0 } else { 1.0 };
+    let wide = door_wide(n);
     let swing = open.clamp(0.0, 1.0) * SWINGS_TO;
-    let hinge = vec3(stands.x - DOOR_WIDE * 0.5, 0.0, stands.z);
-    let tip = hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * DOOR_WIDE;
+    let hinge = vec3(stands.x - wide * 0.5, 0.0, stands.z);
+    let tip = hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * wide;
 
-    Aabb::new(
-        vec3(
-            hinge.x.min(tip.x) - DOOR_THICK,
-            0.0,
-            hinge.z.min(tip.z) - DOOR_THICK,
-        ),
-        vec3(
-            hinge.x.max(tip.x) + DOOR_THICK,
-            DOOR_TALL,
-            hinge.z.max(tip.z) + DOOR_THICK,
-        ),
-    )
+    // **Across the leaf, not around the whole box.** This inflated the
+    // hinge-to-tip box by `DOOR_THICK` on every side, which is right for the
+    // two faces of a thin leaf and wrong for its ends: it put 0.07 of solid
+    // past the hinge, inside the opening the door had just cleared. A leaf
+    // is a rectangle and its corners are where its corners are.
+    let across = vec3(-swing.sin(), 0.0, inward * swing.cos()) * DOOR_THICK * 0.5;
+    let corners = [hinge + across, hinge - across, tip + across, tip - across];
+    let low = corners.iter().fold(corners[0], |was, is| was.min(*is));
+    let high = corners.iter().fold(corners[0], |was, is| was.max(*is));
+
+    Aabb::new(vec3(low.x, 0.0, low.z), vec3(high.x, DOOR_TALL, high.z))
 }
 
 /// Everything solid in here: the lobby's shell, the corridor's, and the desk.
@@ -473,11 +497,15 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         // corridor and saw the speckle.
         Aabb::new(
             vec3(corridor_west(), 0.0, corridor_from - THICK),
-            vec3(blank_door(reaches).x - DOOR_WIDE * 0.5, TALL, corridor_from),
+            vec3(
+                blank_door(reaches).x - BLANK_WIDE * 0.5,
+                TALL,
+                corridor_from,
+            ),
         ),
         Aabb::new(
             vec3(
-                blank_door(reaches).x + DOOR_WIDE * 0.5,
+                blank_door(reaches).x + BLANK_WIDE * 0.5,
                 0.0,
                 corridor_from - THICK,
             ),
@@ -1268,6 +1296,54 @@ mod tests {
                 .any(|at| (*at - stands).length() < LOBBY_RANGE),
             "nothing in the lobby reaches where somebody waits"
         );
+    }
+
+    /// Spec 0031: the one door you walk through is wide enough to walk
+    /// through.
+    ///
+    /// **It was a hit and miss passage.** At `DOOR_WIDE` the opening was
+    /// 1.04 against a body 0.90 across, and the open leaf's collider ate
+    /// another 0.07 of it by inflating its whole hinge-to-tip box by
+    /// `DOOR_THICK` on every side, which put solid past the hinge inside the
+    /// opening the door had just cleared. Driving an approach into it a
+    /// frame at a time, 65, 66 and 67 got through, 68 and 69 did not, and 70
+    /// did. The register is behind this door and nothing else leads there,
+    /// so a player who bounces off it twice concludes the room is not there.
+    #[test]
+    fn the_one_door_you_walk_through_is_wide_enough() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let blank = blank_door(reaches);
+        let leaf = leaf_box(reaches, BLANK, 1.0);
+        let body = crate::RADIUS * 2.0;
+
+        // the opening, and what the leaf standing open takes out of it
+        let west = blank.x - BLANK_WIDE * 0.5;
+        let east = blank.x + BLANK_WIDE * 0.5;
+        let clear = east - leaf.max.x.max(west);
+
+        assert!(
+            clear > body + 0.3,
+            "the way into the register is {:.2} clear for a body {:.2} across",
+            clear,
+            body
+        );
+
+        // and the leaf is a leaf rather than the box it sweeps: it reaches
+        // past the hinge into the opening by a thickness at most
+        // half a thickness, which is what a leaf hinged on the jamb reaches
+        // back by. A whole one is the old box inflated on every side, and a
+        // bound of exactly `DOOR_THICK` lands on that to within a rounding
+        // error, so it is not a bound at all.
+        assert!(
+            leaf.max.x - west < DOOR_THICK * 0.6,
+            "the open leaf stands {:.3} inside its own doorway, which is {:.3} thick",
+            leaf.max.x - west,
+            DOOR_THICK
+        );
+
+        // every other door is scenery and stays the size it was
+        assert_eq!(door_wide(1), DOOR_WIDE);
+        assert_eq!(door_wide(BLANK), BLANK_WIDE);
     }
 
     /// Spec 0033: whoever is waiting at the desk is facing the desk.

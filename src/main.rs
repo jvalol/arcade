@@ -1987,9 +1987,12 @@ impl Arcade {
                 1.0
             };
             let swing = aleph::SWINGS_TO;
-            let hinge = vec3(stands.x - aleph::DOOR_WIDE * 0.5, 0.0, stands.z);
-            let leaf =
-                hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * (aleph::DOOR_WIDE * 0.5);
+            // **Its own width.** This is the only door in the hotel anybody
+            // walks through, and at `DOOR_WIDE` its opening was 1.04 against
+            // a body 0.90 across.
+            let wide = aleph::BLANK_WIDE;
+            let hinge = vec3(stands.x - wide * 0.5, 0.0, stands.z);
+            let leaf = hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * (wide * 0.5);
 
             scene.push_colored(
                 cube,
@@ -2000,7 +2003,7 @@ impl Arcade {
                 ))
                 .with_rotation(glam::Quat::from_rotation_y(-inward * swing))
                 .with_scale(vec3(
-                    aleph::DOOR_WIDE,
+                    wide,
                     aleph::DOOR_TALL - aleph::DOOR_GAP,
                     aleph::DOOR_THICK,
                 )),
@@ -2020,7 +2023,7 @@ impl Arcade {
                 scene.push_colored(
                     cube,
                     &Transform::at(vec3(
-                        stands.x + along * (aleph::DOOR_WIDE * 0.5 + aleph::JAMB * 0.5),
+                        stands.x + along * (wide * 0.5 + aleph::JAMB * 0.5),
                         aleph::DOOR_TALL * 0.5,
                         stands.z + inward * aleph::JAMB_OUT * 0.5,
                     ))
