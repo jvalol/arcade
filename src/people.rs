@@ -15,20 +15,49 @@ use glam::{vec3, Vec3};
 
 /// How tall somebody is, and where they come apart.
 ///
-/// **A figure of turned parts, which is how this building makes anything
-/// round.** No face and no hands: both are detail the corridor's distance
-/// cannot carry, and a smeared face is the thing that turns a figure into a
-/// mistake.
-pub const TALL: f32 = 1.72;
-pub const LEG_TALL: f32 = 0.84;
-pub const BODY_FROM: f32 = 0.66;
-pub const BODY_TALL: f32 = TALL - BODY_FROM;
+/// **Four parts and three colours, which is the whole of why the first one
+/// did not work.** It was a single lathe from crown to toe in one colour: a
+/// shape of a person in one material, which is what a shop window puts
+/// clothes on. Jake walked up to it and called it a creepy mannequin, and
+/// that is the word for it.
+///
+/// So a head, a torso, two legs and two arms, and the head is not the colour
+/// of the coat and the coat is not the colour of the trousers. No face and
+/// no hands still: those are detail the corridor cannot carry. What makes
+/// somebody read as dressed is where the colour changes, not what is drawn
+/// on them.
+pub const TALL: f32 = 1.73;
+
+/// How many sides a turned part has.
+///
+/// ~~Seven, so the silhouette has corners in it and nothing promises a face
+/// it has not got.~~
+///
+/// Struck 2026-10-21, the same hour it was tried. Faceting made it worse in
+/// both rooms: seven sides with a crown that closes to a point is a spike
+/// rather than a head, so a mannequin became something hooded, and a
+/// corridor of them was a corridor of hooded things. The answer was never
+/// the geometry's resolution.
+pub const SIDES: u32 = 18;
+
+/// Where the parts sit, in metres off the floor.
+///
+/// **A seventh of the height, not a fifth.** The head ran from 0.66 of the
+/// way up to the crown, which is 0.35 of a 1.72 figure: a doll's head, and
+/// doll proportions are most of what reads as uncanny before anybody gets
+/// close enough to look for a face.
+pub const LEG_TALL: f32 = 0.95;
+pub const TORSO_FROM: f32 = 0.80;
+pub const TORSO_TALL: f32 = 0.70;
+pub const HEAD_FROM: f32 = 1.47;
+pub const HEAD_TALL: f32 = TALL - HEAD_FROM;
+pub const HEAD_WIDE: f32 = 0.2;
 
 /// How far from the middle a leg and an arm hang.
-pub const LEGS_APART: f32 = 0.098;
-pub const ARMS_APART: f32 = 0.2;
-pub const ARM_FROM: f32 = 1.38;
-pub const ARM_TALL: f32 = 0.52;
+pub const LEGS_APART: f32 = 0.1;
+pub const ARMS_APART: f32 = 0.205;
+pub const ARM_FROM: f32 = 1.44;
+pub const ARM_TALL: f32 = 0.56;
 
 /// Read a profile off a table of `(how far up, how wide)`, between the two
 /// entries either side.
@@ -53,37 +82,51 @@ fn through(table: &[(f32, f32)], v: f32) -> f32 {
     table.last().map(|(_, wide)| *wide).unwrap_or(0.0)
 }
 
-/// Hips, chest, shoulders, neck, head, closed at both ends.
+/// Hips, waist, chest, shoulders and a neck to sit a head on.
 ///
-/// Closed, because an open lathe is one you see through from the far side.
-/// The bottom closes to a point at `BODY_FROM`, which is between the tops of
-/// the legs and out of sight.
-pub fn body_profile(v: f32) -> (f32, f32) {
-    const SHAPE: [(f32, f32); 10] = [
+/// Closed at the bottom, because an open lathe is one you see through from
+/// the far side, and the point it closes to is at `TORSO_FROM`, between the
+/// tops of the legs and out of sight. Open at the neck, which the head caps.
+pub fn torso_profile(v: f32) -> (f32, f32) {
+    const SHAPE: [(f32, f32); 8] = [
         (0.00, 0.00),
-        (0.09, 0.33),
-        (0.20, 0.40),
-        (0.42, 0.44),
-        (0.60, 0.43),
-        (0.655, 0.17),
-        (0.715, 0.23),
-        (0.84, 0.28),
-        (0.95, 0.19),
-        (1.00, 0.00),
+        (0.10, 0.32),
+        (0.22, 0.345),
+        (0.42, 0.33),
+        (0.62, 0.40),
+        (0.84, 0.435),
+        (0.94, 0.30),
+        (1.00, 0.135),
     ];
 
-    (v * BODY_TALL, through(&SHAPE, v))
+    (v * TORSO_TALL, through(&SHAPE, v))
 }
 
-/// A leg, and the same mesh scaled down is an arm.
+/// A head, which is an egg rather than a cone.
+///
+/// **The crown closed to a point and that is what read as a hood.** It went
+/// 0.19 wide at 0.95 of the way up and nothing at all at the top, which over
+/// the last twentieth is a spike. This is an ellipsoid, so the top of it is
+/// a dome the way a skull is, slightly narrower at the jaw than at the
+/// temples.
+pub fn head_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    // an ellipsoid, pulled in a little under the widest part for a jaw
+    let round = (1.0 - (2.0 * v - 1.0).powi(2)).max(0.0).sqrt();
+    let jaw = 1.0 - 0.1 * (1.0 - v).powi(2);
+
+    (v * HEAD_TALL, HEAD_WIDE * round * jaw)
+}
+
+/// A leg, and the same mesh thinner and shorter is an arm.
 pub fn limb_profile(v: f32) -> (f32, f32) {
     const SHAPE: [(f32, f32); 6] = [
         (0.00, 0.00),
-        (0.05, 0.12),
-        (0.22, 0.15),
-        (0.52, 0.13),
-        (0.80, 0.18),
-        (1.00, 0.17),
+        (0.05, 0.105),
+        (0.26, 0.14),
+        (0.52, 0.12),
+        (0.80, 0.175),
+        (1.00, 0.165),
     ];
 
     (v * LEG_TALL, through(&SHAPE, v))
@@ -198,7 +241,8 @@ mod tests {
     #[test]
     fn a_figure_is_not_nothing() {
         for (what, profile) in [
-            ("the body", body_profile as fn(f32) -> (f32, f32)),
+            ("the torso", torso_profile as fn(f32) -> (f32, f32)),
+            ("the head", head_profile as fn(f32) -> (f32, f32)),
             ("a limb", limb_profile as fn(f32) -> (f32, f32)),
         ] {
             let mesh = crate::cellar::turned(16, 24, profile);
@@ -221,6 +265,92 @@ mod tests {
                 "{} is a wire, {:.3} at its widest",
                 what,
                 widest
+            );
+        }
+    }
+
+    /// Spec 0033: a head is about a seventh of somebody, and it is domed.
+    ///
+    /// **Both of these made it read as a mannequin.** The head ran from 0.66
+    /// of the way up to the crown, which is a fifth of the figure and a
+    /// doll's proportion, and it closed to a point over the last twentieth,
+    /// which is a hood rather than a skull. Jake walked up to one and said
+    /// so twice.
+    #[test]
+    fn a_head_is_a_seventh_of_somebody_and_it_is_domed() {
+        // read off the profiles rather than the constants, which is what is
+        // actually drawn and is also the only way to ask a question whose
+        // answer is not already in the source
+        let head = HEAD_FROM + head_profile(1.0).0;
+        let skull = head_profile(1.0).0;
+        let torso = TORSO_FROM + torso_profile(1.0).0;
+        let leg = limb_profile(1.0).0;
+
+        assert!(
+            (head / skull) > 6.0 && (head / skull) < 9.0,
+            "a head is one {:.1}th of the figure",
+            head / skull
+        );
+
+        // domed: near the crown it is still carrying width, where a cone
+        // would have run out of it
+        let widest = (0..=40)
+            .map(|step| head_profile(step as f32 / 40.0).1)
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            head_profile(0.9).1 > widest * 0.4,
+            "the top of the head is a point: {:.3} against {:.3} at its widest",
+            head_profile(0.9).1,
+            widest
+        );
+
+        // and the parts stack into one body rather than leaving a gap
+        assert!(
+            TORSO_FROM < leg,
+            "the torso starts above the top of the legs"
+        );
+        assert!(HEAD_FROM < torso, "the head floats over the neck");
+        assert!(
+            (head - TALL).abs() < 1e-5,
+            "the figure comes out {:.3} tall rather than {:.3}",
+            head,
+            TALL
+        );
+    }
+
+    /// Spec 0033: a coat, trousers and a head, and no two the same.
+    ///
+    /// One colour from crown to toe is a mannequin by definition: a single
+    /// material in the shape of a person is what a shop window dresses.
+    #[test]
+    fn nobody_is_one_colour_from_crown_to_toe() {
+        for which in 0..crate::aim::COATS.len() {
+            let coat = crate::aim::COATS[which];
+            let trousers = crate::aim::TROUSERS[which];
+            let head = crate::aim::HEADS[which];
+
+            assert_ne!(
+                coat, trousers,
+                "guest {} is one colour below the neck",
+                which
+            );
+            assert_ne!(
+                coat, head,
+                "guest {}'s head is the colour of their coat",
+                which
+            );
+        }
+
+        assert_eq!(crate::aim::COATS.len(), crate::aim::TROUSERS.len());
+        assert_eq!(crate::aim::COATS.len(), crate::aim::HEADS.len());
+
+        // and a corridor of them is not one person repeated
+        for which in 1..crate::aim::COATS.len() {
+            assert_ne!(
+                crate::aim::COATS[which],
+                crate::aim::COATS[0],
+                "two guests are wearing the same coat"
             );
         }
     }

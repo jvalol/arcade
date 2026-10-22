@@ -112,9 +112,31 @@ door, and the corridor at rest must look exactly as it does now.
 
 ## What building it found
 
-**It reads.** One figure standing at the desk, which was this spec's own
-gate, and it is a person: head, shoulders, arms at its sides, two legs. The
-lathe is doing the work the building always said it would.
+**It did not read, and the spec's own bar is what said so.** One figure
+standing at the desk passed at a glance, and then Jake walked up to it and
+said it is a creepy mannequin. The bar here was that a figure reads as
+somebody at corridor distance without inviting a close look, and the lobby is
+exactly where somebody stands next to one.
+
+Two wrong answers first, both recorded where they were tried. Lighting it
+better changed nothing, because the problem was never that it was dark.
+Faceting it to seven sides made it worse in both rooms: a crown that closes
+to a point is a spike, so a mannequin became something hooded.
+
+**It was one colour from crown to toe.** That is what a mannequin is. A
+single material in the shape of a person is the thing a shop window puts
+clothes on, and nothing on the figure said coat, or trousers, or head. So it
+is four parts in three colours now: a torso, a head, two legs and two arms,
+and the coat is not the colour of the trousers and the head is not the colour
+of either. Four sets of three, so a corridor is not one person repeated.
+
+**And its head was a fifth of it, where a person's is a seventh.** Doll
+proportions are most of what reads as uncanny before anybody is close enough
+to look for a face. The head is a seventh now, and it is an ellipsoid rather
+than a cone, which is the other half of why the old one read as hooded.
+
+No face and no hands, still. What makes somebody read as dressed is where the
+colour stops, not what is drawn on them.
 
 **They were mannequins first.** The guests were given a colour around 0.3,
 which is dark on paper, and came out near white. A colour here is an
@@ -150,6 +172,10 @@ Sending everybody to room n+2 instead left it green.
 - A figure has a surface: the turned parts are not degenerate, which is how
   the candles, the clock dial and the fire's coals were all invisible at
   once. — `people::tests::a_figure_is_not_nothing`
+- A head is about a seventh of somebody and it is domed rather than
+  pointed. — `people::tests::a_head_is_a_seventh_of_somebody_and_it_is_domed`
+- Nobody is one colour from crown to toe, and no two wear the same
+  coat. — `people::tests::nobody_is_one_colour_from_crown_to_toe`
 - Nobody is drawn for a guest the wave has not reached, and everybody the wave
   is passing is. — `people::tests::only_the_ones_the_wave_has_reached_are_out`
 - They walk from their own door to the next room's, which is across the
@@ -166,7 +192,10 @@ Sending everybody to room n+2 instead left it green.
 
 - **One figure, standing still, before anything else is built.** Does it read
   as somebody, at corridor distance, in the dark. This is the whole spec and
-  no test can see it.
+  no test can see it. It failed this twice before it passed, and the thing
+  that fixed it was not in the geometry.
+- And at two metres, in a lit room, with somebody looking straight at it,
+  which is the condition the hall of mirrors would be nothing but.
 - A dozen of them crossing reads as everybody moving up a room, and not as
   traffic.
 - The desk having somebody standing at it is better than the desk not having

@@ -616,9 +616,14 @@ pub fn sign_top() -> f32 {
 /// the desk and said it does not make sense to a user, and this is most of
 /// why.
 ///
-/// Two lines, because the paradox needs both halves: every room is taken, and
-/// the rooms do not run out.
-pub const SIGN_SAYS: [&str; 2] = ["EVERY ROOM TAKEN", "THE ROOMS DO NOT RUN OUT"];
+/// Two lines, because the paradox needs both halves: every room is taken,
+/// and there are always more rooms.
+///
+/// **The second line is Jake's, twice over.** It read THE ROOMS DO NOT RUN
+/// OUT, which is stock language: a hotel that does not run out of rooms is a
+/// hotel with a great many rooms, and that is not what this one does. He said
+/// the point is that there is always a new one. These are his words for it.
+pub const SIGN_SAYS: [&str; 2] = ["EVERY ROOM TAKEN", "THERE ARE ALWAYS MORE ROOMS"];
 
 /// What the desk says while a move runs and after one.
 ///
@@ -1111,10 +1116,45 @@ pub fn lobby_sconces(reaches: f32) -> Vec<Vec3> {
 }
 
 /// And the lamps, which are those lifted a little into the shade's mouth.
+/// Both sets together, which is what the rule is stated over.
+///
+/// `#[cfg(test)]` because the drawing wants them apart now that the lobby
+/// burns differently from the corridor. The rule is still about all of them,
+/// so this is where it is said.
+#[cfg(test)]
 pub fn lamps(reaches: f32) -> Vec<Vec3> {
+    corridor_lamps(reaches)
+        .into_iter()
+        .chain(lobby_lamps(reaches))
+        .collect()
+}
+
+/// How far the lobby's two reach, and how hard they burn.
+///
+/// **A lobby is not a corridor at night.** The corridor's `SCONCE_RANGE` of
+/// 2.5 is short on purpose: pools with dark between them are what say how
+/// long it is. Giving the lobby the same number left a room eight metres by
+/// six with two lamps that reached a quarter of the way across it, and the
+/// one place anybody stands in it, where somebody waits at the desk, was 2.91
+/// from the nearest and so lit by nothing at all.
+///
+/// Jake came in and said the shadowy figure is creepy. Painting it lighter
+/// did nothing, because the problem was never the paint: a colour here is a
+/// multiplier and there was no light to multiply.
+pub const LOBBY_RANGE: f32 = 4.6;
+pub const LOBBY_LIT: f32 = 0.95;
+
+/// The corridor's lamps and the lobby's, which burn differently.
+pub fn corridor_lamps(reaches: f32) -> Vec<Vec3> {
     sconces(reaches)
         .into_iter()
-        .chain(lobby_sconces(reaches))
+        .map(|at| at + Vec3::Y * SCONCE.y * 0.3)
+        .collect()
+}
+
+pub fn lobby_lamps(reaches: f32) -> Vec<Vec3> {
+    lobby_sconces(reaches)
+        .into_iter()
         .map(|at| at + Vec3::Y * SCONCE.y * 0.3)
         .collect()
 }
@@ -1178,6 +1218,89 @@ pub const HANDLE_IN: f32 = 0.12;
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0029: every lamp in here sits in a fitting, and every fitting
+    /// has a lamp.
+    ///
+    /// **Derived rather than placed twice.** The cellar lit a wall with
+    /// nothing on it and the baths ran the lamps along a ceiling while the
+    /// sconces stood on a wall, so every sconce was dark and the ceiling
+    /// glowed at nothing. `lamps` is the sconces lifted, which is why there
+    /// cannot be one without the other, and this is what keeps the split
+    /// into corridor and lobby from quietly dropping a set.
+    #[test]
+    fn every_lamp_is_in_a_fitting() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let fittings: Vec<_> = sconces(reaches)
+            .into_iter()
+            .chain(lobby_sconces(reaches))
+            .collect();
+        let lamps = lamps(reaches);
+
+        assert_eq!(
+            lamps.len(),
+            fittings.len(),
+            "there are {} lamps and {} fittings",
+            lamps.len(),
+            fittings.len()
+        );
+        assert_eq!(
+            lamps.len(),
+            corridor_lamps(reaches).len() + lobby_lamps(reaches).len(),
+            "the two sets do not add up to the whole"
+        );
+
+        for lamp in lamps.iter() {
+            assert!(
+                fittings.iter().any(|at| (*at - *lamp).length() < SCONCE.y),
+                "a lamp at {:?} is in no fitting",
+                lamp
+            );
+        }
+
+        // and the lobby reaches the one place anybody stands in it, which it
+        // did not: 2.91 away with a reach of 2.5, so whoever waits at the
+        // desk was lit by nothing at all
+        let stands = waiting(reaches);
+
+        assert!(
+            lobby_lamps(reaches)
+                .iter()
+                .any(|at| (*at - stands).length() < LOBBY_RANGE),
+            "nothing in the lobby reaches where somebody waits"
+        );
+    }
+
+    /// Spec 0033: whoever is waiting at the desk is facing the desk.
+    ///
+    /// **It was facing the way in.** Yaw nought is `-z` and the counter is
+    /// at `-z` of where they stand, and the first build turned them a half
+    /// turn from that, so the one person in the lobby stood with its back to
+    /// the desk watching the door. Jake came in and said the shadowy figure
+    /// is creepy. It was not the dark that did that.
+    #[test]
+    fn whoever_is_waiting_faces_the_desk() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let stands = waiting(reaches);
+        let counter = desk(reaches);
+
+        // the desk is behind them in `z`, which is the way yaw nought looks
+        assert!(
+            counter.center().z < stands.z,
+            "the desk is not in front of where somebody waits"
+        );
+
+        // and they are clear of it rather than standing in it
+        assert!(
+            stands.z > counter.max.z,
+            "whoever waits is standing inside the counter"
+        );
+        assert!(
+            stands.z - counter.max.z < 1.0,
+            "whoever waits is {:.2} back from the counter, which is not at it",
+            stands.z - counter.max.z
+        );
+    }
+
     /// Spec 0033: a guest at rest is still a light under a shut door.
     ///
     /// **The settlement that stays.** Spec 0029 decided a guest is a lit

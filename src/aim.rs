@@ -1051,24 +1051,7 @@ pub const REGISTER_ROOM: Vec4 = vec4(0.58, 0.62, 0.70, 1.0);
 
 pub const REGISTER_MARK: Vec4 = vec4(0.72, 0.73, 0.78, 1.0);
 
-/// What the hotel's guests are. Spec 0033.
-///
-/// **Four, so a corridor of them is not one person repeated.** Dark enough
-/// to be shapes in a corridor lit by sconces rather than figures standing in
-/// a studio, which is the difference between somebody being there and
-/// somebody being presented.
-///
-/// **Darker than they look like they should be.** At 0.3 they came out
-/// near white, because the corridor's sconces are 1.85 at the red end and a
-/// colour here is a multiplier rather than a paint: a hallway of pale
-/// figures reads as mannequins in a shop window. These are about a tenth,
-/// which puts them in the dark the corridor is actually in.
-pub const GUESTS: [Vec4; 4] = [
-    vec4(0.11, 0.115, 0.145, 1.0),
-    vec4(0.15, 0.125, 0.115, 1.0),
-    vec4(0.10, 0.125, 0.13, 1.0),
-    vec4(0.135, 0.11, 0.14, 1.0),
-];
+/// The cell on the diagonal that the walk has taken.
 pub const REGISTER_DIAGONAL: Vec4 = vec4(1.9, 1.42, 0.72, 1.0);
 
 /// And the part of it the walk has not reached yet.
@@ -1079,6 +1062,37 @@ pub const REGISTER_DIAGONAL: Vec4 = vec4(1.9, 1.42, 0.72, 1.0);
 /// marked out, enough to show there is a way through the page. Behind it the
 /// cell is `REGISTER_DIAGONAL` and plainly taken.
 pub const REGISTER_AHEAD: Vec4 = vec4(0.62, 0.55, 0.40, 1.0);
+
+/// What the hotel's guests are: a coat, trousers and a head, four ways.
+///
+/// **Three colours each, which is what says dressed.** They were one colour
+/// from crown to toe, and a single material in the shape of a person is a
+/// mannequin by definition: the only thing that tells a figure in a dark
+/// corridor it is wearing something is where the colour stops.
+///
+/// Dark, because they are in a hallway lit by sconces at 1.85 and a colour
+/// here is a multiplier rather than a paint. Four of them so a corridor is
+/// not one person repeated, and no two share a head.
+pub const COATS: [Vec4; 4] = [
+    vec4(0.16, 0.17, 0.235, 1.0),
+    vec4(0.235, 0.145, 0.13, 1.0),
+    vec4(0.125, 0.185, 0.175, 1.0),
+    vec4(0.2, 0.185, 0.125, 1.0),
+];
+
+pub const TROUSERS: [Vec4; 4] = [
+    vec4(0.1, 0.105, 0.125, 1.0),
+    vec4(0.135, 0.125, 0.145, 1.0),
+    vec4(0.09, 0.1, 0.115, 1.0),
+    vec4(0.125, 0.11, 0.1, 1.0),
+];
+
+pub const HEADS: [Vec4; 4] = [
+    vec4(0.34, 0.25, 0.185, 1.0),
+    vec4(0.2, 0.145, 0.105, 1.0),
+    vec4(0.41, 0.315, 0.25, 1.0),
+    vec4(0.27, 0.185, 0.13, 1.0),
+];
 
 /// What the register's one sconce is made of, which is the same brass as the
 /// hotel's next door.

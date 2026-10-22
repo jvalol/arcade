@@ -387,6 +387,7 @@ struct Arcade {
     /// A guest's body and a guest's leg, turned on the same wheel as the
     /// barrels and the bell. Spec 0033.
     body: Option<MeshId>,
+    head: Option<MeshId>,
     leg: Option<MeshId>,
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
@@ -821,6 +822,7 @@ impl Arcade {
             boards_mesh: None,
             barrel: None,
             body: None,
+            head: None,
             leg: None,
             hoop: None,
             bottle: None,
@@ -1621,23 +1623,37 @@ impl Arcade {
     /// who are out of their rooms, and a guest at rest is still a strip,
     /// because there is nothing to see in a room you cannot go into.
     fn draw_the_people(&self, scene: &mut Scene) {
-        let (Some(body), Some(leg)) = (self.body, self.leg) else {
+        let (Some(body), Some(head), Some(leg)) = (self.body, self.head, self.leg) else {
             return;
         };
 
         let reaches = self.room.reaches;
         let mut stand = |at: Vec3, facing: f32, along: Option<f32>, shade: usize| {
             let turn = glam::Quat::from_rotation_y(facing);
-            let colour = aim::GUESTS[shade % aim::GUESTS.len()];
+            // **A coat, trousers and a head.** One colour from crown to
+            // toe is a mannequin by definition: the only thing that says a
+            // figure in a dark corridor is dressed is where the colour
+            // stops.
+            let which = shade % aim::COATS.len();
+            let coat = aim::COATS[which];
+            let trousers = aim::TROUSERS[which];
+            let skin = aim::HEADS[which];
             // which way is their right, for hanging the legs off
             let side = vec3(facing.cos(), 0.0, facing.sin());
             // and which way they are walking, for swinging them along
             let ahead = vec3(facing.sin(), 0.0, -facing.cos());
 
-            scene.push_colored(
+            scene.push_material(
                 body,
-                &Transform::at(at + vec3(0.0, people::BODY_FROM, 0.0)).with_rotation(turn),
-                colour,
+                &Transform::at(at + vec3(0.0, people::TORSO_FROM, 0.0)).with_rotation(turn),
+                coat,
+                aim::DULL,
+            );
+            scene.push_material(
+                head,
+                &Transform::at(at + vec3(0.0, people::HEAD_FROM, 0.0)).with_rotation(turn),
+                skin,
+                aim::DULL,
             );
 
             for which in 0..2 {
@@ -1647,13 +1663,14 @@ impl Arcade {
                     None => (0.0, 0.0),
                 };
 
-                scene.push_colored(
+                scene.push_material(
                     leg,
                     &Transform::at(
                         at + side * (people::LEGS_APART * out) + ahead * fore + vec3(0.0, up, 0.0),
                     )
                     .with_rotation(turn),
-                    colour,
+                    trousers,
+                    aim::DULL,
                 );
 
                 // an arm is the same leg, thinner and shorter, hung off the
@@ -1666,7 +1683,7 @@ impl Arcade {
                 // screen was the inside of an arm, a pale slab flapping off
                 // each shoulder. The limb is wide at the top anyway, so it
                 // only had to start lower.
-                scene.push_colored(
+                scene.push_material(
                     leg,
                     &Transform::at(
                         at + side * (people::ARMS_APART * out)
@@ -1675,11 +1692,12 @@ impl Arcade {
                     )
                     .with_rotation(turn)
                     .with_scale(vec3(
-                        0.58,
+                        0.62,
                         people::ARM_TALL / people::LEG_TALL,
-                        0.58,
+                        0.62,
                     )),
-                    colour,
+                    coat,
+                    aim::DULL,
                 );
             }
         };
@@ -1699,7 +1717,12 @@ impl Arcade {
         // and whoever is at the desk wanting a room, who has never been
         // anything but a line of text
         if self.hotel.at_the_door().is_some() {
-            stand(aleph::waiting(reaches), std::f32::consts::PI, None, 0);
+            // **Facing the desk, which is yaw nought.** It was `PI`, so the
+            // one person in the lobby stood at the counter with its back to
+            // it, looking at whoever came through the door. Jake walked in
+            // and said the shadowy figure is creepy, and it was: a guest
+            // waiting for a room does not watch the entrance.
+            stand(aleph::waiting(reaches), 0.0, None, 0);
         }
     }
 
@@ -4275,8 +4298,20 @@ impl Game for Arcade {
         // **Enough steps to have a skin.** A turned mesh with too few draws
         // two points and nothing between them, which is how the candles, the
         // clock dial and the fire's coals all went missing at once.
-        self.body = Some(renderer.add_mesh(&cellar::turned(18, 28, people::body_profile)));
-        self.leg = Some(renderer.add_mesh(&cellar::turned(12, 10, people::limb_profile)));
+        // **Few sides on purpose.** At eighteen it was a smooth body with a
+        // sheen on the skull, which is the most naturalistic object in a
+        // building made of flat cubes, and Jake walked up to one and said it
+        // is a creepy mannequin. Spec 0033 set the bar as reading like
+        // somebody at corridor distance without inviting a close look, and
+        // what fails that is the promise of a face rather than the lack of
+        // one. Carved reads as a figure. Modelled reads as a person with
+        // something missing.
+        self.body =
+            Some(renderer.add_mesh(&cellar::turned(people::SIDES, 22, people::torso_profile)));
+        self.head =
+            Some(renderer.add_mesh(&cellar::turned(people::SIDES, 16, people::head_profile)));
+        self.leg =
+            Some(renderer.add_mesh(&cellar::turned(people::SIDES, 10, people::limb_profile)));
         self.marks = register::MARKS
             .iter()
             .map(|mark| {
@@ -8181,13 +8216,23 @@ impl Game for Arcade {
         // and the hotel's, per spec 0029. Derived from `aleph::sconces` so
         // there is no lamp in that corridor which is not in a fitting: the
         // cellar was told that once and the baths did it again worse.
-        for at in aleph::lamps(self.room.reaches) {
+        for (at, lit, range) in aleph::corridor_lamps(self.room.reaches)
+            .into_iter()
+            .map(|at| (at, aleph::SCONCE_LIT, aleph::SCONCE_RANGE))
+            // and the lobby's, which reach further: a corridor at night is
+            // pools with dark between them and a reception is not
+            .chain(
+                aleph::lobby_lamps(self.room.reaches)
+                    .into_iter()
+                    .map(|at| (at, aleph::LOBBY_LIT, aleph::LOBBY_RANGE)),
+            )
+        {
             shades.push((
                 eye.distance_squared(at),
                 at,
                 aim::HOTEL_SHADE.truncate().normalize_or(Vec3::ONE),
-                aleph::SCONCE_LIT,
-                aleph::SCONCE_RANGE,
+                lit,
+                range,
             ));
         }
 
