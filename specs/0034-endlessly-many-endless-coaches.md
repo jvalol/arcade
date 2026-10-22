@@ -1,7 +1,8 @@
 # 0034 Endlessly many endless coaches
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-22
+**Built:** 2026-10-22, the same day it was written.
 
 ## Goal
 
@@ -101,6 +102,34 @@ door does not either. There is no panel about unique factorisation.
 move's destinations are outside it and that is the thing you are meant to
 notice.
 
+## What building it found
+
+**The desk said the wrong thing while you watched the right one.** `Everybody
+is moving up a room` is a true sentence about a shuffle and a false one about
+a scatter, so this move has its own two lines.
+
+**And one of them was unreachable, which makes three.** Spec 0030 put
+`DESK_FULL` behind an arm that always matched, so the sentence carrying the
+whole point of the hotel was never once on screen. This put `DESK_SCATTERED`
+behind the filling arm and then, after that was fixed, behind its own
+travelling arm, because `Hotel::travelling` answers `Some` during *both*
+waves and shadows everything below it. The pair that was already there only
+works because they happen to be in the right order.
+
+What stopped the third one shipping was pulling those forty lines out of
+`update` into `what_the_desk_says`, so that a test could ask the desk what it
+says. `every_line_the_desk_has_is_reachable` could not have been written while
+it was an expression in the middle of a match, and it failed twice before it
+passed.
+
+**Two of the first controls tested nothing**, which is worth as much as the
+tests. Replacing `2ⁿ` with `n * 2` left `a_prime_power_is_nobodys_but_its_own`
+green, because that claim is injectivity and doubling is injective too; the
+control has to collide. And `the_ones_who_go_too_far_leave` survived breaking
+the `None` branch, because `2ⁿ` fits in a `u64` for every room the corridor
+draws, so that branch never runs: what the test actually guards is the
+`(1..=DRAWN)` bound, and clamping to it is what makes it fail.
+
 ## Acceptance criteria
 
 - No two guests are sent to the same room, which is the whole rule. —
@@ -115,6 +144,8 @@ notice.
 - A crossing walks to where the move actually sends somebody, rather than to
   the next number. — `people::tests::they_cross_to_where_the_move_sends_them`
 - The cycle has four entries and returns to the first. — `aleph::tests::the_cycle_comes_round`
+- Every line the desk has is one somebody can actually
+  see. — `tests::every_line_the_desk_has_is_reachable`
 
 ### Verified by hand
 

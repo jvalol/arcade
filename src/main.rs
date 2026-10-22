@@ -1622,6 +1622,65 @@ impl Arcade {
     /// Spec 0033. **The light under the door stays**: this draws the ones
     /// who are out of their rooms, and a guest at rest is still a strip,
     /// because there is nothing to see in a room you cannot go into.
+    /// What the desk says under its name.
+    ///
+    /// **A method rather than forty lines inside `update`, so a test can ask
+    /// it.** This building has shipped two unreachable lines here. Spec 0030
+    /// put `DESK_FULL` behind an arm that always matched, so the sentence
+    /// carrying the whole point of the hotel was never once on screen. Spec
+    /// 0034 did it again with `DESK_SCATTERED`, behind the filling arm, and
+    /// that one was caught by `every_line_the_desk_has_is_reachable`, which
+    /// could not have been written while this was an expression in the
+    /// middle of a match.
+    fn what_the_desk_says(&self) -> String {
+        match self.hotel.at_the_door() {
+            // **The one it cannot house.** This desk has taken every
+            // arrival since the building opened, by shuffling and by
+            // doubling. Spec 0031: you wrote this guest yourself, one
+            // line at a time, out of the register that was supposed
+            // to have everybody in it.
+            _ if !self.carried.is_empty() => {
+                format!("{} {}", self.carried.says(), register::DESK_TAKES)
+            }
+            // **Only while the waves it caused are running.** A line
+            // that stays up for ever is a scoreboard, and spec 0030's
+            // cycle has to get the desk back when this one is done.
+            _ if self.book.written() >= 2 && self.hotel.moving() => {
+                String::from(register::DESK_AGAIN)
+            }
+            _ if self.book.written() == 1 && self.hotel.moving() => {
+                String::from(register::DESK_WROTE_IN)
+            }
+            Some(who) => who.says(),
+            // **The scatter does not say what the shuffles say, and
+            // these come first.** Spec 0034: nobody is moving up a
+            // room under the prime powers, they are going to 2^n and
+            // leaving. Put after the two below, the second of these
+            // was unreachable, which is the fault recorded twelve
+            // lines up: `DESK_FULL` was never on screen either.
+            // **Filling before travelling, because `travelling` is true
+            // during both waves.** It answers `Some` whenever anything is
+            // going, so an arm testing it shadows every arm below it. The
+            // pair underneath only works because they are in this order, and
+            // writing them the other way round made `DESK_SCATTERED`
+            // unreachable, which is the third time this file has shipped a
+            // line nobody could see.
+            None if self.hotel.moving_by() == Some(aleph::Arrival::Coaches)
+                && self.hotel.filling() =>
+            {
+                String::from(aleph::DESK_SCATTERED)
+            }
+            None if self.hotel.moving_by() == Some(aleph::Arrival::Coaches)
+                && self.hotel.travelling().is_some() =>
+            {
+                String::from(aleph::DESK_SCATTERING)
+            }
+            None if self.hotel.filling() => String::from(aleph::DESK_FILLING),
+            None if self.hotel.travelling().is_some() => String::from(aleph::DESK_FREEING),
+            None => String::from(aleph::DESK_FULL),
+        }
+    }
+
     fn draw_the_people(&self, scene: &mut Scene) {
         let (Some(body), Some(head), Some(leg)) = (self.body, self.head, self.leg) else {
             return;
@@ -1705,11 +1764,16 @@ impl Arcade {
         // the ones the wave is passing, crossing to the next number
         let window = aleph::window(self.at);
 
+        let moving_by = self.hotel.moving_by();
+
         for who in people::crossing(
             reaches,
             self.hotel.travelling(),
             *window.start(),
             *window.end(),
+            // where this move sends them, which under spec 0034 is a prime
+            // power rather than the door opposite
+            |n| moving_by.and_then(|by| by.sends(n)),
         ) {
             stand(who.at, who.facing, Some(who.along), who.from as usize);
         }
@@ -5198,29 +5262,7 @@ impl Game for Arcade {
                     }
                     (housed, false) => format!("{} {}.", housed, aleph::DESK_HOUSED),
                 }),
-                Some(match self.hotel.at_the_door() {
-                    // **The one it cannot house.** This desk has taken every
-                    // arrival since the building opened, by shuffling and by
-                    // doubling. Spec 0031: you wrote this guest yourself, one
-                    // line at a time, out of the register that was supposed
-                    // to have everybody in it.
-                    _ if !self.carried.is_empty() => {
-                        format!("{} {}", self.carried.says(), register::DESK_TAKES)
-                    }
-                    // **Only while the waves it caused are running.** A line
-                    // that stays up for ever is a scoreboard, and spec 0030's
-                    // cycle has to get the desk back when this one is done.
-                    _ if self.book.written() >= 2 && self.hotel.moving() => {
-                        String::from(register::DESK_AGAIN)
-                    }
-                    _ if self.book.written() == 1 && self.hotel.moving() => {
-                        String::from(register::DESK_WROTE_IN)
-                    }
-                    Some(who) => who.says(),
-                    None if self.hotel.filling() => String::from(aleph::DESK_FILLING),
-                    None if self.hotel.travelling().is_some() => String::from(aleph::DESK_FREEING),
-                    None => String::from(aleph::DESK_FULL),
-                }),
+                Some(self.what_the_desk_says()),
             ),
             (None, Some(room::Seen::Hotel(n))) => (
                 Some(format!("Room {}", n)),
@@ -8917,6 +8959,47 @@ mod tests {
             arcade.carried.is_empty(),
             "it was handed over and is still in your hand"
         );
+    }
+
+    /// Spec 0034: every line the desk has is one you can actually see.
+    ///
+    /// **This building has shipped two unreachable ones.** `DESK_FULL` was
+    /// behind an arm that always matched, so the line carrying the point of
+    /// the hotel was never on screen. `DESK_SCATTERED` went in behind the
+    /// filling arm the same way and was caught by writing this.
+    #[test]
+    fn every_line_the_desk_has_is_reachable() {
+        let mut arcade = Arcade::new();
+        let mut said = std::collections::HashSet::new();
+
+        arcade.seen = Some(room::Seen::Desk);
+
+        // four arrivals, both halves of each move, and what it says between
+        for _ in 0..5 {
+            arcade.hotel.house();
+
+            // long enough for both waves: each runs the length of the
+            // drawn corridor, and `house` refuses while one is going, so a
+            // shorter tick leaves the cycle stuck on its first arrival
+            for _ in 0..1000 {
+                arcade.hotel.tick(1.0 / 60.0);
+
+                said.insert(arcade.what_the_desk_says());
+            }
+        }
+
+        for want in [
+            aleph::DESK_FREEING,
+            aleph::DESK_FILLING,
+            aleph::DESK_SCATTERING,
+            aleph::DESK_SCATTERED,
+        ] {
+            assert!(
+                said.iter().any(|line| line.contains(want)),
+                "the desk never says {:?}",
+                want
+            );
+        }
     }
 
     /// Spec 0031: every row of the register carries the room number whose

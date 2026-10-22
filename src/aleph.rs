@@ -660,6 +660,16 @@ pub const SIGN_SAYS: [&str; 2] = ["EVERY ROOM TAKEN", "THERE ARE ALWAYS MORE ROO
 /// which is a sentence.
 pub const DESK_FULL: &str = "Full, and nobody has left.";
 pub const DESK_FREEING: &str = "Everybody is moving up a room.";
+
+/// And what it says while the prime powers run, which is not that.
+///
+/// **"Everybody is moving up a room" is false under this move.** Spec 0034:
+/// room 3 goes to room 8 and room 10 to room 1024, and most of the corridor
+/// is leaving rather than shuffling along. A line that describes a shuffle
+/// over a scatter is the desk telling you the wrong thing while you watch
+/// the right one.
+pub const DESK_SCATTERING: &str = "Everybody to a prime power. Nobody shares.";
+pub const DESK_SCATTERED: &str = "All of them in, and the hotel is emptier than it was.";
 pub const DESK_FILLING: &str = "The new ones are taking the rooms that opened.";
 pub const DESK_HOUSED: &str = "housed since you came in";
 
@@ -714,6 +724,14 @@ pub enum Arrival {
     /// A coach with a room for every counting number, which is the one that
     /// cannot be done by shuffling at all and is what doubling is for.
     Endless,
+    /// Endlessly many coaches, each of them endless. Spec 0034.
+    ///
+    /// **The one no stride does.** The three above are all shuffles, which is
+    /// why every move in this building draws as a wave running west. This one
+    /// sends everybody to a prime power, so it is a scatter: room 1 to room 2,
+    /// room 3 to room 8, room 10 to room 1024. Most of them go somewhere too
+    /// far to walk to and the corridor in front of you empties.
+    Coaches,
 }
 
 impl Arrival {
@@ -732,6 +750,11 @@ impl Arrival {
             Arrival::One => String::from("I would like a room."),
             Arrival::Coach(n) => format!("We would like {} rooms.", n),
             Arrival::Endless => String::from("We would like a room for every number."),
+            // and the fourth, which is the guest speaking too and follows
+            // the shape of the three above
+            Arrival::Coaches => {
+                String::from("There is a coach for every number, and we fill them.")
+            }
         }
     }
 
@@ -740,13 +763,106 @@ impl Arrival {
     /// Shuffling along frees as many rooms as you shuffle, and no shuffle
     /// frees infinitely many. Doubling frees every odd room, which is
     /// endlessly many, and is the only answer to the last of these.
-    pub fn move_for(&self) -> (u64, u64) {
+    /// Where the guest in room `n` goes, or nowhere that can be drawn.
+    ///
+    /// **A function rather than a stride and a shift.** Every move here used
+    /// to be `n * stride + shift`, which is the shape a shuffle has and the
+    /// shape a scatter has not. Spec 0034: if the prime powers had been bent
+    /// into a `(stride, shift)` pair, something would have been fudged.
+    ///
+    /// Nothing is an answer. Room 64 doubling is room 128 and room 64 to
+    /// 2⁶⁴ is not a number anybody can be in, so that guest has left the
+    /// part of the corridor you can see, which is what actually happens to
+    /// them.
+    pub fn sends(&self, n: u64) -> Option<u64> {
         match self {
-            Arrival::One => (1, 1),
-            Arrival::Coach(n) => (1, *n),
-            Arrival::Endless => (2, 0),
+            Arrival::One => n.checked_add(1),
+            Arrival::Coach(many) => n.checked_add(*many),
+            Arrival::Endless => n.checked_mul(2),
+            // 2ⁿ, which runs out of u64 at n = 64 and out of corridor long
+            // before that
+            // 2ⁿ. Past 63 there is no such room in a u64, which is a
+            // long way past the end of anything drawn.
+            Arrival::Coaches if n < 64 => 2u64.checked_pow(n as u32),
+            Arrival::Coaches => None,
         }
     }
+
+    /// Whether an arrival takes room `n`, once the move has freed it.
+    ///
+    /// **The coaches do not take everything that is free.** A shuffle frees
+    /// as many rooms as it has arrivals and they all fill, which is why this
+    /// used to be every empty room without asking. Under the prime powers,
+    /// seat s of coach c goes to room pˢ for an odd prime p, so the rooms
+    /// that fill are the odd prime powers and the rest stay empty for ever:
+    /// room 6 is 2 times 3 and belongs to nobody.
+    pub fn fills(&self, n: u64) -> bool {
+        match self {
+            Arrival::Coaches => odd_prime_power(n),
+            _ => true,
+        }
+    }
+}
+
+/// The `which`th odd prime, counted from one: 3, 5, 7, 11 and so on.
+///
+/// `#[cfg(test)]`, because the corridor never needs to know which coach
+/// somebody came off: `fills` asks only whether a room is an odd prime
+/// power, and that is answered by dividing rather than by counting primes.
+/// This is here so the no-collisions claim can be stated in the terms the
+/// rule is written in.
+///
+/// Spec 0034. The same arithmetic as `rule::primes::odd` in aleph, which is
+/// the repo this room came out of and is not a dependency of this one.
+#[cfg(test)]
+pub fn odd_prime(which: u64) -> u64 {
+    let mut found = 0;
+    let mut at = 1u64;
+
+    while found < which {
+        at += 2;
+
+        if (3..)
+            .step_by(2)
+            .take_while(|by| by * by <= at)
+            .all(|by| !at.is_multiple_of(by))
+        {
+            found += 1;
+        }
+    }
+
+    at
+}
+
+/// Whether `n` is a power of a single odd prime, which is where seat s of
+/// coach c goes.
+///
+/// Spec 0034. Room 1 is nobody's, because a seat is counted from one and p⁰
+/// would be every coach's at once.
+pub fn odd_prime_power(n: u64) -> bool {
+    if n < 3 {
+        return false;
+    }
+
+    let mut left = n;
+    let mut by = 3;
+
+    // the one prime it is allowed to be made of, found by dividing out the
+    // smallest odd factor it has
+    while by * by <= left && !left.is_multiple_of(by) {
+        by += 2;
+    }
+
+    if !left.is_multiple_of(by) {
+        // a prime itself, and odd because two was ruled out above
+        return !left.is_multiple_of(2);
+    }
+
+    while left.is_multiple_of(by) {
+        left /= by;
+    }
+
+    left == 1
 }
 
 /// Which half of a move is running.
@@ -779,6 +895,9 @@ pub struct Hotel {
     then_filled: Option<Vec<bool>>,
     /// Who is at the desk.
     at_the_door: Option<Arrival>,
+    /// And which move is running, so the people crossing know where they are
+    /// walking to. Spec 0034: under the prime powers that is not next door.
+    moving_by: Option<Arrival>,
     /// How many have been housed since the building opened, which is the
     /// number that says nobody left.
     housed: u64,
@@ -828,6 +947,7 @@ impl Hotel {
             // wanting a room has nothing to demonstrate and this is the
             // resting state rather than a thing you set up
             at_the_door: Some(Arrival::One),
+            moving_by: None,
             housed: 0,
             arriving: 0,
         }
@@ -869,10 +989,13 @@ impl Hotel {
 
         self.take(arrival);
 
+        // the building's argument in order: a shuffle of one, a shuffle of
+        // many, a doubling, and the thing none of those can do
         self.at_the_door = Some(match arrival {
             Arrival::One => Arrival::Coach(42),
             Arrival::Coach(_) => Arrival::Endless,
-            Arrival::Endless => Arrival::One,
+            Arrival::Endless => Arrival::Coaches,
+            Arrival::Coaches => Arrival::One,
         });
     }
 
@@ -900,9 +1023,8 @@ impl Hotel {
 
     /// The two waves, for whoever it is.
     fn take(&mut self, arrival: Arrival) {
-        let (stride, shift) = arrival.move_for();
-
-        self.apply(stride, shift);
+        self.moving_by = Some(arrival);
+        self.apply(|n| arrival.sends(n));
 
         // and who is in once the arrivals are in: whatever the move leaves,
         // plus the rooms they take
@@ -910,7 +1032,7 @@ impl Hotel {
         let mut came = 0u64;
 
         for n in 1..=DRAWN {
-            if filled[n as usize - 1] {
+            if filled[n as usize - 1] || !arrival.fills(n) {
                 continue;
             }
 
@@ -924,6 +1046,12 @@ impl Hotel {
         // you pressed, before either wave had moved a door. Jake pressed and
         // read the outcome of something he had not watched happen.
         self.arriving = came;
+    }
+
+    /// Which move is running, so the people crossing know where they are
+    /// going. Spec 0034: under the prime powers that is not next door.
+    pub fn moving_by(&self) -> Option<Arrival> {
+        self.moving_by
     }
 
     /// Whether either wave is running, which is the window a thing the desk
@@ -962,7 +1090,7 @@ impl Hotel {
     /// Only the rooms that are drawn can be said anything about. A guest sent
     /// past the fortieth has gone somewhere this corridor does not show,
     /// which is the point of the hotel rather than a limitation of it.
-    pub fn apply(&mut self, stride: u64, shift: u64) {
+    pub fn apply(&mut self, sends: impl Fn(u64) -> Option<u64>) {
         let mut going = vec![false; DRAWN as usize];
 
         for n in 1..=DRAWN {
@@ -970,7 +1098,12 @@ impl Hotel {
                 continue;
             }
 
-            let to = n * stride + shift;
+            // nowhere drawable is an answer: they have gone somewhere past
+            // the end of what the corridor shows, which under spec 0034 is
+            // most of them
+            let Some(to) = sends(n) else {
+                continue;
+            };
 
             if (1..=DRAWN).contains(&to) {
                 going[to as usize - 1] = true;
@@ -1298,6 +1431,180 @@ mod tests {
         );
     }
 
+    /// Whether `n` is a power of a single prime, which is where everybody
+    /// ends up under spec 0034.
+    #[cfg(test)]
+    fn prime_power(n: u64) -> bool {
+        if n < 2 {
+            return false;
+        }
+
+        let mut left = n;
+        let mut by = 2;
+
+        while by * by <= left {
+            if left.is_multiple_of(by) {
+                while left.is_multiple_of(by) {
+                    left /= by;
+                }
+
+                return left == 1;
+            }
+
+            by += 1;
+        }
+
+        true
+    }
+
+    /// Spec 0034: no two guests are sent to the same room, which is the
+    /// whole rule.
+    ///
+    /// A number factors one way only, so 2ⁿ is only ever 2ⁿ and 3ˢ is only
+    /// ever 3ˢ. That is why every coach gets endlessly many rooms of its own
+    /// rather than queueing behind the one before it.
+    #[test]
+    fn a_prime_power_is_nobodys_but_its_own() {
+        let mut taken = std::collections::HashSet::new();
+
+        // the residents, to 2ⁿ
+        for n in 1..=40u64 {
+            let to = Arrival::Coaches.sends(n).expect("room {n} goes nowhere");
+
+            assert!(taken.insert(to), "room {} was sent somewhere taken", n);
+        }
+
+        // and seat s of coach c, to pˢ for the c-th odd prime
+        for coach in 1..=12u64 {
+            let p = odd_prime(coach);
+
+            for seat in 1..=10u32 {
+                let Some(to) = p.checked_pow(seat) else {
+                    continue;
+                };
+
+                assert!(
+                    taken.insert(to),
+                    "seat {} of coach {} was sent to room {}, which is taken",
+                    seat,
+                    coach,
+                    to
+                );
+            }
+        }
+    }
+
+    /// Spec 0034: the ones who go too far leave, rather than piling up at
+    /// the end of what is drawn.
+    #[test]
+    fn the_ones_who_go_too_far_leave() {
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Coaches);
+        hotel.house();
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+
+        // after the freeing wave only the powers of two that still fit are
+        // standing, and everybody else has gone somewhere this corridor does
+        // not reach
+        for n in 1..=DRAWN {
+            let stayed = (1..=63)
+                .filter_map(|k| 2u64.checked_pow(k))
+                .any(|to| to == n);
+
+            assert_eq!(
+                hotel.taken(n),
+                stayed,
+                "room {} is {} after the move and should not be",
+                n,
+                if hotel.taken(n) { "taken" } else { "empty" }
+            );
+        }
+    }
+
+    /// Spec 0034: what is lit afterwards is exactly the prime powers, and
+    /// what is dark is every number with two different primes in it.
+    ///
+    /// **This is the ending.** The desk takes endlessly many endless coaches
+    /// and the corridor has more dark doors than lit ones, which is better
+    /// than a full hotel and is true. Room 6 is 2 times 3 and belongs to
+    /// nobody.
+    #[test]
+    fn what_is_left_is_every_number_with_two_primes_in_it() {
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Coaches);
+        hotel.house();
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+
+        let mut lit = 0;
+
+        for n in 1..=DRAWN {
+            assert_eq!(
+                hotel.taken(n),
+                prime_power(n),
+                "room {} is {} and is {}a prime power",
+                n,
+                if hotel.taken(n) { "taken" } else { "empty" },
+                if prime_power(n) { "" } else { "not " }
+            );
+
+            if hotel.taken(n) {
+                lit += 1;
+            }
+        }
+
+        assert!(
+            lit * 2 < DRAWN,
+            "{} of {} doors are lit, which is not more dark than lit",
+            lit,
+            DRAWN
+        );
+    }
+
+    /// Spec 0034: the three older arrivals are the moves they always were.
+    ///
+    /// A move became a function so that the prime powers would fit. Nothing
+    /// about a shuffle changed, and this is what says so.
+    #[test]
+    fn the_older_moves_are_the_moves_they_were() {
+        for n in [1u64, 2, 7, 40] {
+            assert_eq!(Arrival::One.sends(n), Some(n + 1));
+            assert_eq!(Arrival::Coach(42).sends(n), Some(n + 42));
+            assert_eq!(Arrival::Endless.sends(n), Some(n * 2));
+        }
+
+        // and they still take every room their move frees, where the coaches
+        // take only the ones that are theirs
+        for n in [1u64, 6, 10, 12] {
+            assert!(Arrival::One.fills(n));
+            assert!(Arrival::Coach(42).fills(n));
+            assert!(Arrival::Endless.fills(n));
+            assert!(!Arrival::Coaches.fills(n), "room {} is nobody's", n);
+        }
+    }
+
+    /// Spec 0034: four arrivals, and it comes round.
+    #[test]
+    fn the_cycle_comes_round() {
+        let mut hotel = Hotel::new();
+        let mut seen = Vec::new();
+
+        for _ in 0..5 {
+            seen.push(hotel.at_the_door().expect("nobody at the desk"));
+            hotel.house();
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        }
+
+        assert_eq!(seen[0], Arrival::One);
+        assert_eq!(seen[1], Arrival::Coach(42));
+        assert_eq!(seen[2], Arrival::Endless);
+        assert_eq!(seen[3], Arrival::Coaches);
+        assert_eq!(seen[4], Arrival::One, "the cycle did not come round");
+    }
+
     /// Spec 0031: the one door you walk through is wide enough to walk
     /// through.
     ///
@@ -1395,6 +1702,7 @@ mod tests {
                 hotel.travelling(),
                 1,
                 DRAWN,
+                |n| Arrival::One.sends(n),
             )
             .is_empty(),
             "somebody is out of their room in a corridor at rest"
@@ -1515,7 +1823,7 @@ mod tests {
             assert!(hotel.taken(n), "room {} started empty", n);
         }
 
-        hotel.apply(2, 0);
+        hotel.apply(|n| Arrival::Endless.sends(n));
         // let the whole wave through
         hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
 
@@ -1537,7 +1845,7 @@ mod tests {
     fn the_change_travels() {
         let mut hotel = Hotel::new();
 
-        hotel.apply(2, 0);
+        hotel.apply(|n| Arrival::Endless.sends(n));
 
         // one room's worth of travel, and nothing beyond it has moved
         hotel.tick(1.0 / TRAVELS_AT);
@@ -1586,7 +1894,7 @@ mod tests {
     fn the_light_says_what_the_door_says() {
         let mut hotel = Hotel::new();
 
-        hotel.apply(2, 1);
+        hotel.apply(|n| n.checked_mul(2).and_then(|to| to.checked_add(1)));
 
         for _ in 0..400 {
             hotel.tick(0.05);
@@ -1986,15 +2294,16 @@ mod tests {
     /// enough and the room should not say otherwise.
     #[test]
     fn one_guest_does_not_need_the_doubling() {
-        assert_eq!(Arrival::One.move_for(), (1, 1));
-        assert_eq!(Arrival::Coach(42).move_for(), (1, 42));
+        // a shuffle of one, and of forty two, which is what those two are
+        assert_eq!(Arrival::One.sends(7), Some(8));
+        assert_eq!(Arrival::Coach(42).sends(7), Some(49));
     }
 
     /// And a coach with a room for every number is the one that cannot be
     /// shuffled and has to be doubled.
     #[test]
     fn an_endless_coach_is_housed() {
-        assert_eq!(Arrival::Endless.move_for(), (2, 0));
+        assert_eq!(Arrival::Endless.sends(7), Some(14));
 
         let mut hotel = Hotel::new();
 

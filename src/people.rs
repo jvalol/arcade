@@ -143,6 +143,13 @@ pub fn limb_profile(v: f32) -> (f32, f32) {
 /// a corridor 3.2 wide is a brisk walk rather than a sprint.
 pub const CROSSES_IN: f32 = 9.0;
 
+/// How fast somebody walks, which is the speed you do.
+///
+/// A crossing to the next number is about three metres and a crossing takes
+/// a second and a half, so nobody going next door ever reaches this cap. It
+/// is for the ones spec 0034 sends to room 1024.
+pub const WALKS: f32 = crate::SPEED;
+
 /// Somebody on the floor of the corridor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Walking {
@@ -161,7 +168,13 @@ pub struct Walking {
 ///
 /// `front` is the hotel's own wave front, in rooms. Somebody comes out when
 /// it passes their door and is in by the time it is `CROSSES_IN` past them.
-pub fn crossing(reaches: f32, front: Option<f32>, first: u64, last: u64) -> Vec<Walking> {
+pub fn crossing(
+    reaches: f32,
+    front: Option<f32>,
+    first: u64,
+    last: u64,
+    sends: impl Fn(u64) -> Option<u64>,
+) -> Vec<Walking> {
     let Some(front) = front else {
         return Vec::new();
     };
@@ -183,11 +196,23 @@ pub fn crossing(reaches: f32, front: Option<f32>, first: u64, last: u64) -> Vec<
         let along = (front - n as f32) / CROSSES_IN;
 
         let leaves = crate::aleph::at(reaches, n);
-        let arrives = crate::aleph::at(reaches, n + 1);
-        // out of the doorway and across, which is a diagonal because rooms
-        // alternate sides: room n and room n+1 face each other
-        let at = leaves + (arrives - leaves) * along;
+        // **Where the move sends them, not next door.** Every move was a
+        // shuffle of one when this was written, so this said `n + 1`. Spec
+        // 0034's prime powers send room 3 to room 8 and room 10 to room
+        // 1024, and a corridor emptying westward is the point of it.
+        let Some(to) = sends(n) else {
+            continue;
+        };
+        let arrives = crate::aleph::at(reaches, to);
         let way = arrives - leaves;
+        // **At a walk, however far they are going.** Somebody bound for room
+        // 1024 is four hundred metres west, and lerping them there over a
+        // crossing is a streak rather than a person. They walk, and when the
+        // crossing is over they are wherever that got them, which for most
+        // of them is out of the window.
+        let whole = way.length();
+        let gone = along * whole.min(WALKS * CROSSES_IN / crate::aleph::TRAVELS_AT);
+        let at = leaves + way.normalize_or_zero() * gone;
 
         out.push(Walking {
             from: n,
@@ -232,6 +257,7 @@ pub fn lift(along: f32, leg: usize) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::aleph::Arrival;
 
     /// Spec 0033: a figure has a surface.
     ///
@@ -362,11 +388,11 @@ mod tests {
         let reaches = crate::room::Room::of(crate::games()).reaches;
 
         assert!(
-            crossing(reaches, None, 1, 40).is_empty(),
+            crossing(reaches, None, 1, 40, |n| Arrival::One.sends(n)).is_empty(),
             "somebody is crossing a corridor with no wave in it"
         );
 
-        let out = crossing(reaches, Some(12.0), 1, 40);
+        let out = crossing(reaches, Some(12.0), 1, 40, |n| Arrival::One.sends(n));
 
         assert!(
             !out.is_empty(),
@@ -405,11 +431,11 @@ mod tests {
 
         // somebody at the very start of a crossing is in their own doorway,
         // and somebody at the end of one is in the next room's
-        let starting = crossing(reaches, Some(20.0), 1, 40)
+        let starting = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::One.sends(n))
             .into_iter()
             .min_by(|one, two| one.along.total_cmp(&two.along))
             .expect("nobody is crossing");
-        let ending = crossing(reaches, Some(20.0), 1, 40)
+        let ending = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::One.sends(n))
             .into_iter()
             .max_by(|one, two| one.along.total_cmp(&two.along))
             .expect("nobody is crossing");
@@ -443,6 +469,68 @@ mod tests {
         );
     }
 
+    /// Spec 0034: a crossing walks to where the move sends somebody, not to
+    /// the next number.
+    ///
+    /// **This said `n + 1`**, because every move was a shuffle of one when
+    /// it was written. The prime powers send room 3 to room 8 and room 10 to
+    /// room 1024, and a corridor emptying westward is the point of them.
+    #[test]
+    fn they_cross_to_where_the_move_sends_them() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let near = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::One.sends(n));
+        let far = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::Coaches.sends(n));
+
+        assert_eq!(near.len(), far.len(), "a different crowd is out");
+
+        let mut further = 0;
+
+        for (one, two) in near.iter().zip(far.iter()) {
+            assert_eq!(one.from, two.from);
+
+            // room 1 goes to room 2 either way, and room 2 to room 4 is two
+            // doors rather than one: past that they part company
+            if one.from < 3 || one.along < 0.2 {
+                continue;
+            }
+
+            let went = (two.at - crate::aleph::at(reaches, two.from)).length();
+            let next = (one.at - crate::aleph::at(reaches, one.from)).length();
+
+            assert!(
+                went > next,
+                "room {} walks {:.2} to a prime power and {:.2} to next door",
+                one.from,
+                went,
+                next
+            );
+
+            // west, which is where the bigger numbers are
+            assert!(
+                two.at.x < crate::aleph::at(reaches, two.from).x,
+                "room {} is not heading west",
+                two.from
+            );
+
+            further += 1;
+        }
+
+        assert!(further > 0, "nobody was sent further than next door");
+
+        // and nobody streaks: a crossing is a walk however far away the room
+        // they are going to is
+        for who in far.iter() {
+            let went = (who.at - crate::aleph::at(reaches, who.from)).length();
+
+            assert!(
+                went <= WALKS * CROSSES_IN / crate::aleph::TRAVELS_AT + 0.01,
+                "room {} covered {:.1} in one crossing",
+                who.from,
+                went
+            );
+        }
+    }
+
     /// Spec 0033: a longer corridor is not a bigger crowd.
     ///
     /// The hotel is endless. What is on screen is the band the wave is
@@ -454,7 +542,7 @@ mod tests {
         let most = (CROSSES_IN as usize) + 1;
 
         for (front, last) in [(30.0, 40u64), (3_000.0, 40_000), (300_000.0, 4_000_000)] {
-            let out = crossing(reaches, Some(front), 1, last);
+            let out = crossing(reaches, Some(front), 1, last, |n| Arrival::One.sends(n));
 
             assert!(
                 out.len() <= most,
@@ -519,7 +607,9 @@ mod tests {
             .map(|n| (n, hotel.open_by(n)))
             .collect();
 
-        let out = crossing(reaches, hotel.travelling(), 1, 40);
+        let out = crossing(reaches, hotel.travelling(), 1, 40, |n| {
+            Arrival::One.sends(n)
+        });
 
         assert!(
             !out.is_empty(),

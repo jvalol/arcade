@@ -41,7 +41,7 @@ not a priority, and it never changes once a spec exists.
 | [0031](0031-the-one-door-with-no-number.md) | Cantor's diagonal, walked: the door where room nought would be, a register written across a wall, and a guest you write yourself a line at a time. Sited and built in a day. Its mathematics is wrong and spec 0032 says why |
 | [0032](0032-the-desk-says-yes-and-it-does-not-help.md) | What 0031 should have been. The entries never end, what you carry is a prefix rather than a finished thing, and the desk houses them, because one guest can always be housed. Then you are a row, and you walk it again. Tried changing the alphabet first, which is a trick and not a proof |
 | [0033](0033-somebody-to-move.md) | The building's first people, because forty lamps blinking is not forty guests changing rooms. One figure standing still is the whole of the first build: a bad human is worse than a lamp, and whatever a person looks like here is what one looks like everywhere else in this arcade |
-| [0034](0034-endlessly-many-endless-coaches.md) | (draft) The arrival the desk cannot take, and the rule that takes it: everybody to a prime power, which is the first move here that is a scatter rather than a wave. The corridor empties because most of them go somewhere too far to walk to, and what is left lit afterwards is exactly the prime powers |
+| [0034](0034-endlessly-many-endless-coaches.md) | The arrival the desk cannot take, and the rule that takes it: everybody to a prime power, which is the first move here that is a scatter rather than a wave. The corridor empties because most of them go somewhere too far to walk to, and what is left lit afterwards is exactly the prime powers |
 
 ---
 
