@@ -117,6 +117,42 @@ pub const TALL: f32 = 3.2;
 /// A piece of the grid over the hall: where it is and how big. Spec 0012.
 pub type Hung = (Vec3, Vec3);
 
+/// What is left of a box with another taken out of it, in plan.
+///
+/// Four pieces at most, and none where the cut runs out to an edge. Written
+/// for spec 0037, which needed it three times in one room: the slot in the
+/// imaginarium's floor, the shaft wall that must not cross the well beside
+/// it, and the ceiling tiles the stairwell comes through.
+pub fn minus(box_: Aabb, cut: Aabb) -> Vec<Aabb> {
+    if !box_.intersects(&cut) {
+        return vec![box_];
+    }
+
+    let mut out = Vec::new();
+    let keep = |out: &mut Vec<Aabb>, low: Vec3, high: Vec3| {
+        if high.x - low.x > 1e-4 && high.z - low.z > 1e-4 {
+            out.push(Aabb::new(low, high));
+        }
+    };
+
+    keep(&mut out, box_.min, vec3(cut.min.x, box_.max.y, box_.max.z));
+    keep(&mut out, vec3(cut.max.x, box_.min.y, box_.min.z), box_.max);
+
+    let (near, far) = (box_.min.x.max(cut.min.x), box_.max.x.min(cut.max.x));
+    keep(
+        &mut out,
+        vec3(near, box_.min.y, box_.min.z),
+        vec3(far, box_.max.y, cut.min.z),
+    );
+    keep(
+        &mut out,
+        vec3(near, box_.min.y, cut.max.z),
+        vec3(far, box_.max.y, box_.max.z),
+    );
+
+    out
+}
+
 /// The grid over the hall: how big a ceiling tile is, how far the bar between
 /// two of them hangs below, and how wide that bar is. Spec 0012.
 pub const CEIL_TILE: f32 = 1.15;
@@ -1173,10 +1209,26 @@ impl Room {
         let along = crate::twine::mouth(self.reaches);
         let reaching = lobby - 50.0;
         let reaching_z = along - 50.0;
+        // **And up, which is the third of these.** Spec 0037 put a room
+        // over the hall, and a fill that has to cover eight more metres of
+        // height spends its cells on air and refuses.
+        //
+        // By which boxes they are rather than by how high they reach. A
+        // clamp on `max.y` worked while the room was only a room, and then
+        // the way up to it was built: a stair from the nook's floor to that
+        // room's and a shaft round it, which is one thing spanning both
+        // heights and cannot be cut by either. Three tests came back empty
+        // at once and said so, which is the only reason this is not still a
+        // number.
+        let up = crate::aloft::solid();
         let rest: Vec<Aabb> = self
             .built(true)
             .into_iter()
-            .filter(|box_| box_.min.x > reaching && box_.min.z > reaching_z)
+            .filter(|box_| {
+                box_.min.x > reaching
+                    && box_.min.z > reaching_z
+                    && !up.iter().any(|b| b.min == box_.min && b.max == box_.max)
+            })
             .collect();
         let whole = Self::round(rest);
 
@@ -1219,6 +1271,7 @@ impl Room {
             // and the register behind the blank door, per spec 0031
             out.extend(crate::register::solid(self.reaches));
             out.extend(crate::twine::solid(self.reaches));
+            out.extend(crate::aloft::solid());
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
@@ -1332,6 +1385,31 @@ impl Room {
             }
         }
 
+        // and the stairwell comes out of it. The nook's ceiling is the one
+        // the way up to the imaginarium goes through, per spec 0037, so each
+        // bar and each tile is clipped to the well rather than dropped: the
+        // well is cut to the stair and a tile dropped whole leaves the hole
+        // wider than the shaft wall that is meant to edge it.
+        let well = crate::aloft::up_well();
+        let clipped = |hung: &Vec<Hung>| {
+            hung.iter()
+                .flat_map(|(at, size)| {
+                    let mut pieces = vec![Aabb::from_center_size(*at, *size)];
+
+                    for open in well.iter() {
+                        pieces = pieces.into_iter().flat_map(|p| minus(p, *open)).collect();
+                    }
+
+                    pieces
+                        .into_iter()
+                        .map(|p| (p.center(), p.size()))
+                        .collect::<Vec<Hung>>()
+                })
+                .collect()
+        };
+        bars = clipped(&bars);
+        tiles = clipped(&tiles);
+
         (bars, tiles)
     }
 
@@ -1425,6 +1503,7 @@ impl Room {
         out.extend(crate::register::solid(self.reaches));
         // and spec 0035's, the other corridor off that lobby
         out.extend(crate::twine::solid(self.reaches));
+        out.extend(crate::aloft::solid());
 
         out
     }
@@ -2044,6 +2123,8 @@ mod tests {
                 + crate::register::solid(room.reaches).len()
                 // and the other corridor off that lobby, per spec 0035
                 + crate::twine::solid(room.reaches).len()
+                // and the imaginarium over the hall, per spec 0037
+                + crate::aloft::solid().len()
                 + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
@@ -2784,6 +2865,14 @@ mod tests {
             if box_.max.y <= 0.0 {
                 continue;
             }
+            // and the imaginarium is over it rather than in it, by the same
+            // reasoning. This check is `x` and `z` only, which was right
+            // while nothing in this building was ever above anything else:
+            // spec 0037 put a room six metres up and it stands in the
+            // gallery's plan while blocking nothing at all.
+            if box_.min.y >= TALL {
+                continue;
+            }
             // and the plinths are what the room is for
             if plinths
                 .iter()
@@ -2911,6 +3000,8 @@ mod tests {
                 + crate::register::solid(room.reaches).len()
                 // and the other corridor off that lobby, per spec 0035
                 + crate::twine::solid(room.reaches).len()
+                // and the imaginarium over the hall, per spec 0037
+                + crate::aloft::solid().len()
                 + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1

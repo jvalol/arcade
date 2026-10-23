@@ -1094,6 +1094,26 @@ pub const HEADS: [Vec4; 4] = [
     vec4(0.27, 0.185, 0.13, 1.0),
 ];
 
+/// What the imaginarium over the hall is made of. Spec 0037.
+///
+/// **Paler than anything below it**, because it is the only room in this
+/// building with nothing above it and the light should say so. Everything
+/// else here is a cellar, a corridor at night or a hall lit in pools.
+pub const ALOFT_WALL: Vec4 = vec4(0.56, 0.55, 0.52, 1.0);
+pub const ALOFT_CEILING: Vec4 = vec4(0.62, 0.61, 0.58, 1.0);
+pub const ALOFT_TREAD: Vec4 = vec4(0.47, 0.45, 0.42, 1.0);
+pub const ALOFT_LANDING: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
+
+/// The way up to it, per spec 0037. The stair is the nook's own joinery and
+/// the shaft above the ceiling is the imaginarium's stone, so the climb
+/// changes under you about halfway.
+///
+/// **Stone all the way was the first build and it read as plaster.** A pale
+/// flight standing in a panelled room full of books is the one thing in the
+/// nook that is not made of wood, and the spec asks for a way up that is
+/// ordinary. A library has a timber stair in it.
+pub const ASCENT_TREAD: Vec4 = vec4(0.30, 0.18, 0.11, 1.0);
+
 /// What the register's one sconce is made of, which is the same brass as the
 /// hotel's next door.
 pub const REGISTER_SCONCE: Vec4 = vec4(0.42, 0.33, 0.17, 1.0);

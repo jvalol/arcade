@@ -1,7 +1,10 @@
 # 0037 A staircase that does not arrive
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-22
+**Built:** 2026-10-22, the same day it was written. The room, the loop, the
+four landings and the way up to it. Two things in here are not built and are
+named at the end.
 
 ## Goal
 
@@ -69,7 +72,7 @@ Three reasons, and only one of them is that the space is free:
 - **The building already stacks.** The garden sits on the roof of the baths,
   per spec 0010, so a room on top of another is not a new idea here.
 - **It mirrors the only vertical move there is.** Spec 0007 hid a stair down
-  from the hall behind a book. Nothing has ever gone up.
+  from the nook behind a book. Nothing has ever gone up.
 - **A room whose whole content is climbing should be one you climb to.**
   Putting a staircase on the flat is the first thing it would contradict.
 
@@ -78,8 +81,61 @@ in it and would take no work at all. Ruled out: spec 0020's own goal calls
 that wing "the part nobody finds", and putting the end of a trail there makes
 it the part nobody finds twice over.
 
-**Where the way up starts is not this spec's.** That is the last step of spec
-0036's trail and belongs with it.
+### The way up
+
+~~Where the way up starts is not this spec's. That is the last step of spec
+0036's trail and belongs with it.~~
+
+Struck 2026-10-22, the day it was written, because it contradicts this same
+spec forty lines above. Jake, with the room built: how do I get to it in the
+app. The answer was that you cannot, and nothing walkable in this building is
+above 4.5 metres.
+
+**If the only way in is the trail, the room is exactly a lock and the trail
+is exactly a key**, which the section below says it must not be, and a
+visitor who never does anything else gets nothing rather than a whole room.
+The second pair of sentences was written about the thing *above* the loop
+being unreachable, and then the way into the room itself was handed to the
+trail without noticing that had just been ruled out.
+
+**So the way up is ordinary and anybody can find it.** What the trail changes
+is what the fourth flight does once you are in here, and nothing else.
+
+It starts in ~~the hall~~ **the nook**, mirroring spec 0007, which hid a
+stair *down* behind a book in that room's wall of books and is the only
+vertical move this building has ever made. Same room, the opposite
+direction, and it puts the way in directly under this one rather than
+sending anybody across the building to reach something that is over their
+head where they started.
+
+~~the hall~~ was written twice and was wrong twice: 0007's bookcase is in
+the nook and always was. Corrected the same day, before anything was built
+on it.
+
+**And the nook is the only room under here with the floor for it.** Measured
+rather than chosen. The footprint above runs x −9.3 to 3.8 and z −10.05 to
+3.05, and three things are under it:
+
+- **The nook**, clear from x −8.63 to −3.77, which is 4.86 across, and
+  13.7 along. Books down the west face at 0.32 deep, benches down the east
+  at 0.9. Room for a flight and a lane past it.
+- **The hall's aisle**, clear from x −1.45 to 1.45. That is 2.9, it is the
+  spine of the building, and `WALL`'s own note says the aisle cannot change
+  width without the sight breaking. A stair in it is a stair in the only
+  way through.
+- **A slot east of the hall** a shade over a body wide. Not a room.
+
+So the nook, which is also the room the mirror asks for. The two arguments
+land in the same place, which is the only reason this is a short section.
+
+**It is a dog-leg and not a spiral.** A spiral was drawn first and thrown
+away: every collider in this building is a box, a spiral tread is a wedge,
+and the box round a wedge is most of a cylinder. Treads that overlap near
+the newel lift you to whichever is highest, so the stair either refuses you
+or slides you up it, and `walk` reports neither. Spec 0007 learned the same
+thing from the other end, where nested treads made a flight of four legal
+rises you could not get out of. Two straight flights are exactly what a box
+describes.
 
 ## What you do, and the one thing you cannot
 
@@ -119,17 +175,70 @@ walking.
 **An explanation.** Nobody says Penrose and nothing says what you are looking
 at.
 
+## Acceptance criteria
+
+The loop:
+
+- The climb is gentle enough that the loop reads as
+  closed. — `aloft::tests::it_is_shallow_enough_to_read_as_closed`
+- And the treads are that gradient rather than a number beside
+  it. — `aloft::tests::the_steps_are_what_that_gradient_is`
+- The fourth flight's top is the first flight's
+  foot. — `aloft::tests::the_fourth_flight_comes_back_to_the_first`
+- Nothing of it sits in the floor's own
+  plane. — `aloft::tests::nothing_of_it_is_in_the_floors_plane`
+- No two landings are in the same place, which is what tells them
+  apart. — `aloft::tests::no_two_landings_are_in_the_same_place`
+- And nothing else in the building is up
+  here. — `aloft::tests::nothing_in_the_building_is_up_here`
+
+The way up:
+
+- It runs from the nook's floor to this room's, and meets its own landing at
+  both ends of it. — `aloft::tests::the_stair_runs_from_one_floor_to_the_other`
+- The landing laps the flight rather than meeting it edge
+  on. — `aloft::tests::the_landing_laps_the_flight`
+- Every rise is one you can get
+  up. — `aloft::tests::every_rise_is_one_you_can_climb`
+- It does not stand in the swing of spec 0007's door, and you can still
+  reach the shelf that opens
+  it. — `aloft::tests::the_stair_is_not_in_the_swing_of_the_door`
+- You can get past the second flight to the rest of the
+  room. — `aloft::tests::you_can_get_past_the_second_flight`
+- The slot in the floor is filled by the stair, so there is nothing beside
+  it to fall down. — `aloft::tests::the_slot_is_filled_by_the_stair`
+- Where the floor is not open the flight passes under it with room over your
+  head. — `aloft::tests::the_second_flight_clears_the_floor_it_comes_up_through`
+- The stairwell does not cut the
+  loop. — `aloft::tests::the_stairwell_does_not_cut_the_loop`
+- All of it is under this room and none of it is
+  outside. — `aloft::tests::the_whole_stair_is_under_the_room`
+- Every lamp on it is in a fitting, in the shaft, and not inside the
+  stair. — `aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
+- And somebody your size, walking, gets from the nook to the
+  room. — `aloft::tests::you_can_walk_up_it`
+
 ## What it is waiting on
 
-Whether the loop is visible from the middle of the square, and that is the
-whole engineering question rather than a detail.
+~~Whether the loop is visible from the middle of the square, and that is the
+whole engineering question rather than a detail.~~
 
-Seen from inside one flight, nothing is strange and the crossing can hide the
-seam. Seen from the middle, four flights that each climb are a helix, and the
-place where the fourth meets the first is a join that has to be somewhere.
-Hiding it, drawing the loop flat and lying about the climb, or letting the
-join be visible and strange are three different rooms, and I do not know
-which is right without building one.
+Answered by building it. Three were built and looked at: a twelve metre
+climb is 20.6 degrees and is plainly a spiral going away from you, four
+separate flights from the floor are an X of ramps, and three metres over
+thirty two of run is 5.4 degrees and reads as a square walkway. The join is
+nowhere, because at that gradient there is nothing to see.
+
+Two things in this spec are still only written down.
+
+**The thing above the loop that no flight reaches.** The room is eight
+metres tall and the loop climbs three of them, so there is height for it and
+nothing in it. What it is has to be something the room already means, per
+spec 0021's lesson, and I do not have that yet.
+
+**What spec 0036's trail changes when it gets here.** The trail is a draft
+and its last step is this room, so nothing can be built against it until it
+is settled.
 
 ---
 

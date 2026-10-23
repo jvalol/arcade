@@ -2,6 +2,7 @@
 
 mod aim;
 mod aleph;
+mod aloft;
 mod back;
 mod behind;
 mod beyond;
@@ -389,6 +390,8 @@ struct Arcade {
     /// barrels and the bell. Spec 0033.
     body: Option<MeshId>,
     head: Option<MeshId>,
+    /// The four things on the imaginarium's landings. Spec 0037.
+    aloft_shapes: Vec<MeshId>,
     leg: Option<MeshId>,
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
@@ -824,6 +827,7 @@ impl Arcade {
             barrel: None,
             body: None,
             head: None,
+            aloft_shapes: Vec::new(),
             leg: None,
             hoop: None,
             bottle: None,
@@ -1836,6 +1840,67 @@ impl Arcade {
     /// None of the hotel's door drawing could be reused. That corridor runs
     /// along `x` with its doors in the `z` walls, and this one is turned a
     /// quarter: every scale and every offset is the other way about.
+    /// The imaginarium over the hall. Spec 0037.
+    ///
+    /// Its shell is handed over once per spec 0026. What is here is the loop
+    /// itself and the four things that tell its landings apart.
+    fn draw_the_imaginarium(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
+        scene.push_colored(
+            floor,
+            &Transform::at(vec3(aloft::MIDDLE_X, aloft::BASE, aloft::MIDDLE_Z)).with_scale(vec3(
+                aloft::ROOM,
+                1.0,
+                aloft::ROOM,
+            )),
+            aim::ALOFT_WALL,
+        );
+
+        for tread in aloft::treads() {
+            scene.push_colored(
+                cube,
+                &Transform::at(tread.center()).with_scale(tread.size()),
+                aim::ALOFT_TREAD,
+            );
+        }
+
+        // the landings, a shade apart from the treads so the corners read as
+        // places rather than as more stair
+        for landing in aloft::landings() {
+            scene.push_colored(
+                cube,
+                &Transform::at(landing.center()).with_scale(landing.size()),
+                aim::ALOFT_LANDING,
+            );
+        }
+
+        // and the one thing on each, which is what tells them apart
+        for (n, shape) in self.aloft_shapes.iter().copied().enumerate() {
+            scene.push_colored(
+                shape,
+                &Transform::at(aloft::on_the_landing(n as u64)),
+                aim::ALOFT_TREAD,
+            );
+        }
+
+        // the fittings the lamps come from, hung over each landing
+        for at in aloft::lamps() {
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(vec3(0.3, 0.14, 0.3)),
+                aim::ALOFT_CEILING,
+            );
+        }
+
+        // and a fitting for each lamp on the way up
+        for at in aloft::up_sconces() {
+            scene.push_colored(
+                cube,
+                &Transform::at(at).with_scale(vec3(0.16, 0.2, 0.16)),
+                aim::ALOFT_CEILING,
+            );
+        }
+    }
+
     fn draw_the_twine(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
         let reaches = self.room.reaches;
         let middle = twine::middle_x();
@@ -2754,6 +2819,15 @@ impl Arcade {
                 // doors moved, so it is made of what that one is made of
                 (_, standing::Made::TwineWall) => (aim::HOTEL_WALL, aim::MATTE),
                 (_, standing::Made::TwineCeiling) => (aim::HOTEL_CEILING, aim::VOID),
+                (_, standing::Made::AloftWall) => (aim::ALOFT_WALL, aim::MATTE),
+                (_, standing::Made::AloftCeiling) => (aim::ALOFT_CEILING, aim::VOID),
+                // the stair is the nook's own joinery and the shaft over
+                // its ceiling is the imaginarium's stone, so what you are
+                // climbing changes about halfway up. Stone the whole way
+                // was built first and read as plaster: it was the only
+                // thing in a panelled room that was not made of wood.
+                (_, standing::Made::AscentStair) => (aim::ASCENT_TREAD, aim::MATTE),
+                (_, standing::Made::AscentShaft) => (aim::ALOFT_WALL, aim::MATTE),
                 (_, standing::Made::Wall) => (aim::WALL, aim::MATTE),
             };
             // the hall's walls wear the grain the hall's walls have always
@@ -4618,6 +4692,9 @@ impl Game for Arcade {
         // what fails that is the promise of a face rather than the lack of
         // one. Carved reads as a figure. Modelled reads as a person with
         // something missing.
+        self.aloft_shapes = (0..4)
+            .map(|n| renderer.add_mesh(&cellar::turned(20, 18, aloft::standing_on(n))))
+            .collect();
         self.body =
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 22, people::torso_profile)));
         self.head =
@@ -5872,6 +5949,7 @@ impl Game for Arcade {
         self.draw_the_back_room(scene, cube, floor);
         self.draw_the_hotel(scene, cube, floor);
         self.draw_the_twine(scene, cube, floor);
+        self.draw_the_imaginarium(scene, cube, floor);
         self.draw_the_people(scene);
         self.draw_the_register(scene, cube, floor);
 
@@ -8539,6 +8617,28 @@ impl Game for Arcade {
         // only thing in that room telling you where the walk starts
         // and spec 0035's corridor, one beside every door, so the light
         // thins out the way the doors do
+        // and the imaginarium's four, which light the whole loop at once
+        for at in aloft::lamps() {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                Vec3::ONE,
+                aloft::LAMP_LIT,
+                aloft::LAMP_RANGE,
+            ));
+        }
+
+        // and the way up to it, one in each fitting on the shaft wall
+        for at in aloft::up_lamps() {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                Vec3::ONE,
+                aloft::UP_LAMP_LIT,
+                aloft::UP_LAMP_RANGE,
+            ));
+        }
+
         for at in twine::lamps(self.room.reaches) {
             shades.push((
                 eye.distance_squared(at),
@@ -9434,6 +9534,24 @@ mod tests {
         let (at, _) = room::nook_floor(reaches);
 
         looks_right("nook", at + Vec3::X * 1.6, vec3(at.x - 1.0, EYE, at.z));
+    }
+
+    /// Spec 0027: the way up to the imaginarium, from the nook's own lane.
+    ///
+    /// Across it rather than up it. Stood at the foot looking up, a flight
+    /// is a flight and says nothing about where it is; from the side you
+    /// get the stair, the wall of books it climbs past and the lane you
+    /// walk to reach it, which is the whole of what spec 0037 decided.
+    #[test]
+    fn the_way_up_is_drawn() {
+        let west = aloft::up_west();
+        let foot = aloft::up_foot();
+
+        looks_right(
+            "wayup",
+            vec3(west + 3.4, EYE, foot + 1.5),
+            vec3(west, EYE + 0.6, foot + 2.5),
+        );
     }
 
     /// Spec 0027: the garden, looking at the pond.

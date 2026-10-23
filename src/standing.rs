@@ -42,6 +42,11 @@ pub enum Where {
     Register,
     /// The other corridor off the hotel's lobby, per spec 0035.
     Twine,
+    /// The imaginarium over the hall, per spec 0037.
+    Aloft,
+    /// The way up to it, per spec 0037, which is in neither room it joins:
+    /// it starts on the nook's floor and ends on the imaginarium's.
+    Ascent,
 }
 
 /// What a piece is made of, which is the colour it is drawn in.
@@ -61,6 +66,10 @@ pub enum Made {
     RegisterCeiling,
     TwineWall,
     TwineCeiling,
+    AloftWall,
+    AloftCeiling,
+    AscentStair,
+    AscentShaft,
 }
 
 /// One run: where it is, what it is made of, and the boxes in it.
@@ -178,6 +187,33 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     put(Where::Twine, Made::TwineWall, walls);
     put(Where::Twine, Made::TwineCeiling, ceiling);
 
+    // and the imaginarium over the hall, per spec 0037. Its treads and
+    // landings are the room rather than its shell and are pushed, because
+    // what they are made of is what tells them apart.
+    //
+    // The way up comes out of the same list and is its own place. It runs
+    // from the nook's floor to this room's, so it is in neither of them,
+    // and the test that every run is one room is what said so.
+    let up = crate::aloft::way_up();
+    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::aloft::solid()
+        .into_iter()
+        .filter(|box_| {
+            !crate::aloft::treads().contains(box_)
+                && !crate::aloft::landings().contains(box_)
+                && !up.contains(box_)
+        })
+        .partition(|box_| box_.min.y < crate::aloft::BASE + crate::aloft::TALL);
+
+    put(Where::Aloft, Made::AloftWall, walls);
+    put(Where::Aloft, Made::AloftCeiling, ceiling);
+
+    let stair = crate::aloft::up_treads();
+    let (stair, shaft): (Vec<Aabb>, Vec<Aabb>) =
+        up.into_iter().partition(|box_| stair.contains(box_));
+
+    put(Where::Ascent, Made::AscentStair, stair);
+    put(Where::Ascent, Made::AscentShaft, shaft);
+
     out
 }
 
@@ -268,6 +304,39 @@ mod tests {
             )
         };
 
+        // and the imaginarium, which is the only room above the rest
+        let aloft = {
+            let half = crate::aloft::ROOM * 0.5 + crate::room::THICK * 2.0;
+
+            Aabb::new(
+                glam::vec3(
+                    crate::aloft::MIDDLE_X - half,
+                    crate::aloft::BASE - crate::room::THICK * 2.0,
+                    crate::aloft::MIDDLE_Z - half,
+                ),
+                glam::vec3(
+                    crate::aloft::MIDDLE_X + half,
+                    crate::aloft::BASE + crate::aloft::TALL + crate::room::THICK * 2.0,
+                    crate::aloft::MIDDLE_Z + half,
+                ),
+            )
+        };
+
+        // the way up, which is a box round the stair and its shaft and
+        // nothing else: it is in neither room it joins, so neither room's
+        // own box can hold it.
+        let ascent = {
+            let boxes = crate::aloft::way_up();
+            let (mut low, mut high) = (boxes[0].min, boxes[0].max);
+
+            for box_ in boxes.iter() {
+                low = low.min(box_.min);
+                high = high.max(box_.max);
+            }
+
+            Aabb::new(low, high)
+        };
+
         for run in runs(reaches) {
             for box_ in run.boxes.iter() {
                 let inside = match run.at {
@@ -280,6 +349,8 @@ mod tests {
                     Where::Hotel => hotel.contains_point(box_.center()),
                     Where::Register => register.contains_point(box_.center()),
                     Where::Twine => twine.contains_point(box_.center()),
+                    Where::Aloft => aloft.contains_point(box_.center()),
+                    Where::Ascent => ascent.contains_point(box_.center()),
                 };
 
                 assert!(
