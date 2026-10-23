@@ -362,8 +362,38 @@ pub fn up_hole() -> Aabb {
 /// metres under it. The tiles are clipped instead, which `room::minus`
 /// already did for this room's floor.
 pub fn up_well() -> Vec<Aabb> {
+    let (west, head) = (up_west(), up_head());
+    let plan = up_plan();
+
+    // **Only as far along the second flight as it is still in the ceiling.**
+    // Opened along the whole flight, which was the first build, the hole ran
+    // out over the hall's aisle and put a white box and a black hole in the
+    // one ceiling spec 0012 made worth looking up at. By then the stair is
+    // two metres over the tiles and wants no hole at all: it walks over an
+    // intact ceiling the rest of the way.
+    let crosses = up_treads()
+        .iter()
+        .filter(|t| t.max.y > UP_HALFWAY + 1e-4 && t.min.y < crate::room::TALL)
+        .map(|t| t.max.x)
+        .fold(west + UP_WIDE, f32::max);
+
+    vec![
+        plan[0],
+        Aabb::new(
+            vec3(west + UP_WIDE, plan[1].min.y, head),
+            vec3(crosses, plan[1].max.y, head + UP_WIDE),
+        ),
+    ]
+}
+
+/// The stair's own plan, as the two rectangles the shaft is built round.
+///
+/// The first is the top of the first flight and the landing, from where
+/// your head would be in the tiles. The second is the whole of the second
+/// flight, all the way to where it arrives.
+fn up_plan() -> Vec<Aabb> {
     let (west, head, foot) = (up_west(), up_head(), up_foot());
-    let (under, over) = (crate::room::soffit() - crate::room::CEIL_DROP, BASE - THICK);
+    let (under, over) = (crate::room::soffit(), BASE - THICK);
 
     // where your head first reaches the tiles on the way up
     let steps = ((crate::room::soffit() - crate::people::TALL) / UP_RISE)
@@ -383,13 +413,18 @@ pub fn up_well() -> Vec<Aabb> {
 }
 
 /// The shaft the stair climbs between the nook's ceiling and this room's
-/// floor, so that what you see through the well is a wall and not the gap
-/// between two storeys.
+/// floor, so that what you climb through is a wall and not the gap between
+/// two storeys.
 ///
-/// Built on the well's snapped edge rather than the stair's, which is the
-/// whole reason the well is snapped.
+/// **Round the whole stair, not round the hole in the ceiling.** Those are
+/// two different shapes and the first build used one for both: the shaft
+/// stopped where the hole did, so the part of the flight that is over the
+/// hall's ceiling climbed through an open void with the backs of things in
+/// it, and the shaft's own underside hung below the tiles as a white beam
+/// across the hall. It starts at the tiles' own underside now, so there is
+/// nothing of it under them.
 pub fn up_shaft() -> Vec<Aabb> {
-    let wells = up_well();
+    let wells = up_plan();
     let mut out = Vec::new();
 
     for (n, well) in wells.iter().enumerate() {
@@ -487,8 +522,11 @@ pub fn up_sconces() -> Vec<Vec3> {
     // stands free in the middle of the nook, so under the ceiling there is
     // nothing beside it to hang a fitting on, and the nook's own lamps
     // light that part anyway. Above the ceiling the shaft is the wall.
+    let shaft = up_shaft();
     out.retain(|at| {
-        at.y > crate::room::soffit() - crate::room::CEIL_DROP && at.y < BASE - THICK - 0.15
+        shaft
+            .iter()
+            .any(|wall| at.y > wall.min.y && at.y < wall.max.y - 0.15)
     });
     out
 }
@@ -1013,6 +1051,62 @@ mod tests {
                     && tread.max.z <= high.z + 1e-3,
                 "a tread at {:?} is outside the room above it",
                 tread.min
+            );
+        }
+    }
+
+    /// Spec 0012: the way up takes nothing out of the hall's ceiling and
+    /// hangs nothing under it.
+    ///
+    /// **The fault this caught was in a filmed clip and not in a test.**
+    /// The hole in the ceiling was cut along the whole of the second
+    /// flight, which runs out over the hall's aisle, and the shaft's wall
+    /// was built on the hole and started a tile's drop below the tiles. The
+    /// first frame of the arcade's own clip had a white beam across the one
+    /// ceiling spec 0012 made worth looking up at, with a black hole behind
+    /// it. By the time the flight is over the hall it is two metres above
+    /// the tiles and wants no hole at all.
+    #[test]
+    fn the_way_up_leaves_the_halls_ceiling_alone() {
+        let nook_east = -(crate::room::WALL + crate::room::CABINET.x) - THICK * 0.5;
+
+        for (n, well) in up_well().iter().enumerate() {
+            assert!(
+                well.max.x <= nook_east + 1e-3,
+                "piece {} of the hole in the ceiling reaches x {:.2}, past the nook at {:.2}",
+                n,
+                well.max.x,
+                nook_east
+            );
+        }
+
+        for (n, wall) in up_shaft().iter().enumerate() {
+            assert!(
+                wall.min.y >= crate::room::soffit() - 1e-4,
+                "piece {} of the shaft starts at {:.4}, under the tiles at {:.4}",
+                n,
+                wall.min.y,
+                crate::room::soffit()
+            );
+        }
+    }
+
+    /// Spec 0037: the shaft goes round the whole stair and not round the
+    /// hole in the ceiling, which is a different shape.
+    #[test]
+    fn the_shaft_encloses_the_whole_second_flight() {
+        let shaft = up_shaft();
+
+        for tread in up_treads().iter().filter(|t| t.max.y > UP_HALFWAY + 1e-4) {
+            let beside = Aabb::new(
+                vec3(tread.min.x, crate::room::soffit() + 0.1, tread.min.z - 0.2),
+                vec3(tread.max.x, BASE - THICK - 0.1, tread.max.z + 0.2),
+            );
+
+            assert!(
+                shaft.iter().any(|wall| wall.intersects(&beside)),
+                "the flight at x {:.2} climbs with no shaft round it",
+                tread.min.x
             );
         }
     }
