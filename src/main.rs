@@ -3799,6 +3799,17 @@ impl Arcade {
         }
     }
 
+    /// Everything you can be holding down, let go of at once.
+    ///
+    /// One list, because the four that walk you and the four that turn you
+    /// came apart the moment there were two lists. See `focus_changed`.
+    fn let_go(&mut self) {
+        self.walking = [false; 4];
+        self.looking = [false; 4];
+        self.leaning = [false; 4];
+        self.shifted = false;
+    }
+
     /// Moves the list one body out or one in, and stops at the ends rather
     /// than wrapping: a list that wraps is a list you can lose your place in.
     fn walk_the_list(&mut self, way: i32) {
@@ -9080,10 +9091,20 @@ impl Game for Arcade {
         self.quitting
     }
 
+    /// Lets go of the lock and of every key, because a key-up goes to
+    /// whatever has focus and that is no longer this.
+    ///
+    /// **Every held thing, not the ones that walk you.** It cleared
+    /// `walking` alone from the day it was written, so alt-tabbing with an
+    /// arrow down left that arrow down for ever: you came back to a
+    /// building turning on the spot with nothing to let go of.
+    ///
+    /// Written as the whole list rather than four lines, so that a fifth
+    /// thing you can hold down cannot be added without this seeing it.
     fn focus_changed(&mut self, focus: bool) {
         if !focus {
             self.wants_lock = false;
-            self.walking = [false; 4];
+            self.let_go();
         }
     }
 }
@@ -9719,6 +9740,71 @@ mod tests {
                 repeat: false,
             });
         }
+    }
+
+    /// Holds a key down and never lets go of it, which is what the window
+    /// does to you when it loses focus.
+    fn hold(arcade: &mut Arcade, key: KeyboardKey) {
+        arcade.process_keyboard(KeyboardInput {
+            key,
+            state: KeyboardKeyState::Pressed,
+            repeat: false,
+        });
+    }
+
+    /// Losing focus lets go of every key, and not just the ones that walk
+    /// you.
+    ///
+    /// A key-up is delivered to the window that had focus when the key
+    /// went down. Alt-tab with an arrow held and that release goes
+    /// somewhere else, so the arrow stays down for ever and `update` turns
+    /// you by it every frame. `focus_changed` let go of the four keys that
+    /// walk and not the four that turn, the four that lean, or the shift
+    /// that runs.
+    ///
+    /// **Jake found it on 2026-10-23 and his `WHERE` log named the key.**
+    /// For eleven samples his feet did not move, his pitch was exactly
+    /// nought, and his yaw fell by 1.20 radians a sample, which at his
+    /// frame rate is sixty frames of `TURNS`: the left arrow, and nothing
+    /// else, because the mouse cannot turn you without touching pitch.
+    ///
+    /// He said he was in a corner and that is not why he stopped. A body
+    /// where he stood is held on the west and the north and can still walk
+    /// four metres east or south. What stopped him was this going off and
+    /// letting go of `walking`, while `looking` carried on, which is the
+    /// fault saying its own name.
+    ///
+    /// The same fault was found once before from the other end and is
+    /// written up at `process_keyboard`: an arrow held on the way to a
+    /// bench left you walking into it with nothing to let go of.
+    #[test]
+    fn losing_focus_lets_go_of_everything() {
+        let mut one = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+
+        for key in [KeyboardKey::Right, KeyboardKey::Up, KeyboardKey::LShift] {
+            hold(&mut one, key);
+        }
+        one.leaning = [true; 4];
+        one.focus_changed(false);
+
+        assert_eq!(one.looking, [false; 4], "an arrow is still held down");
+        assert_eq!(one.leaning, [false; 4], "a lean is still held down");
+        assert!(!one.shifted, "shift is still held down");
+
+        let (yaw, pitch) = (one.yaw, one.pitch);
+        for _ in 0..60 {
+            one.update(1.0 / 60.0, &mut geometry, &mut text, &sound);
+        }
+
+        assert!(
+            (one.yaw - yaw).abs() < 1e-6 && (one.pitch - pitch).abs() < 1e-6,
+            "nothing was touched for a second and it turned {:.3} and tilted {:.3}",
+            one.yaw - yaw,
+            one.pitch - pitch
+        );
     }
 
     /// Spec 0013: it is off when the building opens.
