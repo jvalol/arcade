@@ -5,6 +5,12 @@
 **Built:** 2026-10-22, the same day it was written. The room, the loop, the
 four landings and the way up to it. Two things in here are not built and are
 named at the end.
+**Superseded in part:** 2026-10-24 by
+[0038](0038-three-ways-to-be-the-right-way-up.md), which replaces the loop
+and keeps the room, the siting, the way up and the lamps. Walked on the
+23rd, the loop does not read as a staircase and cannot be made to, for a
+reason that is in its shape rather than in its build. Read 0038 before
+building anything against the four flights or the things standing on them.
 
 ## Goal
 
