@@ -749,41 +749,35 @@ pub fn up_well() -> Vec<Aabb> {
         .map(|t| t.max.x)
         .fold(west + UP_WIDE, f32::max);
 
-    // **Down past the underside of the ceiling, not down to the shaft.**
-    // The shaft starts inside the ceiling's own thickness so that nothing
-    // of it hangs below the tiles, and for a while the well started there
-    // too. `room::minus` cuts in all three directions, so what that did to
-    // every bar crossing the opening was shave the top off it and leave the
-    // last two centimetres hanging in the hole: Jake looked back down the
-    // stair and saw bars lying across the nook's floor. A hole in a ceiling
-    // goes through the ceiling.
-    let under = crate::room::TALL - crate::room::CEIL_DROP * 2.0;
-    let open = |box_: Aabb| Aabb::new(vec3(box_.min.x, under, box_.min.z), box_.max);
-
     vec![
-        open(plan[0]),
-        open(Aabb::new(
+        plan[0],
+        Aabb::new(
             vec3(west + UP_WIDE, plan[1].min.y, head),
             vec3(crosses, plan[1].max.y, head + UP_WIDE),
-        )),
+        ),
     ]
 }
 
-/// The stair's own plan, as the two rectangles the shaft is built round.
+/// The stair's own plan, as the two rectangles the well and the shaft are
+/// both built on.
 ///
 /// The first is the top of the first flight and the landing, from where
 /// your head would be in the tiles. The second is the whole of the second
 /// flight, all the way to where it arrives.
 fn up_plan() -> Vec<Aabb> {
     let (west, head, foot) = (up_west(), up_head(), up_foot());
-    // **Inside the ceiling's own thickness, not level with its underside.**
-    // Level with it, the shaft's bottom face and the bars' bottom faces
-    // were the same plane, which speckles: Jake looked up in the hall and
-    // saw a white slab with stippled edges hanging in the grid. Below it
-    // instead and the shaft hangs as a beam, which was the fault before
-    // that. Between the two there is neither.
+    // **From under the ceiling to this room's floor, which is the widest
+    // either of the two things built on this wants.** Where the well stops
+    // and where the shaft starts are different numbers and each is said
+    // where that thing is built. They were one number here, half overridden
+    // downstream, and three faults came out of it in a day: the shaft hung
+    // below the ceiling bars, then speckled against them, then the well
+    // inherited the shaft's bottom and left two centimetres of every bar
+    // hanging in the stairwell. `room::minus` cuts in all three
+    // directions, so a hole that stops inside a ceiling shaves it rather
+    // than opening it.
     let (under, over) = (
-        crate::room::soffit() + crate::room::CEIL_DROP * 0.4,
+        crate::room::TALL - crate::room::CEIL_DROP * 2.0,
         BASE - THICK,
     );
 
@@ -819,8 +813,13 @@ pub fn up_shaft() -> Vec<Aabb> {
     let wells = up_plan();
     let mut out = Vec::new();
 
+    // **Inside the ceiling's own thickness.** Level with the bars'
+    // underside the shaft speckled against them; below it, it hung across
+    // the hall as a beam. The shaft's number, said where the shaft is.
+    let under = crate::room::soffit() + crate::room::CEIL_DROP * 0.4;
+
     for (n, well) in wells.iter().enumerate() {
-        let (low, high) = (well.min, well.max);
+        let (low, high) = (vec3(well.min.x, under, well.min.z), well.max);
         let ring = [
             Aabb::new(
                 vec3(low.x - THICK, low.y, low.z - THICK),
