@@ -117,12 +117,19 @@ pub const TALL: f32 = 3.2;
 /// A piece of the grid over the hall: where it is and how big. Spec 0012.
 pub type Hung = (Vec3, Vec3);
 
-/// What is left of a box with another taken out of it, in plan.
+/// What is left of a box with another taken out of it.
 ///
-/// Four pieces at most, and none where the cut runs out to an edge. Written
+/// Six pieces at most, and none where the cut runs out to a face. Written
 /// for spec 0037, which needed it three times in one room: the slot in the
 /// imaginarium's floor, the shaft wall that must not cross the well beside
 /// it, and the ceiling tiles the stairwell comes through.
+///
+/// **In all three directions and not only in plan.** It cut in `x` and `z`
+/// alone to begin with, which is right for a hole in a floor or a ceiling
+/// and wrong for a door: spec 0038 put a door in a wall and got a slot from
+/// the floor to the lid, because a cut that ignores height takes the whole
+/// height. The three earlier uses are unchanged by this, since in each of
+/// them the cut already spans the box's full height.
 pub fn minus(box_: Aabb, cut: Aabb) -> Vec<Aabb> {
     if !box_.intersects(&cut) {
         return vec![box_];
@@ -130,24 +137,39 @@ pub fn minus(box_: Aabb, cut: Aabb) -> Vec<Aabb> {
 
     let mut out = Vec::new();
     let keep = |out: &mut Vec<Aabb>, low: Vec3, high: Vec3| {
-        if high.x - low.x > 1e-4 && high.z - low.z > 1e-4 {
+        if (high - low).min_element() > 1e-4 {
             out.push(Aabb::new(low, high));
         }
     };
 
-    keep(&mut out, box_.min, vec3(cut.min.x, box_.max.y, box_.max.z));
-    keep(&mut out, vec3(cut.max.x, box_.min.y, box_.min.z), box_.max);
+    // under the cut and over it
+    keep(&mut out, box_.min, vec3(box_.max.x, cut.min.y, box_.max.z));
+    keep(&mut out, vec3(box_.min.x, cut.max.y, box_.min.z), box_.max);
 
-    let (near, far) = (box_.min.x.max(cut.min.x), box_.max.x.min(cut.max.x));
+    // then to each side of what is left
+    let (under, over) = (box_.min.y.max(cut.min.y), box_.max.y.min(cut.max.y));
     keep(
         &mut out,
-        vec3(near, box_.min.y, box_.min.z),
-        vec3(far, box_.max.y, cut.min.z),
+        vec3(box_.min.x, under, box_.min.z),
+        vec3(cut.min.x, over, box_.max.z),
     );
     keep(
         &mut out,
-        vec3(near, box_.min.y, cut.max.z),
-        vec3(far, box_.max.y, box_.max.z),
+        vec3(cut.max.x, under, box_.min.z),
+        vec3(box_.max.x, over, box_.max.z),
+    );
+
+    // and before and behind what is left of that
+    let (near, far) = (box_.min.x.max(cut.min.x), box_.max.x.min(cut.max.x));
+    keep(
+        &mut out,
+        vec3(near, under, box_.min.z),
+        vec3(far, over, cut.min.z),
+    );
+    keep(
+        &mut out,
+        vec3(near, under, cut.max.z),
+        vec3(far, over, box_.max.z),
     );
 
     out
@@ -278,6 +300,14 @@ pub fn gallery_wall(reaches: f32) -> f32 {
 /// Just under two steps down the aisle, so a thing comes alive as you reach it
 /// rather than when you merely aim at it.
 pub const REACH: f32 = 4.0;
+
+/// And how far one of the nook's toys does, which is less.
+///
+/// Near enough that you had to walk to it, and far enough that you are not
+/// standing on it: the benches are 0.9 deep and you work them from about
+/// three quarters of a metre off the near face. The sight test that has
+/// stood since the nook was built stands 1.4 away and still passes.
+pub const BENCH_REACH: f32 = 1.8;
 
 /// A floor quad whose u and v run past one, so a tiling texture repeats across
 /// it rather than being stretched over the whole thing.
@@ -1312,6 +1342,40 @@ impl Room {
         out
     }
 
+    /// The ceiling over the hall and the nook, as the pieces it is drawn in.
+    ///
+    /// **With the stairwell out of it.** The grid that hangs under this is
+    /// clipped to the well so the way up to the imaginarium has something
+    /// to come through, and for a while this was not: the hole was only
+    /// ever cut in the thing hanging under the hole, so looking up the
+    /// stair was a flat lid over the whole opening. Spec 0038.
+    ///
+    /// Named rather than worked out where it is drawn, because the test
+    /// that says the hole is open has to read the same list the picture
+    /// does.
+    pub fn ceiling(&self) -> Vec<Aabb> {
+        let well = crate::aloft::up_well();
+        let mut out = Vec::new();
+
+        for slab in self.floors().iter() {
+            let mut pieces = vec![Aabb::new(
+                vec3(slab.min.x, TALL - 0.01, slab.min.z),
+                vec3(slab.max.x, TALL + 0.01, slab.max.z),
+            )];
+
+            for open in well.iter() {
+                pieces = pieces
+                    .into_iter()
+                    .flat_map(|piece| minus(piece, *open))
+                    .collect();
+            }
+
+            out.extend(pieces);
+        }
+
+        out
+    }
+
     /// The grid over the lid: the bars, and the tile sunk behind each square
     /// of them. Spec 0012.
     ///
@@ -1537,8 +1601,26 @@ impl Room {
             slab(from, way, &box_).map(|far| (Seen::Display(n), far))
         });
 
+        // **A bench reaches less far than a cabinet does.** `REACH` is four
+        // metres because the hall needs it: standing by one cabinet you work
+        // the one opposite, and `WALL`'s own note says the aisle cannot
+        // change width without that breaking. A bench is not that. It is a
+        // thing you walk up to, six of them stand in a row down one side of
+        // the nook, and at four metres almost any way you face in that room
+        // has one in it.
+        //
+        // What that costs is your arrow keys. The arrows work the toy the
+        // sight is on and turn you when it is on nothing, so crossing the
+        // nook they stop turning you, for no reason you can see, and the
+        // toy reacting is behind you. Jake walked into it by the way up and
+        // said he loses control of the arrow keys near the stairs. The
+        // stairs are not it: a probe says the nook's floor has done this
+        // since the day it had toys on it, and the stair only gave him a
+        // reason to cross the room holding an arrow down.
         let benches = self.benches.iter().enumerate().filter_map(|(n, one)| {
-            slab(from, way, &Self::bench_box(one)).map(|far| (Seen::Bench(n), far))
+            slab(from, way, &Self::bench_box(one))
+                .filter(|far| *far <= BENCH_REACH)
+                .map(|far| (Seen::Bench(n), far))
         });
 
         // and the one book that is not a book, which is a case sized thing
@@ -3038,6 +3120,106 @@ mod tests {
         let way = (bench.at + Vec3::Y * bench.size.y - from).normalize();
 
         assert_eq!(room.looking_at(from, way), Some(Seen::Bench(0)));
+    }
+
+    /// Spec 0006: crossing the nook does not quietly hand your arrows to a
+    /// toy you are walking past.
+    ///
+    /// The arrows work the toy the sight is on and turn you when it is on
+    /// nothing, so a toy that reaches across the room is a room you cannot
+    /// look around in. Jake found it from the way up, reporting that the
+    /// arrow keys stop working near the stairs; the stairs were not it.
+    /// Spec 0038: nothing of the grid is left hanging in the stairwell.
+    ///
+    /// **A hole in a ceiling goes through the ceiling.** `minus` cuts in
+    /// all three directions, and the well began inside the ceiling's own
+    /// thickness, so every bar crossing the opening kept its lowest two
+    /// centimetres. From up the stair they read as bars lying across the
+    /// nook's floor, which is how Jake found them.
+    #[test]
+    fn nothing_of_the_grid_hangs_in_the_stairwell() {
+        let room = Room::of(crate::games());
+        let (bars, tiles) = room.lattice();
+
+        // **Over the ceiling's own thickness, not over the well's.** Asked
+        // of the well's height this cannot fail: whatever height the well
+        // has, clipping to it removes exactly what is inside it, so the
+        // question answers itself. What is being asked is whether anything
+        // of the grid is left in the opening's footprint at any height the
+        // grid occupies, which is how the shaved bars went unnoticed.
+        for open in crate::aloft::up_well().iter() {
+            let inside = Aabb::new(
+                vec3(open.min.x + 1e-3, TALL - CEIL_DROP * 2.0, open.min.z + 1e-3),
+                vec3(open.max.x - 1e-3, TALL + CEIL_DROP, open.max.z - 1e-3),
+            );
+
+            for (what, pieces) in [("bar", &bars), ("tile", &tiles)] {
+                for (at, size) in pieces.iter() {
+                    let box_ = Aabb::from_center_size(*at, *size);
+
+                    assert!(
+                        !inside.intersects(&box_),
+                        "a {} is still in the stairwell at {:?}, {:.3} deep",
+                        what,
+                        at,
+                        inside.max.y.min(box_.max.y) - inside.min.y.max(box_.min.y)
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0038: the ceiling is open where the way up comes through it.
+    ///
+    /// The grid hanging under it was clipped to the well from the day the
+    /// stair was built and the lid behind the grid was not, so what you saw
+    /// looking up the stair was the hole in the grid with a solid ceiling
+    /// behind it.
+    #[test]
+    fn the_ceiling_is_open_over_the_stairwell() {
+        let room = Room::of(crate::games());
+        let ceiling = room.ceiling();
+
+        for (n, open) in crate::aloft::up_well().iter().enumerate() {
+            let middle = vec3(open.center().x, TALL, open.center().z);
+
+            assert!(
+                !ceiling.iter().any(|piece| piece.contains_point(middle)),
+                "piece {} of the stairwell still has a ceiling over it",
+                n
+            );
+        }
+
+        // and the rest of it is still there: the middle of the hall's aisle
+        // is nowhere near the well and must still be covered
+        let hall = room.floors()[0];
+        let over = vec3(hall.center().x, TALL, hall.center().z);
+
+        assert!(
+            ceiling.iter().any(|piece| piece.contains_point(over)),
+            "cutting the stairwell took the hall's ceiling with it"
+        );
+    }
+
+    #[test]
+    fn crossing_the_nook_leaves_your_arrows_alone() {
+        let room = Room::of(some(12));
+        let bench = room.benches.first().expect("a bench");
+
+        // out in the nook's own lane, a stride and a half off the bench's
+        // working side, looking the way somebody crossing the room looks
+        let from = bench.at + bench.worked_from * 2.6 + Vec3::Y * 1.5;
+
+        for turn in 0..16 {
+            let yaw = turn as f32 * std::f32::consts::TAU / 16.0;
+            let way = vec3(yaw.sin(), -0.25, -yaw.cos()).normalize();
+
+            assert!(
+                !matches!(room.looking_at(from, way), Some(Seen::Bench(_))),
+                "crossing the nook at {:.2} radians took the arrows",
+                yaw
+            );
+        }
     }
 
     #[test]

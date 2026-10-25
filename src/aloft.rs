@@ -16,7 +16,7 @@
 //! hold up. The illusion is in the gentleness.
 
 use blitzkit::collision::Aabb;
-use glam::{vec3, Vec3};
+use glam::{vec3, Quat, Vec3};
 
 use crate::room::THICK;
 
@@ -29,172 +29,519 @@ pub const MIDDLE_X: f32 = -2.75;
 pub const MIDDLE_Z: f32 = -3.5;
 pub const BASE: f32 = 6.0;
 
-/// How big the room is inside, and how high.
+/// How big the room is inside.
 ///
-/// Tall enough for the loop, for headroom over its top flight, and for the
-/// thing above it that no flight reaches.
+/// **A cube.** Spec 0038 puts three floors in here at right angles to each
+/// other and they want to be the same floor, which a room taller or
+/// shorter than it is wide cannot give them. It was 8.0 high for 0037's
+/// loop, which wanted headroom over a flight and nothing else.
 pub const ROOM: f32 = 12.5;
-pub const TALL: f32 = 8.0;
+pub const TALL: f32 = ROOM;
+pub const HALF: f32 = ROOM * 0.5;
 
-/// The loop: the square its flights run round, how wide a flight is, and how
-/// much of each side is stair rather than landing.
-pub const SIDE: f32 = 8.0;
-pub const WIDE: f32 = 1.8;
-pub const RUN: f32 = 5.0;
-pub const LANDING: f32 = SIDE - RUN;
-
-/// How far one flight climbs, and the steps it does it in.
+/// The middle of the room, which everything in here is measured from.
 ///
-/// **A monumental stair, because the arithmetic leaves no choice.** Three
-/// quarters of a metre over five is a gradient that cannot be cut into
-/// ordinary steps: twenty of them would rise under four centimetres each,
-/// which is a trip hazard rather than a stair. Five treads of a metre and
-/// rises of fifteen centimetres is what that gradient actually is, and it is
-/// a real form. Processional, which suits the room.
-pub const CLIMB: f32 = 0.75;
-pub const STEPS: u64 = 5;
-pub const TREAD: f32 = RUN / STEPS as f32;
-pub const RISE: f32 = CLIMB / STEPS as f32;
-
-/// How far the whole loop climbs, which is where it has to drop back to.
-#[cfg(test)]
-pub fn round_trip() -> f32 {
-    CLIMB * 4.0
+/// The three frames are the same layout turned, so they need one point to
+/// turn about, and this is it.
+pub fn middle() -> Vec3 {
+    vec3(MIDDLE_X, BASE + HALF, MIDDLE_Z)
 }
 
-/// Which way flight `n` runs, counted from nought, and which way is its left.
-fn way(n: u64) -> (Vec3, Vec3) {
-    match n % 4 {
-        0 => (vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)),
-        1 => (vec3(0.0, 0.0, 1.0), vec3(-1.0, 0.0, 0.0)),
-        2 => (vec3(-1.0, 0.0, 0.0), vec3(0.0, 0.0, -1.0)),
-        _ => (vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0)),
+/// How many ways there are to be the right way up in here. Spec 0038.
+///
+/// Three, and Jake's reason is that a computer drawing three dimensional
+/// rooms is not fundamentally different from a drawing by hand on paper, so
+/// what fills a picture is what fills this.
+pub const FRAMES: u64 = 3;
+
+/// Frame `n`'s own up, as the turn that carries this room's up on to it.
+///
+/// **The three cyclic turns of the axes**, which is a third of a turn about
+/// the room's long diagonal. Nought leaves them alone, one sends x to z and
+/// y to x, two sends x to y and y to z.
+///
+/// Two things fall out of that and both are the reason for it.
+///
+/// A box stays a box. Every collider in this building is axis aligned, and
+/// a rotation that only permutes the axes leaves one alone, so three frames
+/// cost no new kind of collider at all.
+///
+/// And the three flights climb to three different surfaces. Quarter turns
+/// about single axes were tried first: they put one frame's door in the
+/// floor, which is a hole you fall down, and gave two other frames the same
+/// wall. Under these, up is y, x and z and the doors are in the east wall,
+/// the north wall and the ceiling.
+pub fn frame(n: u64) -> Quat {
+    let diagonal = Vec3::ONE.normalize();
+    let third = std::f32::consts::TAU / 3.0;
+
+    match n % FRAMES {
+        0 => Quat::IDENTITY,
+        1 => Quat::from_axis_angle(diagonal, -third),
+        _ => Quat::from_axis_angle(diagonal, third),
     }
 }
 
-/// The corner flight `n` sets off from.
-/// How far the whole loop stands off the floor.
+/// A point in frame `n`'s own terms, put into the world.
 ///
-/// **One step, so that nothing of it is in the floor's plane.** The first
-/// landing sat with its top face at exactly `BASE`, which is where the floor
-/// is drawn, and two faces in one plane speckle as you move: it is the fault
-/// this building has fought nine times and the first picture of this room
-/// had it round the foot of the cone.
-/// A step and a half, not a step: the slabs are a rise thick and anchored
-/// at their tops, so lifting by exactly one rise put the bottom of the first
-/// one back in the floor and cancelled out.
-pub const OFF_THE_FLOOR: f32 = RISE * 1.5;
-
-pub fn corner(n: u64) -> Vec3 {
-    let half = SIDE * 0.5;
-    let (x, z) = match n % 4 {
-        0 => (-half, -half),
-        1 => (half, -half),
-        2 => (half, half),
-        _ => (-half, half),
-    };
-
-    vec3(MIDDLE_X + x, BASE + OFF_THE_FLOOR, MIDDLE_Z + z)
+/// Frame nought's terms are the world's, turned so that nought nought nought
+/// is the middle of the room rather than its corner.
+pub fn in_frame(n: u64, local: Vec3) -> Vec3 {
+    middle() + frame(n) * local
 }
 
-/// Every tread of every flight, as the boxes they are drawn and walked as.
-pub fn treads() -> Vec<Aabb> {
+/// A box in frame `n`'s own terms, put into the world.
+///
+/// Exact rather than a bounding box, because the turn is a right angle: the
+/// two corners come back as two corners of the same box with the names
+/// swapped, so taking the smaller and larger of each pair is the box itself.
+pub fn box_in_frame(n: u64, low: Vec3, high: Vec3) -> Aabb {
+    let (a, b) = (in_frame(n, low), in_frame(n, high));
+
+    Aabb::new(a.min(b), a.max(b))
+}
+
+/// One flight: how wide, how deep a tread, how high a rise, and how many.
+///
+/// **A stair you can read as a stair**, which is the whole reason 0038
+/// exists. 0037's loop rose 0.15 over a metre of going, which is eight and
+/// a half degrees, and at that pitch the risers are invisible and what is
+/// left is a row of shelves. This is 32 degrees, which is a staircase.
+pub const STAIR_WIDE: f32 = 1.6;
+pub const STAIR_GOING: f32 = 0.4;
+pub const STAIR_RISE: f32 = 0.25;
+pub const STAIR_STEPS: u64 = 12;
+pub const STAIR_RUN: f32 = STAIR_GOING * STAIR_STEPS as f32;
+pub const STAIR_CLIMB: f32 = STAIR_RISE * STAIR_STEPS as f32;
+
+/// How far across its own floor a flight stands.
+///
+/// Off the middle, so that the three of them turn into three different
+/// parts of the room rather than three copies of the same part. A test says
+/// so rather than the eye.
+pub const STAIR_ACROSS: f32 = -2.6;
+
+/// The door each flight climbs to: how wide, how tall, and how deep the
+/// dark behind it is.
+///
+/// **The flights have to go somewhere.** A staircase ending at a blank wall
+/// is a ramp with steps on it, and the thing that makes Escher's room read
+/// is that every flight is plainly on its way to a door somebody uses.
+pub const DOOR_WIDE: f32 = STAIR_WIDE;
+pub const DOOR_TALL: f32 = 2.0;
+pub const DOOR_BACK: f32 = 0.5;
+
+/// Every tread of frame `n`'s flight, in the world.
+///
+/// It climbs to the wall rather than stopping short of it, so the top tread
+/// is the threshold of the door and there is no landing to explain.
+pub fn treads(n: u64) -> Vec<Aabb> {
+    (0..STAIR_STEPS)
+        .map(|step| {
+            let along = HALF - STAIR_RUN + STAIR_GOING * step as f32;
+            let top = -HALF + STAIR_RISE * (step as f32 + 1.0);
+
+            box_in_frame(
+                n,
+                vec3(along, -HALF, STAIR_ACROSS),
+                vec3(along + STAIR_GOING, top, STAIR_ACROSS + STAIR_WIDE),
+            )
+        })
+        .collect()
+}
+
+/// How many doors a frame has: one at the top of its flight and one at the
+/// far end of its floor.
+///
+/// **Two, because one is a dead end.** With a door only at the top, the
+/// only journey anybody can make is up and back down again, and Jake's
+/// first word on the built room was that the characters just go back and
+/// forth on the same staircase. They were, and no amount of staggering
+/// fixes a path with one end. People in a building are going somewhere.
+pub const DOORS: u64 = 2;
+
+/// The hole frame `n`'s door `which` makes.
+///
+/// Nought is at the top of the flight, in the wall it climbs to. One is at
+/// the far end of the same frame's floor, square to it, so the two of them
+/// are the ends of a walk rather than the same wall twice.
+pub fn doorway(n: u64, which: u64) -> Aabb {
+    let across = STAIR_ACROSS + STAIR_WIDE * 0.5;
+
+    match which % DOORS {
+        0 => {
+            let foot = -HALF + STAIR_CLIMB;
+
+            box_in_frame(
+                n,
+                vec3(HALF - THICK, foot, across - DOOR_WIDE * 0.5),
+                vec3(HALF + THICK, foot + DOOR_TALL, across + DOOR_WIDE * 0.5),
+            )
+        }
+        // **Across the floor from the foot of the flight, not in line with
+        // it.** Lined up, frame nought's stood on where the way up arrives
+        // and walled it off, which the walk test found and the test meant
+        // to guard that arrival missed, because it only read the treads.
+        //
+        // Putting the dark behind a door past its opening rather than
+        // round it, which was a separate fault found the same hour, fixes
+        // that one too, so this is no longer the only thing holding it. It
+        // stays because of what it does to the walk: a floor leg that
+        // crosses the room is somebody walking in the open, and in line it
+        // was two paces and a door.
+        _ => box_in_frame(
+            n,
+            vec3(-HALF + DOOR_WIDE, -HALF, HALF - THICK),
+            vec3(-HALF + DOOR_WIDE * 2.0, -HALF + DOOR_TALL, HALF + THICK),
+        ),
+    }
+}
+
+/// Which way a doorway faces: the axis it is thin along, and which way
+/// along that axis is out of the room.
+fn door_faces(hole: &Aabb) -> (usize, f32) {
+    let size = hole.size().to_array();
+    let axis = (0..3)
+        .min_by(|a, b| size[*a].total_cmp(&size[*b]))
+        .expect("three axes");
+    let sign = (hole.center() - middle()).to_array()[axis].signum();
+
+    (axis, sign)
+}
+
+/// The recess behind frame `n`'s door `which`: a back and four sides.
+///
+/// **Closed, not a panel hung behind the hole.** One slab with daylight all
+/// round it was the first build, and through the opening you saw a lit
+/// surface square to the sun, which came out *brighter* than the wall it
+/// was meant to be a hole in. Jake looked at the room and said the portals
+/// the people walk through look like blank walls. They did: there is
+/// nothing about a pale rectangle on a pale wall that says doorway.
+///
+/// Boxed in, the only light that gets in is the room's own, through the
+/// opening, which is what makes a doorway dark.
+pub fn door_recess(n: u64, which: u64) -> Vec<Aabb> {
+    let hole = doorway(n, which);
+    let (axis, sign) = door_faces(&hole);
+    let (mut low, mut high) = (hole.min.to_array(), hole.max.to_array());
+
+    // the recess runs from the wall's far face outward
+    if sign > 0.0 {
+        low[axis] = high[axis];
+        high[axis] = low[axis] + DOOR_BACK;
+    } else {
+        high[axis] = low[axis];
+        low[axis] = high[axis] - DOOR_BACK;
+    }
+
     let mut out = Vec::new();
 
-    for flight in 0..4u64 {
-        let (along, across) = way(flight);
-        let foot = CLIMB * flight as f32;
-        let from = corner(flight) + along * LANDING;
+    // the back of it, grown to cover the ends of the four sides
+    let (mut back_low, mut back_high) = (low, high);
+    if sign > 0.0 {
+        back_low[axis] = high[axis];
+        back_high[axis] = high[axis] + THICK;
+    } else {
+        back_high[axis] = low[axis];
+        back_low[axis] = low[axis] - THICK;
+    }
+    for k in 0..3 {
+        if k != axis {
+            back_low[k] -= THICK;
+            back_high[k] += THICK;
+        }
+    }
+    out.push(Aabb::new(Vec3::from(back_low), Vec3::from(back_high)));
 
-        for step in 0..STEPS {
-            let up = foot + RISE * (step as f32 + 1.0);
-            let at = from + along * (TREAD * step as f32) + vec3(0.0, up, 0.0);
-            let far = at + along * TREAD + across * WIDE;
+    // and its four sides
+    for k in 0..3 {
+        if k == axis {
+            continue;
+        }
 
-            out.push(Aabb::new(
-                vec3(at.x.min(far.x), at.y - RISE, at.z.min(far.z)),
-                vec3(at.x.max(far.x), at.y, at.z.max(far.z)),
-            ));
+        for end in 0..2 {
+            let (mut side_low, mut side_high) = (low, high);
+            if end == 0 {
+                side_high[k] = low[k];
+                side_low[k] = low[k] - THICK;
+            } else {
+                side_low[k] = high[k];
+                side_high[k] = high[k] + THICK;
+            }
+            out.push(Aabb::new(Vec3::from(side_low), Vec3::from(side_high)));
         }
     }
 
     out
 }
 
-/// The four landings, each at the top of one flight and the foot of the next.
-pub fn landings() -> Vec<Aabb> {
-    (0..4u64)
-        .map(|n| {
-            let (along, across) = way(n);
-            let up = BASE + OFF_THE_FLOOR + CLIMB * n as f32;
-            let at = corner(n) + vec3(0.0, CLIMB * n as f32, 0.0);
-            let far = at + along * LANDING + across * WIDE;
-
-            Aabb::new(
-                vec3(at.x.min(far.x), up - RISE, at.z.min(far.z)),
-                vec3(at.x.max(far.x), up, at.z.max(far.z)),
-            )
-        })
-        .collect()
-}
-
-/// Where the thing on landing `n` stands, which is what tells the landings
-/// apart.
+/// How far the casing round a door stands proud of its wall, and how wide
+/// it is.
 ///
-/// **Spec 0021 learned this the hard way and wrote it down.** Eight rooms
-/// alike in everything but a word on a wall, parked the day they were built
-/// because nobody could tell where they were, and three rewrites of a map
-/// failed before anybody saw why: a map can only point at places that
-/// already mean something. Four flights that look alike is that room again.
-pub fn on_the_landing(n: u64) -> Vec3 {
-    let (along, across) = way(n);
-    let at = corner(n) + vec3(0.0, CLIMB * n as f32, 0.0);
+/// **A doorway needs an edge.** A hole cut clean into a flat wall has
+/// nothing to catch the light along, so from any distance it is a change of
+/// shade and not an opening. An architrave is the oldest fix there is and
+/// it is four boxes.
+pub const CASE_OUT: f32 = 0.07;
+pub const CASE_WIDE: f32 = 0.17;
 
-    at + along * (LANDING * 0.5) + across * (WIDE * 0.5) + vec3(0.0, 0.0, 0.0)
-}
+/// The casing round frame `n`'s door `which`, on the side you see it from.
+pub fn door_case(n: u64, which: u64) -> Vec<Aabb> {
+    let hole = doorway(n, which);
+    let (axis, sign) = door_faces(&hole);
+    let (mut low, mut high) = (hole.min.to_array(), hole.max.to_array());
 
-/// The four things on the four landings, as profiles for the wheel.
-///
-/// **One each, and no two alike**, which is spec 0021's whole lesson. A
-/// colour would not do it: that spec tried telling eight rooms apart by a
-/// word and a colour and parked the room over it.
-pub fn standing_on(n: u64) -> fn(f32) -> (f32, f32) {
-    match n % 4 {
-        // a cone, point up
-        0 => |v: f32| (v * 0.9, 0.55 * (1.0 - v)),
-        // a sphere
-        1 => |v: f32| {
-            (
-                v * 0.8,
-                0.8 * (1.0 - (2.0 * v - 1.0).powi(2)).max(0.0).sqrt(),
-            )
-        },
-        // a spindle, widest in the middle and closed at both ends
-        2 => |v: f32| (v * 1.1, 0.5 * (1.0 - (2.0 * v - 1.0).abs())),
-        // and a bowl, open at the top
-        _ => |v: f32| (v * 0.6, 0.18 + 0.52 * v),
+    // it stands on the room's side of the wall, which is the near face
+    if sign > 0.0 {
+        high[axis] = low[axis] + CASE_OUT;
+        low[axis] -= CASE_OUT * 0.4;
+    } else {
+        low[axis] = high[axis] - CASE_OUT;
+        high[axis] += CASE_OUT * 0.4;
     }
+
+    let mut out = Vec::new();
+    // **No sill.** A casing is two uprights and a head, which is what a
+    // real one is and what this one has to be: the piece along the bottom
+    // sat in the plane of the tread you step off, and the engine's own
+    // coplanar check named it as a fight 0.10 by 1.60. Jake saw it as
+    // banding on the floor.
+    let down = (frame(n) * Vec3::NEG_Y).to_array();
+
+    for k in 0..3 {
+        if k == axis {
+            continue;
+        }
+
+        for end in 0..2 {
+            let toward = if end == 0 { -1.0 } else { 1.0 };
+            if down[k] * toward > 0.5 {
+                continue;
+            }
+
+            let (mut side_low, mut side_high) = (low, high);
+            if end == 0 {
+                side_high[k] = low[k];
+                side_low[k] = low[k] - CASE_WIDE;
+            } else {
+                side_low[k] = high[k];
+                side_high[k] = high[k] + CASE_WIDE;
+            }
+
+            // **Only the head oversails.** Growing the uprights as well
+            // laps them into it at the corners, and two drawn faces that
+            // lap in one plane speckle: the engine's check reported four
+            // of those, one per corner. The head reaching over the
+            // uprights is what a casing does anyway.
+            if down[k].abs() > 0.5 {
+                let other = (0..3).find(|m| *m != axis && *m != k).expect("a third");
+                side_low[other] -= CASE_WIDE;
+                side_high[other] += CASE_WIDE;
+            }
+
+            out.push(Aabb::new(Vec3::from(side_low), Vec3::from(side_high)));
+        }
+    }
+
+    out
 }
 
-/// How high the fittings hang, how far they reach and how hard they burn.
+/// Where frame `n`'s own lamp hangs, which is from its own ceiling.
 ///
-/// **The only room here with daylight in it**, or the nearest this building
-/// gets: everything else is a cellar, a corridor at night or a hall lit in
-/// pools, and this is the one room with nothing above it. The reach is long
-/// so the whole loop is visible at once, because a loop you can only see a
-/// quarter of is not a loop.
-pub const LAMP_UP: f32 = TALL - 1.2;
+/// **One light per frame, and each one is overhead in its own terms.** A
+/// room lit from a single direction tells you which way is really up, which
+/// is the one thing this room must not say. Lit from three, no surface is
+/// the lit one.
+pub const LAMP_DOWN: f32 = 1.0;
 pub const LAMP_RANGE: f32 = 11.0;
-pub const LAMP_LIT: f32 = 0.9;
+pub const LAMP_LIT: f32 = 0.55;
 
-pub fn lamps() -> Vec<Vec3> {
-    (0..4u64)
+pub fn sconces() -> Vec<Vec3> {
+    (0..FRAMES)
         .map(|n| {
-            let at = on_the_landing(n);
-
-            vec3(at.x, BASE + LAMP_UP, at.z)
+            in_frame(
+                n,
+                vec3(
+                    HALF - STAIR_RUN * 0.5,
+                    HALF - LAMP_DOWN,
+                    STAIR_ACROSS + STAIR_WIDE * 0.5,
+                ),
+            )
         })
         .collect()
+}
+
+/// And the lamps, which are those.
+pub fn lamps() -> Vec<Vec3> {
+    sconces()
+}
+
+/// Somebody on one of the flights: where they are, which way is up to them,
+/// which way they face in their own terms, and where they are in their
+/// stride.
+pub struct Walker {
+    pub at: Vec3,
+    pub up: Quat,
+    pub facing: f32,
+    pub along: f32,
+    pub shade: usize,
+}
+
+/// How many walk each flight, and how fast.
+pub const WALKERS: u64 = 4;
+pub const WALKS: f32 = 0.9;
+
+/// How far one pace carries somebody, which is what turns metres walked into
+/// legs swung.
+pub const STRIDE: f32 = 0.7;
+
+/// How long somebody is out of sight between journeys.
+pub const WAITS: f32 = 3.0;
+
+/// The walk through a frame, in that frame's own terms: out of the door at
+/// the top of the flight, down it, along the floor, and out of the door at
+/// the end of that.
+///
+/// Three corners rather than two, because the turn at the foot is the thing
+/// that says they are going somewhere rather than pacing.
+pub fn journey() -> [Vec3; 4] {
+    let across = STAIR_ACROSS + STAIR_WIDE * 0.5;
+    let over = -HALF + DOOR_WIDE * 1.5;
+
+    [
+        vec3(HALF, -HALF + STAIR_CLIMB, across),
+        vec3(HALF - STAIR_RUN, -HALF, across),
+        vec3(over, -HALF, across),
+        vec3(over, -HALF, HALF - THICK),
+    ]
+}
+
+/// The floor leg of that walk, laid on the floor as a path.
+///
+/// **A person on a blank wall reads as floating.** The first build with
+/// journeys in it had people crossing the other two frames' floors, which
+/// are this room's walls and ceiling, and from the middle they looked like
+/// debris hanging in the air: nothing about a blank surface says it is a
+/// floor, so nothing about somebody on it says they are standing. A worn
+/// strip under them says both, which is spec 0020's trick in the hall.
+pub fn path(n: u64) -> Vec<Aabb> {
+    let walk = journey();
+
+    // **Square legs and not one diagonal.** A box cannot be a strip laid
+    // across a corner: the first build ran the floor leg from the foot of
+    // the flight straight to the door, and the box round that diagonal was
+    // a seven metre slab stuck to the wall. An L is two strips.
+    walk.windows(2)
+        .skip(1)
+        .map(|leg| {
+            let (low, high) = (leg[0].min(leg[1]), leg[0].max(leg[1]));
+
+            box_in_frame(
+                n,
+                vec3(low.x - PATH_WIDE * 0.5, -HALF, low.z - PATH_WIDE * 0.5),
+                vec3(
+                    high.x + PATH_WIDE * 0.5,
+                    -HALF + PATH_DEEP,
+                    high.z + PATH_WIDE * 0.5,
+                ),
+            )
+        })
+        .collect()
+}
+
+/// How wide that path is and how proud of the floor it stands.
+///
+/// Proud rather than sunk, because a strip laid *in* a floor is two faces
+/// in one plane, which is the fault this building has fought nine times.
+pub const PATH_WIDE: f32 = 1.4;
+pub const PATH_DEEP: f32 = 0.04;
+
+/// How long that walk is, corner to corner.
+pub fn journey_long() -> f32 {
+    journey()
+        .windows(2)
+        .map(|leg| leg[0].distance(leg[1]))
+        .sum()
+}
+
+/// Everybody in the room, at `since` seconds.
+///
+/// **Each of them is going somewhere and then is gone.** They used to walk
+/// up the flight and back down it for ever, which Jake named the first time
+/// he saw the room built: the characters just go back and forth on the same
+/// staircase. They did, and no amount of staggering fixes a path with one
+/// end. This one has a door at each end, so somebody comes out of one,
+/// crosses the room and leaves by the other.
+///
+/// **Popping happens in a doorway and nowhere else.** A figure appearing in
+/// the open reads as the building being broken, which is the one reading
+/// this room cannot afford, and a door is the thing that makes an arrival
+/// ordinary.
+///
+/// Half of them walk it the other way, so the traffic goes both ways and
+/// people pass each other on the stair.
+pub fn walking(since: f32) -> Vec<Walker> {
+    let path = journey();
+    let long = journey_long();
+    let round = long / WALKS + WAITS;
+    let mut out = Vec::new();
+
+    for n in 0..FRAMES {
+        for who in 0..WALKERS {
+            // spread along the round, and the frames out of step with each
+            // other, so the room is never three of the same thing at once
+            let off = round * (who as f32 / WALKERS as f32 + n as f32 * 0.11);
+            let walked = (since + off).rem_euclid(round) * WALKS;
+
+            // out of sight, which is the wait past the end of the walk
+            if walked > long {
+                continue;
+            }
+
+            // and the odd ones take it from the other end
+            let down = (n + who) % 2 == 0;
+            let gone = if down { walked } else { long - walked };
+
+            let mut left = gone;
+            let mut leg = 0;
+            while leg + 2 < path.len() && left > path[leg].distance(path[leg + 1]) {
+                left -= path[leg].distance(path[leg + 1]);
+                leg += 1;
+            }
+            let (from, to) = (path[leg], path[leg + 1]);
+            let at = from.lerp(to, (left / from.distance(to)).clamp(0.0, 1.0));
+            let way = (to - from).normalize_or(Vec3::X) * if down { 1.0 } else { -1.0 };
+
+            // their feet stand on the tread under them rather than on the
+            // slope between two, or they ride the flight like a ramp
+            let at = if at.y > -HALF + 1e-4 {
+                // clamped, because at the very top they are standing on
+                // the threshold of the door rather than on a thirteenth
+                // tread of a flight with twelve
+                let step = ((at.x - (HALF - STAIR_RUN)) / STAIR_GOING)
+                    .floor()
+                    .clamp(0.0, STAIR_STEPS as f32 - 1.0);
+
+                vec3(at.x, -HALF + (step + 1.0) * STAIR_RISE, at.z)
+            } else {
+                at
+            };
+
+            out.push(Walker {
+                at: in_frame(n, at),
+                up: frame(n),
+                // yaw nought faces -z and grows toward +x
+                facing: way.x.atan2(-way.z),
+                // `people::swing` takes a fraction of a crossing and puts
+                // `people::STEPS` paces in it, so this is distance walked
+                // over the length of that many strides
+                along: (since + off) * WALKS / (STRIDE * crate::people::STEPS),
+                shade: (n * WALKERS + who) as usize,
+            });
+        }
+    }
+
+    out
 }
 
 // ---- the way up ----
@@ -325,6 +672,31 @@ pub fn up_treads() -> Vec<Aabb> {
     out
 }
 
+/// The way up as it is drawn, which is the way up without its lap.
+///
+/// **Spec 0014's own answer, and spec 0011 got there first.** The landing
+/// reaches a tread back under the last of them so that two walking surfaces
+/// never meet in a plane, which `walk` needs and which leaves both of them
+/// with a face at the same `z`. Two drawn faces in one plane speckle. So
+/// the lap is in the colliders, where it is needed, and out of the drawing,
+/// where it costs: the space behind the wall settled the same thing the
+/// same way, with its floor lapping the hall's in `solid` and stopping
+/// short of it in the picture.
+pub fn up_drawn() -> Vec<Aabb> {
+    let head = up_head();
+
+    up_treads()
+        .into_iter()
+        .map(|box_| {
+            if box_.size().z <= UP_GOING + 1e-4 || box_.min.z > head - 1e-4 {
+                return box_;
+            }
+
+            Aabb::new(vec3(box_.min.x, box_.min.y, head), box_.max)
+        })
+        .collect()
+}
+
 /// The slot the second flight comes up through, in this room's own floor.
 ///
 /// **Exactly the width of the flight**, so the stair fills it and there is
@@ -377,12 +749,23 @@ pub fn up_well() -> Vec<Aabb> {
         .map(|t| t.max.x)
         .fold(west + UP_WIDE, f32::max);
 
+    // **Down past the underside of the ceiling, not down to the shaft.**
+    // The shaft starts inside the ceiling's own thickness so that nothing
+    // of it hangs below the tiles, and for a while the well started there
+    // too. `room::minus` cuts in all three directions, so what that did to
+    // every bar crossing the opening was shave the top off it and leave the
+    // last two centimetres hanging in the hole: Jake looked back down the
+    // stair and saw bars lying across the nook's floor. A hole in a ceiling
+    // goes through the ceiling.
+    let under = crate::room::TALL - crate::room::CEIL_DROP * 2.0;
+    let open = |box_: Aabb| Aabb::new(vec3(box_.min.x, under, box_.min.z), box_.max);
+
     vec![
-        plan[0],
-        Aabb::new(
+        open(plan[0]),
+        open(Aabb::new(
             vec3(west + UP_WIDE, plan[1].min.y, head),
             vec3(crosses, plan[1].max.y, head + UP_WIDE),
-        ),
+        )),
     ]
 }
 
@@ -393,7 +776,16 @@ pub fn up_well() -> Vec<Aabb> {
 /// flight, all the way to where it arrives.
 fn up_plan() -> Vec<Aabb> {
     let (west, head, foot) = (up_west(), up_head(), up_foot());
-    let (under, over) = (crate::room::soffit(), BASE - THICK);
+    // **Inside the ceiling's own thickness, not level with its underside.**
+    // Level with it, the shaft's bottom face and the bars' bottom faces
+    // were the same plane, which speckles: Jake looked up in the hall and
+    // saw a white slab with stippled edges hanging in the grid. Below it
+    // instead and the shaft hangs as a beam, which was the fault before
+    // that. Between the two there is neither.
+    let (under, over) = (
+        crate::room::soffit() + crate::room::CEIL_DROP * 0.4,
+        BASE - THICK,
+    );
 
     // where your head first reaches the tiles on the way up
     let steps = ((crate::room::soffit() - crate::people::TALL) / UP_RISE)
@@ -467,7 +859,23 @@ pub fn up_shaft() -> Vec<Aabb> {
                     .collect();
             }
 
-            out.extend(pieces);
+            // **And out of the pieces already kept.** The two rings meet at
+            // a corner and lap there, so two drawn faces ended up in one
+            // plane three times over, which the engine's check reported and
+            // which speckles on the way up. Disjoint, there is nothing for
+            // two faces to share.
+            for piece in pieces {
+                let mut left = vec![piece];
+
+                for kept in out.iter() {
+                    left = left
+                        .into_iter()
+                        .flat_map(|one| crate::room::minus(one, *kept))
+                        .collect();
+                }
+
+                out.extend(left);
+            }
         }
     }
 
@@ -586,8 +994,29 @@ pub fn solid() -> Vec<Aabb> {
         ),
     ]);
 
-    out.extend(treads());
-    out.extend(landings());
+    // the three doors come out of the shell, whichever face each is in: one
+    // is in the east wall, one in the north wall and one in the ceiling
+    for n in 0..FRAMES {
+        for which in 0..DOORS {
+            let hole = doorway(n, which);
+            out = out
+                .into_iter()
+                .flat_map(|box_| crate::room::minus(box_, hole))
+                .collect();
+        }
+    }
+
+    // then every frame's flight, and the dark behind every frame's door,
+    // which are put in after the cutting rather than before it
+    for n in 0..FRAMES {
+        out.extend(treads(n));
+
+        for which in 0..DOORS {
+            out.extend(door_recess(n, which));
+            out.extend(door_case(n, which));
+        }
+    }
+
     out.extend(way_up());
     out
 }
@@ -595,103 +1024,6 @@ pub fn solid() -> Vec<Aabb> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Spec 0037: the loop is shallow enough to read as closed.
-    ///
-    /// **This is the room.** Three of these were built and looked at: a
-    /// twelve metre climb is 20.6 degrees and is plainly a spiral going away
-    /// from you, four separate flights from the floor are an X of ramps, and
-    /// this one reads as a square walkway. Lose the gradient and the room
-    /// stops working.
-    #[test]
-    fn it_is_shallow_enough_to_read_as_closed() {
-        // **Over the whole loop, not over the stairs.** The eye integrates
-        // what it can see, which is the perimeter: rise over the stairs
-        // alone ignores the landings and comes out at 8.5 degrees, and that
-        // was not the number the picture was judged on.
-        let around = SIDE * 4.0;
-        let degrees = (round_trip() / around).atan().to_degrees();
-
-        assert!(
-            degrees < 7.0,
-            "the loop climbs at {:.1} degrees over its own length, which reads as a spiral",
-            degrees
-        );
-        assert!(
-            degrees > 2.0,
-            "the loop climbs at {:.1} degrees, which is a floor",
-            degrees
-        );
-
-        // and no single flight is steep enough to give it away either
-        let flight = (CLIMB / RUN).atan().to_degrees();
-
-        assert!(
-            flight < 12.0,
-            "a flight climbs at {:.1} degrees, which is a staircase and not a gradient",
-            flight
-        );
-    }
-
-    /// And the steps are the gradient rather than a guess at one.
-    ///
-    /// A monumental stair, because that gradient cannot be cut into ordinary
-    /// steps: twenty treads would rise under four centimetres each.
-    #[test]
-    fn the_steps_are_what_that_gradient_is() {
-        // read off the treads that are built, because an assertion on the
-        // constants they are built from has a constant value and proves
-        // only that I can type
-        let steps = treads();
-        let first = steps[0];
-        let second = steps[1];
-        let rise = second.max.y - first.max.y;
-        let tread = (second.center() - first.center()).length();
-
-        assert_eq!(steps.len() as u64, STEPS * 4, "a flight is missing steps");
-        assert!(
-            rise > 0.1 && rise < 0.2,
-            "a rise of {:.3} is not a step anybody takes",
-            rise
-        );
-        assert!(
-            tread > rise * 4.0,
-            "a tread of {:.2} on a rise of {:.2} is an ordinary stair, not this gradient",
-            tread,
-            rise
-        );
-
-        // and a flight's steps add up to its climb
-        let flight = steps[(STEPS - 1) as usize].max.y - first.max.y + rise;
-
-        assert!(
-            (flight - CLIMB).abs() < 1e-4,
-            "a flight climbs {:.3} where its steps add up to {:.3}",
-            CLIMB,
-            flight
-        );
-    }
-
-    /// Spec 0037: the loop closes, and the join is small enough to hide.
-    #[test]
-    fn the_fourth_flight_comes_back_to_the_first() {
-        let first = landings()[0];
-        let last = treads().last().copied().expect("a last tread");
-
-        // round the square and back over the same corner
-        assert!(
-            (last.max.x - first.min.x).abs() < SIDE,
-            "the loop does not come back over its own start"
-        );
-
-        // and the drop at the join is a step rather than a storey
-        assert!(
-            round_trip() < 3.5,
-            "the join is a {:.1} metre drop, which is nowhere to put",
-            round_trip()
-        );
-    }
-
     /// Nothing of the loop lies in the plane of the floor.
     ///
     /// Two faces in one plane speckle as you move, and this building has
@@ -699,45 +1031,407 @@ mod tests {
     /// the floor's height and the first picture of the room showed it round
     /// the foot of the cone.
     #[test]
-    fn nothing_of_it_is_in_the_floors_plane() {
-        for one in treads().into_iter().chain(landings()) {
+    fn no_flight_is_in_its_own_floors_plane() {
+        for n in 0..FRAMES {
+            let floor = in_frame(n, vec3(0.0, -HALF, 0.0));
+            let down = frame(n) * Vec3::Y;
+
+            for tread in treads(n) {
+                // the lowest tread's underside is the floor, which is one
+                // box inside another and hidden. What must not happen is a
+                // tread's *top* landing in the floor's plane.
+                let top = (tread.center() - floor).dot(down) + tread.size().dot(down.abs()) * 0.5;
+
+                assert!(
+                    top > 1e-3,
+                    "a tread of frame {} tops out in its own floor, {:.4} off it",
+                    n,
+                    top
+                );
+            }
+        }
+    }
+
+    /// Spec 0014 and the engine's 0048: nothing drawn in these two rooms
+    /// shares a plane with anything else drawn.
+    ///
+    /// **Asked of the engine rather than of the eye.** Jake sent three
+    /// screenshots of this room and the hall under it with speckle in them,
+    /// and the check named every one: a casing sill in the plane of the
+    /// tread you step off, four casing corners where an upright lapped its
+    /// head, the shaft's underside level with the ceiling bars it comes
+    /// through, the landing's lap, and the two shaft rings meeting at a
+    /// corner. Twelve in here, and none of them needed walking to.
+    ///
+    /// Over what is drawn and not over what is walked, which is the whole
+    /// difference: `up_treads` laps its landing on purpose so no two
+    /// walking surfaces meet in a plane, and that lap is meant to be in the
+    /// colliders and out of the picture.
+    #[test]
+    fn nothing_drawn_in_here_is_in_one_plane_with_anything() {
+        use blitzkit::renderer::coplanar::Fights;
+
+        let room = crate::room::Room::of(crate::games());
+        let looking = blitzkit::renderer::depth::Depth::of(&blitzkit::camera::Camera::default());
+
+        let mut drawn: Vec<Aabb> = room
+            .solid()
+            .into_iter()
+            .filter(|box_| !up_treads().contains(box_))
+            .collect();
+        drawn.extend(up_drawn());
+
+        let mine = Aabb::new(
+            middle() - Vec3::splat(HALF + 1.5),
+            middle() + Vec3::splat(HALF + 1.5),
+        );
+        let way = Aabb::new(
+            vec3(up_west() - 1.0, -1.0, up_foot() - 1.0),
+            vec3(up_arrival() + 1.0, BASE + 1.0, up_head() + UP_WIDE + 1.0),
+        );
+
+        for fight in Fights::of(drawn, 0, 0, &looking).fights.iter() {
+            let at = fight.patch.center();
+
             assert!(
-                one.min.y > BASE,
-                "a piece of the loop reaches the floor at {:.3}",
-                one.min.y
+                !mine.contains_point(at) && !way.contains_point(at),
+                "two drawn faces share a plane at {:?}, over {:.2} by {:.2}",
+                at,
+                fight.patch.size().x.max(fight.patch.size().y),
+                fight.patch.size().z.max(fight.patch.size().y)
             );
         }
     }
 
-    /// Spec 0021's lesson: the landings have to be tellable apart.
+    /// Spec 0012: the shaft meets the nook's ceiling inside its thickness,
+    /// not level with either face of it and not hanging below it.
+    ///
+    /// **The engine's check cannot see this one.** It reads boxes, and a
+    /// suspended ceiling is drawn and never collided, so the bars are in no
+    /// list it is given. Both ways of getting this wrong have shipped: the
+    /// shaft started a tile's drop under the bars and hung across the hall
+    /// as a white beam, then level with their underside and speckled along
+    /// every edge. Jake found each by looking up.
     #[test]
-    fn no_two_landings_are_in_the_same_place() {
-        let mut seen: Vec<Vec3> = Vec::new();
+    fn the_shaft_meets_the_ceiling_inside_its_thickness() {
+        let room = crate::room::Room::of(crate::games());
+        let (bars, tiles) = room.lattice();
+        let hung = |pieces: &Vec<crate::room::Hung>| {
+            pieces
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(low, high), (at, size)| {
+                    (low.min(at.y - size.y * 0.5), high.max(at.y + size.y * 0.5))
+                })
+        };
 
-        for n in 0..4u64 {
-            let at = on_the_landing(n);
+        let (bar_low, bar_high) = hung(&bars);
+        let (tile_low, tile_high) = hung(&tiles);
+        let low = bar_low.min(tile_low);
+        let high = bar_high.max(tile_high);
 
-            for was in seen.iter() {
-                assert!(
-                    (at - *was).length() > 1.0,
-                    "two landings are {:.2} apart",
-                    (at - *was).length()
-                );
-            }
-
-            seen.push(at);
-        }
-
-        // each is a step higher than the last, which is the only thing they
-        // share and the thing that makes the climb real
-        for n in 1..4u64 {
+        for (n, wall) in up_shaft().iter().enumerate() {
             assert!(
-                on_the_landing(n).y > on_the_landing(n - 1).y,
-                "landing {} is not above landing {}",
+                wall.min.y > low + 1e-3 && wall.min.y < high - 1e-3,
+                "shaft wall {} starts at {:.4}, and the ceiling it comes \
+                 through is {:.4} to {:.4}",
                 n,
-                n - 1
+                wall.min.y,
+                low,
+                high
             );
         }
+    }
+
+    /// Spec 0038: a flight here reads as a flight.
+    ///
+    /// **The whole reason 0038 exists.** 0037's loop rose 0.15 over a metre
+    /// of going, which is eight and a half degrees, and at that pitch the
+    /// risers are invisible and what is left is a row of shelves. Taken off
+    /// the built boxes rather than off the two constants, because what gets
+    /// drawn is the boxes.
+    #[test]
+    fn a_flight_reads_as_a_flight() {
+        let treads = treads(0);
+        let (low, high) = (treads[0], treads[treads.len() - 1]);
+        let rise = high.max.y - low.max.y;
+        let run = high.center().x - low.center().x;
+        let degrees = (rise / run).atan().to_degrees();
+
+        assert!(
+            (25.0..45.0).contains(&degrees),
+            "the flight climbs at {:.1} degrees, which is a ramp or a ladder",
+            degrees
+        );
+    }
+
+    /// Spec 0038: the three frames are at right angles to each other.
+    #[test]
+    fn the_three_frames_are_at_right_angles() {
+        let ups: Vec<Vec3> = (0..FRAMES).map(|n| frame(n) * Vec3::Y).collect();
+
+        for (a, one) in ups.iter().enumerate() {
+            for (b, other) in ups.iter().enumerate() {
+                if a == b {
+                    continue;
+                }
+
+                assert!(
+                    one.dot(*other).abs() < 1e-5,
+                    "frame {} and frame {} are {:.3} apart rather than square",
+                    a,
+                    b,
+                    one.dot(*other)
+                );
+            }
+        }
+    }
+
+    /// Spec 0038: every frame is a quarter turn, so a box stays a box.
+    ///
+    /// Every collider in this building is axis aligned and a right angle is
+    /// the only rotation that leaves one of those alone. This is what makes
+    /// three frames buildable here at all, so it is worth a test rather
+    /// than a comment.
+    #[test]
+    fn a_box_turned_into_any_frame_is_still_a_box() {
+        let (low, high) = (vec3(-1.0, -2.0, -3.0), vec3(1.5, 2.5, 3.5));
+        let mut want = (high - low).to_array();
+        want.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        for n in 0..FRAMES {
+            let mut got = box_in_frame(n, low, high).size().to_array();
+            got.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            for (one, other) in want.iter().zip(got.iter()) {
+                assert!(
+                    (one - other).abs() < 1e-4,
+                    "frame {} turned a {:?} box into a {:?} one",
+                    n,
+                    want,
+                    got
+                );
+            }
+        }
+    }
+
+    /// Spec 0038: no two frames stand in each other.
+    ///
+    /// The three are the same layout turned, so whether they collide is
+    /// decided entirely by how far off its own middle a flight stands, and
+    /// that is a number somebody picked. A test says it was picked right.
+    #[test]
+    fn no_two_frames_stand_in_each_other() {
+        let all = |n: u64| {
+            let mut out = treads(n);
+            out.extend((0..DOORS).map(|which| doorway(n, which)));
+            out
+        };
+
+        for a in 0..FRAMES {
+            for b in 0..FRAMES {
+                if a >= b {
+                    continue;
+                }
+
+                for mine in all(a) {
+                    for theirs in all(b) {
+                        assert!(
+                            !mine.intersects(&theirs),
+                            "frames {} and {} overlap at {:?}",
+                            a,
+                            b,
+                            mine.center()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Spec 0038: every flight is inside the room it is in.
+    #[test]
+    fn every_flight_is_inside_the_room() {
+        let room = Aabb::new(middle() - Vec3::splat(HALF), middle() + Vec3::splat(HALF));
+
+        for n in 0..FRAMES {
+            for (step, tread) in treads(n).iter().enumerate() {
+                assert!(
+                    room.contains_point(tread.min) && room.contains_point(tread.max),
+                    "tread {} of frame {} is outside the room at {:?}",
+                    step,
+                    n,
+                    tread.min
+                );
+            }
+        }
+    }
+
+    /// Spec 0038: every flight climbs to a door, and the door is a hole.
+    ///
+    /// **A staircase that ends at a blank wall is a ramp with steps on it.**
+    /// What makes Escher's room read is that every flight is plainly on its
+    /// way to a door somebody uses, so the opening being real rather than
+    /// painted on is the claim.
+    #[test]
+    fn every_flight_climbs_to_a_hole_in_the_wall() {
+        let solid = solid();
+
+        for n in 0..FRAMES {
+            let top = treads(n)[STAIR_STEPS as usize - 1];
+
+            assert!(
+                top.intersects(&doorway(n, 0)),
+                "frame {}'s top tread does not reach its own door",
+                n
+            );
+
+            for which in 0..DOORS {
+                let door = doorway(n, which);
+
+                // a body standing in the opening is standing in nothing
+                let through = door.center();
+                for box_ in solid.iter() {
+                    assert!(
+                        !box_.contains_point(through),
+                        "frame {}'s door {} is still wall: {:?} to {:?}",
+                        n,
+                        which,
+                        box_.min,
+                        box_.max
+                    );
+                }
+
+                // with something behind it rather than the outside
+                assert!(
+                    solid
+                        .iter()
+                        .any(|box_| door_recess(n, which).iter().any(|part| part == box_)),
+                    "frame {}'s door {} opens on to nothing at all",
+                    n,
+                    which
+                );
+            }
+        }
+    }
+
+    /// Spec 0038: every frame's lamp hangs from that frame's own ceiling.
+    ///
+    /// **One light per frame and each one overhead in its own terms.** A
+    /// room lit from one direction tells you which way is really up, which
+    /// is the one thing this room must not say.
+    #[test]
+    fn every_frame_is_lit_from_its_own_ceiling() {
+        let sconces = sconces();
+
+        assert_eq!(sconces.len(), FRAMES as usize, "a frame with no light");
+        assert_eq!(sconces, lamps(), "a lamp that is not in a fitting");
+
+        for (n, at) in sconces.iter().enumerate() {
+            let up = frame(n as u64) * Vec3::Y;
+            let over = (*at - middle()).dot(up);
+
+            assert!(
+                over > HALF - LAMP_DOWN * 2.0,
+                "frame {}'s lamp is {:.2} over its middle, not up at its ceiling",
+                n,
+                over
+            );
+
+            // and it is over its own flight rather than anywhere up there
+            let flight: Vec<Aabb> = treads(n as u64);
+            let under = Aabb::new(*at - up * ROOM - Vec3::splat(0.6), *at + Vec3::splat(0.6));
+            assert!(
+                flight.iter().any(|tread| under.intersects(tread)),
+                "frame {}'s lamp lights no part of its own flight",
+                n
+            );
+        }
+    }
+
+    /// Spec 0038: somebody is always about, and nobody walks on air.
+    ///
+    /// **Not everybody all the time.** They used to be a fixed cast pacing
+    /// a flight, so counting them was the test. Now each of them walks a
+    /// journey with a door at either end and is out of sight between
+    /// journeys, so what can be claimed is that the room is never empty,
+    /// that every frame gets used, and that nobody is ever between a tread
+    /// and their own floor.
+    #[test]
+    fn somebody_is_always_about_and_nobody_walks_on_air() {
+        let mut seen = vec![0; FRAMES as usize];
+
+        for tick in 0..600 {
+            let since = tick as f32 * 0.1;
+            let who = walking(since);
+
+            assert!(!who.is_empty(), "the room emptied at {:.2}s", since);
+
+            for walker in who.iter() {
+                let on = walker.shade as u64 / WALKERS;
+                seen[on as usize] += 1;
+
+                let under = Aabb::new(walker.at - Vec3::splat(0.06), walker.at + Vec3::splat(0.06));
+                let floor = in_frame(on, vec3(0.0, -HALF, 0.0));
+                let up = frame(on) * Vec3::Y;
+                let off_the_floor = (walker.at - floor).dot(up);
+
+                assert!(
+                    off_the_floor.abs() < 0.06
+                        || treads(on).iter().any(|tread| tread.intersects(&under)),
+                    "at {:.2}s somebody on frame {} is {:.3} off their own floor and on no tread",
+                    since,
+                    on,
+                    off_the_floor
+                );
+                assert!(
+                    walker.up.is_normalized(),
+                    "somebody on frame {} has no way up",
+                    on
+                );
+            }
+        }
+
+        for (n, count) in seen.iter().enumerate() {
+            assert!(*count > 0, "nobody ever used frame {}", n);
+        }
+    }
+
+    /// Spec 0038: the one flight that is the right way up for you is one you
+    /// can actually walk.
+    ///
+    /// You keep your own down and cannot change it, so two of the three
+    /// flights are somebody else's. The third is yours and a stair you
+    /// cannot climb in a room about climbing is worth a test.
+    #[test]
+    fn you_can_walk_up_your_own_frames_flight() {
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+        let flight = treads(0);
+        let foot = flight[0];
+
+        let start = vec3(foot.min.x - 0.8, BASE + 0.6, foot.center().z);
+        let (mut at, mut falling) = (start, 0.0);
+        for _ in 0..420 {
+            let (next, fell) = crate::walk::walk(
+                at,
+                Vec3::X * crate::SPEED,
+                falling,
+                crate::RADIUS,
+                1.0 / 60.0,
+                &solid,
+                true,
+            );
+            at = next;
+            falling = fell;
+        }
+
+        let top = flight[flight.len() - 1].max.y;
+        assert!(
+            at.y > top - STAIR_RISE * 2.0,
+            "walking at your own frame's flight ended at y {:.3} and its top is {:.3}",
+            at.y,
+            top
+        );
     }
 
     /// And it is above everything else in the building.
@@ -947,20 +1641,39 @@ mod tests {
         }
     }
 
-    /// Spec 0037: you can get past the second flight to the rest of the room.
+    /// Spec 0038: nothing in the room stands where the way up arrives.
     ///
-    /// The landing and the second flight stand in the north lane, which is
-    /// what is left between the loop and the wall. If the flight takes too
-    /// much of it, arriving in this room means arriving in a dead end.
+    /// It used to read the lane between the loop and the wall. The loop is
+    /// gone and the three flights are somewhere else, so the claim is the
+    /// one that outlived it: you get off the stair into room rather than
+    /// into the side of something.
     #[test]
-    fn you_can_get_past_the_second_flight() {
-        let lane = up_head() - (MIDDLE_Z + SIDE * 0.5);
-
-        assert!(
-            lane >= 1.05,
-            "the lane past the second flight is {:.3}, and a body is 0.9",
-            lane
+    fn nothing_stands_where_the_way_up_arrives() {
+        let step_off = Aabb::new(
+            vec3(up_arrival(), BASE, up_head() - crate::RADIUS),
+            vec3(
+                up_arrival() + crate::RADIUS * 3.0,
+                BASE + crate::people::TALL,
+                up_head() + UP_WIDE + crate::RADIUS,
+            ),
         );
+
+        for n in 0..FRAMES {
+            let mut all = treads(n);
+            for which in 0..DOORS {
+                all.extend(door_recess(n, which));
+                all.extend(door_case(n, which));
+            }
+
+            for (step, tread) in all.iter().enumerate() {
+                assert!(
+                    !step_off.intersects(tread),
+                    "piece {} of frame {} stands where you step off the way up",
+                    step,
+                    n
+                );
+            }
+        }
     }
 
     /// Spec 0037: the slot in the floor is exactly the flight wide, so there
@@ -1012,25 +1725,6 @@ mod tests {
             );
         }
     }
-
-    /// Spec 0037: the stairwell does not cut the loop.
-    ///
-    /// The slot is in the north lane and the loop is a square inside it. One
-    /// box of the two overlapping would be a hole in a flight.
-    #[test]
-    fn the_stairwell_does_not_cut_the_loop() {
-        let hole = up_hole();
-
-        for (n, box_) in treads().iter().chain(landings().iter()).enumerate() {
-            assert!(
-                !hole.intersects(box_),
-                "the slot cuts box {} of the loop: {:?}",
-                n,
-                box_
-            );
-        }
-    }
-
     /// Spec 0037: all of it is under this room, and none of it is outside.
     ///
     /// A stair arriving through a floor that is not there arrives nowhere,

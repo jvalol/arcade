@@ -183,19 +183,24 @@ at.
 
 ## Acceptance criteria
 
-The loop:
+~~The loop:~~
 
-- The climb is gentle enough that the loop reads as
-  closed. — `aloft::tests::it_is_shallow_enough_to_read_as_closed`
-- And the treads are that gradient rather than a number beside
-  it. — `aloft::tests::the_steps_are_what_that_gradient_is`
-- The fourth flight's top is the first flight's
-  foot. — `aloft::tests::the_fourth_flight_comes_back_to_the_first`
-- Nothing of it sits in the floor's own
-  plane. — `aloft::tests::nothing_of_it_is_in_the_floors_plane`
-- No two landings are in the same place, which is what tells them
-  apart. — `aloft::tests::no_two_landings_are_in_the_same_place`
-- And nothing else in the building is up
+~~The climb is gentle enough that the loop reads as closed. And the treads
+are that gradient. The fourth flight's top is the first flight's foot.
+Nothing of it sits in the floor's own plane. No two landings are in the same
+place, which is what tells them apart.~~
+
+**Struck 2026-10-24 with the loop, per
+[0038](0038-three-ways-to-be-the-right-way-up.md).** Six tests, all passing,
+all honest about what they measured, and the room still did not read. The
+first of them is the one worth keeping in mind: it asked whether the
+gradient was gentle enough to look level, which it was, and nothing
+anywhere asked whether a stair looked like a stair.
+
+What survives of that list, because it is about the room rather than the
+loop:
+
+- Nothing else in the building is up
   here. — `aloft::tests::nothing_in_the_building_is_up_here`
 
 The way up:
@@ -209,14 +214,12 @@ The way up:
 - It does not stand in the swing of spec 0007's door, and you can still
   reach the shelf that opens
   it. — `aloft::tests::the_stair_is_not_in_the_swing_of_the_door`
-- You can get past the second flight to the rest of the
-  room. — `aloft::tests::you_can_get_past_the_second_flight`
+- Nothing in the room stands where the way up
+  arrives. — `aloft::tests::nothing_stands_where_the_way_up_arrives`
 - The slot in the floor is filled by the stair, so there is nothing beside
   it to fall down. — `aloft::tests::the_slot_is_filled_by_the_stair`
 - Where the floor is not open the flight passes under it with room over your
   head. — `aloft::tests::the_second_flight_clears_the_floor_it_comes_up_through`
-- The stairwell does not cut the
-  loop. — `aloft::tests::the_stairwell_does_not_cut_the_loop`
 - All of it is under this room and none of it is
   outside. — `aloft::tests::the_whole_stair_is_under_the_room`
 - Every lamp on it is in a fitting, in the shaft, and not inside the

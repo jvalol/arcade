@@ -1104,6 +1104,21 @@ pub const ALOFT_CEILING: Vec4 = vec4(0.62, 0.61, 0.58, 1.0);
 pub const ALOFT_TREAD: Vec4 = vec4(0.47, 0.45, 0.42, 1.0);
 pub const ALOFT_LANDING: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
 
+/// Past each of the three doors, per spec 0038.
+///
+/// **Not black.** Nothing in this engine is lit to nothing, so a true black
+/// panel reads as a hole in the picture rather than as a room with its light
+/// off. Dark enough to be somewhere else and light enough to be somewhere.
+pub const ALOFT_DARK: Vec4 = vec4(0.10, 0.10, 0.11, 1.0);
+
+/// The way worn across each frame's own floor, per spec 0038. Darker than
+/// the floor it is on, because what it has to do is say where the floor is.
+pub const ALOFT_PATH: Vec4 = vec4(0.33, 0.32, 0.31, 1.0);
+
+/// The casing round each door, per spec 0038. Darker than the wall and
+/// lighter than what is behind the opening, so the three read as three.
+pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
+
 /// The way up to it, per spec 0037. The stair is the nook's own joinery and
 /// the shaft above the ceiling is the imaginarium's stone, so the climb
 /// changes under you about halfway.

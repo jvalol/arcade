@@ -198,8 +198,7 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::aloft::solid()
         .into_iter()
         .filter(|box_| {
-            !crate::aloft::treads().contains(box_)
-                && !crate::aloft::landings().contains(box_)
+            !(0..crate::aloft::FRAMES).any(|n| crate::aloft::treads(n).contains(box_))
                 && !up.contains(box_)
         })
         .partition(|box_| box_.min.y < crate::aloft::BASE + crate::aloft::TALL);
@@ -207,11 +206,18 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     put(Where::Aloft, Made::AloftWall, walls);
     put(Where::Aloft, Made::AloftCeiling, ceiling);
 
-    let stair = crate::aloft::up_treads();
-    let (stair, shaft): (Vec<Aabb>, Vec<Aabb>) =
-        up.into_iter().partition(|box_| stair.contains(box_));
+    // **Drawn without the lap.** `up_treads` reaches its landing a tread
+    // back under the flight so that no two walking surfaces meet in a
+    // plane, which `walk` wants; drawn, that leaves two faces in one plane,
+    // which speckles. Spec 0014's settlement is to keep the lap in the
+    // colliders and out of the picture.
+    let walked = crate::aloft::up_treads();
+    let shaft: Vec<Aabb> = up
+        .into_iter()
+        .filter(|box_| !walked.contains(box_))
+        .collect();
 
-    put(Where::Ascent, Made::AscentStair, stair);
+    put(Where::Ascent, Made::AscentStair, crate::aloft::up_drawn());
     put(Where::Ascent, Made::AscentShaft, shaft);
 
     out
@@ -306,19 +312,18 @@ mod tests {
 
         // and the imaginarium, which is the only room above the rest
         let aloft = {
-            let half = crate::aloft::ROOM * 0.5 + crate::room::THICK * 2.0;
+            // out as far as the dark behind the three doors, which stands
+            // past the shell on purpose: it is what stops each opening
+            // being an opening on to nothing. Spec 0038 put one of those
+            // doors in the ceiling, so the room reaches past its own lid as
+            // well as past its own walls, and it is the same distance every
+            // way because the three frames are one layout turned.
+            let out = crate::aloft::DOOR_BACK + crate::room::THICK * 2.0;
+            let middle = crate::aloft::middle();
 
             Aabb::new(
-                glam::vec3(
-                    crate::aloft::MIDDLE_X - half,
-                    crate::aloft::BASE - crate::room::THICK * 2.0,
-                    crate::aloft::MIDDLE_Z - half,
-                ),
-                glam::vec3(
-                    crate::aloft::MIDDLE_X + half,
-                    crate::aloft::BASE + crate::aloft::TALL + crate::room::THICK * 2.0,
-                    crate::aloft::MIDDLE_Z + half,
-                ),
+                middle - glam::Vec3::splat(crate::aloft::HALF + out),
+                middle + glam::Vec3::splat(crate::aloft::HALF + out),
             )
         };
 
@@ -421,6 +426,28 @@ mod tests {
             // drawn only as far as the hall's floor reaches and walked a
             // good deal further, per `behind::built`
             if matches!(run.made, Made::Lining | Made::Ground) {
+                continue;
+            }
+
+            // and a third, which is held to more than the other two. The way
+            // up's landing laps the flight in the colliders so that no two
+            // walking surfaces meet in a plane, and is drawn without that
+            // lap because two drawn faces in one plane speckle, per spec
+            // 0014. So its drawn boxes are not the walked ones, but every
+            // one of them has to be inside a walked one: drawn short of
+            // what stops you is a picture of a stair, drawn past it is a
+            // stair you fall through.
+            if run.made == Made::AscentStair {
+                for box_ in run.boxes.iter() {
+                    assert!(
+                        solid.iter().any(|one| {
+                            one.min.cmple(box_.min + 1e-3).all()
+                                && one.max.cmpge(box_.max - 1e-3).all()
+                        }),
+                        "a drawn piece of the way up is outside everything that stops you"
+                    );
+                }
+
                 continue;
             }
 

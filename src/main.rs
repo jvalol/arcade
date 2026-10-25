@@ -390,8 +390,6 @@ struct Arcade {
     /// barrels and the bell. Spec 0033.
     body: Option<MeshId>,
     head: Option<MeshId>,
-    /// The four things on the imaginarium's landings. Spec 0037.
-    aloft_shapes: Vec<MeshId>,
     leg: Option<MeshId>,
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
@@ -827,7 +825,6 @@ impl Arcade {
             barrel: None,
             body: None,
             head: None,
-            aloft_shapes: Vec::new(),
             leg: None,
             hoop: None,
             bottle: None,
@@ -1727,79 +1724,87 @@ impl Arcade {
         };
 
         let reaches = self.room.reaches;
-        let mut stand = |at: Vec3, facing: f32, along: Option<f32>, shade: usize| {
-            let turn = glam::Quat::from_rotation_y(facing);
-            // **A coat, trousers and a head.** One colour from crown to
-            // toe is a mannequin by definition: the only thing that says a
-            // figure in a dark corridor is dressed is where the colour
-            // stops.
-            let which = shade % aim::COATS.len();
-            let coat = aim::COATS[which];
-            let trousers = aim::TROUSERS[which];
-            let skin = aim::HEADS[which];
-            // which way is their right, for hanging the legs off
-            let side = vec3(facing.cos(), 0.0, facing.sin());
-            // and which way they are walking, for swinging them along
-            let ahead = vec3(facing.sin(), 0.0, -facing.cos());
-
-            scene.push_material(
-                body,
-                &Transform::at(at + vec3(0.0, people::TORSO_FROM, 0.0)).with_rotation(turn),
-                coat,
-                aim::DULL,
-            );
-            scene.push_material(
-                head,
-                &Transform::at(at + vec3(0.0, people::HEAD_FROM, 0.0)).with_rotation(turn),
-                skin,
-                aim::DULL,
-            );
-
-            for which in 0..2 {
-                let out = if which == 0 { 1.0 } else { -1.0 };
-                let (fore, up) = match along {
-                    Some(along) => (people::swing(along, which), people::lift(along, which)),
-                    None => (0.0, 0.0),
-                };
+        // **Which way is up is a parameter now, per spec 0038.** Every
+        // offset in here used to be a `vec3(0.0, something, 0.0)`, which is
+        // a figure that can only ever stand on a floor. The imaginarium has
+        // three floors at right angles to each other and people on all of
+        // them, so the body is built in its own terms and then turned.
+        let mut stand =
+            |at: Vec3, up: glam::Quat, facing: f32, along: Option<f32>, shade: usize| {
+                let turn = up * glam::Quat::from_rotation_y(facing);
+                // **A coat, trousers and a head.** One colour from crown to
+                // toe is a mannequin by definition: the only thing that says a
+                // figure in a dark corridor is dressed is where the colour
+                // stops.
+                let which = shade % aim::COATS.len();
+                let coat = aim::COATS[which];
+                let trousers = aim::TROUSERS[which];
+                let skin = aim::HEADS[which];
+                // which way is their right, for hanging the legs off
+                let side = up * vec3(facing.cos(), 0.0, facing.sin());
+                // and which way they are walking, for swinging them along
+                let ahead = up * vec3(facing.sin(), 0.0, -facing.cos());
+                // and which way is over their head
+                let over = up * Vec3::Y;
 
                 scene.push_material(
-                    leg,
-                    &Transform::at(
-                        at + side * (people::LEGS_APART * out) + ahead * fore + vec3(0.0, up, 0.0),
-                    )
-                    .with_rotation(turn),
-                    trousers,
-                    aim::DULL,
-                );
-
-                // an arm is the same leg, thinner and shorter, hung off the
-                // shoulder. One mesh for both is the point of a wheel.
-                //
-                // **Stood on its hand rather than scaled upside down.** The
-                // first build hung it from the shoulder with a y scale of
-                // minus one, which turns every triangle in it inside out: a
-                // face wound away from you is drawn nowhere, so what was on
-                // screen was the inside of an arm, a pale slab flapping off
-                // each shoulder. The limb is wide at the top anyway, so it
-                // only had to start lower.
-                scene.push_material(
-                    leg,
-                    &Transform::at(
-                        at + side * (people::ARMS_APART * out)
-                            + ahead * (-fore * 0.55)
-                            + vec3(0.0, people::ARM_FROM - people::ARM_TALL, 0.0),
-                    )
-                    .with_rotation(turn)
-                    .with_scale(vec3(
-                        0.62,
-                        people::ARM_TALL / people::LEG_TALL,
-                        0.62,
-                    )),
+                    body,
+                    &Transform::at(at + over * people::TORSO_FROM).with_rotation(turn),
                     coat,
                     aim::DULL,
                 );
-            }
-        };
+                scene.push_material(
+                    head,
+                    &Transform::at(at + over * people::HEAD_FROM).with_rotation(turn),
+                    skin,
+                    aim::DULL,
+                );
+
+                for which in 0..2 {
+                    let out = if which == 0 { 1.0 } else { -1.0 };
+                    let (fore, lift) = match along {
+                        Some(along) => (people::swing(along, which), people::lift(along, which)),
+                        None => (0.0, 0.0),
+                    };
+
+                    scene.push_material(
+                        leg,
+                        &Transform::at(
+                            at + side * (people::LEGS_APART * out) + ahead * fore + over * lift,
+                        )
+                        .with_rotation(turn),
+                        trousers,
+                        aim::DULL,
+                    );
+
+                    // an arm is the same leg, thinner and shorter, hung off the
+                    // shoulder. One mesh for both is the point of a wheel.
+                    //
+                    // **Stood on its hand rather than scaled upside down.** The
+                    // first build hung it from the shoulder with a y scale of
+                    // minus one, which turns every triangle in it inside out: a
+                    // face wound away from you is drawn nowhere, so what was on
+                    // screen was the inside of an arm, a pale slab flapping off
+                    // each shoulder. The limb is wide at the top anyway, so it
+                    // only had to start lower.
+                    scene.push_material(
+                        leg,
+                        &Transform::at(
+                            at + side * (people::ARMS_APART * out)
+                                + ahead * (-fore * 0.55)
+                                + over * (people::ARM_FROM - people::ARM_TALL),
+                        )
+                        .with_rotation(turn)
+                        .with_scale(vec3(
+                            0.62,
+                            people::ARM_TALL / people::LEG_TALL,
+                            0.62,
+                        )),
+                        coat,
+                        aim::DULL,
+                    );
+                }
+            };
 
         // the ones the wave is passing, crossing to the next number
         let window = aleph::window(self.at);
@@ -1815,7 +1820,13 @@ impl Arcade {
             // power rather than the door opposite
             |n| moving_by.and_then(|by| by.sends(n)),
         ) {
-            stand(who.at, who.facing, Some(who.along), who.from as usize);
+            stand(
+                who.at,
+                glam::Quat::IDENTITY,
+                who.facing,
+                Some(who.along),
+                who.from as usize,
+            );
         }
 
         // and whoever is at the desk wanting a room, who has never been
@@ -1826,7 +1837,13 @@ impl Arcade {
             // it, looking at whoever came through the door. Jake walked in
             // and said the shadowy figure is creepy, and it was: a guest
             // waiting for a room does not watch the entrance.
-            stand(aleph::waiting(reaches), 0.0, None, 0);
+            stand(aleph::waiting(reaches), glam::Quat::IDENTITY, 0.0, None, 0);
+        }
+
+        // and the three flights of the imaginarium, per spec 0038, where
+        // the whole content of the room is other people using it
+        for who in aloft::walking(self.since) {
+            stand(who.at, who.up, who.facing, Some(who.along), who.shade);
         }
     }
 
@@ -1840,10 +1857,11 @@ impl Arcade {
     /// None of the hotel's door drawing could be reused. That corridor runs
     /// along `x` with its doors in the `z` walls, and this one is turned a
     /// quarter: every scale and every offset is the other way about.
-    /// The imaginarium over the hall. Spec 0037.
+    /// The imaginarium over the hall. Specs 0037 and 0038.
     ///
-    /// Its shell is handed over once per spec 0026. What is here is the loop
-    /// itself and the four things that tell its landings apart.
+    /// Its shell is handed over once per spec 0026. What is here is the
+    /// three frames: a flight apiece, a door at the top of each, and the
+    /// fitting each frame's own lamp hangs in.
     fn draw_the_imaginarium(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
         scene.push_colored(
             floor,
@@ -1855,38 +1873,62 @@ impl Arcade {
             aim::ALOFT_WALL,
         );
 
-        for tread in aloft::treads() {
-            scene.push_colored(
-                cube,
-                &Transform::at(tread.center()).with_scale(tread.size()),
-                aim::ALOFT_TREAD,
-            );
+        for n in 0..aloft::FRAMES {
+            // **A riser is a face and a tread is a face.** What makes a
+            // stair read is the two of them taking the light differently,
+            // which one colour over the lot throws away.
+            for (step, tread) in aloft::treads(n).iter().enumerate() {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(tread.center()).with_scale(tread.size()),
+                    if step % 2 == 0 {
+                        aim::ALOFT_TREAD
+                    } else {
+                        aim::ALOFT_LANDING
+                    },
+                );
+            }
+
+            // the path worn across each frame's own floor, which is what
+            // says that the surface somebody is standing on is a floor
+            for leg in aloft::path(n) {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(leg.center()).with_scale(leg.size()),
+                    aim::ALOFT_PATH,
+                );
+            }
+
+            // the dark past each door, which is what stops an opening
+            // being an opening on to nothing
+            for which in 0..aloft::DOORS {
+                for part in aloft::door_recess(n, which) {
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(part.center()).with_scale(part.size()),
+                        aim::ALOFT_DARK,
+                    );
+                }
+
+                // and the casing round it, which is what gives the opening
+                // an edge to catch the light along
+                for part in aloft::door_case(n, which) {
+                    scene.push_colored(
+                        cube,
+                        &Transform::at(part.center()).with_scale(part.size()),
+                        aim::ALOFT_CASE,
+                    );
+                }
+            }
         }
 
-        // the landings, a shade apart from the treads so the corners read as
-        // places rather than as more stair
-        for landing in aloft::landings() {
+        // the fitting each frame's lamp hangs in, on that frame's ceiling
+        for (n, at) in aloft::sconces().iter().copied().enumerate() {
             scene.push_colored(
                 cube,
-                &Transform::at(landing.center()).with_scale(landing.size()),
-                aim::ALOFT_LANDING,
-            );
-        }
-
-        // and the one thing on each, which is what tells them apart
-        for (n, shape) in self.aloft_shapes.iter().copied().enumerate() {
-            scene.push_colored(
-                shape,
-                &Transform::at(aloft::on_the_landing(n as u64)),
-                aim::ALOFT_TREAD,
-            );
-        }
-
-        // the fittings the lamps come from, hung over each landing
-        for at in aloft::lamps() {
-            scene.push_colored(
-                cube,
-                &Transform::at(at).with_scale(vec3(0.3, 0.14, 0.3)),
+                &Transform::at(at)
+                    .with_rotation(aloft::frame(n as u64))
+                    .with_scale(vec3(0.3, 0.14, 0.3)),
                 aim::ALOFT_CEILING,
             );
         }
@@ -4703,9 +4745,6 @@ impl Game for Arcade {
         // what fails that is the promise of a face rather than the lack of
         // one. Carved reads as a figure. Modelled reads as a person with
         // something missing.
-        self.aloft_shapes = (0..4)
-            .map(|n| renderer.add_mesh(&cellar::turned(20, 18, aloft::standing_on(n))))
-            .collect();
         self.body =
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 22, people::torso_profile)));
         self.head =
@@ -5990,8 +6029,10 @@ impl Game for Arcade {
             // outdoors. It hung over the garden three metres up, six by five of
             // dark slate with the lanterns catching its underside, which from
             // down there is a roof over a garden that has no building on it.
-            for slab in self.room.floors().iter() {
-                let (middle, size) = (slab.center(), slab.size());
+            // one quad per piece, and the pieces have the stairwell out of
+            // them. Spec 0038, and `Room::ceiling` says why.
+            for piece in self.room.ceiling() {
+                let (middle, size) = (piece.center(), piece.size());
 
                 // turned over, because a plane faces up and from underneath
                 // that is a back face, which the opaque pass culls
@@ -9572,6 +9613,24 @@ mod tests {
             "wayup",
             vec3(west + 3.4, EYE, foot + 1.5),
             vec3(west, EYE + 0.6, foot + 2.5),
+        );
+    }
+
+    /// Spec 0027: the imaginarium, from the floor you walk in on.
+    ///
+    /// **Two frames in one frame.** Stood anywhere in here you can see your
+    /// own staircase and at least one that belongs to somebody else, and
+    /// that pairing is the whole picture: a flight you understand next to a
+    /// flight at an angle that makes no sense, with people on both. One
+    /// alone is either a staircase or a bug.
+    #[test]
+    fn the_imaginarium_is_drawn() {
+        let mid = aloft::middle();
+
+        looks_right(
+            "imaginarium",
+            vec3(mid.x - 4.5, aloft::BASE + EYE, mid.z + 4.5),
+            vec3(mid.x + 1.0, mid.y - 2.0, mid.z - 2.0),
         );
     }
 
