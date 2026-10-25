@@ -12,44 +12,21 @@ use blitzkit::texture::TextureData;
 /// than Cantor's diagonal.
 pub const NAME: &str = "A Window";
 
-/// How far in step `level` is.
-pub fn deep(level: usize) -> f32 {
-    STEP.powi(level as i32)
+pub fn says(view: View) -> String {
+    format!("{:.0} times in", view.deep())
 }
 
-pub fn says(level: usize) -> String {
-    format!("{:.0} times in", deep(level))
-}
-
-/// How many steps a second the arrows take you, and how much shift adds.
+/// The frame round the opening, and how far it stands proud of the wall.
 ///
-/// Shift runs you everywhere else in this building, so it runs you here.
-pub const DIVES: f32 = 0.9;
-pub const RUNS: f32 = 3.5;
-
-/// How much of a step you can be part way through and still have the frame
-/// cover the picture behind it.
-///
-/// **The whole trick, and it costs nothing.** Each step in is a separate
-/// picture and there are only as many as single precision has, so a frame
-/// of them cannot be worked out while you watch: one is three to twenty
-/// five milliseconds and a frame is eight. What can be done at no cost is
-/// grow the one already on the wall. A quarter of the way into a step the
-/// picture is `STEP` to the quarter bigger, and at the end of the step it
-/// is exactly `STEP` bigger, which is the next picture's view, so swapping
-/// to it changes nothing on screen.
-///
-/// What the frame is for is the overflow. The picture grows past the
-/// opening and the frame has to be wide enough to hide where it has got to
-/// at the end of a step, which is `(STEP - 1) / 2` of the opening each
-/// side.
-pub const FRAME: f32 = WIDE * (STEP - 1.0) * 0.5 + 0.04;
+/// **It used to be load bearing and now it is not.** Spec 0039 shipped
+/// with a ladder of fixed views and no live picture at all: between two
+/// steps it drew the one it had bigger, and the frame had to be wide
+/// enough to hide the overflow. Spec 0074 of the engine gave a texture you
+/// can write again, so the picture is worked out as you move and nothing
+/// overflows. The frame stays because it reads as a window rather than a
+/// poster, and it is a third of what it was.
+pub const FRAME: f32 = 0.11;
 pub const FRAME_PROUD: f32 = 0.06;
-
-/// How much bigger the picture is drawn, part way through a step.
-pub fn grown(dove: f32) -> f32 {
-    STEP.powf(dove.fract())
-}
 
 /// The frame round the opening: four sides, standing proud of the wall.
 pub fn surround(reaches: f32) -> Vec<blitzkit::collision::Aabb> {
@@ -82,7 +59,7 @@ pub fn surround(reaches: f32) -> Vec<blitzkit::collision::Aabb> {
 }
 
 /// How many texels across the panel is drawn.
-pub const TEXELS: u32 = 256;
+pub const TEXELS: u32 = 128;
 
 /// Where the dive goes.
 ///
@@ -94,41 +71,38 @@ pub const AT: (f32, f32) = (-0.743_643_9, 0.131_825_9);
 /// How much the panel shows at the top of the dive.
 pub const ACROSS: f32 = 3.2;
 
-/// How much one step in goes.
+/// How fast the arrows move you, as a share of the view a second.
 ///
-/// A root two, so a doubling is two steps and holding the key reads as a
-/// dive rather than a slideshow.
-pub const STEP: f32 = std::f32::consts::SQRT_2;
+/// A share rather than a distance, so panning feels the same however far
+/// in you are: half a panel a second at the top is half a panel a second
+/// at the bottom.
+pub const PANS: f32 = 0.5;
 
-/// How many steps there are before single precision gives out.
+/// And how fast shift and up or down change the scale, as a multiple a
+/// second.
 ///
-/// **Worked out rather than chosen, and it is the room.** Two neighbouring
-/// texels differ by `across / TEXELS`, and a float near the dive point can
-/// only tell apart differences above its own last bit. Below that the
-/// arithmetic is the same for both and the picture goes to blocks: the
-/// machine runs out before the mathematics does, which is the only thing
-/// this panel has to say.
-pub fn levels() -> usize {
-    let ulp = AT.0.abs().max(AT.1.abs()) * f32::EPSILON;
-    let mut level = 0;
+/// **Shift, because the plain arrows move you now.** Spec 0039 shipped
+/// with a ladder of fixed views and no way across the plane at all, which
+/// Jake walked into on 2026-10-25.
+pub const ZOOMS: f32 = 1.7;
 
-    while ACROSS / STEP.powi(level) / TEXELS as f32 > ulp {
-        level += 1;
-    }
-
-    level as usize
+/// How far out and how far in you can get.
+///
+/// Out is where the whole set is in the panel. In is where single
+/// precision gives out: a texel's place is `corner + n * step`, and once
+/// `step` is under the last bit of `corner` the two come out the same
+/// float, so the same arithmetic runs twice and the picture goes to
+/// blocks. The machine runs out before the mathematics does.
+pub fn closest(at: (f32, f32)) -> f32 {
+    at.0.abs().max(at.1.abs()).max(1.0) * f32::EPSILON * TEXELS as f32
 }
 
-/// What the panel shows at step `level`.
-pub fn view(level: usize) -> View {
-    View {
-        at: AT,
-        across: ACROSS / STEP.powi(level as i32),
-    }
-}
+/// How far the view can wander from the set before there is nothing to
+/// look at.
+pub const WANDER: f32 = 2.0;
 
-/// Where you are looking and how much of the plane is in the panel.
-#[derive(Clone, Copy, Debug)]
+/// Where you are looking and how much of the plane is in the panel./// Where you are looking and how much of the plane is in the panel.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct View {
     pub at: (f32, f32),
     pub across: f32,
@@ -136,7 +110,31 @@ pub struct View {
 
 impl Default for View {
     fn default() -> Self {
-        view(0)
+        View {
+            at: AT,
+            across: ACROSS,
+        }
+    }
+}
+
+impl View {
+    /// Moves the view by the arrows, in its own terms.
+    pub fn moved(self, pan: (f32, f32), zoom: f32, dt: f32) -> View {
+        let across = (self.across * ZOOMS.powf(-zoom * dt)).clamp(closest(self.at), ACROSS);
+        let step = self.across * PANS * dt;
+
+        View {
+            at: (
+                (self.at.0 + pan.0 * step).clamp(AT.0 - WANDER, AT.0 + WANDER),
+                (self.at.1 + pan.1 * step).clamp(AT.1 - WANDER, AT.1 + WANDER),
+            ),
+            across,
+        }
+    }
+
+    /// How far in this is, which is the only thing the readout says.
+    pub fn deep(self) -> f32 {
+        ACROSS / self.across
     }
 }
 
@@ -254,22 +252,149 @@ fn shade(n: u32, rounds: u32) -> (u8, u8, u8) {
 mod tests {
     use super::*;
 
+    /// Spec 0039: moving feels the same however far in you are.
+    ///
+    /// A pan is a share of what is in the panel rather than a distance, or
+    /// the same key crosses the whole set at the top and moves nothing at
+    /// the bottom.
     #[test]
-    fn it_stops_where_single_precision_does() {
-        let deep = view(levels() - 1);
-        let step = deep.across / TEXELS as f32;
-        let ulp = AT.0.abs().max(AT.1.abs()) * f32::EPSILON;
+    fn moving_feels_the_same_however_far_in() {
+        let shares: Vec<f32> = [1.0f32, 1e-2, 1e-4]
+            .iter()
+            .map(|across| {
+                let view = View {
+                    at: AT,
+                    across: *across,
+                };
+                let moved = view.moved((1.0, 0.0), 0.0, 0.25);
+
+                (moved.at.0 - view.at.0) / view.across
+            })
+            .collect();
+
+        for share in shares.iter() {
+            assert!(
+                (share - shares[0]).abs() < shares[0] * 0.02,
+                "a quarter second moves {:.6} of the panel at one scale and {:.6} at another",
+                shares[0],
+                share
+            );
+        }
+    }
+
+    /// Spec 0039: you cannot zoom in past what single precision can tell
+    /// apart, or out past the whole set.
+    ///
+    /// **In is the room's one claim.** A texel's place is `corner + n *
+    /// step`, and once `step` is under the last bit of `corner` the two
+    /// come out the same float, so the same arithmetic runs twice and the
+    /// picture goes to blocks. The machine runs out before the mathematics
+    /// does.
+    #[test]
+    fn the_view_stops_where_the_numbers_run_together() {
+        // taken at the clamp rather than walked to it: getting there is
+        // twenty three seconds of holding a key, and what is being asked
+        // is where it stops rather than how long that takes
+        let view = View {
+            at: AT,
+            across: closest(AT),
+        };
 
         assert!(
-            step > ulp,
-            "the last step is already past what a float can tell apart"
+            view.moved((0.0, 0.0), 1.0, 10.0).across >= view.across,
+            "held in from the stop, it went further"
         );
 
-        let past = ACROSS / STEP.powi(levels() as i32) / TEXELS as f32;
+        let step = view.across / TEXELS as f32;
+        let corner = view.at.0 - view.across * 0.5;
+
         assert!(
-            past <= ulp,
-            "there is another step in it, so this is not where it gives out"
+            (0..TEXELS - 1).all(|n| corner + n as f32 * step != corner + (n + 1) as f32 * step),
+            "held in, it went past where two texels are the same number"
         );
+
+        // and a few steps further in they do run together, so this is
+        // where it gives out rather than somewhere short of it
+        let past = View {
+            at: view.at,
+            across: view.across * 0.2,
+        };
+        let step = past.across / TEXELS as f32;
+        let corner = past.at.0 - past.across * 0.5;
+
+        assert!(
+            (0..TEXELS - 1).any(|n| corner + n as f32 * step == corner + (n + 1) as f32 * step),
+            "five times further in the numbers still tell texels apart"
+        );
+
+        // and out stops at the whole set
+        let mut view = View::default();
+        for _ in 0..600 {
+            view = view.moved((0.0, 0.0), -1.0, 1.0 / 60.0);
+        }
+
+        assert!(
+            (view.across - ACROSS).abs() < 1e-4,
+            "held out, the panel shows {:.3} and the whole set is {:.3}",
+            view.across,
+            ACROSS
+        );
+    }
+
+    /// Spec 0039: you cannot walk the view off into empty plane.
+    #[test]
+    fn you_cannot_wander_off_the_set() {
+        for way in [(1.0f32, 0.0f32), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+            let mut view = View::default();
+            for _ in 0..600 {
+                view = view.moved(way, 0.0, 1.0 / 60.0);
+            }
+
+            // **Against the set rather than against `WANDER`.** Read off
+            // that constant this cannot fail: whatever it is, clamping to
+            // it keeps you inside it. The set lives inside x -2.1 to 0.6
+            // and y -1.2 to 1.2, so staying within three of the origin is
+            // staying somewhere with something in it.
+            assert!(
+                view.at.0.abs() < 3.0 && view.at.1.abs() < 3.0,
+                "held {:?} for ten seconds, the view wandered to {:?}, \
+                 where there is nothing to look at",
+                way,
+                view.at
+            );
+        }
+    }
+
+    /// Spec 0039: a view that has moved is a different picture.
+    ///
+    /// Read off the pixels, because the point of the engine's spec 0074 is
+    /// that the picture is worked out again as you move: a view that
+    /// changes and a panel that does not is exactly the fault worth
+    /// catching.
+    #[test]
+    fn a_moved_view_is_a_different_picture() {
+        let view = View::default();
+        let before = pixels(view);
+
+        for moved in [
+            view.moved((1.0, 0.0), 0.0, 0.5),
+            view.moved((0.0, 1.0), 0.0, 0.5),
+            view.moved((0.0, 0.0), 1.0, 0.5),
+        ] {
+            let after = pixels(moved);
+            let same = before
+                .iter()
+                .zip(after.iter())
+                .filter(|(one, other)| one == other)
+                .count();
+
+            assert!(
+                (same as f32) < before.len() as f32 * 0.98,
+                "moving to {:?} left the picture {:.1} per cent the same",
+                moved,
+                same as f32 / before.len() as f32 * 100.0
+            );
+        }
     }
 
     /// Spec 0039: the panel hangs clear of the shapes and of the ceiling,
@@ -310,148 +435,5 @@ mod tests {
             from.distance(at),
             crate::room::REACH
         );
-    }
-
-    /// Spec 0039: the frame covers the picture wherever it has got to
-    /// inside a step.
-    ///
-    /// **This is what makes the dive run instead of jump.** Each step is
-    /// its own picture and one of those takes three to twenty five
-    /// milliseconds, which does not fit in a frame, so what moves between
-    /// steps is not a new picture but the old one drawn bigger. At the end
-    /// of a step it is exactly `STEP` bigger, which is the next picture's
-    /// own view, so the swap changes nothing on screen. All the frame has
-    /// to do is hide the overflow, and if it does not the picture is seen
-    /// growing out of its own opening.
-    #[test]
-    fn the_frame_covers_the_picture_all_the_way_through_a_step() {
-        let reaches = 8.3;
-        let (at, size) = panel(reaches);
-        let sides = surround(reaches);
-
-        for n in 0..=40 {
-            let part = n as f32 / 40.0;
-            let half = size.x * 0.5 * grown(part);
-
-            for (which, edge) in [
-                (at + glam::vec3(half, 0.0, 0.0), 0),
-                (at - glam::vec3(half, 0.0, 0.0), 1),
-                (at + glam::vec3(0.0, half, 0.0), 2),
-                (at - glam::vec3(0.0, half, 0.0), 3),
-            ]
-            .iter()
-            .map(|(point, n)| (*n, *point))
-            {
-                assert!(
-                    sides.iter().any(|side| side.contains_point(glam::vec3(
-                        edge.x,
-                        edge.y,
-                        side.center().z
-                    ))),
-                    "{:.0} per cent through a step, edge {} is at {:?} with no frame over it",
-                    part * 100.0,
-                    which,
-                    edge
-                );
-            }
-        }
-    }
-
-    /// Spec 0039: the dive goes somewhere, and every step of it is a
-    /// different place.
-    ///
-    /// Read off the drawn pictures rather than off the view, because a
-    /// view that changes and a picture that does not is exactly the fault
-    /// worth catching: every one of these is thrown away and only its
-    /// pixels are compared.
-    #[test]
-    fn every_step_in_shows_something_else() {
-        let mut last = pixels(view(0));
-
-        for level in 1..levels() {
-            let next = pixels(view(level));
-            let same = last
-                .iter()
-                .zip(next.iter())
-                .filter(|(one, other)| one == other)
-                .count();
-
-            assert!(
-                (same as f32) < last.len() as f32 * 0.98,
-                "step {} is {:.1} per cent the same as the one before it",
-                level,
-                same as f32 / last.len() as f32 * 100.0
-            );
-            last = next;
-        }
-    }
-
-    /// Spec 0039: the dive stops at the last step where two neighbouring
-    /// texels are still two different numbers.
-    ///
-    /// **The room's one claim, and counted rather than looked at.** A
-    /// texel's place on the plane is `corner + n * step`, and once `step`
-    /// is under the last bit of `corner` the two come out the same float,
-    /// so the same arithmetic runs twice and the picture goes to blocks.
-    /// The machine runs out before the mathematics does.
-    ///
-    /// Blockiness in the pixels was tried first and is not the same
-    /// question: the shallow views are mostly inside the set, which is one
-    /// flat colour, so they measure blockier than the deep ones while
-    /// being perfectly sharp.
-    #[test]
-    fn the_dive_stops_where_the_numbers_run_together() {
-        let apart = |level: usize| {
-            let view = view(level);
-            let step = view.across / TEXELS as f32;
-            let corner = view.at.0 - view.across * 0.5;
-
-            (0..TEXELS - 1)
-                .filter(|n| corner + *n as f32 * step == corner + (*n + 1) as f32 * step)
-                .count()
-        };
-
-        assert_eq!(
-            apart(levels() - 1),
-            0,
-            "the last step already has texels that are the same number"
-        );
-
-        // and a few steps past the end they have run together
-        let past = View {
-            at: AT,
-            across: ACROSS / STEP.powi(levels() as i32 + 3),
-        };
-        let step = past.across / TEXELS as f32;
-        let corner = past.at.0 - past.across * 0.5;
-        let run = (0..TEXELS - 1)
-            .filter(|n| corner + *n as f32 * step == corner + (*n + 1) as f32 * step)
-            .count();
-
-        assert!(
-            run > 0,
-            "three steps past the end the numbers are still telling texels apart, \
-             so this is not where it gives out"
-        );
-    }
-
-    #[test]
-    fn how_long_does_it_take() {
-        for across in [3.2f32, 3.2e-2, 3.2e-5] {
-            let view = View {
-                at: (-0.743_643_9, 0.131_825_9),
-                across,
-            };
-            let then = std::time::Instant::now();
-            let made = drawn(view);
-            eprintln!(
-                "M across {:9.2e}  rounds {:5}  {:?}  {}x{}",
-                across,
-                rounds(view),
-                then.elapsed(),
-                made.width(),
-                made.height()
-            );
-        }
     }
 }

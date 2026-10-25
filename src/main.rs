@@ -410,10 +410,12 @@ struct Arcade {
     /// diagonal and is the guest the desk cannot house.
     carried: register::Carried,
     book: register::Book,
-    /// How far into the gallery's panel you have gone, in steps, and the
-    /// picture at each step once it has been worked out. Spec 0039.
-    dove: f32,
-    mandel: Vec<Option<TextureId>>,
+    /// What the gallery's panel is showing, the texture it is written
+    /// into, and what was last written there. Specs 0039 and the engine's
+    /// 0074.
+    view: mandel::View,
+    mandel: Option<TextureId>,
+    shown_view: Option<mandel::View>,
     /// A pocket's net. Spec 0007.
     bag: Option<MeshId>,
     /// The turned pieces in the baths. Spec 0008.
@@ -831,8 +833,9 @@ impl Arcade {
             body: None,
             head: None,
             leg: None,
-            dove: 0.0,
-            mandel: Vec::new(),
+            view: mandel::View::default(),
+            mandel: None,
+            shown_view: None,
             hoop: None,
             bottle: None,
             peg: None,
@@ -1017,7 +1020,7 @@ impl Arcade {
         match self.seen {
             // the panel: back to the top of the dive. Thirty four steps out
             // is a long hold and nothing is learned on the way. Spec 0039.
-            Some(room::Seen::Mandel) => self.dove = 0.0,
+            Some(room::Seen::Mandel) => self.view = mandel::View::default(),
             Some(room::Seen::Cabinet(n)) => {
                 let stood = self.room.stood[n].clone();
                 if self.playing.start(&stood.cabinet) {
@@ -4547,18 +4550,20 @@ impl Game for Arcade {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
 
-        // the gallery's panel, worked out a step at a time as you go in and
-        // kept. Spec 0039: one of these is three to twenty five
-        // milliseconds, which is too long for a frame, and there are only
-        // as many as single precision has steps, so they are all made in
-        // the end and none of them is made twice.
-        if self.mandel.is_empty() {
-            self.mandel = vec![None; mandel::levels()];
+        // the gallery's panel. One texture, written again whenever the view
+        // has moved, per the engine's spec 0074. It was a ladder of fixed
+        // views before that, because adding a texture was the only way to
+        // change a picture and doing that every frame leaks one a frame.
+        if self.mandel.is_none() {
+            self.mandel = Some(renderer.add_texture(&mandel::drawn(self.view)));
+            self.shown_view = Some(self.view);
         }
 
-        let step = (self.dove as usize).min(self.mandel.len() - 1);
-        if self.mandel[step].is_none() {
-            self.mandel[step] = Some(renderer.add_texture(&mandel::drawn(mandel::view(step))));
+        if self.shown_view != Some(self.view) {
+            if let Some(id) = self.mandel {
+                renderer.write_texture(id, &mandel::drawn(self.view));
+                self.shown_view = Some(self.view);
+            }
         }
 
         // a number for every plaque about to be drawn, made the first time
@@ -5332,16 +5337,17 @@ impl Game for Arcade {
         // and that is the whole of it. Spec 0039.
         let diving = self.seen == Some(room::Seen::Mandel);
         let tilt = if diving {
-            // and shift runs you here, the way it runs you everywhere else
-            let pace = if self.shifted {
-                mandel::DIVES * mandel::RUNS
-            } else {
-                mandel::DIVES
-            };
+            let up = f32::from(self.looking[0]) - f32::from(self.looking[1]);
+            let right = f32::from(self.looking[3]) - f32::from(self.looking[2]);
 
-            self.dove = (self.dove
-                + (f32::from(self.looking[0]) - f32::from(self.looking[1])) * pace * dt)
-                .clamp(0.0, (mandel::levels() - 1) as f32);
+            // **Shift scales and the plain arrows move you.** Jake asked
+            // for the scale on shift and up or down, and then for a way
+            // across the plane, which the arrows had nowhere else to go.
+            self.view = if self.shifted {
+                self.view.moved((0.0, 0.0), up, dt)
+            } else {
+                self.view.moved((right, up), 0.0, dt)
+            };
 
             0.0
         } else {
@@ -5651,7 +5657,7 @@ impl Game for Arcade {
             // the panel: how far in you are, and nothing else. Spec 0039.
             (None, Some(room::Seen::Mandel)) => (
                 Some(String::from(mandel::NAME)),
-                Some(mandel::says(self.dove as usize)),
+                Some(mandel::says(self.view)),
             ),
             // the book: what you have taken off the diagonal so far. Spec
             // 0031, and it is the guest the desk cannot house.
@@ -8653,18 +8659,13 @@ impl Game for Arcade {
 
         // and the panel at the end of that row, which is the one flat thing
         // in this building you work. Spec 0039.
-        let step = (self.dove as usize).min(self.mandel.len().saturating_sub(1));
-        if let Some(picture) = self.mandel.get(step).copied().flatten() {
+        if let Some(picture) = self.mandel {
             let (at, size) = mandel::panel(self.room.reaches);
-            // part way through a step the picture is drawn bigger, which is
-            // what makes the dive run rather than jump. The frame below
-            // covers where it has got to. Spec 0039.
-            let grown = mandel::grown(self.dove);
 
             scene.push_textured(
                 cube,
                 picture,
-                &Transform::at(at).with_scale(vec3(size.x * grown, size.y * grown, size.z)),
+                &Transform::at(at).with_scale(size),
                 // lit rather than painted, because it is a screen: colour
                 // here is an unclamped multiplier and a surface at one is
                 // only as bright as the room, which in this one is dim
