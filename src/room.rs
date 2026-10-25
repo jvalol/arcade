@@ -739,6 +739,8 @@ pub enum Seen {
     Desk,
     /// The register on the far wall behind the blank door. Spec 0031.
     Book,
+    /// The Mandelbrot panel at the end of the gallery's row. Spec 0039.
+    Mandel,
     /// One of the hotel's doors, by its room number. Spec 0029.
     ///
     /// The one thing in that corridor you can work, and the only way there is
@@ -1631,6 +1633,14 @@ impl Room {
             .handle()
             .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
 
+        // and the one panel in the gallery, per spec 0039, which is the
+        // only flat thing in this building you work
+        let panel = {
+            let (at, size) = crate::mandel::panel(self.reaches);
+
+            slab(from, way, &Aabb::from_center_size(at, size)).map(|far| (Seen::Mandel, far))
+        };
+
         let glass = {
             let leaf = crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing);
 
@@ -1712,6 +1722,7 @@ impl Room {
         cabinets
             .chain(shapes)
             .chain(benches)
+            .chain(panel)
             .chain(case)
             .chain(glass)
             .chain(baths)

@@ -1119,6 +1119,14 @@ pub const ALOFT_PATH: Vec4 = vec4(0.33, 0.32, 0.31, 1.0);
 /// lighter than what is behind the opening, so the three read as three.
 pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
 
+/// How much the gallery's panel lights itself, per spec 0039. Well short of
+/// the neon's 3.2: a window with something in it, not a sign.
+pub const MANDEL_LIT: Vec4 = vec4(1.7, 1.7, 1.8, 1.0);
+
+/// And the frame round it, which the picture grows behind. Dark, so the
+/// opening reads as an opening and not as the edge of a poster.
+pub const MANDEL_FRAME: Vec4 = vec4(0.18, 0.16, 0.15, 1.0);
+
 /// The way up to it, per spec 0037. The stair is the nook's own joinery and
 /// the shaft above the ceiling is the imaginarium's stone, so the climb
 /// changes under you about halfway.
