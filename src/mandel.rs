@@ -12,8 +12,17 @@ use blitzkit::texture::TextureData;
 /// than Cantor's diagonal.
 pub const NAME: &str = "A Window";
 
+/// What the arrows do here, said where you are looking.
+///
+/// **Because the room is the only thing that can say it.** The line across
+/// the top of the screen says the arrows work the toy you are looking at,
+/// which is true and does not say what working this one does. Jake stood
+/// at the panel, found it scrolling one way, and could not tell a bug from
+/// not knowing the keys. Either way the room should have told him.
+pub const KEYS: &str = "Arrows to move, shift with up or down to zoom";
+
 pub fn says(view: View) -> String {
-    format!("{:.0} times in", view.deep())
+    format!("{}. {:.0} times in", KEYS, view.deep())
 }
 
 /// The frame round the opening, and how far it stands proud of the wall.

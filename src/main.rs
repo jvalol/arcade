@@ -5330,28 +5330,30 @@ impl Game for Arcade {
 
         // the arrows turn and tilt you. Yaw nought faces -z and grows toward
         // +x, which is your right, so the right arrow adds.
-        let turn = f32::from(self.looking[3]) - f32::from(self.looking[2]);
-        // **Up and down go into the panel while the sight is on it**, the
-        // way they go into a toy on a bench. Left and right still turn you,
-        // because there is nowhere sideways to go: the dive is at one point
-        // and that is the whole of it. Spec 0039.
-        let diving = self.seen == Some(room::Seen::Mandel);
-        let tilt = if diving {
-            let up = f32::from(self.looking[0]) - f32::from(self.looking[1]);
-            let right = f32::from(self.looking[3]) - f32::from(self.looking[2]);
+        let up = f32::from(self.looking[0]) - f32::from(self.looking[1]);
+        let right = f32::from(self.looking[3]) - f32::from(self.looking[2]);
 
-            // **Shift scales and the plain arrows move you.** Jake asked
-            // for the scale on shift and up or down, and then for a way
-            // across the plane, which the arrows had nowhere else to go.
+        // **All four arrows go into the panel while the sight is on it**,
+        // the way they go into a toy on a bench. Shift and up or down
+        // changes the scale, and the plain arrows move about the plane.
+        // Spec 0039.
+        //
+        // **All four, which is the fix.** Left and right went into the
+        // panel and kept turning you as well, and turning takes the sight
+        // off the panel, so a pan stopped within a frame of starting. From
+        // the floor that is a window that only scrolls up and down, which
+        // is how Jake found it.
+        let diving = self.seen == Some(room::Seen::Mandel);
+        let (turn, tilt) = if diving {
             self.view = if self.shifted {
                 self.view.moved((0.0, 0.0), up, dt)
             } else {
                 self.view.moved((right, up), 0.0, dt)
             };
 
-            0.0
+            (0.0, 0.0)
         } else {
-            f32::from(self.looking[0]) - f32::from(self.looking[1])
+            (right, up)
         };
         if turn != 0.0 || tilt != 0.0 {
             self.yaw += turn * TURNS * dt;
