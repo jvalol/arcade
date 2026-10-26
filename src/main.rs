@@ -526,6 +526,7 @@ struct Arcade {
     aloft_mesh: Option<MeshId>,
     aloft_skin: Vec<TextureId>,
     roof_skin: Option<TextureId>,
+    storey_skin: Vec<TextureId>,
     jutting_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
@@ -970,6 +971,7 @@ impl Arcade {
             aloft_mesh: None,
             aloft_skin: Vec::new(),
             roof_skin: None,
+            storey_skin: Vec::new(),
             jutting_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
@@ -2014,6 +2016,27 @@ impl Arcade {
                     &Transform::at(face.center() + looks * 0.02)
                         .with_rotation(room::laid_on(looks))
                         .with_scale(room::quad_on(face.size(), looks)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+
+            // the ground storey's roof, which until spec 0041 flew over it
+            // was not there at all.
+            for (piece, skin) in self
+                .room
+                .ceiling()
+                .iter()
+                .zip(self.storey_skin.iter().copied())
+            {
+                let (middle, size) = (piece.center(), piece.size());
+
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(vec3(middle.x, room::TALL + 0.01, middle.z))
+                        .with_rotation(room::laid_on(Vec3::Y))
+                        .with_scale(vec3(size.x, 1.0, size.z)),
                     aim::GARDEN_PLASTER,
                     aim::MATTE,
                 );
@@ -5466,9 +5489,34 @@ impl Game for Arcade {
             .collect();
         self.roof_skin = Some(renderer.add_texture(&garden::screeded(
             garden::SCREED_SEED,
+            aloft::roof_from(),
             aloft::roof().1,
             garden::BAY,
         )));
+        // and the storey under it, which had no roof at all: the lid is one
+        // quad per piece turned over to face down, so from above it is a
+        // back face and the opaque pass culls it. Flying over the hall you
+        // looked straight into it at the top of its own suspended ceiling.
+        //
+        // One picture per piece, each laid out from where that piece is, so
+        // the eight of them are one roof. The stairwell is cut out of these
+        // pieces and stays cut: the hole is under the imaginarium's mass,
+        // which is the only thing up here that is allowed to cover it.
+        self.storey_skin = self
+            .room
+            .ceiling()
+            .iter()
+            .map(|piece| {
+                let (middle, size) = (piece.center(), piece.size());
+
+                renderer.add_texture(&garden::screeded(
+                    garden::SCREED_SEED,
+                    glam::vec2(middle.x - size.x * 0.5, middle.z - size.z * 0.5),
+                    glam::vec2(size.x, size.z),
+                    garden::BAY,
+                ))
+            })
+            .collect();
         self.aloft_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.corridor_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             aleph::RUNS / field::RENDER,

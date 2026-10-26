@@ -250,6 +250,24 @@ Which of the box's three extents a quad is scaled by depends on which way the
 quad was turned to face, and worked out at the call it is the third slot that
 gets it wrong, silently. `room::quad_on` is the one account of it.
 
+**And the storey under it had no roof at all.** The hall's lid is drawn as
+one quad per piece turned over to face down, because from underneath an
+upward plane is a back face and the opaque pass culls it. From above it is
+the other way about, so flying over the hall you looked straight down into
+it at the top of its own suspended ceiling. The same screed, one picture per
+piece.
+
+The stairwell stays cut out of those pieces, because the hole is under the
+imaginarium's mass and that is the only thing up here allowed to cover it.
+
+The rooms that adjoin at that level are a different job and not this one.
+The hotel's lobby, the register and the back room each have a lid of their
+own at their own height, and those lids are boxes rather than downward
+quads, so they are there and lit and simply undressed, along with the walls
+under them. Spec 0015's is the fifth and it is a hundred and fifty nine
+metres square: it is the black plane you can read Neptune over, which spec
+0041 says is a gate to be fixed rather than a surface to be dressed.
+
 **And the roof, which spec 0041 found the first hour it existed.** Thirteen
 metres square, the largest surface this building has, and it was the pale stone
 of the room's own ceiling, because until there was a way to be above it nobody
@@ -435,6 +453,8 @@ eight metres inside the building.
   thickness. — `aloft::outside_tests::the_roof_runs_under_the_cope`
 - And what is laid on it has no dark edge, which a wall's plaster laid flat
   would have. — `garden::screed_tests::a_roof_is_not_darker_at_one_edge`
+- And two pieces of one roof agree where they
+  meet. — `garden::screed_tests::two_pieces_of_a_roof_meet`
 
 ### Verified by hand
 

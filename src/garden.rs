@@ -2115,15 +2115,19 @@ pub const SCREED_SEED: u32 = 0x5C_7EED;
 ///
 /// What a flat lime roof looks like from above is bays with a joint between
 /// them, bleached grey by the sun, and dirtiest in the middle of each bay
-/// because that is where the water stands. The bays are counted rather than
-/// measured, so a joint always lands on the edge of the roof.
-pub fn screeded(seed: u32, size: Vec2, bay: f32) -> blitzkit::texture::TextureData {
+/// because that is where the water stands.
+///
+/// **Laid out from where it is in the world rather than from its own
+/// corner**, which `from` is. A roof here is not one rectangle: the ground
+/// storey's is eight pieces, the widest ten metres and the narrowest eighty
+/// centimetres, and bays counted off each piece give that piece its own
+/// spacing and its own stains. Eight patches of screed is not a roof. Every
+/// mark in this picture is worked out from the world, so the joints line up
+/// across the pieces and the imaginarium's roof fifteen metres above is the
+/// same lime as the one under it.
+pub fn screeded(seed: u32, from: Vec2, size: Vec2, bay: f32) -> blitzkit::texture::TextureData {
     let across = ((size.x * PLASTER_PER_UNIT).round() as u32).clamp(8, 2048);
     let along = ((size.y * PLASTER_PER_UNIT).round() as u32).clamp(8, 2048);
-    let bays = vec2(
-        (size.x / bay).round().max(1.0),
-        (size.y / bay).round().max(1.0),
-    );
 
     let hash = move |x: i32, y: i32| {
         let mut n =
@@ -2158,11 +2162,11 @@ pub fn screeded(seed: u32, size: Vec2, bay: f32) -> blitzkit::texture::TextureDa
 
     for j in 0..along {
         let v = j as f32 / (along - 1).max(1) as f32;
-        let down = v * size.y;
+        let down = from.y + v * size.y;
 
         for i in 0..across {
             let u = i as f32 / (across - 1).max(1) as f32;
-            let wide = u * size.x;
+            let wide = from.x + u * size.x;
 
             // the stains, in two sizes and the same both ways, because a
             // roof has no up
@@ -2170,18 +2174,12 @@ pub fn screeded(seed: u32, size: Vec2, bay: f32) -> blitzkit::texture::TextureDa
                 noise(wide * 0.5, down * 0.5) * 0.62 + noise(wide * 1.7, down * 1.7) * 0.38;
 
             // how far into its own bay this is, nought at a joint and one in
-            // the middle of it
-            let into = |at: f32, bays: f32, run: f32| {
-                let step = run / bays;
-                let from = (at / step).fract();
-
-                ((from - 0.5).abs() * 2.0, step)
-            };
-            let (from_x, step_x) = into(wide, bays.x, size.x);
-            let (from_z, step_z) = into(down, bays.y, size.y);
+            // the middle of it, counted off the world's grid
+            let into = |at: f32| ((at / bay).rem_euclid(1.0) - 0.5).abs() * 2.0;
+            let (from_x, from_z) = (into(wide), into(down));
 
             // the joint itself, a finger wide
-            let joint = (from_x.max(from_z) - 1.0 + 0.04 / step_x.min(step_z)).max(0.0) * 6.0;
+            let joint = (from_x.max(from_z) - 1.0 + 0.04 / bay).max(0.0) * 6.0;
             // and the water that stands in the middle of a bay, in the bays
             // that hold it. Every bay pooling by the same amount is seven by
             // seven dark smudges on a grid, which is a pattern rather than a
@@ -2189,8 +2187,8 @@ pub fn screeded(seed: u32, size: Vec2, bay: f32) -> blitzkit::texture::TextureDa
             // that streaks every hand's breadth is a wall with a pattern on
             // it.
             let lies = hash(
-                (wide / step_x).floor() as i32,
-                (down / step_z).floor() as i32 + 977,
+                (wide / bay).floor() as i32,
+                (down / bay).floor() as i32 + 977,
             );
             let pooled = (1.0 - from_x.max(from_z)) * (lies * lies) * 0.26;
 
@@ -2229,6 +2227,35 @@ mod screed_tests {
         (sum / f64::from(rows * wide)) as f32
     }
 
+    /// And two pieces of one roof agree where they meet, which is what
+    /// laying it out from the world is for. Counted off each piece the two
+    /// have different bays and different stains, and a roof made of eight
+    /// pieces is eight patches of screed.
+    #[test]
+    fn two_pieces_of_a_roof_meet() {
+        let (near, far) = (
+            screeded(SCREED_SEED, vec2(0.0, 0.0), vec2(4.0, 4.0), BAY),
+            screeded(SCREED_SEED, vec2(4.0, 0.0), vec2(4.0, 4.0), BAY),
+        );
+        let (one, two) = (&near.levels[0], &far.levels[0]);
+
+        assert_eq!(one.height, two.height);
+
+        for j in 0..one.height {
+            let last = ((j * one.width + one.width - 1) * 4 + 1) as usize;
+            let first = ((j * two.width) * 4 + 1) as usize;
+            let gap = i32::from(one.pixels[last]) - i32::from(two.pixels[first]);
+
+            assert!(
+                gap.abs() <= 8,
+                "row {} ends at {} and the next piece opens at {}",
+                j,
+                one.pixels[last],
+                two.pixels[first]
+            );
+        }
+    }
+
     /// A roof has no dark edge, which is the whole reason it is not
     /// `plastered` laid flat. Every mark in that picture is about a wall
     /// standing up, and the foot of a wall is thirty per cent darker than
@@ -2237,7 +2264,7 @@ mod screed_tests {
     #[test]
     fn a_roof_is_not_darker_at_one_edge() {
         let size = vec2(13.1, 13.1);
-        let skin = screeded(SCREED_SEED, size, BAY);
+        let skin = screeded(SCREED_SEED, vec2(-9.3, -10.05), size, BAY);
         let rows = skin.levels[0].height;
         let band = rows / 12;
         let middle = tone(&skin, rows / 2 - band / 2, band);

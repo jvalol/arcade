@@ -284,6 +284,15 @@ pub fn roof() -> (Vec3, Vec2) {
     )
 }
 
+/// And its near corner in plan, which is where the screed on it is laid out
+/// from. The same grid the storey below is laid out from, so the two roofs
+/// are one lime rather than two.
+pub fn roof_from() -> Vec2 {
+    let (middle, size) = roof();
+
+    vec2(middle.x - size.x * 0.5, middle.z - size.y * 0.5)
+}
+
 /// How high the top of that mass is, which is the room's own lid.
 pub fn tops() -> f32 {
     BASE + ROOM + THICK
