@@ -218,6 +218,45 @@ the horizon; one that went over them has a two kilometre wall running away
 across the grass. The second is arguably the best view of spec 0029 this
 building could offer, and that is a question rather than an answer.
 
+**And where the ground is is not asked as a region at all.** Three times
+the field had an edge somewhere nobody had thought to look, and each time
+the fix moved the edge rather than removing it: first east of the garden's
+west face, then round the garden's corner, then the strip north of it,
+eleven hundred square metres with grass drawn on it and nothing under it,
+because `garden::under_the_sky` is a quarter plane and `open` was a half
+plane and the two are not the same shape.
+
+A region cannot help being a region. So the question the walk asks is
+`field::afoot`: if nothing of the building is under your feet, the field
+is. There is nowhere left for an edge to be, and
+`field::tests::there_is_ground_under_everywhere` sweeps sixty metres each
+way round the building every half metre to say so.
+
+**And what is drawn asks the same question.** It did not. The ground was
+solid as a half plane and drawn as a quarter one, `garden::under_the_sky`,
+which stops at the nook's end wall: south of that line you stood on grass
+nobody had painted and looked straight into the nook with black where the
+sky should be, four seconds' walk from the gap. `field::in_view` is
+`afoot` plus the garden now, and the sweep holds the two together, because
+being the same shape by accident is how this has gone wrong twice.
+
+Two things that took finding in `afoot` itself. A floor only counts if it
+is at least as high as the field's would be, since the baths' roof is
+thirty centimetres down and runs out past the garden and counted as a
+floor it took the ground away over the whole of it. And a body inside a
+box of the building is in the building whatever is under it, which is what
+the picture of the space behind the wall is: it stands a floor's thickness
+under that room's floor, where nothing of the building is under the feet
+because the feet are in the floor.
+
+Two things that took finding. A floor only counts if it is at least as
+high as the field's would be: the baths' roof is thirty centimetres down
+and runs out past the garden, and counted as a floor it took the ground
+away over the whole of it. And it is asked at any height, because it used
+to test that you were above the grass first, so the moment anything put a
+body a hand's breadth under it the grass stopped being there and the body
+fell for ever.
+
 What the half plane gets instead is an edge you cannot walk through. The
 first draft left it at the garden's own west wall and called the rest
 unreachable, because the wall runs away north and south further than you
@@ -254,6 +293,10 @@ eight metres inside the building.
   it. — `field::tests::the_field_has_one_edge_and_you_cannot_reach_it`
 - And you cannot walk out of it, from anywhere, in twenty
   seconds. — `field::tests::you_cannot_walk_out_of_the_field`
+- There is ground under every spot a body could
+  be. — `field::tests::there_is_ground_under_everywhere`
+- And a body let loose outdoors for half a minute stays in the
+  world. — `field::tests::a_body_let_loose_outdoors_stays_in_the_world`
 - And the whole of it, from outside the building looking
   back. — `tests::the_field_is_drawn`
 

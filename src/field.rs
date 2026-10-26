@@ -69,6 +69,64 @@ pub fn starts(reaches: f32) -> f32 {
     crate::garden::at(reaches).x - crate::garden::half().x
 }
 
+/// Whether the field's ground is what is holding you up.
+///
+/// **Asked of what is under you rather than of where you are.** Every
+/// region this has been written as has had an edge somewhere, and each time
+/// the edge was somewhere nobody had thought to look: first east of the
+/// garden's west face, then round the garden's corner, then the strip north
+/// of it, which had grass drawn on it and nothing under it for eleven
+/// hundred square metres.
+///
+/// A region cannot help being a region. This is not one: if nothing of the
+/// building is under your feet, the field is, and there is nowhere left for
+/// an edge to be. The building's own floors win where there are any,
+/// because they are two centimetres higher. See [`DROP`].
+///
+/// **Asked at any height and not only above the ground.** It tested that
+/// you were above -0.1 first, so the moment anything put a body a hand's
+/// breadth under the grass the grass stopped being there and the body
+/// fell for ever. A wandering body found that in half a minute. Nothing
+/// needs the height test: in the cellar and the baths it is their own
+/// floors that are under you and the field is not asked.
+pub fn afoot(solid: &[Aabb], at: Vec3) -> bool {
+    // the rooms under this one have their own floors and their own
+    // ceilings and want nothing from the field
+    if at.y < -2.0 {
+        return false;
+    }
+
+    // and a body inside a box of the building is in the building,
+    // whatever is under it. The picture of the space behind the wall
+    // stands at the bottom of that room's own boxes, a floor's thickness
+    // under its floor, where nothing of the building is *under* the feet
+    // because the feet are in the floor.
+    if solid.iter().any(|box_| {
+        box_.min.x <= at.x
+            && box_.max.x >= at.x
+            && box_.min.z <= at.z
+            && box_.max.z >= at.z
+            && box_.min.y <= at.y
+            && box_.max.y >= at.y
+    }) {
+        return false;
+    }
+
+    // **A floor only counts if it is at least as high as the field's
+    // would be.** The baths' roof is thirty centimetres down and runs out
+    // past the garden, and counted as a floor it took the field's ground
+    // away over the whole of it: a body walking east from the grass had
+    // the wall vanish from under its nose and carried on into the nook.
+    !solid.iter().any(|box_| {
+        box_.min.x <= at.x
+            && box_.max.x >= at.x
+            && box_.min.z <= at.z
+            && box_.max.z >= at.z
+            && box_.max.y >= -DROP - 1e-3
+            && box_.max.y <= at.y + 0.2
+    })
+}
+
 /// Whether a spot is out in the field rather than in the building.
 ///
 /// Measured against the garden's west face and nothing else. That is right
@@ -119,11 +177,19 @@ pub const DROP: f32 = 0.02;
 /// Whether the field can be seen from here, which is a different question
 /// from whether you are standing in it.
 ///
-/// The garden is open to it along the whole of its west wall's gap, so the
-/// answer is the same one `garden::under_the_sky` gives: the garden and the
-/// field are the two places in this building with sky over them.
-pub fn in_view(reaches: f32, at: Vec3) -> bool {
-    crate::garden::under_the_sky(reaches, at)
+/// **The same question [`afoot`] answers, plus the garden.** It was
+/// `garden::under_the_sky` alone, which is a quarter plane: everything
+/// west of the hall's left wall and north of the nook's end. South of
+/// that line the field was solid and not drawn, so you stood on grass
+/// nobody had painted and looked straight into the nook with black where
+/// the sky should be. Jake walked out of the gap, turned south and was
+/// there in four seconds.
+///
+/// Regions again. So it is not a region: if the field is what is under
+/// you, the field is what you can see, and the garden says so for itself
+/// because its own floor is what is under you in there.
+pub fn in_view(reaches: f32, solid: &[Aabb], at: Vec3) -> bool {
+    afoot(solid, at) || crate::garden::under_the_sky(reaches, at)
 }
 
 /// How much bigger the field's sky is than the garden's.
@@ -368,11 +434,14 @@ pub fn wall(reaches: f32, at: Vec3) -> Vec<Aabb> {
     let middle = crate::garden::at(reaches).z;
     let half = crate::garden::half().y;
     let tall = crate::garden::HIGH;
+    // west of the line and not east of it, which is the side the garden's
+    // own west wall is on. Built east, it stood inside the garden, and a
+    // body already on the garden's floor walked straight through it.
     let piece = |near: f32, far: f32| {
         (far > near + 1e-3).then(|| {
             Aabb::new(
-                vec3(face, -DROP, near),
-                vec3(face + crate::room::THICK, tall, far),
+                vec3(face - crate::room::THICK, -DROP, near),
+                vec3(face, tall, far),
             )
         })
     };
@@ -746,15 +815,7 @@ mod tests {
         let mut falling = 0.0;
 
         for _ in 0..(14.0 / step) as u32 {
-            let solid: Vec<Aabb> = crate::room::Room::of(crate::games())
-                .solid()
-                .into_iter()
-                .chain(if open(reaches, at) {
-                    self::solid(reaches, at)
-                } else {
-                    Vec::new()
-                })
-                .collect();
+            let solid = standing_on(reaches, at);
             let way = vec3(to.x - at.x, 0.0, to.z - at.z);
             let wish = if way.length_squared() > 1e-4 {
                 way.normalize() * crate::SPEED
@@ -912,6 +973,180 @@ mod tests {
         }
     }
 
+    /// Everything a body can walk into from where it is, which is what
+    /// `Arcade::standing_on` hands the walk.
+    fn standing_on(reaches: f32, at: Vec3) -> Vec<Aabb> {
+        let mut solid = crate::room::Room::of(crate::games()).solid();
+
+        if afoot(&solid, at) {
+            solid.extend(self::solid(reaches, at));
+        }
+
+        solid
+    }
+
+    /// Spec 0040: there is ground under every spot a body could be.
+    ///
+    /// **Swept rather than walked**, because a walk only finds the holes it
+    /// happens into and this room has had three. Over sixty metres each way
+    /// round the building, every half metre: either something of the
+    /// building is under you or the field is, and there is nowhere that is
+    /// neither.
+    ///
+    /// The strip north of the garden was eleven hundred square metres of
+    /// grass with nothing under it, drawn because `garden::under_the_sky` is
+    /// a quarter plane and solid because `open` was a half plane, and the
+    /// two are not the same shape. Nothing is asked about shapes now: see
+    /// [`afoot`].
+    #[test]
+    fn there_is_ground_under_everywhere() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+        let fixed = room.solid();
+        let mut holes = 0;
+        let mut first = None;
+        let mut z = -60.0f32;
+
+        while z < 60.0 {
+            let mut x = -60.0f32;
+
+            while x < 30.0 {
+                let at = vec3(x, 0.5, z);
+                // not inside a wall, where nobody can be and nothing has
+                // to hold anybody up
+                if fixed.iter().any(|box_| {
+                    box_.min.x <= x
+                        && box_.max.x >= x
+                        && box_.min.z <= z
+                        && box_.max.z >= z
+                        && box_.min.y <= 0.5
+                        && box_.max.y >= 0.5
+                }) {
+                    x += 0.5;
+                    continue;
+                }
+
+                let mut solid = fixed.clone();
+
+                if afoot(&solid, at) {
+                    solid.extend(self::solid(reaches, at));
+                }
+
+                let under = solid.iter().any(|box_| {
+                    box_.min.x <= x
+                        && box_.max.x >= x
+                        && box_.min.z <= z
+                        && box_.max.z >= z
+                        && box_.max.y <= 0.7
+                        && box_.max.y > -3.0
+                });
+
+                if !under {
+                    holes += 1;
+                    first.get_or_insert((x, z));
+                }
+
+                // and wherever the field is what holds you up, the field
+                // is what you see. The two were different shapes twice:
+                // solid as a half plane and drawn as a quarter one, which
+                // is grass nobody painted south of the garden and grass
+                // painted over nothing north of it. They are one question
+                // now and this is here so they stay one.
+                assert!(
+                    !afoot(&fixed, at) || in_view(reaches, &fixed, at),
+                    "the field holds you up at {:.1}, {:.1} and is not drawn there",
+                    x,
+                    z
+                );
+
+                x += 0.5;
+            }
+
+            z += 0.5;
+        }
+
+        assert_eq!(
+            holes, 0,
+            "{} spots with nothing under them, the first at {:?}",
+            holes, first
+        );
+    }
+
+    /// Spec 0040: a body let loose outdoors stays in the world.
+    ///
+    /// **Jake's, after finding the third hole in it by walking.** Three
+    /// times now the field has had an edge somewhere nobody thought to
+    /// look, and three times what found it was a person wandering rather
+    /// than a test measuring the place the fault was last time. So this
+    /// wanders: a seeded heading that changes every so often, from eight
+    /// starts, for half a minute of walking each. Half a minute, because
+    /// the gate runs it: a minute each found nothing a half minute did
+    /// not and doubled what this file costs to check.
+    ///
+    /// What it holds is the one thing that must never happen, which is
+    /// being somewhere with no ground under you. Everything else out here
+    /// is a matter of taste.
+    #[test]
+    fn a_body_let_loose_outdoors_stays_in_the_world() {
+        /// How far under the lowest floor anybody can get before they are
+        /// falling rather than walking. The baths are the deepest room and
+        /// their floor is at -3.
+        const UNDER: f32 = -4.0;
+
+        let reaches = reaches();
+        let face = starts(reaches);
+        let middle = crate::garden::at(reaches);
+        let half = crate::garden::half();
+        let step = 1.0 / 60.0;
+        let mut rolls = Rolls::of((0x5EED, 0x11FE), 0xA11);
+
+        for (what, from) in [
+            ("the way out", vec3(face - 1.0, 0.0, middle.z)),
+            ("the garden", vec3(middle.x, 0.0, middle.z)),
+            (
+                "the garden's north end",
+                vec3(middle.x, 0.0, middle.z + half.y - 1.0),
+            ),
+            (
+                "the garden's south end",
+                vec3(middle.x, 0.0, middle.z - half.y + 1.0),
+            ),
+            ("just outside", vec3(face - 2.0, 0.0, middle.z + half.y)),
+            ("the field", vec3(face - 25.0, 0.0, middle.z + 30.0)),
+            ("the field, south", vec3(face - 25.0, 0.0, middle.z - 30.0)),
+            ("far out", vec3(face - 90.0, 0.0, middle.z)),
+        ] {
+            let mut at = from;
+            let mut falling = 0.0;
+            let mut round = rolls.next() * std::f32::consts::TAU;
+
+            for frame in 0..(30.0 / step) as u32 {
+                // a new heading every half second or so, which is a body
+                // wandering rather than a body walking a line
+                if frame % 30 == 0 {
+                    round += (rolls.next() - 0.5) * 2.4;
+                }
+
+                let wish = vec3(round.cos(), 0.0, round.sin()) * crate::SPEED;
+                let solid = standing_on(reaches, at);
+                let (next, fell) =
+                    crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
+
+                at = next;
+                falling = fell;
+
+                assert!(
+                    at.y > UNDER,
+                    "let loose at {} and {:.1} seconds later the body is at {:?}, \
+                     which is under the building",
+                    what,
+                    frame as f32 * step,
+                    at
+                );
+            }
+        }
+    }
+
     /// Spec 0040: you cannot walk out of the field.
     ///
     /// **Walked, because the first version of this was measured and the
@@ -943,15 +1178,7 @@ mod tests {
             let mut falling = 0.0;
 
             for _ in 0..(20.0 / step) as u32 {
-                let solid: Vec<Aabb> = crate::room::Room::of(crate::games())
-                    .solid()
-                    .into_iter()
-                    .chain(if open(reaches, at) {
-                        self::solid(reaches, at)
-                    } else {
-                        Vec::new()
-                    })
-                    .collect();
+                let solid = standing_on(reaches, at);
                 let wish = vec3(1.0, 0.0, 0.0) * crate::SPEED;
                 let (next, fell) =
                     crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);

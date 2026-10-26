@@ -1780,7 +1780,7 @@ impl Arcade {
         // metres wide and what is through it is a hundred and sixty metres
         // of ground. Drawn only from out in the field, the gap was a black
         // rectangle in a garden wall.
-        if !field::in_view(reaches, self.at) {
+        if !field::in_view(reaches, &self.room.solid(), self.at) {
             return;
         }
 
@@ -1982,7 +1982,7 @@ impl Arcade {
     fn standing_on(&self) -> Vec<Aabb> {
         let mut out = self.room.solid();
 
-        if field::open(self.room.reaches, self.at) {
+        if field::afoot(&out, self.at) {
             out.extend(field::solid(self.room.reaches, self.at));
         }
 
@@ -6346,7 +6346,7 @@ impl Game for Arcade {
         // sun you cannot see is the one thing that space is for.
         camera.far = if self.in_the_deep() {
             beyond::sees()
-        } else if field::in_view(self.room.reaches, self.at) {
+        } else if field::in_view(self.room.reaches, &self.room.solid(), self.at) {
             // and out in the field it is the far side of the sky, per spec
             // 0040. A hundred metres out there cuts the ground off at a
             // hundred and leaves black above it, which is a field in a
@@ -7143,7 +7143,7 @@ impl Game for Arcade {
             // under a storm is the deck going white, and the cloud's own
             // shape is a better picture of it than any patch.
             if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
-                if field::in_view(self.room.reaches, self.at) {
+                if field::in_view(self.room.reaches, &self.room.solid(), self.at) {
                     scene.push_textured(
                         dome,
                         storm,
