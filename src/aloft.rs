@@ -128,23 +128,34 @@ pub fn coping() -> Vec<(Vec3, Vec3)> {
     let mut boxes = Vec::new();
 
     for (course, deep, high) in [
-        (THICK + COPE_OUT, COPE_DEEP, top + COPE_DEEP * 0.5),
+        (THICK, COPE_DEEP, top + COPE_DEEP * 0.5),
         (
-            THICK + COPE_OUT * 0.3,
+            THICK - COPE_OUT * 0.7,
             COPE_ROLL,
             top + COPE_DEEP + COPE_ROLL * 0.5,
         ),
     ] {
-        // flush with the room's inside and oversailing outward, so the
-        // line a course is centred on is worked back from its outer face
-        let line = out - course * 0.5;
-        let along = out;
+        // **Standing back from the room's inner face by the oversail.**
+        // Flush with it, which is where the doorways on the ceiling begin,
+        // the course and the reveal of each are one plane with both on
+        // show: the engine's own check named it at 0.13 by 1.60, twice
+        // over, in a place no eye of mine had looked. The roll is set in
+        // from the course on both sides because the garden's is.
+        let line = HALF + COPE_OUT + THICK * 0.5;
+
+        // **The two runs butt rather than lap.** Four bars each the whole
+        // length of a side overlap at the corners, and over that square
+        // both tops are on show: 0.30 by 0.30 of speckle at each corner,
+        // which is what the engine's check reported. The runs along x take
+        // the corners and the runs along z stop at their faces, where the
+        // two end faces look opposite ways and neither is hidden.
+        let (long, short) = (out, line - course * 0.5);
 
         for (middle, size) in [
-            (vec3(-line, 0.0, 0.0), vec3(course, 0.0, along * 2.0)),
-            (vec3(line, 0.0, 0.0), vec3(course, 0.0, along * 2.0)),
-            (vec3(0.0, 0.0, -line), vec3(along * 2.0, 0.0, course)),
-            (vec3(0.0, 0.0, line), vec3(along * 2.0, 0.0, course)),
+            (vec3(-line, 0.0, 0.0), vec3(course, 0.0, long * 2.0)),
+            (vec3(line, 0.0, 0.0), vec3(course, 0.0, long * 2.0)),
+            (vec3(0.0, 0.0, -line), vec3(short * 2.0, 0.0, course)),
+            (vec3(0.0, 0.0, line), vec3(short * 2.0, 0.0, course)),
         ] {
             boxes.push((
                 vec3(MIDDLE_X + middle.x, high, MIDDLE_Z + middle.z),
@@ -154,6 +165,100 @@ pub fn coping() -> Vec<(Vec3, Vec3)> {
     }
 
     boxes
+}
+
+/// What stands on that roof: the two doorways spec 0038 puts in this
+/// room's ceiling, boxed in, which from the field are lanterns.
+///
+/// A way out on all six faces of a cube means two of them point up, and a
+/// closed recess behind a doorway in the ceiling is a box standing on the
+/// roof. Nothing had ever looked at the roof, so they were up there in the
+/// pale stone of the room's inside, reading as two crates somebody left.
+pub fn lanterns() -> Vec<Aabb> {
+    let mut out = Vec::new();
+
+    for n in 0..FRAMES {
+        for which in 0..DOORS {
+            let hole = doorway(n, which);
+            let (axis, sign) = door_faces(&hole);
+
+            if axis != 1 || sign < 0.0 {
+                continue;
+            }
+
+            // the recess is a back and four sides, and the whole of it is
+            // the lantern: taking its bounds rather than writing the box
+            // out again, because the recess is what is actually up there
+            // and a second account of it would drift from the first.
+            let whole = door_recess(n, which)
+                .into_iter()
+                .fold(None::<Aabb>, |all, box_| {
+                    Some(match all {
+                        None => box_,
+                        Some(all) => Aabb::new(all.min.min(box_.min), all.max.max(box_.max)),
+                    })
+                })
+                .expect("a back and four sides");
+
+            out.push(whole);
+        }
+    }
+
+    out
+}
+
+/// Their outward faces, four to a lantern, as (face, which way it looks),
+/// the way `outside` gives the mass's.
+///
+/// The recess's four sides leave the corners of the ring open, which is
+/// what a ring of four boxes does and has never mattered inside a wall. A
+/// quad across the whole face covers them.
+pub fn lantern_faces() -> Vec<(Aabb, Vec3)> {
+    let mut out = Vec::new();
+
+    for lantern in lanterns() {
+        let (middle, size) = (lantern.center(), lantern.size());
+
+        for looks in [-Vec3::X, Vec3::X, -Vec3::Z, Vec3::Z] {
+            let on = middle + looks * (size * 0.5);
+            let along = if looks.x.abs() > 0.5 {
+                vec3(0.0, 0.0, size.z * 0.5)
+            } else {
+                vec3(size.x * 0.5, 0.0, 0.0)
+            };
+
+            out.push((
+                Aabb::new(
+                    vec3(on.x - along.x, lantern.min.y, on.z - along.z),
+                    vec3(on.x + along.x, lantern.max.y, on.z + along.z),
+                ),
+                looks,
+            ));
+        }
+    }
+
+    out
+}
+
+/// And the capstone over one, which is the parapet's course on a smaller
+/// plan: one slab, oversailing, with no roll on it. A roll on a lantern two
+/// and a half metres across is a third course on a thing eighty centimetres
+/// high.
+///
+/// The dashed line under the oversail is older than any of this and is on
+/// the compound wall's cope in the same frame. Not the sun's shadow map,
+/// which was the first guess: shrinking that map from a hundred and sixty
+/// metres to thirty changes the line by nothing at all.
+pub fn lantern_cap(lantern: &Aabb) -> (Vec3, Vec3) {
+    use crate::garden::{COPE_DEEP, COPE_OUT};
+
+    let middle = lantern.center();
+    let size = lantern.size();
+
+    (
+        vec3(middle.x, lantern.max.y + COPE_DEEP * 0.5, middle.z),
+        vec3(size.x + COPE_OUT * 2.0, COPE_DEEP, size.z + COPE_OUT * 2.0),
+    )
 }
 
 /// How high the top of that mass is, which is the room's own lid.
@@ -1200,6 +1305,18 @@ mod tests {
             .filter(|box_| !up_treads().contains(box_))
             .collect();
         drawn.extend(up_drawn());
+        // **And the outside of it**, which `room::solid` has no reason to
+        // carry: the parapet and the two capstones are drawn and nothing
+        // walks into them. The first parapet had its roll flush with the
+        // course below it, which is a dashed line along the whole top of
+        // the building, and this check names it where the four tests
+        // either side of it do not.
+        drawn.extend(
+            coping()
+                .into_iter()
+                .chain(lanterns().iter().map(lantern_cap))
+                .map(|(middle, size)| Aabb::new(middle - size * 0.5, middle + size * 0.5)),
+        );
 
         let mine = Aabb::new(
             middle() - Vec3::splat(HALF + 1.5),

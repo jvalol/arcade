@@ -475,6 +475,7 @@ struct Arcade {
     corridor_mesh: Option<MeshId>,
     aloft_mesh: Option<MeshId>,
     aloft_skin: Vec<TextureId>,
+    lantern_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
@@ -917,6 +918,7 @@ impl Arcade {
             corridor_mesh: None,
             aloft_mesh: None,
             aloft_skin: Vec::new(),
+            lantern_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
             heads: Vec::new(),
@@ -1939,6 +1941,37 @@ impl Arcade {
             }
 
             for (middle, size) in aloft::coping() {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(middle).with_scale(size),
+                    aim::GARDEN_COPE,
+                );
+            }
+
+            // and the two lanterns standing on its roof, which are spec
+            // 0038's doorways in the ceiling seen from the other side:
+            // plastered like the mass with a capstone over each.
+            for ((face, looks), skin) in aloft::lantern_faces()
+                .into_iter()
+                .zip(self.lantern_skin.iter().copied())
+            {
+                let (middle, size) = (face.center(), face.size());
+                let across = if looks.x.abs() > 0.5 { size.z } else { size.x };
+
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(middle + looks * 0.02)
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(vec3(across, 1.0, size.y)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+
+            for lantern in aloft::lanterns() {
+                let (middle, size) = aloft::lantern_cap(&lantern);
+
                 scene.push_colored(
                     cube,
                     &Transform::at(middle).with_scale(size),
@@ -5350,6 +5383,19 @@ impl Game for Arcade {
                 renderer.add_texture(&garden::plastered(
                     garden::PLASTER_SEED.wrapping_add(0x51D3 + n * 7919),
                     aloft::outside_size(),
+                ))
+            })
+            .collect();
+        self.lantern_skin = aloft::lantern_faces()
+            .into_iter()
+            .enumerate()
+            .map(|(n, (face, looks))| {
+                let size = face.size();
+                let across = if looks.x.abs() > 0.5 { size.z } else { size.x };
+
+                renderer.add_texture(&garden::plastered(
+                    garden::PLASTER_SEED.wrapping_add(0x7A11 + n as u32 * 7919),
+                    glam::vec2(across, size.y),
                 ))
             })
             .collect();

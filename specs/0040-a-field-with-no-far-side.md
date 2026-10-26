@@ -228,13 +228,33 @@ nothing had shown it. One picture per wall is what the garden's own walls
 have always had.
 
 The cope is a parapet round the edge rather than a lid over the top, and it
-oversails outward only. Spec 0038 puts a way out on all six faces of that
-cube, so two of them stand on the ceiling: a cope across the footprint seals
-both, and the garden's two-sided oversail lays eleven centimetres of stone
-across the opening of each, because those doorways begin exactly at the wall's
-inner face. A garden wall has two outsides and this one has a roof on its
-inside. What is up there now is a flat roof with two lanterns on it, which is
-what those doorways are from outside.
+stands back from the room's inner face. Spec 0038 puts a way out on all six
+faces of that cube, so two of them stand on the ceiling: a cope across the
+footprint seals both, and the garden's two-sided oversail lays eleven
+centimetres of stone across the opening of each, because those doorways begin
+exactly at that face. A garden wall has two outsides and this one has a roof
+on its inside.
+
+**And those two doorways are the lanterns.** A closed recess behind a hole in
+a ceiling is a box standing on the roof, and there they were in the pale
+stone of the room's inside, two crates somebody had left. `aloft::lanterns`
+takes the bounds of the recess itself rather than writing the box out again,
+and they are plastered like the mass with a capstone apiece, which is the
+parapet's course on a smaller plan.
+
+**Both faults in the parapet came from the engine and not from looking at
+it.** `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
+already ran spec 0048's coplanar check over this room, and the outside is in
+its list now: it found the course flush with the inner face against the
+reveal of each ceiling doorway, 0.13 by 1.60 twice over, and then the four
+runs of the ring lapping at the corners, 0.30 by 0.30 four times. The runs
+along x take the corners and the runs along z stop at their faces, where two
+end faces look opposite ways and neither is hidden.
+
+The dashed line under every cope in this building, the compound wall's
+included, is older than any of this and is not the sun's shadow map:
+shrinking that map from a hundred and sixty metres to thirty changes it by
+nothing.
 
 **Where the field meets the rooms that are bigger than it.** The field is a
 half plane west of the garden's west face. Making it a plane means deciding
@@ -382,6 +402,8 @@ eight metres inside the building.
 - And it stays out of the room's own plan, so the two doorways on the
   ceiling are
   clear. — `aloft::outside_tests::the_cope_is_clear_of_what_stands_on_the_roof`
+- Nothing drawn out there shares a plane with anything drawn in
+  here. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 
 ### Verified by hand
 
