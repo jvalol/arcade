@@ -2132,7 +2132,11 @@ impl Arcade {
         // the trees, which are three meshes stood many times
         let kinds = field::kinds();
 
-        for cell in field::cells_round(self.at, field::TREES_REACH) {
+        for cell in field::cells_round(self.at, field::reaches(self.at)) {
+            if !field::sown(cell, self.at) {
+                continue;
+            }
+
             for stood in field::trees(reaches, cell) {
                 let field::What::Tree(kind) = stood.what else {
                     continue;
@@ -6799,7 +6803,7 @@ impl Game for Arcade {
             // 0040. A hundred metres out there cuts the ground off at a
             // hundred and leaves black above it, which is a field in a
             // cave: the first build of this looked exactly like that.
-            field::SEES
+            field::sees(self.at)
         } else {
             Camera::new().far
         };
@@ -7597,7 +7601,7 @@ impl Game for Arcade {
                         dome,
                         storm,
                         &Transform::at(vec3(self.at.x, 0.0, self.at.z))
-                            .with_scale(Vec3::splat(field::SKY_BY)),
+                            .with_scale(Vec3::splat(field::sky_by(self.at))),
                         garden::skylit(self.since) + self.flashed(),
                         900.0,
                     );

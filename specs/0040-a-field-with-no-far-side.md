@@ -198,6 +198,29 @@ and setting out for a thing is what makes the walk a walk rather than a
 stroll. Hills, a tower, a single tree: Jake's call, and the only part of this
 spec that is still a question.
 
+**The ground reaches further the higher you are.** A hundred and sixty metres
+is a hand's breadth under the horizon on foot, which is why nobody saw its
+edge in a day of walking, and a line across the middle of the picture from a
+hundred and ninety up: the field was a green square on a black table. The
+ground, the sky and the far plane are all counted off `field::reaches` now,
+which is ten times your height.
+
+There is no number that hides it outright. A finite ground seen from above
+ends somewhere, and what a bigger one buys is that the somewhere is far
+enough to read as distance rather than as the end of the world.
+
+And the scatter thins with the square of the distance, because a field ten
+times wider holds a hundred times the cells and sown whole that is a hundred
+times the trees for a picture in which each of them is a pixel. Thinned, the
+sown count per ring is flat and the total is the logarithm: eleven times the
+reach costs five times the cells rather than a hundred and forty. By a share
+rather than by every nth cell, because one in n is a ring you can see.
+
+The trees have no reach of their own any more. They go as far as the ground
+does, which is what stops a tree line standing in a band of bare grass, and
+the sun's map is the only thing still measured in a fixed hundred and sixty:
+it covers what casts rather than what you can see.
+
 **Ground that rolls.** Flat, as the spec said it would be. `walk` has never
 been asked for a height field.
 
@@ -459,8 +482,12 @@ eight metres inside the building.
 - You can walk out of the garden into it. — `field::tests::you_can_walk_out_of_the_garden`
 - The ground never gets nearer its own edge, a kilometre out or
   eight. — `field::tests::the_ground_never_gets_nearer_its_edge`
-- The sky is further off than the ground on every bearing, corners
-  included. — `field::tests::the_sky_is_further_off_than_the_ground`
+- The sky is further off than the ground on every bearing and at every
+  height. — `field::tests::the_sky_is_further_off_than_the_ground`
+- The ground reaches further the higher you
+  are. — `field::tests::the_ground_grows_with_how_high_you_are`
+- And what it asks for grows with the logarithm of that reach rather than
+  its square. — `field::tests::flying_up_does_not_fill_the_machine`
 - And the camera sees as far as the sky. — `field::tests::you_can_see_as_far_as_the_sky`
 - A cell holds the same things every time it is asked, and two cells do
   not hold the same things. — `field::tests::a_cell_is_itself_and_nothing_else`

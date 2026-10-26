@@ -74,6 +74,11 @@ arrangement is that nobody knows the room is there. It has a lid now. Still
 no bound along, because spec 0018 put the system in at true scale and Saturn
 stands ten and a half kilometres out.
 
+The ground was a hundred and sixty metre square round the eye, which is a
+hand's breadth under the horizon on foot and a line across the middle of the
+picture from a hundred and ninety up. It is counted off your height now, and
+spec 0040 says what that costs and why the scatter had to thin with it.
+
 And the building's outside is `draw_the_outside`, its own pass rather than a
 tail of `draw_the_field`. The field is ground, sky and scatter round the eye;
 the outside is a building at fixed coordinates. They want different answers
@@ -123,12 +128,6 @@ not a tool.
 
 **A god mode in the game.** This is a tool, off unless asked for, costing a
 string lookup a frame.
-
-**The edge of the world.** The ground is a disc of `field::GROUND_REACH`
-round the eye, a hundred and sixty metres, so from high enough up it ends and
-there is nothing past it. Growing it with how far you can see means growing
-the cell count with it, which is a level of detail on a procedural field and
-is its own piece of work.
 
 **Fixing what flight shows you.** It turns "the building has an outside" from
 three walls into a list, and the list is not this spec's.

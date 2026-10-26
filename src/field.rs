@@ -24,7 +24,12 @@ pub const CELL: f32 = 8.0;
 /// pixels of trunk and is still what tells you the ground goes on; a tuft of
 /// grass at seventy metres is a quarter of a pixel and costs the same to draw
 /// as one at your feet. What the far distance is made of is ground and sky.
-pub const TREES_REACH: f32 = GROUND_REACH;
+///
+/// The trees have no reach of their own: they go as far as the ground does,
+/// which is [`reaches`], and are thinned past [`GROUND_REACH`] by [`sown`].
+/// A tree line short of the ground's edge is a band of bare grass round a
+/// wood, which this field had once at a hundred and twelve metres against a
+/// ground of a hundred and sixty.
 pub const COVER_REACH: f32 = 22.0;
 
 /// How far the ground slab reaches from the middle of itself.
@@ -148,16 +153,40 @@ pub fn open(reaches: f32, at: Vec3) -> bool {
 /// and a jump of a tile is a jump of nothing, because what it jumps to looks
 /// the same as what it left.
 pub fn ground(at: Vec3) -> Aabb {
+    let out = reaches(at);
     let middle = vec3(
         (at.x / TILE).round() * TILE,
         -crate::room::THICK * 0.5 - DROP,
         (at.z / TILE).round() * TILE,
     );
 
-    Aabb::from_center_size(
-        middle,
-        vec3(GROUND_REACH * 2.0, crate::room::THICK, GROUND_REACH * 2.0),
-    )
+    Aabb::from_center_size(middle, vec3(out * 2.0, crate::room::THICK, out * 2.0))
+}
+
+/// How many times its own height the world reaches from the eye.
+///
+/// **Because a flat ground has an edge and the only thing that hides an
+/// edge is distance.** On foot the edge is a hundred and sixty metres off
+/// and a hand's breadth below the horizon, which is why nobody had seen it
+/// in a day of walking. Spec 0041's flight goes up, and from a hundred and
+/// ninety metres the same edge is a line across the middle of the picture
+/// with nothing past it: the field is a green square on a black table.
+///
+/// Ten, which puts the edge six degrees under the horizon at any height.
+/// There is no number that hides it outright. A finite ground seen from
+/// above ends somewhere, and what a bigger one buys is that the somewhere
+/// is far enough to read as distance rather than as the end of the world.
+pub const ABOVE: f32 = 10.0;
+
+/// How far the world reaches from the eye, which is the ground's own half
+/// width and what the sky and the far plane are counted off.
+pub fn reaches(at: Vec3) -> f32 {
+    GROUND_REACH.max(at.y.max(0.0) * ABOVE)
+}
+
+/// How much bigger everything out here is than it is from the ground.
+pub fn grown(at: Vec3) -> f32 {
+    reaches(at) / GROUND_REACH
 }
 
 /// How far the field's ground lies under the garden's.
@@ -214,6 +243,38 @@ pub const SKY_BY: f32 = 22.0;
 /// which out here is black. The first build of this ran on the building's
 /// hundred metres and was a field in a cave.
 pub const SEES: f32 = 420.0;
+
+/// And how far it sees from where you are, which grows with the rest of it.
+pub fn sees(at: Vec3) -> f32 {
+    SEES * grown(at)
+}
+
+/// How big the sky is from where you are.
+pub fn sky_by(at: Vec3) -> f32 {
+    SKY_BY * grown(at)
+}
+
+/// Whether a cell this far off is sown at all.
+///
+/// **A field that reaches ten times further asks for a hundred times the
+/// cells, and that is the whole cost of the horizon.** So the scatter thins
+/// with the square of the distance, which keeps what is drawn roughly
+/// constant however far the ground runs: at the reach it had on foot every
+/// cell is sown, and ten times out one cell in a hundred is.
+///
+/// Thinned by a share rather than by every nth cell. One in n is a ring you
+/// can see, because the whole wood changes density at one radius; a share
+/// falls off smoothly and reads as a wood going away from you.
+pub fn sown(cell: (i32, i32), at: Vec3) -> bool {
+    let middle = middle_of(cell);
+    let how_far = (middle.x - at.x).hypot(middle.z - at.z);
+
+    if how_far <= GROUND_REACH {
+        return true;
+    }
+
+    Rolls::of(cell, 0x50_1A1).next() < (GROUND_REACH / how_far).powi(2)
+}
 
 /// What the sun's shadow map covers out here.
 ///
@@ -912,21 +973,103 @@ mod tests {
     /// colour, which is black.
     #[test]
     fn the_sky_is_further_off_than_the_ground() {
-        for round in 0..64 {
-            let round = round as f32 / 64.0 * std::f32::consts::TAU;
-            let sky = crate::garden::vault_rim(round) * SKY_BY;
-            // how far the square slab reaches on that bearing
-            let (c, s) = (round.cos().abs(), round.sin().abs());
-            let ground = GROUND_REACH / c.max(s);
+        // and at every height, because spec 0041 flies: both grow together
+        // and the one that grew without the other is a ground that ends
+        // inside the sky or a sky that ends inside the ground
+        for up in [0.0f32, 1.6, 40.0, 190.0, 900.0] {
+            let at = vec3(0.0, up, 0.0);
+
+            for round in 0..64 {
+                let round = round as f32 / 64.0 * std::f32::consts::TAU;
+                let sky = crate::garden::vault_rim(round) * sky_by(at);
+                // how far the square slab reaches on that bearing
+                let (c, s) = (round.cos().abs(), round.sin().abs());
+                let ground = super::reaches(at) / c.max(s);
+
+                assert!(
+                    sky > ground,
+                    "{} up, at {:.2} radians the sky stops at {:.1} and the ground runs to {:.1}",
+                    up,
+                    round,
+                    sky,
+                    ground
+                );
+            }
+        }
+    }
+
+    /// Spec 0041: the ground reaches further the higher you are, so its edge
+    /// stays at the horizon rather than crossing the picture.
+    ///
+    /// **A hundred and sixty metres is a hand's breadth under the horizon on
+    /// foot and a line across the middle of it from a hundred and ninety up.**
+    /// Nobody saw it in a day of walking and everybody sees it in a second of
+    /// flight.
+    #[test]
+    fn the_ground_grows_with_how_high_you_are() {
+        let foot = super::reaches(vec3(0.0, 1.6, 0.0));
+
+        assert!(
+            (foot - GROUND_REACH).abs() < 1e-3,
+            "on foot the field is {} and not {}",
+            foot,
+            GROUND_REACH
+        );
+
+        for up in [40.0f32, 190.0, 900.0] {
+            let out = super::reaches(vec3(0.0, up, 0.0));
 
             assert!(
-                sky > ground,
-                "at {:.2} radians the sky stops at {:.1} and the ground runs to {:.1}",
-                round,
-                sky,
-                ground
+                out >= up * 8.0,
+                "{} metres up the ground stops at {}, which is {:.1} times your height",
+                up,
+                out,
+                out / up
             );
         }
+    }
+
+    /// And what it asks for grows with the logarithm of the reach rather
+    /// than its square.
+    ///
+    /// **A field ten times wider holds a hundred times the cells**, and sown
+    /// whole that is a hundred times the trees for a picture in which each of
+    /// them is a pixel. Thinned by the square of the distance the sown count
+    /// per ring is flat, so the total is the logarithm: eleven times the
+    /// reach costs five times the cells rather than a hundred and forty.
+    ///
+    /// Not flat, and it cannot be. A share that fell faster than the square
+    /// would empty the far field, and an empty far field is the edge of the
+    /// world again with a gradient in front of it.
+    #[test]
+    fn flying_up_does_not_fill_the_machine() {
+        let afoot = sown_round(vec3(0.0, 1.6, 0.0));
+
+        for up in [40.0f32, 190.0, 900.0] {
+            let at = vec3(0.0, up, 0.0);
+            let sown = sown_round(at);
+            let grown = grown(at);
+            let allow = (afoot as f32 * (1.0 + 3.0 * grown.ln())) as usize;
+
+            assert!(
+                sown < allow,
+                "{} metres up the reach is {:.0} times its own and the field sows {} cells \
+                 against {} on foot, which is past the {} a logarithm allows",
+                up,
+                grown,
+                sown,
+                afoot,
+                allow
+            );
+        }
+    }
+
+    /// How many cells are actually sown from a spot.
+    fn sown_round(at: Vec3) -> usize {
+        cells_round(at, super::reaches(at))
+            .into_iter()
+            .filter(|cell| sown(*cell, at))
+            .count()
     }
 
     /// Spec 0040: you can see as far as the sky.
@@ -935,16 +1078,24 @@ mod tests {
     /// ground off at a hundred and left black above it.
     #[test]
     fn you_can_see_as_far_as_the_sky() {
+        for up in [0.0f32, 40.0, 190.0, 900.0] {
+            you_can_see_as_far_as_the_sky_from(vec3(0.0, up, 0.0));
+        }
+    }
+
+    fn you_can_see_as_far_as_the_sky_from(at: Vec3) {
         let corner = (0..64)
-            .map(|n| crate::garden::vault_rim(n as f32 / 64.0 * std::f32::consts::TAU) * SKY_BY)
+            .map(|n| crate::garden::vault_rim(n as f32 / 64.0 * std::f32::consts::TAU) * sky_by(at))
             .fold(0.0f32, f32::max);
-        let top = crate::garden::DOME_UP * SKY_BY;
+        let top = crate::garden::DOME_UP * sky_by(at);
+        let far = sees(at);
 
         assert!(
-            SEES > corner.hypot(top),
-            "the sky's furthest corner is {:.0} off and the camera sees {:.0}",
+            far > corner.hypot(top),
+            "{:.0} up, the sky's furthest corner is {:.0} off and the camera sees {:.0}",
+            at.y,
             corner.hypot(top),
-            SEES
+            far
         );
     }
 
@@ -991,7 +1142,7 @@ mod tests {
         let reaches = reaches();
         let gate = vec3(starts(reaches), 0.0, crate::garden::at(reaches).z);
 
-        for cell in cells_round(gate, TREES_REACH) {
+        for cell in cells_round(gate, GROUND_REACH) {
             for stood in trees(reaches, cell).into_iter().chain(cover(reaches, cell)) {
                 assert!(
                     open(reaches, stood.at),
@@ -1349,11 +1500,11 @@ mod tests {
     fn walking_does_not_fill_the_machine() {
         let reaches = reaches();
         let gate = vec3(starts(reaches) - 1.0, 0.0, crate::garden::at(reaches).z);
-        let at_the_gate = cells_round(gate, TREES_REACH).len();
+        let at_the_gate = cells_round(gate, GROUND_REACH).len();
 
         for away in [100.0f32, 5_000.0, 40_000.0] {
             let at = gate - Vec3::X * away;
-            let cells = cells_round(at, TREES_REACH).len();
+            let cells = cells_round(at, GROUND_REACH).len();
             let things: usize = cells_round(at, COVER_REACH)
                 .into_iter()
                 .map(|cell| cover(reaches, cell).len())
