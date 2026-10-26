@@ -523,6 +523,8 @@ struct Arcade {
     /// And the same plaster counted for the hotel's corridor, which is
     /// two kilometres long against the field wall's three hundred.
     corridor_mesh: Option<MeshId>,
+    corridor_roof_mesh: Option<MeshId>,
+    corridor_roof_skin: Option<TextureId>,
     aloft_mesh: Option<MeshId>,
     aloft_skin: Vec<TextureId>,
     roof_skin: Option<TextureId>,
@@ -970,6 +972,8 @@ impl Arcade {
             render: None,
             rendered: vec![None, None],
             corridor_mesh: None,
+            corridor_roof_mesh: None,
+            corridor_roof_skin: None,
             aloft_mesh: None,
             aloft_skin: Vec::new(),
             roof_skin: None,
@@ -2090,6 +2094,20 @@ impl Arcade {
                     aim::GARDEN_COPE,
                 );
             }
+        }
+
+        if let (Some(mesh), Some(skin)) = (self.corridor_roof_mesh, self.corridor_roof_skin) {
+            let (middle, size) = aleph::corridor_roof(reaches);
+
+            scene.push_textured(
+                mesh,
+                skin,
+                &Transform::at(middle)
+                    .with_rotation(room::laid_on(Vec3::Y))
+                    .with_scale(vec3(size.x, 1.0, size.y)),
+                aim::GARDEN_PLASTER,
+                aim::MATTE,
+            );
         }
 
         // the trees, which are three meshes stood many times
@@ -5558,6 +5576,20 @@ impl Game for Arcade {
             })
             .collect();
         self.aloft_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
+        // and the top of that corridor, which was open from the air. Tiled
+        // like its walls rather than one picture laid out from the world:
+        // two kilometres at forty texels a metre is not a picture. A tile
+        // is a whole number of bays, so the joints run on through it even
+        // though the stains repeat.
+        self.corridor_roof_skin = Some(renderer.add_texture(&garden::screeded(
+            garden::SCREED_SEED,
+            glam::Vec2::ZERO,
+            glam::Vec2::splat(field::RENDER),
+            garden::BAY,
+        )));
+        self.corridor_roof_mesh = Some(renderer.add_mesh(&room::tiled_plane(
+            aleph::corridor_roof(self.room.reaches).1 / field::RENDER,
+        )));
         self.corridor_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             aleph::RUNS / field::RENDER,
             (aleph::TALL + room::THICK) / field::RENDER,

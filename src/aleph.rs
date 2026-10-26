@@ -323,6 +323,27 @@ pub const RUNS: f32 = 2000.0;
 /// Spec 0035's corridor is the same shape and is not dressed; it is not
 /// drawn from outside at all. Two of these on one skyline is the same
 /// sentence said twice. See `twine::inside`.
+/// And the top of it, which from the air was open: the shell's ceiling is a
+/// collider and the drawing of it faces down into the corridor, so from
+/// forty metres up you looked along two kilometres of floor, doors and door
+/// numbers. Spec 0040.
+///
+/// It runs the whole length of that shell. The lobby's lid is eighty
+/// centimetres higher and covers this end of it in plan, so the two never
+/// meet in a plane and there is nothing to butt: the corridor is the lower
+/// of the two roofs and the junction is a step rather than a join.
+pub fn corridor_roof(reaches: f32) -> (Vec3, glam::Vec2) {
+    let (west, _) = span();
+    let middle = middle_z(reaches);
+    let (from, to) = (middle - ACROSS * 0.5 - THICK, middle + ACROSS * 0.5 + THICK);
+    let (near, far) = (corridor_west(), west + THICK);
+
+    (
+        vec3((near + far) * 0.5, TALL + THICK + 0.01, middle),
+        glam::vec2(far - near, to - from),
+    )
+}
+
 pub fn corridor_faces(reaches: f32) -> Vec<(Aabb, Vec3)> {
     let (west, _) = span();
     let middle = middle_z(reaches);
@@ -1452,6 +1473,58 @@ pub const HANDLE_IN: f32 = 0.12;
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0040: the corridor's roof covers its own shell, all of it, and
+    /// sits a hair above it.
+    ///
+    /// **Not level with the lobby's lid**, which was the first guess and is
+    /// eighty centimetres out: this corridor is `aleph::TALL` and the lobby
+    /// is the hall's. Worked from the wrong one the roof lay inside the
+    /// corridor with the shell over it, and the test that caught it was
+    /// this one.
+    #[test]
+    fn the_corridors_roof_covers_its_shell() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let (middle, size) = corridor_roof(reaches);
+        let shell = solid(reaches)
+            .into_iter()
+            .find(|box_| box_.min.y >= TALL - 1e-3 && box_.min.x <= corridor_west() + 1e-3)
+            .expect("the corridor's own ceiling");
+
+        assert!(
+            middle.y > shell.max.y && middle.y < shell.max.y + 0.05,
+            "the roof is laid at {} over a shell whose top is {}",
+            middle.y,
+            shell.max.y
+        );
+
+        for (one, two, low, high, way) in [
+            (
+                middle.x - size.x * 0.5,
+                middle.x + size.x * 0.5,
+                shell.min.x,
+                shell.max.x,
+                "along",
+            ),
+            (
+                middle.z - size.y * 0.5,
+                middle.z + size.y * 0.5,
+                shell.min.z,
+                shell.max.z,
+                "across",
+            ),
+        ] {
+            assert!(
+                one <= low + 1e-3 && two >= high - 1e-3,
+                "{} the roof spans {}..{} over a shell of {}..{}",
+                way,
+                one,
+                two,
+                low,
+                high
+            );
+        }
+    }
+
     /// Spec 0029: every lamp in here sits in a fitting, and every fitting
     /// has a lamp.
     ///

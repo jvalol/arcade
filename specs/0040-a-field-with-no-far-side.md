@@ -344,6 +344,21 @@ endlessness is a thing you look at out here rather than a thing the room
 tells you, and this is the only place in the building you can see the whole
 length of it.
 
+**And it has a top now.** Its shell's ceiling is a collider, and the drawing
+of that ceiling faces down into the corridor, so from forty metres up you
+looked along two kilometres of floor, doors and door numbers.
+`aleph::corridor_roof` is the same screed as the building's, tiled the way
+that corridor's walls are tiled rather than laid out from the world: two
+kilometres at forty texels a metre is not a picture. A tile is a whole
+number of bays, so the joints run on through it even though the stains
+repeat.
+
+It is laid at `aleph::TALL`, which is not the hall's. The first build took
+the lobby's height and put the roof eighty centimetres up inside the
+corridor with the shell over it. The lobby's lid covers that end of it in
+plan anyway, so the junction is a step rather than a join and there is
+nothing to butt.
+
 Spec 0035's is not drawn from outside at all. It is spec 0029's corridor
 re-spaced, and two of them on one skyline is the same sentence said twice.
 See `twine::inside`, which is the same gate `draw_the_system` got for the
@@ -489,6 +504,8 @@ eight metres inside the building.
   it. — `room::tests::the_plaster_sits_on_the_wall_and_not_on_the_lid`
 - And the strip over a borrowed wall is one of the faces
   found. — `room::tests::the_strip_over_a_shorter_room_is_dressed`
+- The hotel's corridor is roofed, all of it, a hair above its own
+  shell. — `aleph::tests::the_corridors_roof_covers_its_shell`
 
 ### Verified by hand
 
