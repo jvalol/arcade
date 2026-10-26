@@ -473,6 +473,8 @@ struct Arcade {
     /// And the same plaster counted for the hotel's corridor, which is
     /// two kilometres long against the field wall's three hundred.
     corridor_mesh: Option<MeshId>,
+    aloft_mesh: Option<MeshId>,
+    aloft_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
@@ -913,6 +915,8 @@ impl Arcade {
             render: None,
             rendered: vec![None, None],
             corridor_mesh: None,
+            aloft_mesh: None,
+            aloft_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
             heads: Vec::new(),
@@ -1906,6 +1910,38 @@ impl Arcade {
                         garden::COPE_DEEP,
                         room::THICK + garden::COPE_OUT,
                     )),
+                    aim::GARDEN_COPE,
+                );
+            }
+        }
+
+        // and the imaginarium, the one storey of this building that stands
+        // above its own wall, in the same plaster with the same cope.
+        // `aloft::outside` says what it was before there was a field to see
+        // it from.
+        if let Some(mesh) = self.aloft_mesh {
+            for ((face, looks), skin) in aloft::outside()
+                .into_iter()
+                .zip(self.aloft_skin.iter().copied())
+            {
+                let (middle, size) = (face.center(), face.size());
+                let across = if looks.x.abs() > 0.5 { size.z } else { size.x };
+
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(middle + looks * 0.02)
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(vec3(across, 1.0, size.y)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+
+            for (middle, size) in aloft::coping() {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(middle).with_scale(size),
                     aim::GARDEN_COPE,
                 );
             }
@@ -5300,6 +5336,24 @@ impl Game for Arcade {
             glam::vec2(field::RENDER, field::RENDER),
         )));
 
+        // the imaginarium's four outward faces: one picture each, counted
+        // off the face, the way the garden's walls are done.
+        //
+        // **Not the field's tiled plaster.** That picture is one tile of a
+        // run and carries the splash the foot of a wall gets, which is the
+        // point of it; tiled up a face fifteen metres high it is a dark
+        // band every six metres, three of them one above another. Nothing
+        // had shown it before, because the compound wall and the hotel's
+        // corridor are both under one tile tall.
+        self.aloft_skin = (0..aloft::outside().len() as u32)
+            .map(|n| {
+                renderer.add_texture(&garden::plastered(
+                    garden::PLASTER_SEED.wrapping_add(0x51D3 + n * 7919),
+                    aloft::outside_size(),
+                ))
+            })
+            .collect();
+        self.aloft_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.corridor_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             aleph::RUNS / field::RENDER,
             (aleph::TALL + room::THICK) / field::RENDER,

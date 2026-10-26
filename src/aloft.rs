@@ -16,7 +16,7 @@
 //! hold up. The illusion is in the gentleness.
 
 use blitzkit::collision::Aabb;
-use glam::{vec3, Quat, Vec3};
+use glam::{vec2, vec3, Quat, Vec2, Vec3};
 
 use crate::room::THICK;
 
@@ -45,6 +45,120 @@ pub const HALF: f32 = ROOM * 0.5;
 /// turn about, and this is it.
 pub fn middle() -> Vec3 {
     vec3(MIDDLE_X, BASE + HALF, MIDDLE_Z)
+}
+
+/// What this room shows the field: its four outward faces and the top of
+/// them. Spec 0040.
+///
+/// **It is the only part of this building that stands above the compound
+/// wall**, so it is the only part of it anybody outside can see, and until
+/// there was a field nobody could. What it was from out there is a pale
+/// slab in the stone of its own inside, floating two and a half metres
+/// over the hall's roof with daylight under it, because the room's floor
+/// is at 6 and the hall's lid is at 3.2 and what fills the gap is the
+/// shaft the way up climbs.
+///
+/// From outside it stands on that roof: one mass from the hall's lid to
+/// the top of the room, in the garden's plaster with the garden's cope, so
+/// what the building is from its own field is a walled compound with one
+/// storey standing out of it. The shaft is inside that mass and so is the
+/// gap, which is right: a gap under a room is a thing a building does not
+/// have.
+pub fn outside() -> Vec<(Aabb, Vec3)> {
+    let out = HALF + THICK;
+    let (low, high) = (crate::room::TALL, BASE + ROOM + THICK);
+
+    [
+        (-Vec3::X, vec3(MIDDLE_X - out, 0.0, MIDDLE_Z)),
+        (Vec3::X, vec3(MIDDLE_X + out, 0.0, MIDDLE_Z)),
+        (-Vec3::Z, vec3(MIDDLE_X, 0.0, MIDDLE_Z - out)),
+        (Vec3::Z, vec3(MIDDLE_X, 0.0, MIDDLE_Z + out)),
+    ]
+    .iter()
+    .map(|(looks, on)| {
+        let along = if looks.x.abs() > 0.5 {
+            vec3(0.0, 0.0, out)
+        } else {
+            vec3(out, 0.0, 0.0)
+        };
+
+        (
+            Aabb::new(
+                vec3(on.x - along.x, low, on.z - along.z),
+                vec3(on.x + along.x, high, on.z + along.z),
+            ),
+            *looks,
+        )
+    })
+    .collect()
+}
+
+/// How far across one of those faces is, and how far up, which is what a
+/// quad laid on one is counted for.
+pub fn outside_size() -> Vec2 {
+    let face = outside()[0].0.size();
+
+    vec2(face.x.max(face.z), face.y)
+}
+
+/// And the top of that mass, dressed the way the compound wall's top is:
+/// the garden's two courses, the tiles and the roll set in from them. Boxes
+/// as (middle, size), like `garden::coping`, which is where every number
+/// here comes from so that the two rooflines are one roofline.
+///
+/// **A parapet round the edge and not a lid over the whole top.** A slab
+/// was the first build and it closed the two doorways that stand on this
+/// room's ceiling: spec 0038 puts a way out on all six faces of the cube,
+/// so two of them come up through the roof, and a cope across the footprint
+/// seals both and shares a plane with the sides of each. What is up there
+/// now is a flat roof with two lanterns on it, which is what those doorways
+/// are from outside.
+///
+/// **And it oversails outward only.** The garden's cope throws rain clear
+/// on both sides because a garden wall has two outsides. This one has a
+/// roof on its inside, and those doorways begin exactly at the wall's inner
+/// face, so eleven centimetres of inward oversail lay across the opening of
+/// each: a lintel across the bottom corner of a hole you look up through
+/// from inside the room.
+pub fn coping() -> Vec<(Vec3, Vec3)> {
+    use crate::garden::{COPE_DEEP, COPE_OUT, COPE_ROLL};
+
+    let out = HALF + THICK + COPE_OUT;
+    let top = tops();
+    let mut boxes = Vec::new();
+
+    for (course, deep, high) in [
+        (THICK + COPE_OUT, COPE_DEEP, top + COPE_DEEP * 0.5),
+        (
+            THICK + COPE_OUT * 0.3,
+            COPE_ROLL,
+            top + COPE_DEEP + COPE_ROLL * 0.5,
+        ),
+    ] {
+        // flush with the room's inside and oversailing outward, so the
+        // line a course is centred on is worked back from its outer face
+        let line = out - course * 0.5;
+        let along = out;
+
+        for (middle, size) in [
+            (vec3(-line, 0.0, 0.0), vec3(course, 0.0, along * 2.0)),
+            (vec3(line, 0.0, 0.0), vec3(course, 0.0, along * 2.0)),
+            (vec3(0.0, 0.0, -line), vec3(along * 2.0, 0.0, course)),
+            (vec3(0.0, 0.0, line), vec3(along * 2.0, 0.0, course)),
+        ] {
+            boxes.push((
+                vec3(MIDDLE_X + middle.x, high, MIDDLE_Z + middle.z),
+                vec3(size.x, deep, size.z),
+            ));
+        }
+    }
+
+    boxes
+}
+
+/// How high the top of that mass is, which is the room's own lid.
+pub fn tops() -> f32 {
+    BASE + ROOM + THICK
 }
 
 /// How many ways there are to be the right way up in here. Spec 0038.
@@ -1915,5 +2029,133 @@ mod tests {
         }
 
         at
+    }
+}
+
+#[cfg(test)]
+mod outside_tests {
+    use super::*;
+
+    /// The footprint those faces enclose, read off the faces themselves.
+    /// Written out again from `HALF` it agreed with them by coincidence and
+    /// a control that halved the mass passed, because the test had halved
+    /// with it.
+    fn footprint() -> Aabb {
+        outside()
+            .iter()
+            .fold(None::<Aabb>, |all, (face, _)| {
+                Some(match all {
+                    None => *face,
+                    Some(all) => Aabb::new(all.min.min(face.min), all.max.max(face.max)),
+                })
+            })
+            .expect("four faces")
+    }
+
+    #[test]
+    fn the_imaginarium_stands_on_the_roof_under_it() {
+        for (face, _) in outside() {
+            assert!(
+                (face.min.y - crate::room::TALL).abs() < 1e-4,
+                "a face starts at {} and the roof is at {}",
+                face.min.y,
+                crate::room::TALL
+            );
+            assert!((face.max.y - tops()).abs() < 1e-4);
+        }
+    }
+
+    /// Which is the point of starting it down there rather than at the
+    /// room's own floor. Two and a half metres of daylight between a roof
+    /// and the storey over it is not a thing a building has, and what stood
+    /// in that daylight was the shaft the way up climbs.
+    #[test]
+    fn the_mass_reaches_the_roof_it_stands_on() {
+        let room = crate::room::Room::of(crate::games());
+        let low = outside()
+            .iter()
+            .map(|(face, _)| face.min.y)
+            .fold(f32::INFINITY, f32::min);
+        let middle = vec3(MIDDLE_X, low, MIDDLE_Z);
+
+        assert!(
+            room.ceiling()
+                .iter()
+                .any(|piece| piece.contains_point(middle)),
+            "the mass starts at {} with nothing of the hall's lid there",
+            low
+        );
+    }
+
+    /// And the shaft is inside it, in plan, so none of it is left standing
+    /// outside the mass that is meant to have swallowed it.
+    #[test]
+    fn the_way_up_is_inside_what_the_field_sees() {
+        let foot = footprint();
+        let mut under = 0;
+
+        for box_ in up_shaft() {
+            if box_.min.y >= BASE {
+                continue;
+            }
+
+            assert!(
+                box_.min.x >= foot.min.x - 1e-3
+                    && box_.max.x <= foot.max.x + 1e-3
+                    && box_.min.z >= foot.min.z - 1e-3
+                    && box_.max.z <= foot.max.z + 1e-3,
+                "the shaft reaches {:?}..{:?} and the mass covers {:?}..{:?}",
+                box_.min,
+                box_.max,
+                foot.min,
+                foot.max
+            );
+            under += 1;
+        }
+
+        assert!(under > 0, "no part of the shaft is under the room at all");
+    }
+
+    /// And it leaves the roof's own doorways alone. Spec 0038 puts one on
+    /// every face of the cube, so two of them stand on the ceiling and both
+    /// begin at the wall's inner face. A cope that reaches past that face
+    /// lies across the opening of each, which is what a slab over the whole
+    /// footprint did and what an inward oversail of eleven centimetres did
+    /// after it.
+    #[test]
+    fn the_cope_is_clear_of_what_stands_on_the_roof() {
+        for (middle, size) in coping() {
+            let (x, z) = (
+                (middle.x - MIDDLE_X).abs() - size.x * 0.5,
+                (middle.z - MIDDLE_Z).abs() - size.z * 0.5,
+            );
+
+            assert!(
+                x >= HALF - 1e-3 || z >= HALF - 1e-3,
+                "a course at {:?} reaches {} and {} from the middle, inside a room of {}",
+                middle,
+                x,
+                z,
+                HALF
+            );
+        }
+    }
+
+    /// And the cope sits on the top of it, one course then the roll, with
+    /// nothing hanging below the lid.
+    #[test]
+    fn the_cope_sits_on_the_top() {
+        let boxes = coping();
+
+        assert_eq!(boxes.len(), 8);
+
+        for (middle, size) in boxes {
+            assert!(
+                middle.y - size.y * 0.5 >= tops() - 1e-4,
+                "a course reaches {} and the top is {}",
+                middle.y - size.y * 0.5,
+                tops()
+            );
+        }
     }
 }

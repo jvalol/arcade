@@ -202,11 +202,39 @@ far enough out the building is below the horizon, and that is the whole of
 getting lost as it stands.
 
 **What the building looks like from its own field, above the garden's
-walls.** The garden is plastered on both sides now and reads as a walled
-compound. What stands over it is the imaginarium, in the pale stone of its
+walls.** The garden is plastered on both sides and reads as a walled
+compound. What stood over it was the imaginarium, in the pale stone of its
 own inside, with no roof and no articulation, because nothing had ever seen
-it from outside. That is a decision about what this building is from the
-outside and not a bug to be fixed.
+it from outside.
+
+**And it is a storey now, standing on the hall's roof.** Spec 0038's room
+is a cube twelve and a half metres each way whose floor is at six, and the
+hall's lid is at three point two, so the pale slab on the skyline was also
+floating two and a half metres clear of the building with daylight under it.
+What was in that daylight was the shaft the way up climbs. `aloft::outside`
+is one mass from the lid to the top of the room, in the garden's plaster
+with the garden's cope, and the shaft and the gap are both inside it. A gap
+under a room is not a thing a building has.
+
+Two things it taught, both of them about reusing the field's dressing on
+something taller than the field has dressed before.
+
+The plaster is one picture per face, not the field's tile. That tile carries
+the splash the foot of a wall gets, which is the point of it on a run three
+hundred metres long, and tiled up a face fifteen and a half metres high it
+is a dark band every six metres with three of them one above another. The
+compound wall and the hotel's corridor are both under one tile tall, so
+nothing had shown it. One picture per wall is what the garden's own walls
+have always had.
+
+The cope is a parapet round the edge rather than a lid over the top, and it
+oversails outward only. Spec 0038 puts a way out on all six faces of that
+cube, so two of them stand on the ceiling: a cope across the footprint seals
+both, and the garden's two-sided oversail lays eleven centimetres of stone
+across the opening of each, because those doorways begin exactly at the wall's
+inner face. A garden wall has two outsides and this one has a roof on its
+inside. What is up there now is a flat roof with two lanterns on it, which is
+what those doorways are from outside.
 
 **Where the field meets the rooms that are bigger than it.** The field is a
 half plane west of the garden's west face. Making it a plane means deciding
@@ -343,6 +371,17 @@ eight metres inside the building.
   back. — `tests::the_field_is_drawn`
 - The hotel's corridor, from out in the field, dressed and running to the
   vanishing point. — `tests::the_corridor_from_the_field_is_drawn`
+- The imaginarium stands on the roof under it, with no daylight between
+  them. — `aloft::outside_tests::the_mass_reaches_the_roof_it_stands_on`
+- And its faces run from that roof to the top of the
+  room. — `aloft::outside_tests::the_imaginarium_stands_on_the_roof_under_it`
+- The shaft the way up climbs is inside that
+  mass. — `aloft::outside_tests::the_way_up_is_inside_what_the_field_sees`
+- Its cope sits on the top and nothing of it hangs
+  below. — `aloft::outside_tests::the_cope_sits_on_the_top`
+- And it stays out of the room's own plan, so the two doorways on the
+  ceiling are
+  clear. — `aloft::outside_tests::the_cope_is_clear_of_what_stands_on_the_roof`
 
 ### Verified by hand
 
