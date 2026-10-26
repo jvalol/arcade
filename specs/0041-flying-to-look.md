@@ -40,6 +40,18 @@ out that make it a walk: gravity, the body's radius, and the floor.
 - `walk` is not called at all, so nothing it does happens: no step budget, no
   slide along a wall, no fall.
 
+**R puts you back at the door.** Flight can leave you somewhere with
+nothing drawn at all: inside something, past everything, or out where no
+room's gate is true, and the screen is black whichever way you turn, so
+there is no landmark left to steer by and no way back. Jake found one the
+first time he flew. The reset drops what you are inside as well as where
+you are, because the tesseract and the ride out past the door each hold you
+in a state of their own and a reset that left you in one would put you at
+the door still riding.
+
+Only while flying. In the game it is a key that teleports you, which is not
+a thing this building does.
+
 **The rooms will pop, and that is the price.** Seven things in here are
 decided by which room the building thinks you are standing in, and every one
 assumes you are in exactly one: `field::in_view` three times, `behind::inside`,
@@ -60,9 +72,15 @@ not a tool.
   journey walked is stopped. — `tests::flying_goes_through_what_walking_does_not`
 - And it goes where you are looking, up and down
   included. — `tests::flying_follows_the_pitch`
+- R puts you back where the game opens, from anywhere, holding
+  nothing. — `tests::the_reset_puts_you_back_at_the_door`
+- And does nothing at all on
+  foot. — `tests::r_does_nothing_when_you_are_walking`
 
 ### Verified by hand
 
+- `FLY=1 cargo run --release`, then fly into the dark until nothing draws
+  and press R.
 - `FLY=1 cargo run --release`, then look down at the building from forty
   metres. The field and the sky are drawn, the imaginarium's four plastered
   faces read, and the two lanterns and four bays stand on it.

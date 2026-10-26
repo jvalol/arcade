@@ -4279,6 +4279,28 @@ impl Arcade {
         );
     }
 
+    /// Puts you back at the door, facing the way the game opens.
+    ///
+    /// **Because flight can lose you somewhere with nothing drawn at all.**
+    /// Jake found one: past everything, inside something, or out where no
+    /// room's gate is true, and the screen is black whichever way you turn,
+    /// so there is no landmark left to steer by and no way back.
+    ///
+    /// It drops what you are inside as well as where you are. The tesseract
+    /// and the ride out past the door both hold you in a state of their own,
+    /// and a reset that moved you and left you in one of those would put you
+    /// at the door still riding.
+    fn back_to_the_door(&mut self) {
+        self.at = self.room.doorway();
+        self.eye = self.at.y;
+        self.yaw = 0.0;
+        self.pitch = 0.0;
+        self.falling = 0.0;
+        self.climbs = 0.0;
+        self.inside = None;
+        self.riding_to = None;
+    }
+
     fn gone(&mut self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
         // inside the tesseract, where the room is a cube with four ways out
         // and the only things that stop you are the floor, the ceiling and
@@ -9988,6 +10010,15 @@ impl Game for Arcade {
             KeyboardKey::P if held && !input.repeat => {
                 self.wants_planes = true;
             }
+            // back to the door, when flying has lost you. Spec 0041.
+            //
+            // **Only while flying.** In the game this is a key that teleports
+            // you, which is not a thing this building does, and R is next to
+            // nothing anybody presses by accident but the walk is not worth
+            // the risk.
+            KeyboardKey::R if held && !input.repeat && flying() => {
+                self.back_to_the_door();
+            }
             KeyboardKey::Escape => self.quitting = held,
             _ => (),
         }
@@ -10203,6 +10234,60 @@ mod tests {
             stopped.x,
             free.x
         );
+    }
+
+    /// Spec 0041: the reset puts you back where the game opens, from
+    /// anywhere, and leaves you holding nothing.
+    ///
+    /// **From anywhere**, which is the point: flight can put you inside
+    /// something, past everything, or out where no room's gate is true, and
+    /// in all three the screen is black whichever way you turn. Jake found
+    /// one. A reset that works from the places you can still see is not a
+    /// reset.
+    #[test]
+    fn the_reset_puts_you_back_at_the_door() {
+        let mut arcade = Arcade::new();
+        let door = arcade.room.doorway();
+
+        for lost in [
+            vec3(0.0, -400.0, 0.0),
+            vec3(1800.0, 60.0, -1800.0),
+            vec3(0.0, 0.0, 0.0),
+            aloft::middle(),
+        ] {
+            arcade.at = lost;
+            arcade.eye = lost.y;
+            arcade.yaw = 2.1;
+            arcade.pitch = 0.9;
+            arcade.falling = 7.0;
+            arcade.climbs = 11.0;
+            arcade.riding_to = Some(0);
+
+            arcade.back_to_the_door();
+
+            assert_eq!(arcade.at, door, "lost at {:?}", lost);
+            assert_eq!(arcade.eye, door.y);
+            assert_eq!((arcade.yaw, arcade.pitch), (0.0, 0.0));
+            assert_eq!((arcade.falling, arcade.climbs), (0.0, 0.0));
+            assert!(arcade.riding_to.is_none() && arcade.inside.is_none());
+        }
+    }
+
+    /// And R does nothing at all when you are not flying, which is both
+    /// halves of the claim: that the key is free, and that a building with
+    /// no teleport in it does not grow one because a tool wanted a way home.
+    #[test]
+    fn r_does_nothing_when_you_are_walking() {
+        let mut one = Arcade::new();
+
+        one.at = vec3(1.0, 0.0, 2.0);
+        one.yaw = 1.3;
+
+        let (at, yaw) = (one.at, one.yaw);
+
+        press(&mut one, KeyboardKey::R);
+
+        assert_eq!((one.at, one.yaw), (at, yaw), "R moved a body on foot");
     }
 
     /// And it goes where you are looking, up and down included, which is the
