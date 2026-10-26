@@ -1676,25 +1676,11 @@ pub fn facing(reaches: f32) -> Vec<Face> {
         // and narrowing the way out to twenty centimetres changed not one
         // pixel of it.
         //
-        // The west one in two pieces round the way out, like its inside.
-        lining(
-            vec3(
-                middle.x - half.x - THICK - proud,
-                up,
-                (west_ends(reaches).0 + out_from) * 0.5,
-            ),
-            vec3(proud * 2.0, HIGH, out_from - west_ends(reaches).0),
-            -Vec3::X,
-        ),
-        lining(
-            vec3(
-                middle.x - half.x - THICK - proud,
-                up,
-                (out_to + west_ends(reaches).1) * 0.5,
-            ),
-            vec3(proud * 2.0, HIGH, west_ends(reaches).1 - out_to),
-            -Vec3::X,
-        ),
+        // The west one is not here: it is drawn with `field::wall`'s own
+        // plaster and in the same run, because it is the same wall. One
+        // picture per face is right for sixteen metres and the field's is
+        // tiled over three hundred, so meeting they were two pictures at
+        // two phases and the join read as a seam.
         // and the two that run away from it. These have no cap of their
         // own: `coping` takes one face per wall and these are second faces
         // on walls that are capped already.

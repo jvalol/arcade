@@ -458,6 +458,42 @@ pub fn wall(reaches: f32, at: Vec3) -> Vec<Aabb> {
         .collect()
 }
 
+/// The plaster on the field's side of the wall, as the two runs of it.
+///
+/// **One run a side, through the garden's own stretch, with the way out
+/// the only break.** The garden used to plaster its own outer face from
+/// its own list, one picture for the whole face the way its other walls
+/// get one each, and `field::wall` tiled a different picture over the rest:
+/// two pictures at two phases meeting at the corner, which reads as a
+/// seam. It is the same wall, so it is one run.
+///
+/// **And the run's length is a whole number of tiles.** The quad carries
+/// its tile count in its own corners, so a run whose length wanders by a
+/// metre is a run whose tiles breathe as you walk. The near end is the way
+/// out, which does not move, and the far end is snapped out to the next
+/// tile past where the ground stops.
+pub fn wall_faces(reaches: f32, at: Vec3) -> Vec<Aabb> {
+    let lies = ground(at);
+    let face = starts(reaches) - crate::room::THICK;
+    let (from, to) = way(reaches);
+    let tall = crate::garden::HIGH;
+    let run = |near: f32, far: f32| {
+        let tiles = ((far - near).abs() / RENDER).ceil().max(1.0) * RENDER;
+        let far = if far < near {
+            near - tiles
+        } else {
+            near + tiles
+        };
+
+        Aabb::new(
+            vec3(face, -DROP, near.min(far)),
+            vec3(face, tall, near.max(far)),
+        )
+    };
+
+    vec![run(from, lies.min.z), run(to, lies.max.z)]
+}
+
 /// What you walk into out here, which is the trunks and nothing else.
 ///
 /// A tuft of grass you walk through and a flower you walk over. A field where
@@ -1206,15 +1242,21 @@ mod tests {
     /// slot one wall thick at each end of the garden with nothing drawn in
     /// it: from the field you looked through the corner at the grass
     /// beyond, and nothing stopped you because the colliders had no such
-    /// gap. `garden::west_ends` is the one account of where that wall ends
-    /// now, and this walks the line to say so.
+    /// gap.
+    ///
+    /// It is one run a side now, through the garden's own stretch, because
+    /// it is one wall. This walks the line every ten centimetres to say
+    /// the only hole in it is the way out.
     #[test]
     fn the_wall_has_one_gap_in_it() {
         let reaches = reaches();
         let face = starts(reaches);
         let (from, to) = way(reaches);
         let at = vec3(face - 2.0, 0.0, crate::garden::at(reaches).z);
-        let pieces = wall(reaches, at);
+        // the drawn account and not the solid one. The solid wall leaves
+        // the garden's own stretch to the garden, which walls it already;
+        // what has to have no holes in it is what you see.
+        let pieces = wall_faces(reaches, at);
         let mut z = -60.0f32;
 
         while z < 60.0 {

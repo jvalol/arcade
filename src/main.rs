@@ -467,7 +467,9 @@ struct Arcade {
     /// The plaster on the field's own wall, which is tiled where the
     /// garden's is one picture a wall. Spec 0040.
     render: Option<TextureId>,
-    render_mesh: Option<MeshId>,
+    /// A quad per run of the field wall's plaster, rebuilt when the run's
+    /// length changes. Spec 0040.
+    rendered: Vec<Option<MeshId>>,
     /// And the same plaster counted for the hotel's corridor, which is
     /// two kilometres long against the field wall's three hundred.
     corridor_mesh: Option<MeshId>,
@@ -909,7 +911,7 @@ impl Arcade {
             turf: None,
             saplings: Vec::new(),
             render: None,
-            render_mesh: None,
+            rendered: vec![None, None],
             corridor_mesh: None,
             tuft: None,
             blades: Vec::new(),
@@ -1818,35 +1820,60 @@ impl Arcade {
                 &Transform::at(middle).with_scale(size),
                 aim::GARDEN_WALL,
             );
+            // and the cope on it, in the garden's own two courses: the
+            // tiles oversailing both ways and the roll set in from them.
+            // One course and no roll, the join with the garden's wall was
+            // a step along the top of one wall.
+            let wide = room::THICK + garden::COPE_OUT * 2.0;
 
-            // and the plaster on the face of it, tiled, because the
-            // garden's walls get one picture each and a picture per
-            // three hundred metres is not a picture. Plain, it was a
-            // white glare running away to the horizon.
-            if let (Some(mesh), Some(skin)) = (self.render_mesh, self.render) {
-                scene.push_textured(
-                    mesh,
-                    skin,
-                    &Transform::at(vec3(box_.min.x - 0.01, middle.y, middle.z))
-                        .with_rotation(room::laid_on(-Vec3::X))
-                        .with_scale(vec3(size.z, 1.0, size.y)),
-                    aim::GARDEN_PLASTER,
-                    aim::MATTE,
-                );
-            }
             scene.push_colored(
                 cube,
                 &Transform::at(vec3(
                     middle.x,
-                    box_.max.y + garden::COPE_DEEP * 0.5,
+                    garden::HIGH + garden::COPE_DEEP * 0.5,
+                    middle.z,
+                ))
+                .with_scale(vec3(wide, garden::COPE_DEEP, size.z)),
+                aim::GARDEN_COPE,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(
+                    middle.x,
+                    garden::HIGH + garden::COPE_DEEP + garden::COPE_ROLL * 0.5,
                     middle.z,
                 ))
                 .with_scale(vec3(
-                    size.x + garden::COPE_OUT * 2.0,
-                    garden::COPE_DEEP,
+                    wide - garden::COPE_OUT * 1.4,
+                    garden::COPE_ROLL,
                     size.z,
                 )),
                 aim::GARDEN_COPE,
+            );
+        }
+
+        // and the plaster on the face of all of it, in one run a side
+        // through the garden's own stretch, because it is one wall. Tiled,
+        // because a picture per three hundred metres is not a picture, and
+        // the quad is rebuilt when its length changes so that a run of
+        // tiles is a run of tiles rather than a stretch of them.
+        for (face, mesh) in field::wall_faces(reaches, self.at)
+            .into_iter()
+            .zip(self.rendered.iter().copied())
+        {
+            let (Some(mesh), Some(skin)) = (mesh, self.render) else {
+                continue;
+            };
+            let (middle, size) = (face.center(), face.size());
+
+            scene.push_textured(
+                mesh,
+                skin,
+                &Transform::at(vec3(middle.x - 0.01, middle.y, middle.z))
+                    .with_rotation(room::laid_on(-Vec3::X))
+                    .with_scale(vec3(size.z, 1.0, size.y)),
+                aim::GARDEN_PLASTER,
+                aim::MATTE,
             );
         }
 
@@ -4933,6 +4960,27 @@ impl Game for Arcade {
             }
         }
 
+        // the field wall's plaster, one quad a run, rebuilt when the run
+        // changes length. The quad carries its own tile count in its
+        // corners, so a run that is a metre longer than it was drawn for
+        // is a run whose tiles are a little wider than they were.
+        for (n, face) in field::wall_faces(self.room.reaches, self.at)
+            .into_iter()
+            .enumerate()
+        {
+            let counts = glam::vec2(face.size().z / field::RENDER, garden::HIGH / field::RENDER);
+            let mesh = room::tiled_plane(counts);
+
+            match self.rendered.get(n).copied().flatten() {
+                Some(id) => renderer.update_mesh(id, &mesh),
+                None => {
+                    if let Some(slot) = self.rendered.get_mut(n) {
+                        *slot = Some(renderer.add_mesh(&mesh));
+                    }
+                }
+            }
+        }
+
         // and out in the field the sun's map follows you, per spec 0040.
         // `load` fitted it to the building, which is right everywhere the
         // building is and leaves the field standing in whatever the map
@@ -5251,10 +5299,7 @@ impl Game for Arcade {
             0x3A77,
             glam::vec2(field::RENDER, field::RENDER),
         )));
-        self.render_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
-            field::GROUND_REACH * 2.0 / field::RENDER,
-            garden::HIGH / field::RENDER,
-        ))));
+
         self.corridor_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             aleph::RUNS / field::RENDER,
             (aleph::TALL + room::THICK) / field::RENDER,

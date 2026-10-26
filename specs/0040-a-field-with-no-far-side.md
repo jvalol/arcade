@@ -283,6 +283,21 @@ So the wall runs the whole length of the ground, in the garden's own
 plaster with the garden's own cope, with the garden's stretch left to the
 garden and the way out the one gap in all of it.
 
+**And the plaster on it is one run a side.** The garden used to plaster its
+own outer face from its own list, one picture for the whole face the way
+its other walls get one each, and the field tiled a different picture over
+the rest: two pictures at two phases meeting at the corner, which reads as
+a seam. It is one wall, so it is one run, through the garden's stretch,
+with the way out the only break in it. The cope on it is the garden's own
+two courses, the tiles and the roll set in from them, because one course
+and no roll was a step along the top of a single wall.
+
+A run's length is a whole number of tiles, and the quad carries its tile
+count in its own corners, so the near end is the way out, which does not
+move, and the far end is snapped out to the next tile past where the ground
+stops. Unsnapped, a run whose length wanders by a metre is a run whose
+tiles breathe as you walk.
+
 **And where the garden's stretch ends is said once.** It was said twice: the
 plaster on the garden's outer face ran to the garden's own edge and
 `field::wall` began a wall's thickness further out, so there was a slot one
