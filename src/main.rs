@@ -527,6 +527,8 @@ struct Arcade {
     aloft_skin: Vec<TextureId>,
     roof_skin: Option<TextureId>,
     storey_skin: Vec<TextureId>,
+    storey_faces: Vec<(blitzkit::collision::Aabb, Vec3)>,
+    storey_wall_skin: Vec<TextureId>,
     jutting_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
@@ -972,6 +974,8 @@ impl Arcade {
             aloft_skin: Vec::new(),
             roof_skin: None,
             storey_skin: Vec::new(),
+            storey_faces: Vec::new(),
+            storey_wall_skin: Vec::new(),
             jutting_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
@@ -2025,7 +2029,7 @@ impl Arcade {
             // was not there at all.
             for (piece, skin) in self
                 .room
-                .ceiling()
+                .lids()
                 .iter()
                 .zip(self.storey_skin.iter().copied())
             {
@@ -2034,9 +2038,28 @@ impl Arcade {
                 scene.push_textured(
                     mesh,
                     skin,
-                    &Transform::at(vec3(middle.x, room::TALL + 0.01, middle.z))
+                    &Transform::at(vec3(middle.x, piece.max.y + 0.01, middle.z))
                         .with_rotation(room::laid_on(Vec3::Y))
                         .with_scale(vec3(size.x, 1.0, size.z)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+
+            // and the walls under them that the sky can see, which is what
+            // `Room::outside` asks the building for.
+            for ((face, looks), skin) in self
+                .storey_faces
+                .iter()
+                .copied()
+                .zip(self.storey_wall_skin.iter().copied())
+            {
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(face.center() + looks * 0.02)
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(room::quad_on(face.size(), looks)),
                     aim::GARDEN_PLASTER,
                     aim::MATTE,
                 );
@@ -5487,6 +5510,23 @@ impl Game for Arcade {
                 ))
             })
             .collect();
+        // and the ground storey's own walls, which until spec 0041 flew
+        // round them were the colour of the rooms' insides.
+        self.storey_faces = self.room.outside();
+        self.storey_wall_skin = self
+            .storey_faces
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(n, (face, looks))| {
+                let on = room::quad_on(face.size(), looks);
+
+                renderer.add_texture(&garden::plastered(
+                    garden::PLASTER_SEED.wrapping_add(0x3C0F + n as u32 * 7919),
+                    glam::vec2(on.x, on.z),
+                ))
+            })
+            .collect();
         self.roof_skin = Some(renderer.add_texture(&garden::screeded(
             garden::SCREED_SEED,
             aloft::roof_from(),
@@ -5504,7 +5544,7 @@ impl Game for Arcade {
         // which is the only thing up here that is allowed to cover it.
         self.storey_skin = self
             .room
-            .ceiling()
+            .lids()
             .iter()
             .map(|piece| {
                 let (middle, size) = (piece.center(), piece.size());

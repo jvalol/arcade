@@ -480,6 +480,20 @@ pub fn leaf_box(reaches: f32, n: u64, open: f32) -> Aabb {
 ///
 /// The gallery's wall is not in this list. It stands already and is cut for
 /// the doorway by [`gallery_west`], which `room.rs` asks for.
+/// The lid over the lobby, which is what this room shows the sky.
+///
+/// Named rather than built inside `solid`, because spec 0040 lays a roof on
+/// it and a second account of where it is would drift from the first.
+pub fn lid(reaches: f32) -> Aabb {
+    let (west, east) = span();
+    let (from, to) = across(reaches);
+
+    Aabb::new(
+        vec3(west - THICK, LOBBY_TALL, from - THICK),
+        vec3(east, LOBBY_TALL + THICK, to + THICK),
+    )
+}
+
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = span();
     let (from, to) = across(reaches);
@@ -544,11 +558,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             vec3(west - THICK, TALL, corridor_from),
             vec3(west, LOBBY_TALL, corridor_to),
         ),
-        // the lobby's ceiling
-        Aabb::new(
-            vec3(west - THICK, LOBBY_TALL, from - THICK),
-            vec3(east, LOBBY_TALL + THICK, to + THICK),
-        ),
+        lid(reaches),
         end(reaches),
         // the corridor's two walls and its ceiling, run past the drawn rooms.
         //

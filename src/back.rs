@@ -120,6 +120,18 @@ pub fn floor(reaches: f32) -> Aabb {
 /// sight and the arrows, the same as the pool table down in the cellar. The
 /// workbench is in here because it stopped being that when the rig came off
 /// it: it is a thing in the way now, and nothing else.
+/// The lid over this room, which is low, and is what it shows the sky. Spec
+/// 0040 lays a roof on it, and two accounts of where it is would drift.
+pub fn lid(reaches: f32) -> Aabb {
+    let (west, east) = span();
+    let (far, near) = deep(reaches);
+
+    Aabb::new(
+        vec3(west, TALL, far - THICK),
+        vec3(east + THICK, TALL + THICK, near + THICK),
+    )
+}
+
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = span();
     let (far, near) = deep(reaches);
@@ -145,11 +157,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             vec3(west, 0.0, near),
             vec3(east + THICK, TALL, near + THICK),
         ),
-        // the ceiling, which is low
-        Aabb::new(
-            vec3(west, TALL, far - THICK),
-            vec3(east + THICK, TALL + THICK, near + THICK),
-        ),
+        lid(reaches),
     ]
     .into_iter()
     .chain(clutter_solid(reaches))

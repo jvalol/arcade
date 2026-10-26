@@ -1404,6 +1404,183 @@ impl Room {
     /// Named rather than worked out where it is drawn, because the test
     /// that says the hole is open has to read the same list the picture
     /// does.
+    /// Every lid this building shows the sky, which is what a roof goes on
+    /// and what the walls under it hang from.
+    ///
+    /// The hall, the gallery and the nook share one, cut for the stairwell,
+    /// and the three rooms that adjoin at that level each have their own at
+    /// their own height. Spec 0015's is not here: it is a hundred and fifty
+    /// nine metres square and it is a secret.
+    pub fn lids(&self) -> Vec<Aabb> {
+        let mut out = self.ceiling();
+
+        out.push(crate::aleph::lid(self.reaches));
+        out.push(crate::register::lid(self.reaches));
+        out.push(crate::back::lid(self.reaches));
+        out
+    }
+
+    /// And the faces under those lids that the sky can see, as (face, which
+    /// way it looks), which is what plaster goes on.
+    ///
+    /// **Asked of what is over the spot rather than worked out from the
+    /// plan.** The ground storey is five rooms of four different heights
+    /// abutting along six edges, and a list of which faces are outward is a
+    /// list that is wrong the day a room moves. It is also the fault under
+    /// most of the others in here: two accounts of one thing drift.
+    ///
+    /// The question each column of each face is asked is whether anything of
+    /// this building stands over the spot a hand's breadth outside it. It
+    /// has to be that question and not whether anything is in the way: the
+    /// hall's lid is eight pieces and the air a hand's breadth past the
+    /// edge of one of them is the air under the next, which the first build
+    /// called outdoors and plastered. Thirty of the sixty six faces it found
+    /// were inside the gallery.
+    ///
+    /// The garden is left out, not because it is indoors but because it is
+    /// dressed already: `garden::facing` lines the hall's wall from the
+    /// garden's side, and a second skin sixteen centimetres in front of that
+    /// one is two walls where there is one.
+    ///
+    /// Asking it this way is also how the strip over a borrowed wall gets
+    /// plastered. The register is a metre taller than the lobby it abuts,
+    /// and a face that is outward only above its neighbour is exactly what
+    /// this building has twice left open and twice failed to notice.
+    pub fn outside(&self) -> Vec<(Aabb, Vec3)> {
+        let lids = self.lids();
+        // **The lids as well as the colliders.** A suspended ceiling is
+        // drawn and never collided, so the hall's lid is in no list `solid`
+        // keeps, and asked of the colliders alone the whole south end of
+        // the gallery reads as open sky.
+        let mut solid = self.solid();
+        solid.extend(lids.iter().copied());
+
+        let (step, rise, out_by) = (0.4, 0.3, 0.12);
+        let reaches = self.reaches;
+        let over = |at: Vec3| {
+            solid.iter().any(|box_| {
+                box_.min.x <= at.x
+                    && box_.max.x >= at.x
+                    && box_.min.z <= at.z
+                    && box_.max.z >= at.z
+                    && box_.max.y >= at.y
+            })
+        };
+        let mut out = Vec::new();
+
+        for lid in lids.iter().copied() {
+            let top = lid.max.y;
+
+            for looks in [-Vec3::X, Vec3::X, -Vec3::Z, Vec3::Z] {
+                let along = if looks.x.abs() > 0.5 { 2 } else { 0 };
+                let (from, to) = (lid.min.to_array()[along], lid.max.to_array()[along]);
+                let flat = if along == 2 { 0 } else { 2 };
+                let edge = if looks.to_array()[flat] > 0.0 {
+                    lid.max.to_array()[flat]
+                } else {
+                    lid.min.to_array()[flat]
+                };
+
+                // **Where the wall's outer face is, which is not the lid's
+                // edge.** Some lids oversail their walls by a thickness and
+                // some are the room's inside, so a plane taken off the lid
+                // is sometimes the outside of the building and sometimes
+                // buried in it. Probed along the normal from the middle of
+                // the face: the wall is whatever the line runs through, and
+                // its outer bound is the plane the plaster goes on.
+                let mut on = edge;
+
+                {
+                    let (middle, half) = ((from + to) * 0.5, top * 0.5);
+                    let mut d = -0.05;
+
+                    while d < 0.8 {
+                        let at = edge + looks.to_array()[flat] * d;
+                        let probe = if along == 2 {
+                            vec3(at, half, middle)
+                        } else {
+                            vec3(middle, half, at)
+                        };
+
+                        if let Some(box_) = solid.iter().find(|box_| box_.contains_point(probe)) {
+                            on = if looks.to_array()[flat] > 0.0 {
+                                box_.max.to_array()[flat].max(on)
+                            } else {
+                                box_.min.to_array()[flat].min(on)
+                            };
+                        }
+
+                        d += 0.02;
+                    }
+                }
+
+                // the lowest height each column of this face is open from,
+                // or nothing if it is roofed all the way up
+                let columns = ((to - from) / step).ceil().max(1.0) as usize;
+                let mut opens: Vec<Option<f32>> = Vec::with_capacity(columns);
+
+                for n in 0..columns {
+                    let at = from + (n as f32 + 0.5) * (to - from) / columns as f32;
+                    let mut lowest = None;
+                    let mut up = top - rise * 0.5;
+
+                    while up > 0.0 {
+                        let probe = if along == 2 {
+                            vec3(on + looks.x * out_by, up, at)
+                        } else {
+                            vec3(at, up, on + looks.z * out_by)
+                        };
+
+                        if over(probe)
+                            || crate::garden::under_the_sky(reaches, probe)
+                            || solid.iter().any(|box_| box_.contains_point(probe))
+                        {
+                            break;
+                        }
+
+                        lowest = Some(up - rise * 0.5);
+                        up -= rise;
+                    }
+
+                    opens.push(lowest.map(|low| low.max(0.0)));
+                }
+
+                // and the runs of columns that open from the same height
+                let mut n = 0;
+
+                while n < columns {
+                    let Some(low) = opens[n] else {
+                        n += 1;
+                        continue;
+                    };
+                    let mut end = n + 1;
+
+                    while end < columns
+                        && opens[end].map(|other| (other - low).abs() < 1e-3) == Some(true)
+                    {
+                        end += 1;
+                    }
+
+                    let span = (to - from) / columns as f32;
+                    let (one, two) = (from + n as f32 * span, from + end as f32 * span);
+
+                    out.push((
+                        if along == 2 {
+                            Aabb::new(vec3(on, low, one), vec3(on, top, two))
+                        } else {
+                            Aabb::new(vec3(one, low, on), vec3(two, top, on))
+                        },
+                        looks,
+                    ));
+
+                    n = end;
+                }
+            }
+        }
+
+        out
+    }
+
     pub fn ceiling(&self) -> Vec<Aabb> {
         let well = crate::aloft::up_well();
         let mut out = Vec::new();
@@ -3235,6 +3412,110 @@ mod tests {
     /// stair was built and the lid behind the grid was not, so what you saw
     /// looking up the stair was the hole in the grid with a solid ceiling
     /// behind it.
+    /// Spec 0040: nothing the building shows the sky is plastered where the
+    /// sky cannot see it.
+    ///
+    /// **Which is the only thing that can go wrong here.** A face that is
+    /// missed leaves bare stone, and bare stone is what this whole job is
+    /// about, so it is reported rather than hidden. A face that is found
+    /// where it should not be is plaster inside somebody's room, which is
+    /// the fault the baths had when they borrowed the cellar's wall and had
+    /// mahogany down one side of a tiled room, and nobody looked for a year.
+    #[test]
+    fn nothing_outside_is_plastered_indoors() {
+        let room = Room::of(crate::games());
+        let faces = room.outside();
+        let lids = room.lids();
+        let mut solid = room.solid();
+        solid.extend(lids.iter().copied());
+
+        assert!(
+            faces.len() > 12,
+            "only {} faces round a building",
+            faces.len()
+        );
+
+        for (face, looks) in faces.iter().copied() {
+            let at = face.center() + looks * 0.12;
+
+            assert!(
+                !solid.iter().any(|box_| box_.contains_point(at)),
+                "the face at {:?} has a wall a hand's breadth outside it",
+                face.center()
+            );
+            assert!(
+                !solid.iter().any(|box_| {
+                    box_.min.x <= at.x
+                        && box_.max.x >= at.x
+                        && box_.min.z <= at.z
+                        && box_.max.z >= at.z
+                        && box_.max.y >= at.y
+                }),
+                "the face at {:?} has a roof over the spot outside it",
+                face.center()
+            );
+        }
+    }
+
+    /// And the plaster sits on the wall's own outer face, not on the edge of
+    /// the lid over it.
+    ///
+    /// Some lids here oversail their walls by a thickness and some are the
+    /// room's own inside, so a plane taken off the lid is sometimes the
+    /// outside of the building and sometimes buried in it. Buried, the
+    /// column reads as covered and the face is not found at all, which is
+    /// why the test above cannot see this one: it loses walls rather than
+    /// misplacing them. Four of the hall's went that way.
+    #[test]
+    fn the_plaster_sits_on_the_wall_and_not_on_the_lid() {
+        let room = Room::of(crate::games());
+        let lids = room.lids();
+        let proud = room
+            .outside()
+            .into_iter()
+            .filter(|(face, looks)| {
+                let at = face.center();
+                let plane = if looks.x.abs() > 0.5 { at.x } else { at.z };
+
+                // on no lid's edge, which is where a plane taken off a lid
+                // would be and where the wall's own face rarely is
+                lids.iter().all(|lid| {
+                    let (low, high) = if looks.x.abs() > 0.5 {
+                        (lid.min.x, lid.max.x)
+                    } else {
+                        (lid.min.z, lid.max.z)
+                    };
+
+                    (plane - low).abs() > 0.1 && (plane - high).abs() > 0.1
+                })
+            })
+            .count();
+
+        assert!(
+            proud > 0,
+            "every face sits on the edge of a lid, so none of them found a wall"
+        );
+    }
+
+    /// And the strip over a borrowed wall is one of them. The register
+    /// stands a metre taller than the lobby it abuts, so part of its east
+    /// side is indoors to the lobby's height and open sky above that. Taken
+    /// as whole walls rather than as columns it would be bare.
+    #[test]
+    fn the_strip_over_a_shorter_room_is_dressed() {
+        let room = Room::of(crate::games());
+        let high: Vec<_> = room
+            .outside()
+            .into_iter()
+            .filter(|(face, _)| face.min.y > 0.5)
+            .collect();
+
+        assert!(
+            !high.is_empty(),
+            "every face found starts at the ground, so no borrowed wall was topped"
+        );
+    }
+
     #[test]
     fn the_ceiling_is_open_over_the_stairwell() {
         let room = Room::of(crate::games());

@@ -260,13 +260,41 @@ piece.
 The stairwell stays cut out of those pieces, because the hole is under the
 imaginarium's mass and that is the only thing up here allowed to cover it.
 
-The rooms that adjoin at that level are a different job and not this one.
-The hotel's lobby, the register and the back room each have a lid of their
-own at their own height, and those lids are boxes rather than downward
-quads, so they are there and lit and simply undressed, along with the walls
-under them. Spec 0015's is the fifth and it is a hundred and fifty nine
-metres square: it is the black plane you can read Neptune over, which spec
-0041 says is a gate to be fixed rather than a surface to be dressed.
+The three rooms that adjoin at that level have theirs now too. The hotel's
+lobby, the register and the back room each had a lid of their own at their
+own height, built inside that room's `solid`; each is `lid` now, so the
+roof and the collider cannot drift apart. Spec 0015's is the fifth and it
+stays: a hundred and fifty nine metres square, the black plane you can read
+Neptune over, which spec 0041 calls a gate to be fixed rather than a surface
+to be dressed.
+
+**And the walls under all of them.** `Room::outside` asks the building which
+of its faces the sky can see, rather than carrying a list of them. The
+ground storey is five rooms of four different heights abutting along six
+edges, and a written list of outward faces is wrong the day a room moves.
+
+The question each column of each face is asked is whether anything of this
+building stands over the spot a hand's breadth outside it. It has to be that
+question and not whether something is in the way: the hall's lid is eight
+pieces, and the air a hand's breadth past the edge of one piece is the air
+under the next, which the first build called outdoors. Thirty of the sixty
+six faces it found were inside the gallery.
+
+Asked column by column rather than face by face, because the register stands
+a metre taller than the lobby it abuts, so part of its side is indoors to
+the lobby's height and open sky above that. A face that is outward only
+above its neighbour is exactly what this building has twice left open and
+twice failed to notice.
+
+And the plane is the wall's own outer face, found by probing along the
+normal, not the edge of the lid over it. Some lids here oversail their walls
+by a thickness and some are the room's own inside, so a plane taken off the
+lid is sometimes the outside of the building and sometimes buried in it.
+Buried, the column reads as covered and the wall is not found at all, which
+is how four of the hall's went missing.
+
+Spec 0015's west wall is still brick in the open air at the hall's east
+side, and that goes with the rest of 0015 rather than with this.
 
 **And the roof, which spec 0041 found the first hour it existed.** Thirteen
 metres square, the largest surface this building has, and it was the pale stone
@@ -455,6 +483,12 @@ eight metres inside the building.
   would have. — `garden::screed_tests::a_roof_is_not_darker_at_one_edge`
 - And two pieces of one roof agree where they
   meet. — `garden::screed_tests::two_pieces_of_a_roof_meet`
+- Nothing the building shows the sky is plastered where the sky cannot see
+  it. — `room::tests::nothing_outside_is_plastered_indoors`
+- The plaster sits on the wall's own face, not on the edge of the lid over
+  it. — `room::tests::the_plaster_sits_on_the_wall_and_not_on_the_lid`
+- And the strip over a borrowed wall is one of the faces
+  found. — `room::tests::the_strip_over_a_shorter_room_is_dressed`
 
 ### Verified by hand
 

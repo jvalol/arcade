@@ -371,6 +371,18 @@ pub fn along(reaches: f32) -> (f32, f32) {
 ///
 /// The fourth wall is the corridor's, which stands already and is cut for the
 /// blank door.
+/// The lid over this room, which is what it shows the sky. Spec 0040 lays a
+/// roof on it, and two accounts of where it is would drift.
+pub fn lid(reaches: f32) -> Aabb {
+    let (west, east) = along(reaches);
+    let (far, near) = across(reaches);
+
+    Aabb::new(
+        vec3(west - THICK, TALL, far - THICK),
+        vec3(east + THICK, TALL + THICK, near + THICK),
+    )
+}
+
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = along(reaches);
     let (far, near) = across(reaches);
@@ -427,11 +439,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         ),
         // Below that it closes this room's near side along the whole of it,
         // since it runs two kilometres west and is cut only at the doorway.
-        // the ceiling
-        Aabb::new(
-            vec3(west - THICK, TALL, far - THICK),
-            vec3(east + THICK, TALL + THICK, near + THICK),
-        ),
+        lid(reaches),
     ]
 }
 
