@@ -525,6 +525,7 @@ struct Arcade {
     corridor_mesh: Option<MeshId>,
     aloft_mesh: Option<MeshId>,
     aloft_skin: Vec<TextureId>,
+    roof_skin: Option<TextureId>,
     jutting_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
@@ -968,6 +969,7 @@ impl Arcade {
             corridor_mesh: None,
             aloft_mesh: None,
             aloft_skin: Vec::new(),
+            roof_skin: None,
             jutting_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
@@ -2012,6 +2014,22 @@ impl Arcade {
                     &Transform::at(face.center() + looks * 0.02)
                         .with_rotation(room::laid_on(looks))
                         .with_scale(room::quad_on(face.size(), looks)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+
+            // the roof itself, which is the one surface up there that is
+            // not a wall: the same lime laid flat, in bays.
+            if let (Some(mesh), Some(skin)) = (self.aloft_mesh, self.roof_skin) {
+                let (middle, size) = aloft::roof();
+
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(middle)
+                        .with_rotation(room::laid_on(Vec3::Y))
+                        .with_scale(vec3(size.x, 1.0, size.y)),
                     aim::GARDEN_PLASTER,
                     aim::MATTE,
                 );
@@ -5446,6 +5464,11 @@ impl Game for Arcade {
                 ))
             })
             .collect();
+        self.roof_skin = Some(renderer.add_texture(&garden::screeded(
+            garden::SCREED_SEED,
+            aloft::roof().1,
+            garden::BAY,
+        )));
         self.aloft_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
         self.corridor_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             aleph::RUNS / field::RENDER,

@@ -2100,6 +2100,162 @@ pub fn plastered(seed: u32, size: Vec2) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(across, up, pixels)
 }
 
+/// How wide a bay of screed is, and the seed its pictures are counted from.
+pub const BAY: f32 = 2.0;
+pub const SCREED_SEED: u32 = 0x5C_7EED;
+
+/// The same lime laid flat, for a roof, with the joints of its bays in it.
+///
+/// **Not `plastered` turned on its side.** Every mark in that picture is
+/// about a wall standing up: the rain streaks down it, the ground splashes
+/// its foot, and the course under the cope dries first. Laid flat, the
+/// streaks are stripes along one axis, the foot is a dark band along one
+/// edge and the dry course is a pale one along the other. The imaginarium's
+/// roof is thirteen metres square and that is three wrong edges on it.
+///
+/// What a flat lime roof looks like from above is bays with a joint between
+/// them, bleached grey by the sun, and dirtiest in the middle of each bay
+/// because that is where the water stands. The bays are counted rather than
+/// measured, so a joint always lands on the edge of the roof.
+pub fn screeded(seed: u32, size: Vec2, bay: f32) -> blitzkit::texture::TextureData {
+    let across = ((size.x * PLASTER_PER_UNIT).round() as u32).clamp(8, 2048);
+    let along = ((size.y * PLASTER_PER_UNIT).round() as u32).clamp(8, 2048);
+    let bays = vec2(
+        (size.x / bay).round().max(1.0),
+        (size.y / bay).round().max(1.0),
+    );
+
+    let hash = move |x: i32, y: i32| {
+        let mut n =
+            (x as u32).wrapping_mul(0x27D4_EB2D) ^ (y as u32).wrapping_mul(0x1656_67B1) ^ seed;
+        n ^= n >> 15;
+        n = n.wrapping_mul(0x2C1B_3C6D);
+        n ^= n >> 12;
+        (n >> 8) as f32 / ((1u32 << 24) as f32)
+    };
+    let smooth = |t: f32| t * t * (3.0 - 2.0 * t);
+    let noise = move |x: f32, y: f32| {
+        let (fx, fy) = (x.floor(), y.floor());
+        let (ix, iy) = (fx as i32, fy as i32);
+        let (tx, ty) = (smooth(x - fx), smooth(y - fy));
+        let a = hash(ix, iy);
+        let b = hash(ix + 1, iy);
+        let c = hash(ix, iy + 1);
+        let d = hash(ix + 1, iy + 1);
+
+        (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty
+    };
+
+    let mut grit = seed | 1;
+    let mut next = move || {
+        grit ^= grit << 13;
+        grit ^= grit >> 17;
+        grit ^= grit << 5;
+        (grit >> 8) as f32 / ((1u32 << 24) as f32)
+    };
+
+    let mut pixels = Vec::with_capacity((across * along * 4) as usize);
+
+    for j in 0..along {
+        let v = j as f32 / (along - 1).max(1) as f32;
+        let down = v * size.y;
+
+        for i in 0..across {
+            let u = i as f32 / (across - 1).max(1) as f32;
+            let wide = u * size.x;
+
+            // the stains, in two sizes and the same both ways, because a
+            // roof has no up
+            let blotch =
+                noise(wide * 0.5, down * 0.5) * 0.62 + noise(wide * 1.7, down * 1.7) * 0.38;
+
+            // how far into its own bay this is, nought at a joint and one in
+            // the middle of it
+            let into = |at: f32, bays: f32, run: f32| {
+                let step = run / bays;
+                let from = (at / step).fract();
+
+                ((from - 0.5).abs() * 2.0, step)
+            };
+            let (from_x, step_x) = into(wide, bays.x, size.x);
+            let (from_z, step_z) = into(down, bays.y, size.y);
+
+            // the joint itself, a finger wide
+            let joint = (from_x.max(from_z) - 1.0 + 0.04 / step_x.min(step_z)).max(0.0) * 6.0;
+            // and the water that stands in the middle of a bay, in the bays
+            // that hold it. Every bay pooling by the same amount is seven by
+            // seven dark smudges on a grid, which is a pattern rather than a
+            // roof: the same fault `plastered`'s streaks had, where a wall
+            // that streaks every hand's breadth is a wall with a pattern on
+            // it.
+            let lies = hash(
+                (wide / step_x).floor() as i32,
+                (down / step_z).floor() as i32 + 977,
+            );
+            let pooled = (1.0 - from_x.max(from_z)) * (lies * lies) * 0.26;
+
+            let tone = 0.86 + (blotch - 0.5) * 0.22 - joint.min(0.26) - pooled - next() * 0.04;
+            let tone = tone.clamp(0.08, 1.0);
+
+            // bleached: the ochre is still under it but the sun has taken
+            // most of the red out, so the three channels run much closer
+            pixels.extend_from_slice(&[
+                (tone * 178.0).min(255.0) as u8,
+                (tone * 174.0).min(255.0) as u8,
+                (tone * 158.0).min(255.0) as u8,
+                255,
+            ]);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(across, along, pixels)
+}
+
+#[cfg(test)]
+mod screed_tests {
+    use super::*;
+
+    /// How dark a band of rows is, taken off the green channel.
+    fn tone(skin: &blitzkit::texture::TextureData, from: u32, rows: u32) -> f32 {
+        let level = &skin.levels[0];
+        let (wide, mut sum) = (level.width, 0.0f64);
+
+        for j in from..from + rows {
+            for i in 0..wide {
+                sum += f64::from(level.pixels[((j * wide + i) * 4 + 1) as usize]);
+            }
+        }
+
+        (sum / f64::from(rows * wide)) as f32
+    }
+
+    /// A roof has no dark edge, which is the whole reason it is not
+    /// `plastered` laid flat. Every mark in that picture is about a wall
+    /// standing up, and the foot of a wall is thirty per cent darker than
+    /// the rest of it: laid flat that is a dark band along one edge of a
+    /// thirteen metre roof.
+    #[test]
+    fn a_roof_is_not_darker_at_one_edge() {
+        let size = vec2(13.1, 13.1);
+        let skin = screeded(SCREED_SEED, size, BAY);
+        let rows = skin.levels[0].height;
+        let band = rows / 12;
+        let middle = tone(&skin, rows / 2 - band / 2, band);
+
+        for (name, from) in [("the near edge", 0), ("the far edge", rows - band)] {
+            let edge = tone(&skin, from, band);
+
+            assert!(
+                (edge - middle).abs() / middle < 0.06,
+                "{} is {:.0} against {:.0} in the middle",
+                name,
+                edge,
+                middle
+            );
+        }
+    }
+}
+
 /// The pond: how far across, how deep, and where it sits in the garden.
 ///
 /// Off centre and off square. A pond in the middle of a square room is a

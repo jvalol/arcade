@@ -267,6 +267,23 @@ pub fn jutting_cap(whole: &Aabb) -> (Vec3, Vec3) {
     )
 }
 
+/// The top of the mass as a surface: where the middle of it is and how far
+/// across, for a quad laid flat on it.
+///
+/// **The largest surface this building has, and nobody had seen it.** It is
+/// thirteen metres square and it was the pale stone of the room's own
+/// ceiling, because until spec 0041 there was no way to be above it. The
+/// parapet rings it and the two lanterns stand on it, so the quad runs the
+/// whole footprint and the edges of it are buried under the cope.
+pub fn roof() -> (Vec3, Vec2) {
+    let out = HALF + THICK;
+
+    (
+        vec3(MIDDLE_X, tops() + 0.01, MIDDLE_Z),
+        vec2(out * 2.0, out * 2.0),
+    )
+}
+
 /// How high the top of that mass is, which is the room's own lid.
 pub fn tops() -> f32 {
     BASE + ROOM + THICK
@@ -2299,6 +2316,34 @@ mod outside_tests {
                 box_.max
             );
         }
+    }
+
+    /// And the roof reaches under the cope, so there is no strip of bare
+    /// lid between the screed and the parapet, and it is laid inside the
+    /// course's own thickness, so it neither shares a plane with the lid it
+    /// covers nor stands over the cope.
+    #[test]
+    fn the_roof_runs_under_the_cope() {
+        use crate::garden::COPE_DEEP;
+
+        let (middle, size) = roof();
+        let inner = coping()
+            .into_iter()
+            .filter(|(at, _)| at.x < MIDDLE_X && at.z.to_bits() == MIDDLE_Z.to_bits())
+            .map(|(at, size)| MIDDLE_X - at.x - size.x * 0.5)
+            .fold(f32::INFINITY, f32::min);
+
+        assert!(
+            size.x * 0.5 >= inner - 1e-3,
+            "the screed stops {} from the middle and the cope starts at {}",
+            size.x * 0.5,
+            inner
+        );
+        assert!(middle.y > tops() + 1e-4, "laid level with the lid");
+        assert!(
+            middle.y < tops() + COPE_DEEP,
+            "laid above the course that is meant to bury its edge"
+        );
     }
 
     /// And the cope sits on the top of it, one course then the roll, with

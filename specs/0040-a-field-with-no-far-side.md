@@ -250,6 +250,23 @@ Which of the box's three extents a quad is scaled by depends on which way the
 quad was turned to face, and worked out at the call it is the third slot that
 gets it wrong, silently. `room::quad_on` is the one account of it.
 
+**And the roof, which spec 0041 found the first hour it existed.** Thirteen
+metres square, the largest surface this building has, and it was the pale stone
+of the room's own ceiling, because until there was a way to be above it nobody
+had been. It is lime laid flat in bays now, and the quad runs the whole
+footprint so the cope buries its edge.
+
+`garden::screeded` rather than `plastered` turned on its side. Every mark in
+that picture is about a wall standing up: the rain streaks down it, the ground
+splashes its foot, and the course under the cope dries first. Laid flat the
+streaks are stripes along one axis, the splashed foot is a dark band along one
+edge and the dry course a pale band along the other, which on a roof this size
+is three wrong edges. What a flat lime roof looks like from above is bays with
+a joint between them, bleached by the sun, and dirtiest in the middle of each
+bay where the water stands. Only in the bays that hold water: pooling the same
+in every one is seven by seven smudges on a grid, which is the fault
+`plastered`'s streaks had before they were made to pick their columns.
+
 **Both faults in the parapet came from the engine and not from looking at
 it.** `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 already ran spec 0048's coplanar check over this room, and the outside is in
@@ -414,6 +431,10 @@ eight metres inside the building.
   here. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 - And nothing of the room stands outside its own shell
   undressed. — `aloft::outside_tests::everything_outside_the_shell_is_dressed`
+- The roof reaches under the cope and is laid inside the course's own
+  thickness. — `aloft::outside_tests::the_roof_runs_under_the_cope`
+- And what is laid on it has no dark edge, which a wall's plaster laid flat
+  would have. — `garden::screed_tests::a_roof_is_not_darker_at_one_edge`
 
 ### Verified by hand
 
