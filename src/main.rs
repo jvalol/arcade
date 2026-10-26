@@ -468,6 +468,9 @@ struct Arcade {
     /// garden's is one picture a wall. Spec 0040.
     render: Option<TextureId>,
     render_mesh: Option<MeshId>,
+    /// And the same plaster counted for the hotel's corridor, which is
+    /// two kilometres long against the field wall's three hundred.
+    corridor_mesh: Option<MeshId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
@@ -907,6 +910,7 @@ impl Arcade {
             saplings: Vec::new(),
             render: None,
             render_mesh: None,
+            corridor_mesh: None,
             tuft: None,
             blades: Vec::new(),
             heads: Vec::new(),
@@ -1844,6 +1848,40 @@ impl Arcade {
                 )),
                 aim::GARDEN_COPE,
             );
+        }
+
+        // and the hotel's corridor, which runs two kilometres through this
+        // field and is dressed in the same plaster. Spec 0040, and
+        // `aleph::corridor_faces` says why it is dressed and spec 0035's
+        // is not drawn at all.
+        if let (Some(mesh), Some(skin)) = (self.corridor_mesh, self.render) {
+            for (face, looks) in aleph::corridor_faces(reaches) {
+                let (middle, size) = (face.center(), face.size());
+
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(middle + looks * 0.02)
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(vec3(size.x, 1.0, size.y)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(
+                        middle.x,
+                        face.max.y + garden::COPE_DEEP * 0.5,
+                        middle.z + looks.z * garden::COPE_OUT * 0.5,
+                    ))
+                    .with_scale(vec3(
+                        size.x,
+                        garden::COPE_DEEP,
+                        room::THICK + garden::COPE_OUT,
+                    )),
+                    aim::GARDEN_COPE,
+                );
+            }
         }
 
         // the trees, which are three meshes stood many times
@@ -3147,6 +3185,13 @@ impl Arcade {
         const STILL_THE_SAME_BUILDING: u64 = 0;
 
         for (n, run) in standing::runs(self.room.reaches).into_iter().enumerate() {
+            // spec 0035's corridor is drawn from inside it and nowhere
+            // else. See `twine::inside`.
+            if run.at == standing::Where::Twine
+                && !twine::inside(self.room.reaches, self.looking_from())
+            {
+                continue;
+            }
             // which room as well as what it is made of: a wall in the hall
             // is boards under a light and a wall of the space behind it is
             // as near black as this building draws, and they were the same
@@ -5209,6 +5254,10 @@ impl Game for Arcade {
         self.render_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             field::GROUND_REACH * 2.0 / field::RENDER,
             garden::HIGH / field::RENDER,
+        ))));
+        self.corridor_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
+            aleph::RUNS / field::RENDER,
+            (aleph::TALL + room::THICK) / field::RENDER,
         ))));
         self.tuft = Some(renderer.add_mesh(&field::tuft_mesh()));
         // a handful of tufts rather than one. Every clump of grass in a field
@@ -10227,6 +10276,35 @@ mod tests {
                 EYE + 3.0,
                 garden::at(reaches).z,
             ),
+        );
+    }
+
+    /// Specs 0029 and 0040: the hotel's corridor, from out in the field.
+    ///
+    /// **The only view in this building of how long that corridor is.**
+    /// Two kilometres of it run through the field at ground level, and
+    /// from the grass it was a blank grey shell going to the horizon,
+    /// because nothing here had ever been seen from outside. Dressed in
+    /// the garden's own plaster with the garden's cope, what you are
+    /// looking at is the endlessness rather than being told about it.
+    ///
+    /// Spec 0035's corridor is the same shape, is not dressed, and is not
+    /// drawn from out here at all: two of these on one skyline is the same
+    /// sentence said twice. Jake's call, 2026-10-25.
+    #[test]
+    fn the_corridor_from_the_field_is_drawn() {
+        let reaches = reaches();
+        let at = vec3(
+            field::starts(reaches) - 60.0,
+            0.0,
+            garden::at(reaches).z - 40.0,
+        );
+        let round = std::f32::consts::TAU / 8.0;
+
+        looks_right(
+            "corridor-outside",
+            at,
+            at + vec3(round.cos(), 0.0, round.sin()) * 50.0 + Vec3::Y * (EYE + 14.0),
         );
     }
 

@@ -431,8 +431,7 @@ pub fn wall(reaches: f32, at: Vec3) -> Vec<Aabb> {
     let lies = ground(at);
     let face = starts(reaches);
     let (from, to) = way(reaches);
-    let middle = crate::garden::at(reaches).z;
-    let half = crate::garden::half().y;
+    let (south_end, north_end) = crate::garden::west_ends(reaches);
     let tall = crate::garden::HIGH;
     // west of the line and not east of it, which is the side the garden's
     // own west wall is on. Built east, it stood inside the garden, and a
@@ -451,16 +450,12 @@ pub fn wall(reaches: f32, at: Vec3) -> Vec<Aabb> {
     // way out cut through it already, and a second wall in that plane is
     // the fault this building has fought six times.
     let _ = (from, to);
-    let ends = crate::room::THICK;
 
-    [
-        piece(lies.min.z, middle - half - ends),
-        piece(middle + half + ends, lies.max.z),
-    ]
-    .iter()
-    .copied()
-    .flatten()
-    .collect()
+    [piece(lies.min.z, south_end), piece(north_end, lies.max.z)]
+        .iter()
+        .copied()
+        .flatten()
+        .collect()
 }
 
 /// What you walk into out here, which is the trunks and nothing else.
@@ -1200,6 +1195,53 @@ mod tests {
                 from,
                 at.y
             );
+        }
+    }
+
+    /// Spec 0040: the wall along that edge has one gap in it and no others.
+    ///
+    /// **Drawn and not solid, which is the half that was missing.** The
+    /// garden's outer plaster ran to the garden's own edge and
+    /// `field::wall` began a wall's thickness further out, so there was a
+    /// slot one wall thick at each end of the garden with nothing drawn in
+    /// it: from the field you looked through the corner at the grass
+    /// beyond, and nothing stopped you because the colliders had no such
+    /// gap. `garden::west_ends` is the one account of where that wall ends
+    /// now, and this walks the line to say so.
+    #[test]
+    fn the_wall_has_one_gap_in_it() {
+        let reaches = reaches();
+        let face = starts(reaches);
+        let (from, to) = way(reaches);
+        let at = vec3(face - 2.0, 0.0, crate::garden::at(reaches).z);
+        let pieces = wall(reaches, at);
+        let mut z = -60.0f32;
+
+        while z < 60.0 {
+            if z > from + 0.05 && z < to - 0.05 {
+                z += 0.1;
+                continue;
+            }
+
+            let walled = pieces.iter().any(|box_| box_.min.z <= z && box_.max.z >= z)
+                || crate::garden::facing(reaches).iter().any(|face| {
+                    // `plane` gives the run across the face and not the
+                    // box's z, which for a wall looking west is its z
+                    let (surface, across, looks) = face.plane();
+
+                    looks.x < -0.5
+                        && surface.z - across.x * 0.5 <= z
+                        && surface.z + across.x * 0.5 >= z
+                });
+
+            assert!(
+                walled,
+                "nothing is drawn along the field's edge at z {:.2}, and the way out is \
+                 {:.2} to {:.2}",
+                z, from, to
+            );
+
+            z += 0.1;
         }
     }
 

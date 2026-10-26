@@ -135,6 +135,22 @@ pub fn parapet() -> (f32, f32) {
 /// nook's end wall is most of its south, and both already exist: a second box
 /// in the same place is two surfaces in one plane, which this building has
 /// fought four times.
+/// The two `z` the garden's own west wall runs between, which is its own
+/// span plus the thickness of the walls it returns into at each end.
+///
+/// **Said once because three things read it.** The collider, the plaster
+/// on its outer face, and `field::wall`, which is the same wall carried on
+/// past the garden. The outer plaster ran to the garden's own edge rather
+/// than to the corner, and `field::wall` started at the corner, so there
+/// was a slot one wall thick with nothing drawn in it: from the field you
+/// looked through the garden's north west corner at the grass beyond.
+pub fn west_ends(reaches: f32) -> (f32, f32) {
+    let middle = at(reaches);
+    let half = half();
+
+    (middle.z - half.y - THICK, middle.z + half.y + THICK)
+}
+
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let middle = at(reaches);
     let half = half();
@@ -142,7 +158,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     let south = middle.z - half.y;
 
     let (from, to) = crate::field::way(reaches);
-    let (south_end, north_end) = (middle.z - half.y - THICK, middle.z + half.y + THICK);
+    let (south_end, north_end) = west_ends(reaches);
 
     let mut out = vec![
         // the west wall, in two pieces with the way out to the field between
@@ -1665,18 +1681,18 @@ pub fn facing(reaches: f32) -> Vec<Face> {
             vec3(
                 middle.x - half.x - THICK - proud,
                 up,
-                (middle.z - half.y + out_from) * 0.5,
+                (west_ends(reaches).0 + out_from) * 0.5,
             ),
-            vec3(proud * 2.0, HIGH, out_from - (middle.z - half.y)),
+            vec3(proud * 2.0, HIGH, out_from - west_ends(reaches).0),
             -Vec3::X,
         ),
         lining(
             vec3(
                 middle.x - half.x - THICK - proud,
                 up,
-                (out_to + middle.z + half.y) * 0.5,
+                (out_to + west_ends(reaches).1) * 0.5,
             ),
-            vec3(proud * 2.0, HIGH, middle.z + half.y - out_to),
+            vec3(proud * 2.0, HIGH, west_ends(reaches).1 - out_to),
             -Vec3::X,
         ),
         // and the two that run away from it. These have no cap of their

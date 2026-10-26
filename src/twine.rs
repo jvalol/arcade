@@ -96,6 +96,25 @@ pub fn at(reaches: f32, n: u64) -> Vec3 {
 /// What the hall is called, over the line that counts for you.
 pub const NAME: &str = "The long hall";
 
+/// Whether somebody is in this corridor.
+///
+/// **Which decides whether it is drawn at all.** Spec 0040 put a field off
+/// the garden, and this corridor is two kilometres of shell at ground level
+/// running straight through it: from out there it is a blank wall going to
+/// the horizon. The hotel's corridor is the same shape and is dressed for
+/// it, because being able to see how long it is is the best view this
+/// building has of spec 0029. This one is that corridor re-spaced, per spec
+/// 0035, and two of them on one skyline is the same sentence said twice.
+///
+/// So it is drawn from inside and nowhere else. Nothing is lost: there is no
+/// sightline into it from any room, which is what made leaving it standing
+/// safe until there was an outdoors to stand in.
+pub fn inside(reaches: f32, at: Vec3) -> bool {
+    let half = ACROSS * 0.5 + crate::room::THICK;
+
+    (at.x - middle_x()).abs() < half && at.z < mouth(reaches) + half && at.z > end(reaches) - half
+}
+
 /// How far along somebody is, in metres from the mouth.
 pub fn walked(reaches: f32, at: Vec3) -> f32 {
     (mouth(reaches) - at.z).max(0.0)

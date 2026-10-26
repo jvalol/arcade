@@ -214,9 +214,24 @@ what happens where it meets the three rooms in this building that run a
 hundred metres or more: spec 0029's corridor is two kilometres long so that
 its doors never stop, spec 0035's is the same, and spec 0015's room is a
 hundred and fifty nine. A field that went round all three would start past
-the horizon; one that went over them has a two kilometre wall running away
-across the grass. The second is arguably the best view of spec 0029 this
-building could offer, and that is a question rather than an answer.
+the horizon; one that goes over them has two kilometres of wall running
+away across the grass.
+
+**Over them, and the wall is the point.** Jake's, 2026-10-25, after
+standing in the field and seeing two pale wedges on the skyline that turned
+out to be the two corridors end on. Spec 0029's is dressed: the garden's
+own plaster, the garden's own cope, running to the vanishing point. The
+endlessness is a thing you look at out here rather than a thing the room
+tells you, and this is the only place in the building you can see the whole
+length of it.
+
+Spec 0035's is not drawn from outside at all. It is spec 0029's corridor
+re-spaced, and two of them on one skyline is the same sentence said twice.
+See `twine::inside`, which is the same gate `draw_the_system` got for the
+solar system and for the same reason.
+
+Spec 0015's room is the third, and it stays hidden: it is a secret, which
+is what gating it was for.
 
 **And where the ground is is not asked as a region at all.** Three times
 the field had an edge somewhere nobody had thought to look, and each time
@@ -266,7 +281,17 @@ and came back standing on the hall's ceiling.
 
 So the wall runs the whole length of the ground, in the garden's own
 plaster with the garden's own cope, with the garden's stretch left to the
-garden and the way out the one gap in all of it. It follows you and ends
+garden and the way out the one gap in all of it.
+
+**And where the garden's stretch ends is said once.** It was said twice: the
+plaster on the garden's outer face ran to the garden's own edge and
+`field::wall` began a wall's thickness further out, so there was a slot one
+wall thick at each end of the garden with nothing drawn in it. Jake looked
+through the north one at the grass beyond. The colliders had no such gap,
+which is why nothing stopped him and why only looking found it.
+`garden::west_ends` is the one account now, and
+`field::tests::the_wall_has_one_gap_in_it` walks the line every ten
+centimetres to say the only hole is the way out. It follows you and ends
 where the ground does. That is also the answer to what the building looks
 like from its field at eye level: a long wall with one way through it.
 `field::tests::you_cannot_walk_out_of_the_field` walks a body at it from
@@ -295,10 +320,14 @@ eight metres inside the building.
   seconds. — `field::tests::you_cannot_walk_out_of_the_field`
 - There is ground under every spot a body could
   be. — `field::tests::there_is_ground_under_everywhere`
+- And the wall along its edge has one gap in it and no
+  others. — `field::tests::the_wall_has_one_gap_in_it`
 - And a body let loose outdoors for half a minute stays in the
   world. — `field::tests::a_body_let_loose_outdoors_stays_in_the_world`
 - And the whole of it, from outside the building looking
   back. — `tests::the_field_is_drawn`
+- The hotel's corridor, from out in the field, dressed and running to the
+  vanishing point. — `tests::the_corridor_from_the_field_is_drawn`
 
 ### Verified by hand
 

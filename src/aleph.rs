@@ -309,6 +309,41 @@ pub fn corridor_west() -> f32 {
 /// is the price of this length and is named there.
 pub const RUNS: f32 = 2000.0;
 
+/// The two long faces the corridor shows the field, and the cope along the
+/// top of each. Spec 0040.
+///
+/// **Two kilometres of shell at ground level, running straight through a
+/// field.** It was never meant to be seen from outside, because until spec
+/// 0040 there was no outside: from the grass it was a blank grey wall
+/// going to the horizon. Dressed in the garden's own plaster with the
+/// garden's own cope, what it is instead is the one view in this building
+/// of how long spec 0029's corridor actually is. The endlessness is a
+/// thing you look at rather than a thing you are told.
+///
+/// Spec 0035's corridor is the same shape and is not dressed; it is not
+/// drawn from outside at all. Two of these on one skyline is the same
+/// sentence said twice. See `twine::inside`.
+pub fn corridor_faces(reaches: f32) -> Vec<(Aabb, Vec3)> {
+    let (west, _) = span();
+    let middle = middle_z(reaches);
+    let out = ACROSS * 0.5 + THICK;
+
+    [-1.0f32, 1.0]
+        .iter()
+        .map(|side| {
+            let on = middle + side * out;
+
+            (
+                Aabb::new(
+                    vec3(corridor_west(), 0.0, on - 0.01),
+                    vec3(west, TALL + THICK, on + 0.01),
+                ),
+                vec3(0.0, 0.0, *side),
+            )
+        })
+        .collect()
+}
+
 /// The corridor's floor, which laps into the lobby's for the same reason the
 /// lobby's laps into the gallery's.
 pub fn corridor_floor(reaches: f32) -> Aabb {
