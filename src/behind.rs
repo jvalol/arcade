@@ -492,8 +492,15 @@ pub fn door_portal(reaches: f32) -> (Vec3, Vec2) {
 /// lap is not in here: it is walked and not drawn, it is under the hall's
 /// floor rather than in this room, and anybody standing over it is standing
 /// in the hall.
+///
+/// **It is bounded above and not along**, which is the other half of the
+/// same point. Unbounded upward it was true of the sky as well as the room,
+/// and spec 0041's flight goes there: from a hundred and ninety metres up
+/// you read Saturn and Neptune and Uranus laid out over the roof of a
+/// building whose whole arrangement is that nobody knows that room is
+/// there. The lid is what tells you whether you are under it.
 pub fn inside(reaches: f32, at: Vec3) -> bool {
-    at.y > -0.1 && at.z >= reaches
+    at.y > -0.1 && at.y < HIGH + THICK && at.z >= reaches
 }
 
 /// The middle of the floor, and how far it reaches from there.
@@ -933,6 +940,41 @@ mod tests {
     use super::*;
     use blitzkit::camera::Camera;
     use blitzkit::renderer::coplanar::Fights;
+
+    /// Spec 0011 and spec 0041: the sky over this room is not in it.
+    ///
+    /// **The whole of spec 0011 is that nobody knows the room is there.**
+    /// Asked without a lid, `inside` was true of everything above the
+    /// building as well, and spec 0015's planets are drawn on that answer,
+    /// so from a hundred and ninety metres up you read their names laid out
+    /// over the roof.
+    ///
+    /// Still unbounded along, which is the other half of it: spec 0018 put
+    /// the system in at true scale and Saturn stands ten and a half
+    /// kilometres out, so a box of `SPAN` by `DEEP` would say the staged
+    /// shot of it was taken in the hall.
+    #[test]
+    fn the_sky_over_this_room_is_not_in_it() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let middle = at(reaches);
+
+        assert!(
+            inside(reaches, vec3(middle.x, 1.6, middle.z)),
+            "standing in the middle of it counts as out of it"
+        );
+        assert!(
+            inside(reaches, vec3(middle.x, 1.6, middle.z + 10_000.0)),
+            "ten kilometres out is where Saturn is and is still this room"
+        );
+
+        for up in [HIGH + THICK + 0.01, 40.0, 190.0] {
+            assert!(
+                !inside(reaches, vec3(middle.x, up, middle.z)),
+                "{} metres up counts as being in the room",
+                up
+            );
+        }
+    }
 
     /// Spec 0015: no column stands on the line the bodies are strung along.
     ///

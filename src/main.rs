@@ -529,6 +529,7 @@ struct Arcade {
     aloft_skin: Vec<TextureId>,
     roof_skin: Option<TextureId>,
     storey_skin: Vec<TextureId>,
+    outdoors: bool,
     storey_faces: Vec<(blitzkit::collision::Aabb, Vec3)>,
     storey_wall_skin: Vec<TextureId>,
     jutting_skin: Vec<TextureId>,
@@ -978,6 +979,7 @@ impl Arcade {
             aloft_skin: Vec::new(),
             roof_skin: None,
             storey_skin: Vec::new(),
+            outdoors: false,
             storey_faces: Vec::new(),
             storey_wall_skin: Vec::new(),
             jutting_skin: Vec::new(),
@@ -1841,40 +1843,20 @@ impl Arcade {
 
     /// The field. Spec 0040.
     ///
-    /// **The one room in this building that is drawn relative to you.**
-    /// Everything else is at fixed coordinates and is either in the frustum
-    /// or is not. Out here the ground and the sky are centred on where you
-    /// stand, because a field whose ground ends is a stage and a field whose
-    /// sky ends is a tent, and what the room is about is that neither does.
-    fn draw_the_field(&self, scene: &mut Scene, cube: MeshId) {
+    /// What this building is from outside it. Spec 0040.
+    ///
+    /// **Its own pass, because it is not the field's.** All of this was
+    /// written inside `draw_the_field`, because the field is where it first
+    /// became possible to see any of it, and that is a reason for the order
+    /// it was built in rather than for where it lives. The field is ground,
+    /// sky and scatter round the eye; this is a building at fixed
+    /// coordinates, and the two want different answers the moment either of
+    /// them grows a reach of its own.
+    fn draw_the_outside(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
 
-        // from anywhere the field can be seen, which is the whole of the
-        // garden as well as the field: the gap in the west wall is three
-        // metres wide and what is through it is a hundred and sixty metres
-        // of ground. Drawn only from out in the field, the gap was a black
-        // rectangle in a garden wall.
-        if !flying() && !field::in_view(reaches, &self.room.solid(), self.at) {
+        if !self.outdoors {
             return;
-        }
-
-        // the ground, snapped to its own grass so that walking moves the
-        // ground under you rather than carrying it with you
-        if let (Some(sward), Some(turf)) = (self.sward, self.turf) {
-            let lies = field::ground(self.at);
-
-            scene.push_textured(
-                sward,
-                turf,
-                &Transform::at(vec3(lies.center().x, -field::DROP, lies.center().z))
-                    .with_scale(vec3(lies.size().x, 1.0, lies.size().z)),
-                aim::FIELD_GROUND,
-                // no highlight at all. The default is a broad one, and a
-                // broad highlight on four hundred metres of ground with the
-                // sun low is a lit path down the middle of the field that
-                // turns with you. The garden's pond is the same note.
-                aim::VOID,
-            );
         }
 
         // the wall the building shows the field, past the garden's own
@@ -2107,6 +2089,43 @@ impl Arcade {
                     .with_scale(vec3(size.x, 1.0, size.y)),
                 aim::GARDEN_PLASTER,
                 aim::MATTE,
+            );
+        }
+    }
+
+    /// **The one room in this building that is drawn relative to you.**
+    /// Everything else is at fixed coordinates and is either in the frustum
+    /// or is not. Out here the ground and the sky are centred on where you
+    /// stand, because a field whose ground ends is a stage and a field whose
+    /// sky ends is a tent, and what the room is about is that neither does.
+    fn draw_the_field(&self, scene: &mut Scene) {
+        let reaches = self.room.reaches;
+
+        // from anywhere the field can be seen, which is the whole of the
+        // garden as well as the field: the gap in the west wall is three
+        // metres wide and what is through it is a hundred and sixty metres
+        // of ground. Drawn only from out in the field, the gap was a black
+        // rectangle in a garden wall.
+        if !self.outdoors {
+            return;
+        }
+
+        // the ground, snapped to its own grass so that walking moves the
+        // ground under you rather than carrying it with you
+        if let (Some(sward), Some(turf)) = (self.sward, self.turf) {
+            let lies = field::ground(self.at);
+
+            scene.push_textured(
+                sward,
+                turf,
+                &Transform::at(vec3(lies.center().x, -field::DROP, lies.center().z))
+                    .with_scale(vec3(lies.size().x, 1.0, lies.size().z)),
+                aim::FIELD_GROUND,
+                // no highlight at all. The default is a broad one, and a
+                // broad highlight on four hundred metres of ground with the
+                // sun low is a lit path down the middle of the field that
+                // turns with you. The garden's pond is the same note.
+                aim::VOID,
             );
         }
 
@@ -6061,6 +6080,12 @@ impl Game for Arcade {
                 );
             }
         }
+        // whether the sky is over you, asked once a frame rather than three
+        // times, since the drawing, the far plane and the sky itself all
+        // want the same answer and each was building the whole collider
+        // list to get it.
+        self.outdoors = self.room.out_of_doors(self.looking_from());
+
         self.mind_the_threshold();
 
         // the toy on the bench, stepped at its own rate so a slow frame does
@@ -6769,7 +6794,7 @@ impl Game for Arcade {
         // sun you cannot see is the one thing that space is for.
         camera.far = if self.in_the_deep() {
             beyond::sees()
-        } else if field::in_view(self.room.reaches, &self.room.solid(), self.at) {
+        } else if self.outdoors {
             // and out in the field it is the far side of the sky, per spec
             // 0040. A hundred metres out there cuts the ground off at a
             // hundred and leaves black above it, which is a field in a
@@ -7544,7 +7569,8 @@ impl Game for Arcade {
         // **Only while you are out there, or about to be.** Nothing of this
         // is a place, so none of it can be left standing: the slab alone is
         // four hundred metres of ground at the hall's own floor height.
-        self.draw_the_field(scene, cube);
+        self.draw_the_field(scene);
+        self.draw_the_outside(scene, cube);
 
         // the garden, per spec 0010: its sky, its ground, and the walls round
         // it. The sky first, because everything else in here is seen against
@@ -7566,7 +7592,7 @@ impl Game for Arcade {
             // under a storm is the deck going white, and the cloud's own
             // shape is a better picture of it than any patch.
             if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
-                if field::in_view(self.room.reaches, &self.room.solid(), self.at) {
+                if self.outdoors {
                     scene.push_textured(
                         dome,
                         storm,

@@ -52,7 +52,34 @@ the door still riding.
 Only while flying. In the game it is a key that teleports you, which is not
 a thing this building does.
 
-**The rooms will pop, and that is the price.** Seven things in here are
+**Three of the gates were wrong rather than merely narrow**, and those are
+fixed.
+
+`field::in_view` asks whether the field's ground is what is holding you up,
+which is exactly right on foot and false of a body that is not standing on
+anything. Forty metres over the hall it said indoors, and the ground, the
+sky and the far plane went out together: that is the black, and no key could
+have got you out of it because there was nothing drawn to steer by.
+`Room::out_of_doors` is either question now. The field under your feet, or no
+roof over your head. Both, because neither alone will do: the imaginarium
+oversails the hall by a metre, so there is grass at the building's east wall
+with a storey hanging five metres over it, and a body standing there is out
+of doors by every test but the roof.
+
+`behind::inside` was `at.y > -0.1 && at.z >= reaches`, a half-space, so it
+was true of the sky over that room as well as the room. Spec 0015's planets
+are drawn on that answer, so from a hundred and ninety metres up you read
+Saturn, Uranus and Neptune laid out over the roof of a building whose whole
+arrangement is that nobody knows the room is there. It has a lid now. Still
+no bound along, because spec 0018 put the system in at true scale and Saturn
+stands ten and a half kilometres out.
+
+And the building's outside is `draw_the_outside`, its own pass rather than a
+tail of `draw_the_field`. The field is ground, sky and scatter round the eye;
+the outside is a building at fixed coordinates. They want different answers
+the moment either grows a reach of its own.
+
+**The rooms will still pop, and that is the price.** Seven things in here are
 decided by which room the building thinks you are standing in, and every one
 assumes you are in exactly one: `field::in_view` three times, `behind::inside`,
 `twine::inside`, `garden::under_the_sky` and `noise::room_at` three times. Fly
@@ -76,6 +103,10 @@ not a tool.
   nothing. — `tests::the_reset_puts_you_back_at_the_door`
 - And does nothing at all on
   foot. — `tests::r_does_nothing_when_you_are_walking`
+- The sky is over you in the air and over the field, and is not over you in
+  a room. — `room::tests::the_sky_is_over_you_outside_and_not_in_a_room`
+- And the sky over spec 0011's room is not in
+  it. — `behind::tests::the_sky_over_this_room_is_not_in_it`
 
 ### Verified by hand
 
@@ -92,6 +123,12 @@ not a tool.
 
 **A god mode in the game.** This is a tool, off unless asked for, costing a
 string lookup a frame.
+
+**The edge of the world.** The ground is a disc of `field::GROUND_REACH`
+round the eye, a hundred and sixty metres, so from high enough up it ends and
+there is nothing past it. Growing it with how far you can see means growing
+the cell count with it, which is a level of detail on a procedural field and
+is its own piece of work.
 
 **Fixing what flight shows you.** It turns "the building has an outside" from
 three walls into a list, and the list is not this spec's.

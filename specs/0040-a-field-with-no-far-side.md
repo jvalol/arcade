@@ -183,6 +183,13 @@ The garden's three outward walls have outer faces, from the same
 `garden::facing` list that gives them inner ones. The rest of the building
 does not: see below.
 
+**And it is `draw_the_outside` now, not a tail of `draw_the_field`.** All of
+it was written in there because the field is where it first became possible
+to see any of it, which is a reason for the order it was built in rather than
+for where it lives. The field is ground, sky and scatter round the eye; this
+is a building at fixed coordinates, and the two want different answers the
+moment either of them grows a reach of its own.
+
 ## What the first build left out
 
 **What is on the horizon.** The horizon itself is there and the ground meets

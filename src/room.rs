@@ -1420,6 +1420,43 @@ impl Room {
         out
     }
 
+    /// Whether you are out of doors, which is what the ground, the sky and
+    /// the far plane are all drawn on.
+    ///
+    /// **`field::in_view` is a walker's question and this is the flyer's as
+    /// well.** That one asks whether the field's ground is what is holding
+    /// you up, which is exactly right on foot and false of a body that is
+    /// not standing on anything: forty metres over the hall it said you were
+    /// indoors and the ground, the sky and the far plane went with it, which
+    /// is spec 0041 flying into a black that nothing could get you out of.
+    ///
+    /// So it is either question. The field under your feet, or no roof over
+    /// your head. Both, because neither alone is enough: the imaginarium
+    /// oversails the hall by a metre, so there is grass at the building's
+    /// east wall with a storey hanging five metres above it, and a body
+    /// standing there is out of doors by every test but the roof.
+    ///
+    /// The lids as well as the colliders, because a suspended ceiling is
+    /// drawn and never collided and the hall's roof is in no list `solid`
+    /// keeps.
+    pub fn out_of_doors(&self, at: Vec3) -> bool {
+        let solid = self.solid();
+
+        if crate::field::in_view(self.reaches, &solid, at) {
+            return true;
+        }
+
+        let over = |box_: &Aabb| {
+            box_.min.x <= at.x
+                && box_.max.x >= at.x
+                && box_.min.z <= at.z
+                && box_.max.z >= at.z
+                && box_.max.y >= at.y
+        };
+
+        !solid.iter().any(&over) && !self.lids().iter().any(&over)
+    }
+
     /// And the faces under those lids that the sky can see, as (face, which
     /// way it looks), which is what plaster goes on.
     ///
@@ -3412,6 +3449,49 @@ mod tests {
     /// stair was built and the lid behind the grid was not, so what you saw
     /// looking up the stair was the hole in the grid with a solid ceiling
     /// behind it.
+    /// Spec 0041: the sky is over you in the air and over the field, and is
+    /// not over you in a room.
+    ///
+    /// **The air is the half that was missing.** `field::in_view` asks what
+    /// is holding you up, which is nothing at all when you are flying, so
+    /// forty metres over this building it said indoors and the ground, the
+    /// sky and the far plane all went out at once.
+    #[test]
+    fn the_sky_is_over_you_outside_and_not_in_a_room() {
+        let room = Room::of(crate::games());
+        let door = room.doorway();
+
+        for (at, what) in [
+            (vec3(door.x, 40.0, door.z), "forty metres over the hall"),
+            (vec3(door.x, 190.0, door.z), "a hundred and ninety over it"),
+            (
+                vec3(crate::aloft::MIDDLE_X, 30.0, crate::aloft::MIDDLE_Z),
+                "over the imaginarium",
+            ),
+            (vec3(-40.0, 0.5, 0.0), "out in the field"),
+            // grass at the building's east wall with a storey hanging five
+            // metres over it, which is out of doors by every test but one
+            (vec3(3.0, 0.5, -8.0), "under the imaginarium's oversail"),
+        ] {
+            assert!(room.out_of_doors(at), "{} counts as indoors", what);
+        }
+
+        for (at, what) in [
+            (vec3(door.x, 1.6, door.z), "in the hall"),
+            (
+                vec3(
+                    crate::cellar::stair_foot() - 3.0,
+                    -crate::cellar::DOWN + 0.5,
+                    crate::cellar::opening(Room::of(crate::games()).reaches),
+                ),
+                "down in the cellar",
+            ),
+            (crate::aloft::middle(), "in the imaginarium"),
+        ] {
+            assert!(!room.out_of_doors(at), "{} counts as out of doors", what);
+        }
+    }
+
     /// Spec 0040: nothing the building shows the sky is plastered where the
     /// sky cannot see it.
     ///
