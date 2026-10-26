@@ -141,11 +141,21 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, north) = (middle.x - half.x, middle.z + half.y);
     let south = middle.z - half.y;
 
+    let (from, to) = crate::field::way(reaches);
+    let (south_end, north_end) = (middle.z - half.y - THICK, middle.z + half.y + THICK);
+
     let mut out = vec![
-        // the west wall, the whole span
+        // the west wall, in two pieces with the way out to the field between
+        // them. Spec 0040: the field is through here, and a wall with a slot
+        // in it makes a field look like a painting hung in a doorway, so the
+        // slot is wide.
         Aabb::from_center_size(
-            vec3(west - THICK * 0.5, HIGH * 0.5, middle.z),
-            vec3(THICK, HIGH, SPAN + THICK * 2.0),
+            vec3(west - THICK * 0.5, HIGH * 0.5, (south_end + from) * 0.5),
+            vec3(THICK, HIGH, from - south_end),
+        ),
+        Aabb::from_center_size(
+            vec3(west - THICK * 0.5, HIGH * 0.5, (to + north_end) * 0.5),
+            vec3(THICK, HIGH, north_end - to),
         ),
         // the north wall, across the top
         Aabb::from_center_size(
@@ -744,17 +754,6 @@ pub fn vault_rim(round: f32) -> f32 {
     (DEEP * 0.5 / round.cos().abs().max(1e-3)).min(SPAN * 0.5 / round.sin().abs().max(1e-3))
 }
 
-/// How high the vault is at a given distance out, along a given angle.
-///
-/// Only the tests ask this. It is here rather than in them because a test
-/// that works the shape out for itself passes when the shape changes.
-#[cfg(test)]
-pub fn vault_at(round: f32, out: f32) -> f32 {
-    let lean = (out / vault_rim(round)).clamp(0.0, 1.0).acos();
-
-    springs() + DOME_UP * lean.sin()
-}
-
 /// The sky, turned `by` radians.
 ///
 /// The turn is in the picture and not in the transform, which it was until
@@ -849,34 +848,14 @@ pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
     mesh
 }
 
-/// How high the sky springs.
-///
-/// Between the building's ceilings and the top of the garden's walls, and both
-/// ends of that are load bearing.
-///
-/// Above the ceilings, because the dome is nineteen across and the garden is
-/// sixteen: it reaches well past the garden and over the hall and the nook,
-/// and anything of it below their ceilings is inside those rooms. Sprung at a
-/// little over half the garden's height, which it was, the rim sat at 2.31 and
-/// every ceiling in this building is at 3.2, so the rim ran through the nook
-/// and the hall at head height. From in there it is a pale blade hanging
-/// through the ceiling, and it took a recording, a camera put exactly where
-/// Jake was standing, and a build with the dome left out to find.
-///
-/// Below the garden's own walls, which is the older reason: level with them or
-/// over them and you see the rim from inside the garden, which is the edge of
-/// the sky.
-pub fn springs() -> f32 {
-    (crate::room::TALL + HIGH) * 0.5
-}
-
-/// Where the dome stands: over the middle of the garden, springing between the
-/// building's ceilings and the top of the garden's walls.
-pub fn dome_at(reaches: f32) -> Vec3 {
-    let middle = at(reaches);
-
-    vec3(middle.x, springs(), middle.z)
-}
+// **Where the sky springs from is no longer the garden's to say.** It
+// sprang from `springs`, a little under the top of these walls and above
+// every ceiling next door, and `dome_at` stood it over this room. Spec
+// 0040 gave the field a sky of its own and the building had two, each
+// plainly visible from under the other, so there is one now: drawn round
+// the eye at `field::SKY_BY` times this size, springing from the ground.
+// `vault_at` went with them, since it measured the old vault from the old
+// middle.
 
 /// The gravel, as the four strips of it round the pond.
 ///
@@ -1563,6 +1542,7 @@ pub fn facing(reaches: f32) -> Vec<Face> {
     let proud = 0.01;
     let up = HIGH * 0.5;
     let (way_from, way_to) = way(reaches);
+    let (out_from, out_to) = crate::field::way(reaches);
     let (low, high) = parapet();
 
     // the garden looks west at the east wall, north at the south wall, and so
@@ -1636,10 +1616,31 @@ pub fn facing(reaches: f32) -> Vec<Face> {
             vec3(DEEP, HIGH, proud * 2.0),
             Vec3::Z,
         ),
-        // west
+        // west, in two pieces with the way out to the field between them,
+        // the way the east side is split round the way in from the hall.
+        //
+        // **This list is not `solid`, and that is how the field first opened
+        // a hole you could walk through and not see through.** The colliders
+        // were cut and the lining was not, so from the garden the wall was
+        // whole and from the wall you were outside. Two lists of one thing,
+        // which is the fault under most of the others in this building: the
+        // gap is `field::way` in both.
         lining(
-            vec3(middle.x - half.x + proud, up, middle.z),
-            vec3(proud * 2.0, HIGH, SPAN),
+            vec3(
+                middle.x - half.x + proud,
+                up,
+                (middle.z - half.y + out_from) * 0.5,
+            ),
+            vec3(proud * 2.0, HIGH, out_from - (middle.z - half.y)),
+            Vec3::X,
+        ),
+        lining(
+            vec3(
+                middle.x - half.x + proud,
+                up,
+                (out_to + middle.z + half.y) * 0.5,
+            ),
+            vec3(proud * 2.0, HIGH, middle.z + half.y - out_to),
             Vec3::X,
         ),
         // north
@@ -1648,6 +1649,53 @@ pub fn facing(reaches: f32) -> Vec<Face> {
             vec3(DEEP, HIGH, proud * 2.0),
             -Vec3::Z,
         ),
+        // and the outsides of the three walls the field can see, per spec
+        // 0040.
+        //
+        // **Every surface in this building faced inward until there was
+        // somewhere to stand outside it.** A wall here is a collider and a
+        // skin on its inner face, with nothing on the back, so from the
+        // field the garden had no walls at all: you could see the pond, the
+        // stones and the lanterns straight through where its west wall is,
+        // and narrowing the way out to twenty centimetres changed not one
+        // pixel of it.
+        //
+        // The west one in two pieces round the way out, like its inside.
+        lining(
+            vec3(
+                middle.x - half.x - THICK - proud,
+                up,
+                (middle.z - half.y + out_from) * 0.5,
+            ),
+            vec3(proud * 2.0, HIGH, out_from - (middle.z - half.y)),
+            -Vec3::X,
+        ),
+        lining(
+            vec3(
+                middle.x - half.x - THICK - proud,
+                up,
+                (out_to + middle.z + half.y) * 0.5,
+            ),
+            vec3(proud * 2.0, HIGH, middle.z + half.y - out_to),
+            -Vec3::X,
+        ),
+        // and the two that run away from it. These have no cap of their
+        // own: `coping` takes one face per wall and these are second faces
+        // on walls that are capped already.
+        Face {
+            at: vec3(middle.x, up, middle.z - half.y - THICK - proud),
+            size: vec3(DEEP + THICK * 2.0, HIGH, proud * 2.0),
+            looks: -Vec3::Z,
+            solid: false,
+            caps: false,
+        },
+        Face {
+            at: vec3(middle.x, up, middle.z + half.y + THICK + proud),
+            size: vec3(DEEP + THICK * 2.0, HIGH, proud * 2.0),
+            looks: Vec3::Z,
+            solid: false,
+            caps: false,
+        },
     ]
 }
 
@@ -1850,9 +1898,14 @@ pub fn mossed(seed: u32, size: Vec2) -> blitzkit::texture::TextureData {
 /// stand, how tall the screen is, and how far it stands off the plaster.
 ///
 /// One wall and not four. A garden walled in bamboo on every side is a
-/// stockade; a screen on the wall you face coming in is a thing somebody put
-/// there. The west wall is the one opposite the way in, so it is the first
-/// surface you look at.
+/// stockade; a screen on one wall is a thing somebody put there.
+///
+/// **The north wall, from spec 0040.** It was the west one, which is
+/// opposite the way in and so was the first surface you looked at. The field
+/// is through that wall now and the first thing you look at is a hundred and
+/// sixty metres of grass, and a bamboo screen across the way out to it is a
+/// fence across a view. The north wall is the long one with nothing else on
+/// it, which is what the west wall was before the field.
 pub const POLE: f32 = 0.055;
 pub const POLE_GAP: f32 = 0.012;
 pub const SCREEN_UP: f32 = 2.05;
@@ -1928,11 +1981,11 @@ pub fn rails(reaches: f32) -> Vec<(Vec3, Vec3)> {
         .collect()
 }
 
-/// The wall the screen is fixed to, which is the west one.
+/// The wall the screen is fixed to, which is the north one.
 fn screened(reaches: f32) -> Option<Face> {
     facing(reaches)
         .into_iter()
-        .find(|face| face.looks.x > 0.5 && !face.solid)
+        .find(|face| face.looks.z < -0.5 && !face.solid)
 }
 
 /// How many texels to a metre the plaster gets, and the seed its pictures are
@@ -4094,12 +4147,22 @@ mod tests {
             poles.len()
         );
 
-        let face = screened(reaches).expect("the west wall");
+        let face = screened(reaches).expect("the screened wall");
         let (surface, size, looks) = face.plane();
         let half = size.x * 0.5;
+        // which way the wall runs and which way it faces, off the face
+        // itself. Written for the west wall it measured along z and off
+        // along x, which is right for one wall out of four and silently
+        // wrong for the rest: spec 0040 moved the screen to the north wall
+        // and this said a pole stood nothing off the plaster.
+        let faces_x = looks.x.abs() > 0.5;
 
         for at_ in poles {
-            let along = at_.z - surface.z;
+            let along = if faces_x {
+                at_.z - surface.z
+            } else {
+                at_.x - surface.x
+            };
 
             assert!(
                 along.abs() <= half - POLE * 0.5 + 1e-3,
@@ -4108,7 +4171,11 @@ mod tests {
                 size.x
             );
             // and clear of the plaster rather than in it
-            let off = (at_.x - surface.x) * looks.x;
+            let off = if faces_x {
+                (at_.x - surface.x) * looks.x
+            } else {
+                (at_.z - surface.z) * looks.z
+            };
 
             assert!(
                 off >= POLE * 0.5,
@@ -4117,55 +4184,6 @@ mod tests {
                 POLE
             );
         }
-    }
-    /// Spec 0010 and 0015: the room next door is not taller than the sky.
-    ///
-    /// This is the rule the last three faults all broke, each its own way,
-    /// and the only one of the three tests worth keeping.
-    ///
-    /// A vault's edge is at no height at all. Its rim sits at the garden's
-    /// inside face and springs from 3.70, so anything standing outside that
-    /// face and taller than 3.70 stands past the edge of the sky, whatever
-    /// the middle of the vault does. Raising the vault does not help, and
-    /// was tried: the middle went to twenty four metres and the wall still
-    /// poked, because the wall was beyond the rim rather than under it.
-    ///
-    /// The room behind the wall went to eight metres and four and a half of
-    /// them came up through the clouds. It is 3.2 now.
-    #[test]
-    fn the_sky_clears_the_room_next_door() {
-        let reaches = room().reaches;
-        let at_ = dome_at(reaches);
-
-        // the garden's own walls, with the cope on top of them
-        let mine = facing(reaches)
-            .into_iter()
-            .map(|face| face.at.y + face.size.y * 0.5)
-            .fold(0.0f32, f32::max)
-            + COPE_DEEP
-            + COPE_ROLL;
-
-        assert!(
-            mine > at_.y,
-            "the garden's own walls reach {:.2} and the sky springs at {:.2}, \
-             so the rim shows over them",
-            mine,
-            at_.y
-        );
-
-        // and the neighbour's, which is the one that caught us out. What
-        // stands outside the garden has to be under the springing, because
-        // out there the sky has already ended.
-        let theirs = crate::behind::HIGH + THICK;
-
-        assert!(
-            theirs < at_.y,
-            "the room behind the wall stands {:.2} and the sky springs at \
-             {:.2}, so {:.2} m of it is above the edge of the sky",
-            theirs,
-            at_.y,
-            theirs - at_.y
-        );
     }
 
     /// Spec 0010: the weather goes round and the sky does not move.
@@ -4227,74 +4245,50 @@ mod tests {
     #[test]
     fn the_sky_clears_every_wall_round_the_garden() {
         let reaches = room().reaches;
-        let at_ = dome_at(reaches);
-
-        for face in facing(reaches) {
-            let (surface, size, _) = face.plane();
-            let (dx, dz) = (surface.x - at_.x, surface.z - at_.z);
-            let sky = vault_at(dz.atan2(dx), vec2(dx, dz).length());
-            let top = face.at.y + size.y * 0.5;
-
-            assert!(
-                sky > top + 0.3,
-                "the sky is {:.2} up where a wall {:.2} tall stands, {:.2} out",
-                sky,
-                top,
-                vec2(surface.x - at_.x, surface.z - at_.z).length()
-            );
-        }
-    }
-
-    /// Spec 0010: the sky stays over the garden's own footprint.
-    ///
-    /// `no_part_of_the_sky_is_inside_the_building` checks the rooms that
-    /// existed when it was written, and the dome overhung eleven metres east
-    /// of them into unbuilt ground, which was fine until spec 0015 built
-    /// there and raised its ceiling to eight. Then it was a pale sail hanging
-    /// in the middle of the solar system.
-    ///
-    /// So the claim is not "not in the rooms I know about" but "not outside
-    /// this garden", which cannot go stale when somebody builds next door.
-    #[test]
-    fn the_sky_stays_over_the_garden() {
-        let reaches = room().reaches;
-        let at_ = dome_at(reaches);
         let middle = at(reaches);
         let half = half();
-        let mesh = dome_mesh(0.0);
+        let by = crate::field::SKY_BY;
+        // the vault's height at a distance out along a bearing, as it is
+        // actually drawn: sprung from the ground at the eye and scaled.
+        // `vault_at` is the old one, which stood on `springs` over the
+        // garden's own middle and is what this asked about while the sky
+        // was a lid on one room.
+        let sky = |round: f32, out: f32| {
+            let rim = vault_rim(round) * by;
 
-        for vertex in mesh.vertices.iter() {
-            let on = vec3(at_.x + vertex.position[0], 0.0, at_.z + vertex.position[2]);
+            DOME_UP * by * (1.0 - (out / rim).clamp(0.0, 1.0).powi(2)).sqrt()
+        };
 
-            assert!(
-                on.x >= middle.x - half.x - THICK && on.x <= middle.x + half.x + THICK,
-                "the sky reaches x {:.2} and the garden runs {:.2} to {:.2}",
-                on.x,
-                middle.x - half.x,
-                middle.x + half.x
+        // from the corners as well as the middle, because the sky moves
+        // with you now and the wall it has to clear is the far one
+        for (x, z) in [
+            (0.0f32, 0.0f32),
+            (-1.0, -1.0),
+            (1.0, -1.0),
+            (-1.0, 1.0),
+            (1.0, 1.0),
+        ] {
+            let eye = vec3(
+                middle.x + x * (half.x - 0.5),
+                0.0,
+                middle.z + z * (half.y - 0.5),
             );
-            assert!(
-                on.z >= middle.z - half.y - THICK && on.z <= middle.z + half.y + THICK,
-                "the sky reaches z {:.2} and the garden runs {:.2} to {:.2}",
-                on.z,
-                middle.z - half.y,
-                middle.z + half.y
-            );
+
+            for face in facing(reaches) {
+                let (surface, size, _) = face.plane();
+                let (dx, dz) = (surface.x - eye.x, surface.z - eye.z);
+                let out = vec2(dx, dz).length();
+                let top = face.at.y + size.y * 0.5;
+
+                assert!(
+                    sky(dz.atan2(dx), out) > top + 0.3,
+                    "the sky is {:.2} up where a wall {:.2} tall stands, {:.2} out",
+                    sky(dz.atan2(dx), out),
+                    top,
+                    out
+                );
+            }
         }
-
-        // and it still covers the corners, which is what a round dome was for
-        let corner = vec3(middle.x + half.x, 0.0, middle.z + half.y);
-        let reach_there = mesh
-            .vertices
-            .iter()
-            .map(|v| vec3(at_.x + v.position[0], 0.0, at_.z + v.position[2]).distance(corner))
-            .fold(f32::MAX, f32::min);
-
-        assert!(
-            reach_there < 0.5,
-            "the nearest the sky comes to a corner of the garden is {:.2} m",
-            reach_there
-        );
     }
 
     /// Spec 0010: the garden is closed all the way up, on every side.
@@ -4344,10 +4338,19 @@ mod tests {
                     // of the stretch, and skipping it at every height is why
                     // this test watched the parapet drop a metre and said
                     // nothing.
-                    let through = what == "the east wall"
+                    let (out_from, out_to) = crate::field::way(reaches);
+                    // and the way out to the field, which is open to the top
+                    // of the wall rather than to a doorway's head: spec 0040
+                    // is the garden stopping being walled, not a door in a
+                    // wall, and a band of masonry across the sky over a field
+                    // is the parapet fault on a bigger wall
+                    let through = (what == "the east wall"
                         && at_.z > from_z - 0.2
                         && at_.z < to_z + 0.2
-                        && up < crate::room::TALL;
+                        && up < crate::room::TALL)
+                        || (what == "the west wall"
+                            && at_.z > out_from - 0.2
+                            && at_.z < out_to + 0.2);
 
                     if through {
                         continue;
@@ -4477,41 +4480,39 @@ mod tests {
     /// against the ceiling of every room the dome reaches over.
     #[test]
     fn no_part_of_the_sky_is_inside_the_building() {
-        let reaches = room().reaches;
-        let middle = at(reaches);
-        let stands = dome_at(reaches);
+        let by = crate::field::SKY_BY;
+        let tallest = crate::aloft::BASE * 2.0;
+        // as far as anything of this building gets from anywhere you can
+        // stand under the sky, which is the far corner of the far room
+        let across = 60.0f32;
+        let mut nearest_rim = f32::MAX;
 
-        // the rim is the lowest of it, and the whole of the dome is at that
-        // height or above
-        let mut lowest = f32::MAX;
-        for vertex in dome_mesh(0.0).vertices.iter() {
-            lowest = lowest.min(vertex.position[1]);
+        for round in 0..64 {
+            let round = round as f32 / 64.0 * std::f32::consts::TAU;
+            let rim = vault_rim(round) * by;
+
+            nearest_rim = nearest_rim.min(rim);
+
+            let over = DOME_UP * by * (1.0 - (across / rim).clamp(0.0, 1.0).powi(2)).sqrt();
+
+            assert!(
+                over > tallest,
+                "at {:.2} radians the sky is {:.1} up {:.0} metres out, and this building \
+                 reaches {:.1}",
+                round,
+                over,
+                across,
+                tallest
+            );
         }
-        let rim = stands.y + lowest;
 
+        // and the rim, which is the one part of it at ground level, is
+        // further off than anything of the building is from you
         assert!(
-            rim > crate::room::TALL,
-            "the sky comes down to {:.2} and the rooms it crosses have ceilings at {:.2}",
-            rim,
-            crate::room::TALL
-        );
-
-        // and it reaches over them, which is why that matters
-        let over = |x: f32, z: f32| vec2(x - middle.x, z - middle.z).length() < DOME;
-        assert!(over(0.0, 0.0), "the dome should reach over the hall");
-        assert!(
-            over(-crate::room::WALL - CABINET.x - NOOK_DEEP * 0.5, 0.0),
-            "the dome should reach over the nook"
-        );
-
-        // still tucked under the garden's own walls, which is the older reason
-        // it is sprung low at all: level with them and you see the edge of the
-        // sky from inside the garden
-        assert!(
-            rim < HIGH,
-            "the rim is at {:.2} and the garden's walls stop at {:.2}",
-            rim,
-            HIGH
+            nearest_rim > across,
+            "the sky comes down to the ground {:.1} metres out, and the building reaches {:.1}",
+            nearest_rim,
+            across
         );
     }
 

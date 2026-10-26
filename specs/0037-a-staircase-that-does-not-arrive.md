@@ -226,6 +226,18 @@ The way up:
   stair. — `aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
 - And somebody your size, walking, gets from the nook to the
   room. — `aloft::tests::you_can_walk_up_it`
+- The hall's ceiling has nothing of the way up hanging under
+  it. — `aloft::tests::the_way_up_leaves_the_halls_ceiling_alone`
+
+The last of those is the one that had to be aimed twice. The shaft has to
+begin inside the thickness of a ceiling tile: level with the bars it
+speckles against them, level with the tiles it speckles against those, and
+anywhere lower it hangs across the hall as a pale slab the length of the
+second flight. The height it needs is the tile's, and it was worked out
+from the bars' underside instead, which is eleven millimetres lower. The
+test measured the same wrong surface, so it passed while the slab was on
+screen. `room::tile_under` and `room::tile_middle` are now the one place
+either number is said.
 
 ## What it is waiting on
 

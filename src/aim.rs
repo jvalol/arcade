@@ -1548,6 +1548,28 @@ pub const BEHIND_PORTAL: Vec4 = vec4(1.1, 2.3, 4.6, 1.0);
 pub const BEHIND_DOORWAY: Vec4 = BEHIND_FRAME;
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
+/// The field, per spec 0040: the ground, a tuft of grass standing in it, and
+/// the four flowers.
+///
+/// **The ground is lighter than a tuft and the tuft is lighter than a leaf.**
+/// Grass seen flat from above is the sky's colour mixed into it and a blade
+/// seen side on is not, so a field painted in one green is a billiard table.
+/// Three greens, each a step down, and the trees' own `LEAF` is the darkest
+/// of them, which is what puts the trees against the ground they stand in.
+pub const FIELD_GROUND: Vec4 = vec4(0.42, 0.50, 0.28, 1.0);
+pub const FIELD_TUFT: Vec4 = vec4(0.33, 0.43, 0.22, 1.0);
+
+/// And the flowers, as inks rather than lights: a flower is a picture of
+/// stalks with a head on each, so what says which flower it is is what the
+/// picture is painted with. They were a light on a box and the box was the
+/// fault, per spec 0040.
+pub const FIELD_HEADS: [[u8; 3]; 4] = [
+    [228, 206, 92],
+    [214, 112, 140],
+    [238, 234, 226],
+    [146, 124, 206],
+];
+
 /// What burns in a stone lantern: a candle behind paper, which is warm against
 /// everything else out here being the colour of rain.
 pub const LANTERN_LIT: Vec3 = vec3(1.0, 0.82, 0.52);

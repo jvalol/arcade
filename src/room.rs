@@ -190,6 +190,30 @@ pub const CEIL_BAR: f32 = 0.05;
 pub fn soffit() -> f32 {
     TALL - CEIL_DROP
 }
+
+/// How thick a ceiling tile is and where it hangs, which is above the bars
+/// so that nothing up there is level with anything. Spec 0012.
+///
+/// **Named because the way up reads them.** The shaft spec 0037 climbs
+/// through has to begin inside a tile's own thickness: level with their
+/// underside it speckles against them, and anywhere lower it hangs across
+/// the hall as a white beam. `aloft::up_shaft` worked that height out from
+/// `soffit` instead, which is the bars' underside and eleven millimetres
+/// lower, and the beam was in the hall's ceiling from the day the way up
+/// went in. Two places saying where a tile is, and they disagreed.
+pub const CEIL_TILE_THICK: f32 = CEIL_DROP * 0.3;
+
+/// The lowest a tile reaches, which is what nothing above the ceiling may
+/// come below.
+pub fn tile_under() -> f32 {
+    TALL - CEIL_DROP * 0.4
+}
+
+/// And the plane through the middle of one, which is where a thing that has
+/// to be hidden by the ceiling without sharing a face with it begins.
+pub fn tile_middle() -> f32 {
+    tile_under() + CEIL_TILE_THICK * 0.5
+}
 pub const THICK: f32 = 0.3;
 
 /// How far inside the near wall you wake up.
@@ -218,7 +242,13 @@ pub const INSIDE: f32 = 1.0;
 #[cfg(test)]
 pub const CORRIDOR_FILLED: f32 = 24.0;
 
-pub const GALLERY_WIDE: f32 = 6.8;
+/// Wide enough for the row with the picture's hole in the middle of it,
+/// and `display::CLEAR` of bare wall past each end.
+///
+/// It was 6.8 for a row of six standing shoulder to shoulder. Spec 0039's
+/// picture now stands in the middle of that row rather than behind it, per
+/// `display::gap`, and the room holds what the row came to.
+pub const GALLERY_WIDE: f32 = 10.4;
 
 /// How much wall is in frame per unit you stand back from it.
 ///
@@ -234,7 +264,7 @@ pub const IN_FRAME: f32 = 1.15;
 /// Derived, so a row that grows takes the room with it rather than quietly
 /// not fitting in it, which is the whole fault this room exists to fix.
 pub fn gallery_deep() -> f32 {
-    let wants = crate::display::row() + crate::display::CLEAR * 2.0;
+    let wants = crate::display::shapes() + crate::display::CLEAR * 2.0;
 
     wants / IN_FRAME + 0.6
 }
@@ -1438,12 +1468,12 @@ impl Room {
                     tiles.push((
                         vec3(
                             (near_x + far_x) * 0.5,
-                            TALL - CEIL_DROP * 0.25,
+                            tile_middle(),
                             (near_z + far_z) * 0.5,
                         ),
                         vec3(
                             far_x - near_x - CEIL_BAR,
-                            CEIL_DROP * 0.3,
+                            CEIL_TILE_THICK,
                             far_z - near_z - CEIL_BAR,
                         ),
                     ));

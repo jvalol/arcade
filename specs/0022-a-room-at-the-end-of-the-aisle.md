@@ -68,6 +68,18 @@ measured off a picture at 3.65 back with 4.2 of row in frame, and the depth is
 what that needs plus room to stand in behind it. The first guess was 4.2 and
 cut both ends off the row.
 
+**10.4 wide, from 2026-10-25.** Spec 0039's picture stands in the middle of
+the row rather than behind it, so the row opens by the picture, its moulding
+and a clear stride each side, and the width is what the row came to. The rule
+did the work: a row that grows takes the room with it, which is what this room
+exists to make true.
+
+The depth stays at 6.3 and is measured off the six alone now. What you step
+back from is the picture, and the six are things you walk along a wall to
+reach: deep enough to take in the whole of a row with a 2.6 hole in the middle
+of it would be nine and a quarter, which is a room with nothing in the middle
+of it and a ceiling 3.2 up.
+
 The shapes are 39 per cent bigger than the squeezed six and 32 per cent
 bigger than the five ever were.
 

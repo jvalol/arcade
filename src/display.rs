@@ -58,9 +58,41 @@ pub fn span() -> f32 {
     crate::room::GALLERY_WIDE
 }
 
+/// How wide the six stand, from the outside of one to the outside of the
+/// other, with no account of what is between them.
+///
+/// What the room is deep enough to see, which is a different question from
+/// how wide the room is. See `room::gallery_deep`.
+pub fn shapes() -> f32 {
+    (SHAPES.len() - 1) as f32 * APART + ACROSS
+}
+
+/// How much clear wall the picture keeps either side of its own moulding.
+///
+/// Measured to the next shape's sweep and not to its middle, which is what
+/// you are actually asking when you ask whether a thing is in the way.
+pub const BESIDE: f32 = 0.4;
+
+/// Where the innermost shape of each half stands.
+///
+/// **Spec 0039 hung the one that does not stop behind the six that do, and
+/// from anywhere far enough back to see all of it, three of them were
+/// across the middle of it.** So the row opens instead: three either side
+/// and the picture in the hole, with clear floor in front of it and the
+/// way in from the hall pointing straight at it.
+pub fn inside() -> f32 {
+    crate::mandel::framed() * 0.5 + BESIDE + sweep()
+}
+
+/// How far a shape reaches from its own middle while it is turning, which
+/// is further than it is wide. See [`SWEEP`].
+pub fn sweep() -> f32 {
+    ACROSS * SWEEP * 0.5
+}
+
 /// How wide the row actually is, from the outside of one shape to the other.
 pub fn row() -> f32 {
-    (SHAPES.len() - 1) as f32 * APART + ACROSS
+    (inside() + (SHAPES.len() / 2 - 1) as f32 * APART) * 2.0 + ACROSS
 }
 
 pub const OFF_THE_WALL: f32 = 0.75;
@@ -139,7 +171,7 @@ pub fn tesseract() -> usize {
 /// hilbert tube at 0.522, a quarter of each other, while the library hands all
 /// five back within a twentieth of the same size already.
 pub fn all_of_them(wall: f32) -> Vec<Display> {
-    let along = (SHAPES.len() - 1) as f32 * APART;
+    let each = SHAPES.len() / 2;
 
     SHAPES
         .iter()
@@ -148,10 +180,16 @@ pub fn all_of_them(wall: f32) -> Vec<Display> {
         .map(|(n, (name, mesh))| {
             let size = mesh.bounds().size();
             let scale = ACROSS / size.max_element().max(1e-4);
+            // out from the picture a step at a time, each half its own way
+            let (side, out) = if n < each {
+                (-1.0, (each - 1 - n) as f32)
+            } else {
+                (1.0, (n - each) as f32)
+            };
 
             Display {
                 name,
-                at: vec3(n as f32 * APART - along * 0.5, HIGH, wall + OFF_THE_WALL),
+                at: vec3(side * (inside() + out * APART), HIGH, wall + OFF_THE_WALL),
                 scale,
                 half: size * scale * 0.5,
             }

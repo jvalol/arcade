@@ -71,6 +71,9 @@ pub enum Room {
     /// Which holds the pool, the fountain and the sauna.
     Baths,
     Garden,
+    /// Out past the garden's west wall, where the ground does not stop.
+    /// Spec 0040.
+    Field,
     /// The space behind the hall's near end wall, per spec 0011.
     Behind,
 }
@@ -96,7 +99,7 @@ impl Room {
         match self {
             // the garden is open to it, and the hall looks into the garden
             // through its door
-            Room::Garden | Room::Hall => true,
+            Room::Garden | Room::Hall | Room::Field => true,
             Room::Nook | Room::Stair | Room::Cellar | Room::Baths | Room::Behind => false,
         }
     }
@@ -140,6 +143,13 @@ pub fn room_at(reaches: f32, at: Vec3) -> Room {
     // Asked of `garden::under_the_sky`, which is the same question the storm
     // asks and so is answered once.
     if at.x < crate::garden::wall_at() {
+        // past the garden's own west face the ground does not stop. Spec
+        // 0040: asked before the garden, because the field is the garden's
+        // sky carried on and `under_the_sky` is true of both.
+        if crate::field::open(reaches, at) && at.y > -0.1 {
+            return Room::Field;
+        }
+
         if crate::garden::under_the_sky(reaches, at) {
             return Room::Garden;
         }
@@ -176,6 +186,10 @@ pub fn underfoot(reaches: f32, at: Vec3) -> Underfoot {
         // go down to
         Room::Nook | Room::Stair | Room::Cellar => Underfoot::Boards,
         Room::Garden => Underfoot::Gravel,
+        // grass sounds nothing like gravel and this building has no grass
+        // to sound with yet, so the field borrows the nearest thing it has
+        // and spec 0040 carries it as a hole rather than a decision.
+        Room::Field => Underfoot::Gravel,
         // and the space behind the wall is carpeted like the hall on purpose,
         // per spec 0011: its floor is at the hall's height and the one thing
         // that should not change when you step through is you

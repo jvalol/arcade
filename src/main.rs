@@ -12,6 +12,7 @@ mod cascada;
 mod cellar;
 mod cradle;
 mod display;
+mod field;
 mod garden;
 mod globe;
 mod gyro;
@@ -415,7 +416,16 @@ struct Arcade {
     /// 0074.
     view: mandel::View,
     mandel: Option<TextureId>,
-    shown_view: Option<mandel::View>,
+    shown_view: Option<(mandel::View, bool)>,
+    /// And the fine one, which is worked out a slice at a time while
+    /// nobody is moving it and drawn instead of the coarse one once it is
+    /// whole. Spec 0039.
+    sharp: Option<TextureId>,
+    settling: Option<mandel::Settling>,
+    sharp_view: Option<mandel::View>,
+    /// Whether an arrow is on it right now, which decides how many rounds
+    /// the picture gets.
+    moving_the_view: bool,
     /// A pocket's net. Spec 0007.
     bag: Option<MeshId>,
     /// The turned pieces in the baths. Spec 0008.
@@ -449,6 +459,18 @@ struct Arcade {
     pool_in_the_garden: blitzkit::water::Water,
     pond_mesh: Option<MeshId>,
     trunks: Vec<MeshId>,
+    /// The field's ground, the grass on it, and a trunk per kind of tree it
+    /// stands. Spec 0040.
+    sward: Option<MeshId>,
+    turf: Option<TextureId>,
+    saplings: Vec<MeshId>,
+    /// The plaster on the field's own wall, which is tiled where the
+    /// garden's is one picture a wall. Spec 0040.
+    render: Option<TextureId>,
+    render_mesh: Option<MeshId>,
+    tuft: Option<MeshId>,
+    blades: Vec<TextureId>,
+    heads: Vec<TextureId>,
     crown: Option<MeshId>,
     limb: Option<MeshId>,
     lantern: Option<MeshId>,
@@ -835,7 +857,11 @@ impl Arcade {
             leg: None,
             view: mandel::View::default(),
             mandel: None,
+            sharp: None,
+            settling: None,
+            sharp_view: None,
             shown_view: None,
+            moving_the_view: false,
             hoop: None,
             bottle: None,
             peg: None,
@@ -876,6 +902,14 @@ impl Arcade {
             },
             pond_mesh: None,
             trunks: Vec::new(),
+            sward: None,
+            turf: None,
+            saplings: Vec::new(),
+            render: None,
+            render_mesh: None,
+            tuft: None,
+            blades: Vec::new(),
+            heads: Vec::new(),
             crown: None,
             limb: None,
             lantern: None,
@@ -1729,6 +1763,267 @@ impl Arcade {
             None if self.hotel.travelling().is_some() => String::from(aleph::DESK_FREEING),
             None => String::from(aleph::DESK_FULL),
         }
+    }
+
+    /// The field. Spec 0040.
+    ///
+    /// **The one room in this building that is drawn relative to you.**
+    /// Everything else is at fixed coordinates and is either in the frustum
+    /// or is not. Out here the ground and the sky are centred on where you
+    /// stand, because a field whose ground ends is a stage and a field whose
+    /// sky ends is a tent, and what the room is about is that neither does.
+    fn draw_the_field(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+
+        // from anywhere the field can be seen, which is the whole of the
+        // garden as well as the field: the gap in the west wall is three
+        // metres wide and what is through it is a hundred and sixty metres
+        // of ground. Drawn only from out in the field, the gap was a black
+        // rectangle in a garden wall.
+        if !field::in_view(reaches, self.at) {
+            return;
+        }
+
+        // the ground, snapped to its own grass so that walking moves the
+        // ground under you rather than carrying it with you
+        if let (Some(sward), Some(turf)) = (self.sward, self.turf) {
+            let lies = field::ground(self.at);
+
+            scene.push_textured(
+                sward,
+                turf,
+                &Transform::at(vec3(lies.center().x, -field::DROP, lies.center().z))
+                    .with_scale(vec3(lies.size().x, 1.0, lies.size().z)),
+                aim::FIELD_GROUND,
+                // no highlight at all. The default is a broad one, and a
+                // broad highlight on four hundred metres of ground with the
+                // sun low is a lit path down the middle of the field that
+                // turns with you. The garden's pond is the same note.
+                aim::VOID,
+            );
+        }
+
+        // the wall the building shows the field, past the garden's own
+        // ends, with the garden's own plaster and its own cope on it so
+        // the three read as one wall with one gap in it
+        for box_ in field::wall(reaches, self.at) {
+            let (middle, size) = (box_.center(), box_.size());
+
+            scene.push_colored(
+                cube,
+                &Transform::at(middle).with_scale(size),
+                aim::GARDEN_WALL,
+            );
+
+            // and the plaster on the face of it, tiled, because the
+            // garden's walls get one picture each and a picture per
+            // three hundred metres is not a picture. Plain, it was a
+            // white glare running away to the horizon.
+            if let (Some(mesh), Some(skin)) = (self.render_mesh, self.render) {
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(vec3(box_.min.x - 0.01, middle.y, middle.z))
+                        .with_rotation(room::laid_on(-Vec3::X))
+                        .with_scale(vec3(size.z, 1.0, size.y)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(
+                    middle.x,
+                    box_.max.y + garden::COPE_DEEP * 0.5,
+                    middle.z,
+                ))
+                .with_scale(vec3(
+                    size.x + garden::COPE_OUT * 2.0,
+                    garden::COPE_DEEP,
+                    size.z,
+                )),
+                aim::GARDEN_COPE,
+            );
+        }
+
+        // the trees, which are three meshes stood many times
+        let kinds = field::kinds();
+
+        for cell in field::cells_round(self.at, field::TREES_REACH) {
+            for stood in field::trees(reaches, cell) {
+                let field::What::Tree(kind) = stood.what else {
+                    continue;
+                };
+                let (Some(trunk), Some(tree)) = (self.saplings.get(kind), kinds.get(kind)) else {
+                    continue;
+                };
+                let turned = glam::Quat::from_rotation_y(stood.turn);
+
+                scene.push_colored(
+                    *trunk,
+                    &Transform::at(stood.at)
+                        .with_rotation(turned)
+                        .with_scale(Vec3::splat(stood.size)),
+                    aim::BARK,
+                );
+
+                if let Some(limb) = self.limb {
+                    for (from, to) in garden::limbs(tree) {
+                        let (from, to) = (field::stands(&stood, from), field::stands(&stood, to));
+                        let along = to - from;
+                        let long = along.length();
+
+                        if long > 1e-3 {
+                            scene.push_colored(
+                                limb,
+                                &Transform::at(from)
+                                    .with_rotation(glam::Quat::from_rotation_arc(
+                                        Vec3::Y,
+                                        along / long,
+                                    ))
+                                    .with_scale(vec3(
+                                        garden::LIMB_THICK * stood.size,
+                                        long,
+                                        garden::LIMB_THICK * stood.size,
+                                    )),
+                                aim::BARK,
+                            );
+                        }
+                    }
+                }
+
+                if let Some(crown) = self.crown {
+                    for pad in garden::pads(tree) {
+                        let wide = pad.wide * stood.size;
+
+                        scene.push_material(
+                            crown,
+                            &Transform::at(field::stands(&stood, pad.at))
+                                .with_rotation(glam::Quat::from_rotation_y(pad.turn + stood.turn))
+                                .with_scale(vec3(wide, wide * garden::PAD_FLAT, wide * 0.86)),
+                            aim::LEAF,
+                            aim::DULL,
+                        );
+                    }
+                }
+            }
+        }
+
+        // and the near ground: tufts standing in the grass and flowers among
+        // them, which are what streams past you and so are what says you are
+        // moving at all
+        for cell in field::cells_round(self.at, field::COVER_REACH) {
+            for stood in field::cover(reaches, cell) {
+                let turned = glam::Quat::from_rotation_y(stood.turn);
+
+                match stood.what {
+                    // the grass, which is a silhouette on crossed planes
+                    // rather than a solid of any shape: see `field::blades`
+                    field::What::Tuft => {
+                        let (Some(mesh), Some(blades)) = (
+                            self.tuft,
+                            self.blades
+                                .get((stood.turn * 97.0) as usize % self.blades.len().max(1))
+                                .copied(),
+                        ) else {
+                            continue;
+                        };
+                        let tall = field::TUFT_TALL * stood.size;
+                        let wide = field::TUFT_WIDE * stood.size;
+
+                        scene.push_textured(
+                            mesh,
+                            blades,
+                            &Transform::at(stood.at)
+                                .with_rotation(turned)
+                                .with_scale(vec3(wide, tall, wide)),
+                            aim::FIELD_TUFT,
+                            aim::VOID,
+                        );
+                    }
+                    field::What::Flower(which) => {
+                        let (Some(mesh), Some(head)) = (
+                            self.tuft,
+                            self.heads.get(which % self.heads.len().max(1)).copied(),
+                        ) else {
+                            continue;
+                        };
+                        let tall = field::FLOWER_TALL * stood.size;
+                        let wide = field::FLOWER_WIDE * stood.size;
+
+                        scene.push_textured(
+                            mesh,
+                            head,
+                            &Transform::at(stood.at)
+                                .with_rotation(turned)
+                                .with_scale(vec3(wide, tall, wide)),
+                            glam::Vec4::ONE,
+                            aim::VOID,
+                        );
+                    }
+                    field::What::Tree(_) => continue,
+                }
+            }
+        }
+    }
+
+    /// What you can walk into from where you are.
+    ///
+    /// **The field is not in the building's list and cannot be.** Every
+    /// other collider in here is a box at a fixed place, written once. The
+    /// field's ground is two hundred metres of slab that follows you and
+    /// its trunks come out of whichever cells you are near, so the list is
+    /// a different list every few paces.
+    ///
+    /// Only while you are out there. The slab laps two hundred metres back
+    /// under the building, which is right from outside, where it keeps the
+    /// garden's floor and the field's from meeting edge to edge, and wrong
+    /// from inside, where it would be a lid over the cellar stair.
+    fn standing_on(&self) -> Vec<Aabb> {
+        let mut out = self.room.solid();
+
+        if field::open(self.room.reaches, self.at) {
+            out.extend(field::solid(self.room.reaches, self.at));
+        }
+
+        out
+    }
+
+    /// Works the gallery's fine picture a slice further on. Spec 0039.
+    ///
+    /// **Thrown away the moment the view moves.** A settling is of one
+    /// view, and slices of two views side by side in one picture is a
+    /// window onto two places at once. What is drawn in the meantime is
+    /// the coarse picture, which is written every frame anyway, so there
+    /// is nothing to fall back to and nothing to pay for.
+    fn settle(&mut self) {
+        if self.moving_the_view {
+            self.settling = None;
+            self.sharp_view = None;
+
+            return;
+        }
+
+        if self.sharp_view == Some(self.view) {
+            return;
+        }
+
+        let mut settling = match self.settling.take() {
+            Some(settling) if settling.view == self.view => settling,
+            _ => mandel::Settling::new(self.view),
+        };
+
+        settling.step();
+
+        // and the frame that finishes it is the frame the wall changes
+        // on: `before_frame` writes it into the fine texture before
+        // anything is drawn, so there is never a frame wearing a texture
+        // nothing has been put in.
+        if settling.whole() {
+            self.sharp_view = Some(settling.view);
+        }
+
+        self.settling = Some(settling);
     }
 
     fn draw_the_people(&self, scene: &mut Scene) {
@@ -3820,7 +4115,7 @@ impl Arcade {
             self.falling,
             RADIUS,
             dt,
-            &self.room.solid(),
+            &self.standing_on(),
             // a step costs its own height out of a budget that fills at
             // `walk::CLIMBS` a second, and until the budget covers the next
             // riser you simply walk into it. Nothing paced the stair before
@@ -3955,6 +4250,22 @@ impl Arcade {
             return;
         };
         if self.worlds.is_empty() {
+            return;
+        }
+
+        // **Only from past the hall's near end wall**, which is the one
+        // place this room has ever been seen from. Spec 0040 put a field
+        // off the garden with a four hundred metre view across it, and
+        // from out there you could read Saturn's name in the sky over the
+        // roof: a hundred and fifty nine metres of planets and a sun,
+        // standing above a building that is three metres tall. Spec 0011
+        // is a room nobody is supposed to know is there and spec 0015 is
+        // what is in it, and both of them were legible from the grass.
+        //
+        // Nothing was wrong with the room. What changed is that there is
+        // now somewhere to stand outside the building, and everything in
+        // here was drawn on the understanding that there was not.
+        if !behind::inside(self.room.reaches, self.looking_from()) {
             return;
         }
 
@@ -4555,14 +4866,55 @@ impl Game for Arcade {
         // views before that, because adding a texture was the only way to
         // change a picture and doing that every frame leaks one a frame.
         if self.mandel.is_none() {
-            self.mandel = Some(renderer.add_texture(&mandel::drawn(self.view)));
-            self.shown_view = Some(self.view);
+            self.mandel = Some(renderer.add_texture(&mandel::drawn(self.view, false)));
+            self.shown_view = Some((self.view, false));
+            // and the fine one, which starts as a copy of the coarse one
+            // blown up: it is never drawn until a settling has filled it,
+            // and a texture has to exist before anything can be written
+            // into it.
+            self.sharp = Some(renderer.add_texture(&mandel::blank()));
         }
 
-        if self.shown_view != Some(self.view) {
+        // **Low rounds while you move and the full count when you stop.**
+        // At the bottom of the dive the full count is 35 milliseconds
+        // against a frame of 8, so a picture worked out properly every
+        // frame is a picture that stutters. Spec 0039: move coarse, settle
+        // sharp, which is what every explorer of this set does.
+        let want = (self.view, self.moving_the_view);
+        if self.shown_view != Some(want) {
             if let Some(id) = self.mandel {
-                renderer.write_texture(id, &mandel::drawn(self.view));
-                self.shown_view = Some(self.view);
+                renderer.write_texture(id, &mandel::drawn(want.0, want.1));
+                self.shown_view = Some(want);
+            }
+        }
+
+        // and out in the field the sun's map follows you, per spec 0040.
+        // `load` fitted it to the building, which is right everywhere the
+        // building is and leaves the field standing in whatever the map
+        // holds at its edge: a bright strip across the grass where the map
+        // runs out, with the building's own shadow stretched over the rest.
+        let bounds = if field::open(self.room.reaches, self.at) {
+            field::under_the_sun(self.at)
+        } else {
+            self.room.under_the_sun()
+        };
+
+        if renderer.scene_bounds() != bounds {
+            renderer.set_scene_bounds(bounds);
+        }
+
+        // and the fine picture under it, a slice a frame.
+        //
+        // **Thrown away the moment the view moves**, which is what keeps a
+        // settling from ever being a picture of two places at once. What
+        // is drawn meanwhile is the coarse one, which is being written
+        // anyway.
+        self.settle();
+
+        if let (Some(settling), Some(id)) = (&self.settling, self.sharp) {
+            if settling.whole() {
+                renderer.write_texture(id, &settling.drawn());
+                self.settling = None;
             }
         }
 
@@ -4839,6 +5191,42 @@ impl Game for Arcade {
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
+        // the field: one quad for the ground, counted so a tile of grass is a
+        // tile wherever the slab has slid to, and a trunk for each kind of
+        // tree it stands. Spec 0040.
+        self.sward = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::splat(
+            field::GROUND_REACH * 2.0 / field::TILE,
+        ))));
+        self.turf = Some(renderer.add_texture(&field::turf(0x51E7)));
+        self.saplings = field::kinds()
+            .iter()
+            .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
+            .collect();
+        self.render = Some(renderer.add_texture(&garden::plastered(
+            0x3A77,
+            glam::vec2(field::RENDER, field::RENDER),
+        )));
+        self.render_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
+            field::GROUND_REACH * 2.0 / field::RENDER,
+            garden::HIGH / field::RENDER,
+        ))));
+        self.tuft = Some(renderer.add_mesh(&field::tuft_mesh()));
+        // a handful of tufts rather than one. Every clump of grass in a field
+        // cut from the same picture is a field of one plant, which is the
+        // fault the cellar's boards had.
+        self.blades = (0..field::TUFTS)
+            .map(|n| renderer.add_texture(&field::blades(0x2B19u32.wrapping_add(n * 7901))))
+            .collect();
+        self.heads = aim::FIELD_HEADS
+            .iter()
+            .enumerate()
+            .map(|(n, head)| {
+                renderer.add_texture(&field::flower(
+                    0x91C7u32.wrapping_add(n as u32 * 6151),
+                    *head,
+                ))
+            })
+            .collect();
         // one picture per bed rather than one tile repeated over all of them:
         // the raking runs in rings round the stones, and a tile cannot know
         // where a stone is
@@ -5345,14 +5733,16 @@ impl Game for Arcade {
         // is how Jake found it.
         let diving = self.seen == Some(room::Seen::Mandel);
         let (turn, tilt) = if diving {
+            self.moving_the_view = up != 0.0 || right != 0.0;
             self.view = if self.shifted {
-                self.view.moved((0.0, 0.0), up, dt)
+                self.view.moved((0.0, 0.0), up as f64, dt)
             } else {
-                self.view.moved((right, up), 0.0, dt)
+                self.view.moved((right as f64, up as f64), 0.0, dt)
             };
 
             (0.0, 0.0)
         } else {
+            self.moving_the_view = false;
             (right, up)
         };
         if turn != 0.0 || tilt != 0.0 {
@@ -5956,6 +6346,12 @@ impl Game for Arcade {
         // sun you cannot see is the one thing that space is for.
         camera.far = if self.in_the_deep() {
             beyond::sees()
+        } else if field::in_view(self.room.reaches, self.at) {
+            // and out in the field it is the far side of the sky, per spec
+            // 0040. A hundred metres out there cuts the ground off at a
+            // hundred and leaves black above it, which is a field in a
+            // cave: the first build of this looked exactly like that.
+            field::SEES
         } else {
             Camera::new().far
         };
@@ -6718,23 +7114,45 @@ impl Game for Arcade {
             );
         }
 
+        // the field through the garden's west wall, per spec 0040: ground
+        // that follows you, the garden's own sky blown up over it, and
+        // trees, flowers and tufts out of whichever cells you are near.
+        //
+        // **Only while you are out there, or about to be.** Nothing of this
+        // is a place, so none of it can be left standing: the slab alone is
+        // four hundred metres of ground at the hall's own floor height.
+        self.draw_the_field(scene, cube);
+
         // the garden, per spec 0010: its sky, its ground, and the walls round
         // it. The sky first, because everything else in here is seen against
         // it.
         {
+            // the sky, which is one sky and is drawn where you stand.
+            //
+            // **It was two.** Spec 0010 sprang a vault nineteen metres
+            // across over the garden, which is a sky from underneath and a
+            // blue bubble sitting on the roof from out in spec 0040's
+            // field. The field had a second one of its own, so the garden
+            // and the field, which are one outdoors with one sun and one
+            // day over them, had two skies with two rims and two scales,
+            // and each could be seen from under the other.
+            //
+            // One, round the eye. The same cloud all day with the day taken
+            // out from behind it, per spec 0019, and a strike lighting the
+            // whole of it, per spec 0016: what you see of lightning from
+            // under a storm is the deck going white, and the cloud's own
+            // shape is a better picture of it than any patch.
             if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
-                scene.push_textured(
-                    dome,
-                    storm,
-                    &Transform::at(garden::dome_at(self.room.reaches)),
-                    // the same cloud all day, with the day taken out from
-                    // behind it. Spec 0019. And a strike lighting the whole of
-                    // it, per spec 0016: what you see of lightning from under
-                    // a storm is the deck going white, and the cloud's own
-                    // shape is a better picture of it than any patch.
-                    garden::skylit(self.since) + self.flashed(),
-                    900.0,
-                );
+                if field::in_view(self.room.reaches, self.at) {
+                    scene.push_textured(
+                        dome,
+                        storm,
+                        &Transform::at(vec3(self.at.x, 0.0, self.at.z))
+                            .with_scale(Vec3::splat(field::SKY_BY)),
+                        garden::skylit(self.since) + self.flashed(),
+                        900.0,
+                    );
+                }
             }
 
             if let Some(ground) = self.ground {
@@ -8661,7 +9079,15 @@ impl Game for Arcade {
 
         // and the panel at the end of that row, which is the one flat thing
         // in this building you work. Spec 0039.
-        if let Some(picture) = self.mandel {
+        // the fine one when there is one for where you are looking, and
+        // the coarse one every other frame of the dive
+        let panel = if self.sharp_view == Some(self.view) {
+            self.sharp
+        } else {
+            self.mandel
+        };
+
+        if let Some(picture) = panel {
             let (at, size) = mandel::panel(self.room.reaches);
 
             scene.push_textured(
@@ -9635,6 +10061,48 @@ mod tests {
         let _ = west;
     }
 
+    /// Spec 0039: an arrow on the picture throws the settled one away.
+    ///
+    /// **Otherwise the wall is a window onto two places at once.** The
+    /// fine picture takes a second and a half to come in at the bottom of
+    /// the dive, and a view that moves while it does is a view whose
+    /// finished picture is of somewhere you have already left. What would
+    /// be on the wall is the coarse picture of where you are with a sharp
+    /// one of where you were arriving over the top of it.
+    #[test]
+    fn moving_throws_the_settled_picture_away() {
+        let mut arcade = Arcade::new();
+
+        // settled, where you walked in
+        for _ in 0..200 {
+            arcade.settle();
+
+            if arcade.sharp_view == Some(arcade.view) {
+                break;
+            }
+        }
+
+        assert_eq!(
+            arcade.sharp_view,
+            Some(arcade.view),
+            "the picture never settled at all"
+        );
+
+        // and then an arrow goes down
+        arcade.moving_the_view = true;
+        arcade.view = arcade.view.moved((1.0, 0.0), 0.0, 1.0 / 60.0);
+        arcade.settle();
+
+        assert!(
+            arcade.sharp_view.is_none(),
+            "the settled picture is still on the wall and the view has moved"
+        );
+        assert!(
+            arcade.settling.is_none(),
+            "a settling of the view you have left is still being worked out"
+        );
+    }
+
     /// Where a room's reference lives.
     fn reference(name: &str) -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -9714,6 +10182,51 @@ mod tests {
             "imaginarium",
             vec3(mid.x - 4.5, aloft::BASE + EYE, mid.z + 4.5),
             vec3(mid.x + 1.0, mid.y - 2.0, mid.z - 2.0),
+        );
+    }
+
+    /// Spec 0027: the gallery, from the way in.
+    ///
+    /// **The whole room in one frame, which is the point of it.** Six
+    /// mathematical objects on plinths, and behind them the wall of the
+    /// one that does not stop. Spec 0039 put it there because the three
+    /// fractals in that row are meshes cut off at a fixed depth and this
+    /// is the one that is not, and that reading wants them in one view.
+    #[test]
+    fn the_gallery_is_drawn() {
+        let reaches = reaches();
+        let (at, _) = mandel::panel(reaches);
+
+        looks_right(
+            "gallery",
+            vec3(at.x, EYE, at.z + 5.0),
+            vec3(at.x, at.y - 0.1, at.z),
+        );
+    }
+
+    /// Specs 0027 and 0040: the field, looking back at the building.
+    ///
+    /// **The one picture in this building taken from outside it.** The
+    /// other seven look at a room from in it, which is the only place
+    /// anything here could be looked at from until the field went in. What
+    /// this one is of is the outside, and the outside is where three faults
+    /// lived at once: the garden's walls had no outer face, so you could see
+    /// its pond through them; spec 0010's sky was a blue bubble sitting on
+    /// the roof; and spec 0015's solar system stood above the roofline with
+    /// its planets named, which is a secret you could read from the grass.
+    #[test]
+    fn the_field_is_drawn() {
+        let reaches = reaches();
+        let at = vec3(field::starts(reaches) - 18.0, 0.0, garden::at(reaches).z);
+
+        looks_right(
+            "field",
+            at,
+            vec3(
+                field::starts(reaches) + 30.0,
+                EYE + 3.0,
+                garden::at(reaches).z,
+            ),
         );
     }
 

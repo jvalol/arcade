@@ -813,10 +813,17 @@ pub fn up_shaft() -> Vec<Aabb> {
     let wells = up_plan();
     let mut out = Vec::new();
 
-    // **Inside the ceiling's own thickness.** Level with the bars'
-    // underside the shaft speckled against them; below it, it hung across
-    // the hall as a beam. The shaft's number, said where the shaft is.
-    let under = crate::room::soffit() + crate::room::CEIL_DROP * 0.4;
+    // **Inside a tile's own thickness.** Level with the bars' underside the
+    // shaft speckled against them, and level with the tiles' it speckles
+    // against those, so it begins between the two faces a tile has, where
+    // it is hidden and shares a plane with nothing.
+    //
+    // **From the tiles and not from the bars.** This was `soffit` plus a
+    // share of the drop, which is eleven millimetres under the tiles, and
+    // the shaft hung that far below the hall's ceiling the whole length of
+    // the second flight: a pale slab in the one ceiling spec 0012 made
+    // worth looking up at. The height a tile hangs at is `room`'s to say.
+    let under = crate::room::tile_middle();
 
     for (n, well) in wells.iter().enumerate() {
         let (low, high) = (vec3(well.min.x, under, well.min.z), well.max);
@@ -1773,13 +1780,19 @@ mod tests {
             );
         }
 
+        // **Against the tiles and not against the soffit.** `soffit` is
+        // the bars' underside, eleven millimetres below the tiles, so a
+        // shaft that hung under the hall's ceiling the whole length of the
+        // second flight passed this and the beam was on screen anyway. A
+        // test that measures the wrong surface passes for the wrong
+        // reason.
         for (n, wall) in up_shaft().iter().enumerate() {
             assert!(
-                wall.min.y >= crate::room::soffit() - 1e-4,
+                wall.min.y >= crate::room::tile_under() - 1e-4,
                 "piece {} of the shaft starts at {:.4}, under the tiles at {:.4}",
                 n,
                 wall.min.y,
-                crate::room::soffit()
+                crate::room::tile_under()
             );
         }
     }
