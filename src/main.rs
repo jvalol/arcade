@@ -157,6 +157,56 @@ fn staged() -> bool {
     std::env::args().any(|arg| arg.starts_with("--screenshot"))
 }
 
+/// Whether this run flies rather than walks. `FLY=1`.
+///
+/// **Because the slow part of finding a fault in this building is getting to
+/// where you can see it.** `WHERE` solved the other half of that, which is
+/// matching a picture to a camera; this is the half where the place you need
+/// to stand is the roof, or the air fifteen metres west of a wall, or inside
+/// a room you cannot walk into. Everything the outside of this building
+/// needed in one sitting was found by posing a camera in a test and
+/// rendering it, four or five rounds apiece.
+///
+/// Flight is the walk with the three things taken out that make it a walk:
+/// gravity, the body's radius, and the floor. You go where you are looking,
+/// so the pitch flies you up and down.
+///
+/// **The rooms will pop.** Seven things in here are decided by which room
+/// the building thinks you are standing in, and all of them assume you are
+/// in exactly one: fly out through a wall and the room behind you stops
+/// being drawn, fly over the hall's end wall and spec 0015's solar system
+/// appears, which is the gate that keeps it a secret. That is the price of
+/// this being twenty lines instead of a rework of all seven, and it is the
+/// right price for a tool whose job is to let you look at a thing.
+///
+/// The one gate flight does open is the field's, because a tool for looking
+/// at the outside of a building that draws no ground and no sky the moment
+/// you leave the grass is not a tool.
+fn flying() -> bool {
+    std::env::var("FLY").is_ok()
+}
+
+/// Where flight takes you: along `wish`, at `FLIES` times the pace, through
+/// whatever is in the way.
+///
+/// Named rather than written inline at the one place it is used, because
+/// what it leaves out is the whole of it and a test can only read the
+/// leaving out if there is something to call.
+fn flown(at: Vec3, wish: Vec3, pace: f32, dt: f32) -> Vec3 {
+    if wish.length_squared() > 1e-6 {
+        at + wish.normalize() * pace * FLIES * dt
+    } else {
+        at
+    }
+}
+
+/// How much faster flight is than the walk.
+///
+/// Four, which at `SPEED` is seventeen metres a second. The building is three
+/// hundred and twenty metres of field across and two kilometres of corridor
+/// along, so a flight paced like a walk is a tool you stop reaching for.
+pub const FLIES: f32 = 4.0;
+
 /// Whether the staged shot is the hall's rather than the system's.
 ///
 /// `--screenshot` stages what `media/screenshot.png` actually holds, which is
@@ -1792,7 +1842,7 @@ impl Arcade {
         // metres wide and what is through it is a hundred and sixty metres
         // of ground. Drawn only from out in the field, the gap was a black
         // rectangle in a garden wall.
-        if !field::in_view(reaches, &self.room.solid(), self.at) {
+        if !flying() && !field::in_view(reaches, &self.room.solid(), self.at) {
             return;
         }
 
@@ -5891,12 +5941,18 @@ impl Game for Arcade {
         self.globe.advance(dt);
 
         let mut wish = Vec3::ZERO;
+        // where you are looking rather than where you are facing, when the
+        // thing you are doing is flying: the pitch is the only way up there
+        // is, and a flight that only goes along the ground is a walk that
+        // ignores walls.
+        let flight = flying();
+        let ahead = if flight {
+            self.facing()
+        } else {
+            self.forward()
+        };
         let right = self.forward().cross(Vec3::Y);
-        for (held, way) in self
-            .walking
-            .iter()
-            .zip([self.forward(), -self.forward(), -right, right])
-        {
+        for (held, way) in self.walking.iter().zip([ahead, -ahead, -right, right]) {
             if *held {
                 wish += way;
             }
@@ -5942,16 +5998,27 @@ impl Game for Arcade {
         }
 
         let riding = self.riding();
-        let (at, falling) = self.gone(wish, pace, dt);
+        let (at, falling) = if flight {
+            (flown(self.at, wish, pace, dt), 0.0)
+        } else {
+            self.gone(wish, pace, dt)
+        };
         // the ride is not walking, so it takes no steps. Spec 0004 reads this
         // for the footfalls and `went` is all it reads.
-        let went = if riding {
+        let went = if riding || flight {
             0.0
         } else {
             (at - self.at).length() / dt.max(1e-4)
         };
         // what the climb cost, and the budget filling back up
-        self.climbs = (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0);
+        // and a climb costs nothing in the air, or a flight up to the roof
+        // spends a budget meant for stairs and you land unable to climb one
+        // for the next four seconds.
+        self.climbs = if flight {
+            0.0
+        } else {
+            (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0)
+        };
         self.at = at;
         self.falling = falling;
 
@@ -9940,6 +10007,72 @@ mod tests {
         // left out of them, which also means a reference does not change
         // when a line of help does.
         Some(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()))
+    }
+
+    /// Spec 0041: flight goes the whole way with the building in the way.
+    ///
+    /// **Against the same walk with the colliders taken out, not against a
+    /// landmark.** Held against a line on the floor the first build passed
+    /// with nothing in the way at all, because the start it chose faced the
+    /// garden's way in and the walk went straight through it. And held
+    /// against the flight it passed with the colliders gone, because flight
+    /// is four times the pace and gets further whatever is there. What is
+    /// actually being claimed is that one of these is stopped and the other
+    /// goes its full distance, so that is what is asked.
+    #[test]
+    fn flying_goes_through_what_walking_does_not() {
+        let room = room::Room::of(games());
+        let solid = room.solid();
+        let start = room.doorway();
+        // east, into the hall's own end wall. West is the garden's way in.
+        let wish = Vec3::X;
+        let (step, pace, rounds) = (1.0 / 60.0, SPEED, 180);
+
+        let mut flew = start;
+        let walked = |solid: &[blitzkit::collision::Aabb]| {
+            let (mut at, mut falling) = (start, 0.0);
+
+            for _ in 0..rounds {
+                let (next, fell) = walk::walk(at, wish * pace, falling, RADIUS, step, solid, true);
+                at = next;
+                falling = fell;
+            }
+
+            at
+        };
+
+        for _ in 0..rounds {
+            flew = flown(flew, wish, pace, step);
+        }
+
+        let (stopped, free) = (walked(&solid), walked(&[]));
+        let whole = pace * FLIES * step * rounds as f32;
+
+        assert!(
+            ((flew - start).length() - whole).abs() < 1e-2,
+            "flight went {:.2} of {:.2}",
+            (flew - start).length(),
+            whole
+        );
+        assert!(
+            (free - stopped).length() > 1.0,
+            "nothing stopped the walk: {:.2} against {:.2}",
+            stopped.x,
+            free.x
+        );
+    }
+
+    /// And it goes where you are looking, up and down included, which is the
+    /// only way up there is.
+    #[test]
+    fn flying_follows_the_pitch() {
+        let (step, pace) = (1.0 / 60.0, SPEED);
+        let up = vec3(0.0, 0.6, -0.8);
+        let flew = flown(Vec3::ZERO, up, pace, step);
+
+        assert!((flew.length() - pace * FLIES * step).abs() < 1e-4);
+        assert!(flew.y > 0.0, "looking up flew you to {:.3}", flew.y);
+        assert_eq!(flown(Vec3::ZERO, Vec3::ZERO, pace, step), Vec3::ZERO);
     }
 
     /// Spec 0029: every drawn door has its number on it, wherever you stand.
