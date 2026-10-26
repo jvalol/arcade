@@ -235,12 +235,20 @@ centimetres of stone across the opening of each, because those doorways begin
 exactly at that face. A garden wall has two outsides and this one has a roof
 on its inside.
 
-**And those two doorways are the lanterns.** A closed recess behind a hole in
-a ceiling is a box standing on the roof, and there they were in the pale
-stone of the room's inside, two crates somebody had left. `aloft::lanterns`
-takes the bounds of the recess itself rather than writing the box out again,
-and they are plastered like the mass with a capstone apiece, which is the
-parapet's course on a smaller plan.
+**And all six of those doorways stand outside the shell.** A closed recess
+behind a hole is a box on the far side of the wall it is cut into, so the two
+in the ceiling are crates on the roof and the four in the walls are bays off
+them, and all six were out there in the pale stone of the room's inside.
+`aloft::jutting` takes the bounds of the recess itself rather than writing the
+box out again. Each gets plaster on its four faces that are neither buried in
+the wall nor on top, and stone over the top: a capstone on a lantern, a hood
+on a bay, the parapet's course on a smaller plan either way. The underside of
+a bay is as much on show as its front from a field fifteen metres below, which
+is the face that would have been forgotten.
+
+Which of the box's three extents a quad is scaled by depends on which way the
+quad was turned to face, and worked out at the call it is the third slot that
+gets it wrong, silently. `room::quad_on` is the one account of it.
 
 **Both faults in the parapet came from the engine and not from looking at
 it.** `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
@@ -404,6 +412,8 @@ eight metres inside the building.
   clear. — `aloft::outside_tests::the_cope_is_clear_of_what_stands_on_the_roof`
 - Nothing drawn out there shares a plane with anything drawn in
   here. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
+- And nothing of the room stands outside its own shell
+  undressed. — `aloft::outside_tests::everything_outside_the_shell_is_dressed`
 
 ### Verified by hand
 

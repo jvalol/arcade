@@ -400,6 +400,25 @@ pub fn laid_on(looks: Vec3) -> glam::Quat {
     }
 }
 
+/// How big to make a quad `laid_on(looks)` so it covers a box face of
+/// `size`.
+///
+/// The quad lies in its own x and z with its normal up, so which of the
+/// box's three extents goes in which slot depends on where that turn sent
+/// them: a face looking along x is scaled by the box's z and its y, one
+/// looking along z by its x and its y, and one looking up or down by its x
+/// and its z. Worked out at the call rather than here, it is the third
+/// slot that gets it wrong, and it gets it wrong silently.
+pub fn quad_on(size: glam::Vec3, looks: Vec3) -> Vec3 {
+    if looks.y.abs() > 0.5 {
+        vec3(size.x, 1.0, size.z)
+    } else if looks.x.abs() > 0.5 {
+        vec3(size.z, 1.0, size.y)
+    } else {
+        vec3(size.x, 1.0, size.y)
+    }
+}
+
 /// Which way to turn a quad so its one face looks the way a cabinet does.
 pub fn turned_to(facing: Vec3) -> glam::Quat {
     glam::Quat::from_rotation_y(if facing.x >= 0.0 {

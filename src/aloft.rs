@@ -167,29 +167,30 @@ pub fn coping() -> Vec<(Vec3, Vec3)> {
     boxes
 }
 
-/// What stands on that roof: the two doorways spec 0038 puts in this
-/// room's ceiling, boxed in, which from the field are lanterns.
+/// What stands outside this room's shell: every one of spec 0038's six
+/// doorways, boxed in, with the way it points.
 ///
-/// A way out on all six faces of a cube means two of them point up, and a
-/// closed recess behind a doorway in the ceiling is a box standing on the
-/// roof. Nothing had ever looked at the roof, so they were up there in the
-/// pale stone of the room's inside, reading as two crates somebody left.
-pub fn lanterns() -> Vec<Aabb> {
+/// A way out on all six faces of a cube and a closed recess behind each
+/// means six boxes standing off the outside of it, two on the roof and
+/// four on the walls. Nothing had ever looked at the outside, so all six
+/// were out there in the pale stone of the room's inside: the two on the
+/// roof read as crates somebody had left and the four on the walls as
+/// nothing at all.
+pub fn jutting() -> Vec<(Aabb, Vec3)> {
     let mut out = Vec::new();
 
     for n in 0..FRAMES {
         for which in 0..DOORS {
             let hole = doorway(n, which);
             let (axis, sign) = door_faces(&hole);
-
-            if axis != 1 || sign < 0.0 {
-                continue;
-            }
+            let mut looks = Vec3::ZERO;
+            looks[axis] = sign;
 
             // the recess is a back and four sides, and the whole of it is
-            // the lantern: taking its bounds rather than writing the box
-            // out again, because the recess is what is actually up there
-            // and a second account of it would drift from the first.
+            // what stands out there: taking its bounds rather than writing
+            // the box out again, because the recess is what is actually
+            // outside and a second account of it would drift from the
+            // first.
             let whole = door_recess(n, which)
                 .into_iter()
                 .fold(None::<Aabb>, |all, box_| {
@@ -200,63 +201,68 @@ pub fn lanterns() -> Vec<Aabb> {
                 })
                 .expect("a back and four sides");
 
-            out.push(whole);
+            out.push((whole, looks));
         }
     }
 
     out
 }
 
-/// Their outward faces, four to a lantern, as (face, which way it looks),
-/// the way `outside` gives the mass's.
+/// The faces of those that want plaster, four apiece, as (face, which way
+/// it looks), the way `outside` gives the mass's.
+///
+/// Every face but two: the one against the wall it comes out of, which is
+/// buried, and the one on top, which gets stone. For the two on the roof
+/// that leaves the four sides; for the four on the walls it leaves the far
+/// end, the two cheeks and the underside, which is as much on show as any
+/// of them from a field fifteen metres below.
 ///
 /// The recess's four sides leave the corners of the ring open, which is
 /// what a ring of four boxes does and has never mattered inside a wall. A
 /// quad across the whole face covers them.
-pub fn lantern_faces() -> Vec<(Aabb, Vec3)> {
+pub fn jutting_faces() -> Vec<(Aabb, Vec3)> {
     let mut out = Vec::new();
 
-    for lantern in lanterns() {
-        let (middle, size) = (lantern.center(), lantern.size());
+    for (whole, points) in jutting() {
+        for looks in [-Vec3::X, Vec3::X, -Vec3::Y, Vec3::Y, -Vec3::Z, Vec3::Z] {
+            if looks == Vec3::Y || looks == -points {
+                continue;
+            }
 
-        for looks in [-Vec3::X, Vec3::X, -Vec3::Z, Vec3::Z] {
-            let on = middle + looks * (size * 0.5);
-            let along = if looks.x.abs() > 0.5 {
-                vec3(0.0, 0.0, size.z * 0.5)
-            } else {
-                vec3(size.x * 0.5, 0.0, 0.0)
-            };
+            let (mut low, mut high) = (whole.min, whole.max);
 
-            out.push((
-                Aabb::new(
-                    vec3(on.x - along.x, lantern.min.y, on.z - along.z),
-                    vec3(on.x + along.x, lantern.max.y, on.z + along.z),
-                ),
-                looks,
-            ));
+            for k in 0..3 {
+                if looks[k] > 0.5 {
+                    low[k] = high[k];
+                } else if looks[k] < -0.5 {
+                    high[k] = low[k];
+                }
+            }
+
+            out.push((Aabb::new(low, high), looks));
         }
     }
 
     out
 }
 
-/// And the capstone over one, which is the parapet's course on a smaller
-/// plan: one slab, oversailing, with no roll on it. A roll on a lantern two
-/// and a half metres across is a third course on a thing eighty centimetres
-/// high.
+/// And the stone over the top of one: a capstone on a lantern, a hood on a
+/// bay, and the parapet's course on a smaller plan either way. One slab,
+/// oversailing, with no roll on it, because a roll on a thing eighty
+/// centimetres high is a third course.
 ///
 /// The dashed line under the oversail is older than any of this and is on
 /// the compound wall's cope in the same frame. Not the sun's shadow map,
 /// which was the first guess: shrinking that map from a hundred and sixty
 /// metres to thirty changes the line by nothing at all.
-pub fn lantern_cap(lantern: &Aabb) -> (Vec3, Vec3) {
+pub fn jutting_cap(whole: &Aabb) -> (Vec3, Vec3) {
     use crate::garden::{COPE_DEEP, COPE_OUT};
 
-    let middle = lantern.center();
-    let size = lantern.size();
+    let middle = whole.center();
+    let size = whole.size();
 
     (
-        vec3(middle.x, lantern.max.y + COPE_DEEP * 0.5, middle.z),
+        vec3(middle.x, whole.max.y + COPE_DEEP * 0.5, middle.z),
         vec3(size.x + COPE_OUT * 2.0, COPE_DEEP, size.z + COPE_OUT * 2.0),
     )
 }
@@ -1314,7 +1320,7 @@ mod tests {
         drawn.extend(
             coping()
                 .into_iter()
-                .chain(lanterns().iter().map(lantern_cap))
+                .chain(jutting().iter().map(|(whole, _)| jutting_cap(whole)))
                 .map(|(middle, size)| Aabb::new(middle - size * 0.5, middle + size * 0.5)),
         );
 
@@ -2254,6 +2260,43 @@ mod outside_tests {
                 x,
                 z,
                 HALF
+            );
+        }
+    }
+
+    /// And nothing of this room stands outside its own shell undressed.
+    /// Spec 0038's six doorways all do, which is the point of `jutting`;
+    /// anything else out there is bare stone nobody has looked at, which
+    /// is what all six were.
+    #[test]
+    fn everything_outside_the_shell_is_dressed() {
+        let foot = footprint();
+        let out: Vec<Aabb> = solid()
+            .into_iter()
+            .filter(|box_| {
+                box_.min.x < foot.min.x - 1e-3
+                    || box_.max.x > foot.max.x + 1e-3
+                    || box_.min.z < foot.min.z - 1e-3
+                    || box_.max.z > foot.max.z + 1e-3
+                    || box_.max.y > tops() + 1e-3
+            })
+            .collect();
+
+        assert_eq!(out.len(), 30, "five boxes to a recess and six recesses");
+
+        let dressed = jutting();
+
+        assert_eq!(dressed.len(), 6, "a way out on all six faces");
+        assert_eq!(jutting_faces().len(), 24, "four plastered faces apiece");
+
+        for box_ in out {
+            assert!(
+                dressed.iter().any(|(whole, _)| {
+                    whole.min.cmple(box_.min + 1e-3).all() && whole.max.cmpge(box_.max - 1e-3).all()
+                }),
+                "{:?}..{:?} stands outside and is in nothing that is dressed",
+                box_.min,
+                box_.max
             );
         }
     }
