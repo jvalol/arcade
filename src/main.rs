@@ -6088,7 +6088,15 @@ impl Game for Arcade {
         // times, since the drawing, the far plane and the sky itself all
         // want the same answer and each was building the whole collider
         // list to get it.
-        self.outdoors = self.room.out_of_doors(self.looking_from());
+        //
+        // **Except out past the door, where there is no roof either and it
+        // is not a field.** Spec 0018's floor runs eleven kilometres into
+        // the dark and nothing stands over any of it, so asked of the roof
+        // alone that room is out of doors: the staged shot of Saturn came
+        // back with a green horizon and a cloudy sky behind it. `afoot` was
+        // false out there, which is the half of the old question that was
+        // doing this work and the half I replaced.
+        self.outdoors = !self.in_the_deep() && self.room.out_of_doors(self.looking_from());
 
         self.mind_the_threshold();
 
