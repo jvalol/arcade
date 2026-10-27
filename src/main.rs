@@ -10190,6 +10190,19 @@ impl Step {
         }
     }
 
+    /// How far this asks you to walk, in metres.
+    ///
+    /// Nought for anything that is not a held walking key. Shift is not in
+    /// the grammar and there is no way to hold it from a script, so the
+    /// pace is always the walking one.
+    fn walks_for(&self) -> f32 {
+        if self.walking.iter().any(|held| *held) {
+            SPEED * self.held
+        } else {
+            0.0
+        }
+    }
+
     /// And how far it moved it.
     fn moved(&self, was: (f32, f32), is: (f32, f32)) -> f32 {
         if self.looking[2] || self.looking[3] {
@@ -10296,11 +10309,13 @@ fn walked(route: &str) -> bool {
     let dt = 1.0 / 60.0;
     let mut when = 0.0;
     let mut eaten = Vec::new();
+    let mut stuck = Vec::new();
 
     one.seen = one.what_i_see();
 
     for (n, step) in steps.iter().enumerate() {
         let was = (one.yaw, one.pitch);
+        let from = one.at;
 
         if step.works {
             one.use_what_i_see();
@@ -10326,6 +10341,16 @@ fn walked(route: &str) -> bool {
         // of the hold rather than a judgement about how much is enough
         let swallowed = asks_for > 0.01 && moved < asks_for * 0.9;
 
+        let walks_for = step.walks_for();
+        let covered = one.at.distance(from);
+        // half, and that is a wide gate on purpose. A walk down a corridor
+        // keeps all of its ground, a walk that grazes a jamb or a doorway
+        // loses a few per cent of it, and a walk that is stopped dead keeps
+        // whatever it had covered before it met the thing. The one this was
+        // written for covered 4.3 metres of the 11.5 it asked for, and the
+        // thinnest honest walk in the same route covered 95 per cent.
+        let stopped = walks_for > 0.01 && covered < walks_for * 0.5;
+
         println!(
             "{:6.2}s  {:22}  at {:7.2} {:7.2}  facing {:6.1}  sees {}{}",
             when,
@@ -10337,32 +10362,29 @@ fn walked(route: &str) -> bool {
                 Some(seen) => format!("{:?}", seen),
                 None => String::from("nothing"),
             },
-            if swallowed { "  SWALLOWED" } else { "" },
+            match (swallowed, stopped) {
+                (true, _) => "  SWALLOWED",
+                (false, true) => "  STOPPED",
+                (false, false) => "",
+            },
         );
 
         if swallowed {
             eaten.push(n);
         }
+
+        if stopped {
+            stuck.push((n, covered, walks_for));
+        }
     }
 
-    let faults: Vec<_> = eaten
+    let faults: Vec<usize> = eaten
         .iter()
-        .filter(|n| steps[*n + 1..].iter().any(|step| !step.is_a_wait()))
+        .copied()
+        .filter(|n| steps[n + 1..].iter().any(|step| !step.is_a_wait()))
         .collect();
 
-    if faults.is_empty() {
-        match eaten.last() {
-            Some(n) => println!(
-                "{} goes into what you are looking at, and the route ends there",
-                steps[*n].said
-            ),
-            None => println!("every turn in this route turns you"),
-        }
-
-        return true;
-    }
-
-    for n in faults {
+    for n in &faults {
         let after = steps[*n + 1..].iter().filter(|s| !s.is_a_wait()).count();
 
         println!(
@@ -10374,7 +10396,26 @@ fn walked(route: &str) -> bool {
         );
     }
 
-    false
+    for (n, covered, asked) in &stuck {
+        println!(
+            "{} covers {:.1} of the {:.1} metres it asks for, so something stopped you",
+            steps[*n].said, covered, asked
+        );
+    }
+
+    if !faults.is_empty() || !stuck.is_empty() {
+        return false;
+    }
+
+    match eaten.last() {
+        Some(n) => println!(
+            "{} goes into what you are looking at, and the route ends there",
+            steps[*n].said
+        ),
+        None => println!("every turn in this route turns you, and every walk goes somewhere"),
+    }
+
+    true
 }
 
 fn main() {
@@ -10447,6 +10488,32 @@ mod tests {
         assert!(
             walked("hold:w:3.1 hold:left:0.22 hold:w:1.6 hold:left:0.44 hold:w:0.96"),
             "a route with nothing in its way was refused"
+        );
+    }
+
+    /// Spec 0042: and a walk that something stops is a fault of its own.
+    ///
+    /// A turn that does not happen was the first way a staged route could
+    /// lie about where the camera goes. A walk that does not go is the
+    /// other, and it was found the same way: the threshold out of the
+    /// hotel's lobby stops you dead on one heading and lets you through on
+    /// both of the ones either side of it, and nothing in the trace said
+    /// so. This one walks the gallery into its own end wall, so it asks for
+    /// eighty-four metres and keeps twenty-one.
+    #[test]
+    fn a_walk_a_wall_stops_is_a_fault() {
+        assert!(
+            !walked("hold:w:20.0"),
+            "a walk that spent most of itself against a wall was let through"
+        );
+    }
+
+    /// And the control, which is the same walk with room to finish in.
+    #[test]
+    fn a_walk_with_room_to_finish_is_let_through() {
+        assert!(
+            walked("hold:w:4.0"),
+            "a walk with nothing in its way was refused"
         );
     }
 
