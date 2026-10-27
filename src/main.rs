@@ -1297,6 +1297,119 @@ impl Arcade {
         true
     }
 
+    /// What the sight is on, which decides what `enter` works and which of
+    /// the arrows are yours to turn with.
+    ///
+    /// **Nothing in the building is in front of you while you are in the
+    /// tesseract**, and this asked the building anyway. `looking_at` reads
+    /// the hall's cabinets and plinths against wherever you are standing,
+    /// and a cell's coordinates are not the hall's, so a cell three steps
+    /// from the plinth once sat a cabinet's prompt on a wall: slider,
+    /// click or press enter to play, in a room with nothing in it.
+    ///
+    /// Its own method because `--walk` has to ask the same question between
+    /// frames, and a replay that answered it differently would be checking
+    /// a building nobody walks.
+    fn what_i_see(&self) -> Option<room::Seen> {
+        if self.inside.is_some() {
+            None
+        } else {
+            self.room.looking_at(self.looking_from(), self.facing())
+        }
+    }
+
+    /// The aiming and the moving of one frame.
+    ///
+    /// **Pulled out of `update` rather than copied.** `--walk` replays a
+    /// staged route against this to say whether every turn in it actually
+    /// happens, and a second copy of these forty lines would pass a route
+    /// that the game then walks differently. It reads the held keys off the
+    /// struct, so the only thing a replay has to do is put them there.
+    ///
+    /// Gives back how fast you went, which the footsteps want.
+    fn aimed_and_moved(&mut self, dt: f32) -> f32 {
+        let mut wish = Vec3::ZERO;
+        // where you are looking rather than where you are facing, when the
+        // thing you are doing is flying: the pitch is the only way up there
+        // is, and a flight that only goes along the ground is a walk that
+        // ignores walls.
+        let flight = flying();
+        let ahead = if flight {
+            self.facing()
+        } else {
+            self.forward()
+        };
+        let right = self.forward().cross(Vec3::Y);
+        for (held, way) in self.walking.iter().zip([ahead, -ahead, -right, right]) {
+            if *held {
+                wish += way;
+            }
+        }
+
+        let pace = self.pace();
+
+        // the arrows turn and tilt you. Yaw nought faces -z and grows toward
+        // +x, which is your right, so the right arrow adds.
+        let up = f32::from(self.looking[0]) - f32::from(self.looking[1]);
+        let right = f32::from(self.looking[3]) - f32::from(self.looking[2]);
+
+        // **All four arrows go into the panel while the sight is on it**,
+        // the way they go into a toy on a bench. Shift and up or down
+        // changes the scale, and the plain arrows move about the plane.
+        // Spec 0039.
+        //
+        // **All four, which is the fix.** Left and right went into the
+        // panel and kept turning you as well, and turning takes the sight
+        // off the panel, so a pan stopped within a frame of starting. From
+        // the floor that is a window that only scrolls up and down, which
+        // is how Jake found it.
+        let diving = self.seen == Some(room::Seen::Mandel);
+        let (turn, tilt) = if diving {
+            self.moving_the_view = up != 0.0 || right != 0.0;
+            self.view = if self.shifted {
+                self.view.moved((0.0, 0.0), up as f64, dt)
+            } else {
+                self.view.moved((right as f64, up as f64), 0.0, dt)
+            };
+
+            (0.0, 0.0)
+        } else {
+            self.moving_the_view = false;
+            (right, up)
+        };
+        if turn != 0.0 || tilt != 0.0 {
+            self.yaw += turn * TURNS * dt;
+            self.pitch = (self.pitch + tilt * TILTS * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        }
+
+        let riding = self.riding();
+        let (at, falling) = if flight {
+            (flown(self.at, wish, pace, dt), 0.0)
+        } else {
+            self.gone(wish, pace, dt)
+        };
+        // the ride is not walking, so it takes no steps. Spec 0004 reads this
+        // for the footfalls and `went` is all it reads.
+        let went = if riding || flight {
+            0.0
+        } else {
+            (at - self.at).length() / dt.max(1e-4)
+        };
+        // what the climb cost, and the budget filling back up
+        // and a climb costs nothing in the air, or a flight up to the roof
+        // spends a budget meant for stairs and you land unable to climb one
+        // for the next four seconds.
+        self.climbs = if flight {
+            0.0
+        } else {
+            (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0)
+        };
+        self.at = at;
+        self.falling = falling;
+
+        went
+    }
+
     /// Whether you are standing in the pool.
     ///
     /// Over it and under its surface. Over it alone is standing on the coping
@@ -6142,87 +6255,10 @@ impl Game for Arcade {
         self.gyro.advance(dt);
         self.globe.advance(dt);
 
-        let mut wish = Vec3::ZERO;
-        // where you are looking rather than where you are facing, when the
-        // thing you are doing is flying: the pitch is the only way up there
-        // is, and a flight that only goes along the ground is a walk that
-        // ignores walls.
-        let flight = flying();
-        let ahead = if flight {
-            self.facing()
-        } else {
-            self.forward()
-        };
-        let right = self.forward().cross(Vec3::Y);
-        for (held, way) in self.walking.iter().zip([ahead, -ahead, -right, right]) {
-            if *held {
-                wish += way;
-            }
-        }
-
         // in the water you are slower, which is most of what says you are in it
         // rather than beside it. Spec 0008.
         let wading = self.wading();
-        let pace = self.pace();
-
-        // the arrows turn and tilt you. Yaw nought faces -z and grows toward
-        // +x, which is your right, so the right arrow adds.
-        let up = f32::from(self.looking[0]) - f32::from(self.looking[1]);
-        let right = f32::from(self.looking[3]) - f32::from(self.looking[2]);
-
-        // **All four arrows go into the panel while the sight is on it**,
-        // the way they go into a toy on a bench. Shift and up or down
-        // changes the scale, and the plain arrows move about the plane.
-        // Spec 0039.
-        //
-        // **All four, which is the fix.** Left and right went into the
-        // panel and kept turning you as well, and turning takes the sight
-        // off the panel, so a pan stopped within a frame of starting. From
-        // the floor that is a window that only scrolls up and down, which
-        // is how Jake found it.
-        let diving = self.seen == Some(room::Seen::Mandel);
-        let (turn, tilt) = if diving {
-            self.moving_the_view = up != 0.0 || right != 0.0;
-            self.view = if self.shifted {
-                self.view.moved((0.0, 0.0), up as f64, dt)
-            } else {
-                self.view.moved((right as f64, up as f64), 0.0, dt)
-            };
-
-            (0.0, 0.0)
-        } else {
-            self.moving_the_view = false;
-            (right, up)
-        };
-        if turn != 0.0 || tilt != 0.0 {
-            self.yaw += turn * TURNS * dt;
-            self.pitch = (self.pitch + tilt * TILTS * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
-        }
-
-        let riding = self.riding();
-        let (at, falling) = if flight {
-            (flown(self.at, wish, pace, dt), 0.0)
-        } else {
-            self.gone(wish, pace, dt)
-        };
-        // the ride is not walking, so it takes no steps. Spec 0004 reads this
-        // for the footfalls and `went` is all it reads.
-        let went = if riding || flight {
-            0.0
-        } else {
-            (at - self.at).length() / dt.max(1e-4)
-        };
-        // what the climb cost, and the budget filling back up
-        // and a climb costs nothing in the air, or a flight up to the roof
-        // spends a budget meant for stairs and you land unable to climb one
-        // for the next four seconds.
-        self.climbs = if flight {
-            0.0
-        } else {
-            (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0)
-        };
-        self.at = at;
-        self.falling = falling;
+        let went = self.aimed_and_moved(dt);
 
         // the ears, which go where your eye is and point where you look, so
         // everything that comes from somewhere swings as you turn. Spec 0019 of
@@ -6478,17 +6514,7 @@ impl Game for Arcade {
         }
 
         let playing = self.playing.now().map(|name| name.to_string());
-        // **Nothing in the building is in front of you while you are in the
-        // tesseract**, and this asked the building anyway. `looking_at` reads
-        // the hall's cabinets and plinths against wherever you are standing,
-        // and a cell's coordinates are not the hall's, so a cell three steps
-        // from the plinth once sat a cabinet's prompt on a wall: slider,
-        // click or press enter to play, in a room with nothing in it.
-        self.seen = if self.inside.is_some() {
-            None
-        } else {
-            self.room.looking_at(self.looking_from(), self.facing())
-        };
+        self.seen = self.what_i_see();
 
         // walking away lets go. Looking away cannot happen: while you hold one
         // the mouse is turning it rather than the view.
@@ -10129,9 +10155,243 @@ impl Game for Arcade {
     }
 }
 
+/// One key of a staged route, as `refresh-examples` writes them.
+struct Step {
+    said: String,
+    /// w, s, a, d
+    walking: [bool; 4],
+    /// up, down, left, right
+    looking: [bool; 4],
+    works: bool,
+    held: f32,
+}
+
+impl Step {
+    /// A step that only lets time pass, which is a bare number in the route.
+    fn is_a_wait(&self) -> bool {
+        !self.works && self.walking == [false; 4] && self.looking == [false; 4]
+    }
+
+    /// How far this asks the view to move, in radians.
+    ///
+    /// Nought for anything that is not a held arrow, and for a tilt it is
+    /// what is left before the pitch stops rather than the whole hold: an
+    /// arrow held into the limit moves less than it asked for and is not
+    /// being swallowed by anything.
+    fn asks_for(&self, pitch: f32) -> f32 {
+        if self.looking[2] || self.looking[3] {
+            TURNS * self.held
+        } else if self.looking[0] {
+            (TILTS * self.held).min(PITCH_LIMIT - pitch)
+        } else if self.looking[1] {
+            (TILTS * self.held).min(PITCH_LIMIT + pitch)
+        } else {
+            0.0
+        }
+    }
+
+    /// And how far it moved it.
+    fn moved(&self, was: (f32, f32), is: (f32, f32)) -> f32 {
+        if self.looking[2] || self.looking[3] {
+            (is.0 - was.0).abs()
+        } else {
+            (is.1 - was.1).abs()
+        }
+    }
+}
+
+/// Which slot a key fills, and whether it is an arrow.
+fn slotted(key: &str) -> Option<(bool, usize)> {
+    match key {
+        "w" => Some((false, 0)),
+        "s" => Some((false, 1)),
+        "a" => Some((false, 2)),
+        "d" => Some((false, 3)),
+        "up" => Some((true, 0)),
+        "down" => Some((true, 1)),
+        "left" => Some((true, 2)),
+        "right" => Some((true, 3)),
+        _ => None,
+    }
+}
+
+/// Reads a route in `refresh-examples`' own grammar.
+///
+/// A key this cannot replay is not an error. Half the examples press letters
+/// that toggle something, and none of those aim or walk, so there is nothing
+/// here to say about them.
+fn read_route(route: &str) -> Result<Vec<Step>, String> {
+    route
+        .split_whitespace()
+        .map(|word| {
+            let mut step = Step {
+                said: word.to_owned(),
+                walking: [false; 4],
+                looking: [false; 4],
+                works: false,
+                held: 0.0,
+            };
+
+            if let Some(rest) = word.strip_prefix("hold:") {
+                let mut bits = rest.split(':');
+                let key = bits.next().unwrap_or_default();
+                let held = bits.next().ok_or(format!("{} says no seconds", word))?;
+
+                step.held = held
+                    .parse()
+                    .map_err(|_| format!("{} does not say how long in seconds", word))?;
+
+                match slotted(key) {
+                    Some((true, n)) => step.looking[n] = true,
+                    Some((false, n)) => step.walking[n] = true,
+                    None => {
+                        return Err(format!("{} holds a key that neither aims nor walks", word))
+                    }
+                }
+            } else if word == "enter" {
+                step.works = true;
+            } else if let Ok(wait) = word.parse::<f32>() {
+                step.held = wait;
+            }
+
+            Ok(step)
+        })
+        .collect()
+}
+
+/// Replays a staged route and says whether every turn in it turns you.
+///
+/// **A turn that does not happen takes the rest of the clip with it.** Spec
+/// 0039's panel swallows all four arrows while the sight is on it, which is
+/// right when you are working the panel and wrong when you are walking past
+/// one. The staged walk met the panel on its way to the hotel: every turn
+/// after that was eaten, the camera walked into the end wall, and the last
+/// nine seconds of the clip published on the 26th of October 2026 are a
+/// fractal with a window pressed against it. It was filmed, looked at and
+/// shipped, and the fault is invisible in any one frame.
+///
+/// So this asks the game. The route lives in the table in `refresh-examples`
+/// and nowhere else, `aimed_and_moved` is the game's own aiming, and
+/// `what_i_see` is the game's own sight, so there is no second account of
+/// any of it to come apart.
+///
+/// **A swallowed arrow is a fault only when a key comes after it.** The
+/// arcade's own route ends by holding one into the panel on purpose, which
+/// is how the clip finishes and the one thing the panel can be filmed doing.
+/// A route is allowed to end that way. It is not allowed to carry on.
+///
+/// What this does not replay is the door easing open and the shove that
+/// keeps you out of its leaf. Neither aims you, and a route that waits on a
+/// door is one nobody has written.
+fn walked(route: &str) -> bool {
+    let steps = match read_route(route) {
+        Ok(steps) => steps,
+        Err(why) => {
+            println!("{}", why);
+            return false;
+        }
+    };
+
+    let mut one = Arcade::new();
+    let dt = 1.0 / 60.0;
+    let mut when = 0.0;
+    let mut eaten = Vec::new();
+
+    one.seen = one.what_i_see();
+
+    for (n, step) in steps.iter().enumerate() {
+        let was = (one.yaw, one.pitch);
+
+        if step.works {
+            one.use_what_i_see();
+        }
+
+        one.walking = step.walking;
+        one.looking = step.looking;
+
+        for _ in 0..(step.held / dt).round() as u32 {
+            one.aimed_and_moved(dt);
+            // after the move, the way `update` has it: the sight a frame
+            // aims by is the one the frame before it left
+            one.seen = one.what_i_see();
+            when += dt;
+        }
+
+        one.walking = [false; 4];
+        one.looking = [false; 4];
+
+        let asks_for = step.asks_for(was.1);
+        let moved = step.moved(was, (one.yaw, one.pitch));
+        // a tenth, which is slack for the clamp and for a frame either side
+        // of the hold rather than a judgement about how much is enough
+        let swallowed = asks_for > 0.01 && moved < asks_for * 0.9;
+
+        println!(
+            "{:6.2}s  {:22}  at {:7.2} {:7.2}  facing {:6.1}  sees {}{}",
+            when,
+            step.said,
+            one.at.x,
+            one.at.z,
+            one.yaw.to_degrees(),
+            match one.seen {
+                Some(seen) => format!("{:?}", seen),
+                None => String::from("nothing"),
+            },
+            if swallowed { "  SWALLOWED" } else { "" },
+        );
+
+        if swallowed {
+            eaten.push(n);
+        }
+    }
+
+    let faults: Vec<_> = eaten
+        .iter()
+        .filter(|n| steps[*n + 1..].iter().any(|step| !step.is_a_wait()))
+        .collect();
+
+    if faults.is_empty() {
+        match eaten.last() {
+            Some(n) => println!(
+                "{} goes into what you are looking at, and the route ends there",
+                steps[*n].said
+            ),
+            None => println!("every turn in this route turns you"),
+        }
+
+        return true;
+    }
+
+    for n in faults {
+        let after = steps[*n + 1..].iter().filter(|s| !s.is_a_wait()).count();
+
+        println!(
+            "{} was swallowed by what you are looking at, and {} key{} after it {} aimed by a turn that never happened",
+            steps[*n].said,
+            after,
+            if after == 1 { "" } else { "s" },
+            if after == 1 { "is" } else { "are" },
+        );
+    }
+
+    false
+}
+
 fn main() {
     // asked what it can photograph rather than told, so the list lives in one
     // place and that place is the game
+    // and walked rather than told, for the same reason: the rule about which
+    // arrows are yours lives in this binary, so the check does too
+    if let Some(route) =
+        std::env::args().find_map(|arg| arg.strip_prefix("--walk=").map(str::to_owned))
+    {
+        if !walked(&route) {
+            std::process::exit(1);
+        }
+
+        return;
+    }
+
     if std::env::args().any(|arg| arg == "--screenshots") {
         for (name, file) in shots() {
             println!("{}\t{}", name, file);
@@ -10146,6 +10406,63 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0042: a staged route may not go on past a turn that was eaten.
+    ///
+    /// The route walks the gallery's centre line until the panel takes the
+    /// sight, which is the thing that happened in October: the left arrow
+    /// goes into the panel instead of turning, and the walk after it is
+    /// aimed by a turn that never happened.
+    #[test]
+    fn a_turn_the_panel_eats_is_a_fault_when_the_route_carries_on() {
+        assert!(
+            !walked("hold:w:4.6 hold:left:0.655 hold:w:1.0"),
+            "a route whose turn was swallowed was let through"
+        );
+    }
+
+    /// And the control, which is the same walk into the same panel with the
+    /// key that came after it taken away.
+    ///
+    /// Ending on the panel is how the clip finishes, so this has to pass or
+    /// the check refuses the one thing the panel can be filmed doing.
+    #[test]
+    fn a_route_may_end_by_holding_an_arrow_into_the_panel() {
+        assert!(
+            walked("hold:w:4.6 hold:up:0.4"),
+            "a route that ends in the panel was refused"
+        );
+
+        // and a rest on the panel after it is still an ending, because a
+        // bare wait has nothing to aim
+        assert!(
+            walked("hold:w:4.6 hold:up:0.4 1.0"),
+            "a route that rests on the panel after the pan was refused"
+        );
+    }
+
+    /// Spec 0042: and a walk that keeps off the panel is nobody's business.
+    #[test]
+    fn a_route_that_stays_out_of_the_panels_reach_is_let_through() {
+        assert!(
+            walked("hold:w:3.1 hold:left:0.22 hold:w:1.6 hold:left:0.44 hold:w:0.96"),
+            "a route with nothing in its way was refused"
+        );
+    }
+
+    /// Spec 0042: a route this cannot read is refused rather than guessed at.
+    ///
+    /// A hold with no seconds on it used to be a hold of nought seconds,
+    /// which is a key that silently does nothing in a clip nobody watches
+    /// closely enough to notice.
+    #[test]
+    fn a_route_this_cannot_read_is_refused() {
+        assert!(!walked("hold:w"), "a hold with no seconds was read anyway");
+        assert!(
+            !walked("hold:q:1.0"),
+            "a hold of a key with no meaning was read anyway"
+        );
+    }
 
     /// How big a room's picture is.
     ///
