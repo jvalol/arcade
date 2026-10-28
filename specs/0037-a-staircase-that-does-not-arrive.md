@@ -228,8 +228,12 @@ The way up:
   room. — `aloft::tests::you_can_walk_up_it`
 - The hall's ceiling has nothing of the way up hanging under
   it. — `aloft::tests::the_way_up_leaves_the_halls_ceiling_alone`
+- And a body pressed into either side of the first flight stays on the
+  stair. — `aloft::tests::you_cannot_walk_off_the_side_of_the_way_up`
+- The landing is at the nook's
+  ceiling. — `aloft::tests::the_landing_is_at_the_nooks_ceiling`
 
-The last of those is the one that had to be aimed twice. The shaft has to
+The ceiling one is the test that had to be aimed twice. The shaft has to
 begin inside the thickness of a ceiling tile: level with the bars it
 speckles against them, level with the tiles it speckles against those, and
 anywhere lower it hangs across the hall as a pale slab the length of the
@@ -238,6 +242,49 @@ from the bars' underside instead, which is eleven millimetres lower. The
 test measured the same wrong surface, so it passed while the slab was on
 screen. `room::tile_under` and `room::tile_middle` are now the one place
 either number is said.
+
+**Seventeen steps up and fifteen on, rather than sixteen each.** Thirty two
+rises over six metres either way, so every step in here is the same step.
+What the split decides is where the landing is.
+
+Sixteen put it at 3.00 and the nook's ceiling is at 3.18, so the second
+flight set off from under that ceiling and had to climb through it. Its
+first two treads hung 0.18 into the room below, in a hole cut in the tiles
+for them, and from the lane underneath that is a wooden soffit coming out of
+the ceiling. The same 0.18 showed as a slot running round the landing,
+between the stair's top and the foot of the shaft. Both were dressed twice,
+with a trim under the landing and then with every tread carried down to it,
+and neither was a dressing fault.
+
+Seventeen puts the landing at 3.1875, inside the thickness of a ceiling
+tile. The second flight starts above the ceiling, nothing hangs under it,
+and the shaft comes down onto the landing rather than stopping short of it.
+Those two heights are worked out apart, one from the stair's own rise and
+one from where spec 0012 hangs its tiles, and they agree to a millimetre, so
+a test holds them together rather than one of them being written in terms of
+the other.
+
+It costs 0.28 at each end: the foot of the flight is a tread further south
+and the arrival a tread further west.
+
+**The first flight has solid sides.** A parapet, standing on the nook's
+floor and stopping a rail's height over each tread, stepped because every
+collider in this building is a box.
+
+Without them the shaft hung from the nook's ceiling at 3.19 and everything
+under it was open air. A body here is a sphere 0.9 across sitting on your
+feet, so on the twelfth tread its middle is at 2.70, under the bottom edge
+of the lowest wall there was, and pressing sideways took it under that edge
+and off into a three metre drop. Jake walked into it twice. The arithmetic
+was never wrong: every wall was where the plan said, and what was missing
+was anything between the lowest wall and the floor.
+
+**A parapet and not a wall to the ceiling.** Both stop the fall, and the
+wall was built first. It also stands between the lane and the stair, and
+that lane is the one view this building has of its own staircase: the
+nook's two reference pictures both came back as a grey slab and both
+cameras had to move to see round it. A metre over the treads you look over
+the sides at a flight of stairs.
 
 ## What it is waiting on
 

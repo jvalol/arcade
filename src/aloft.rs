@@ -797,8 +797,8 @@ pub fn walking(since: f32) -> Vec<Walker> {
 
 // ---- the way up ----
 
-/// How wide a flight is, how deep one tread, how many treads to a flight and
-/// how many flights there are. Spec 0037.
+/// How wide a flight is, how deep one tread, and how many treads there are
+/// in each of the two. Spec 0037.
 ///
 /// **A dog-leg, because every collider in this building is a box.** A spiral
 /// was drawn first: a wedge-shaped tread's bounding box is most of a
@@ -807,16 +807,34 @@ pub fn walking(since: f32) -> Vec<Walker> {
 /// other end, where nested treads gave a flight four legal rises and no way
 /// out of it. Two straight runs at right angles is what a box describes
 /// exactly.
+///
+/// **Seventeen up and fifteen on, rather than sixteen each.** Thirty two
+/// rises over six metres either way, so every step in here is the same
+/// step; what the split decides is where the landing is. Sixteen put it at
+/// 3.00 and the nook's ceiling is at 3.18, so the second flight set off
+/// from under that ceiling and had to climb through it: its first two
+/// treads hung 0.18 into the room below, in a hole cut in the tiles for
+/// them, and from the lane underneath that is a wooden soffit coming out
+/// of the ceiling. Dressing it was tried twice and it is not a dressing
+/// fault.
+///
+/// Seventeen puts the landing at 3.1875, which is inside the thickness of
+/// a ceiling tile. The second flight starts above the ceiling, nothing
+/// hangs under it, and the shaft round it comes down onto the landing
+/// instead of stopping a slot short of it. Those two heights are arrived
+/// at separately and agree to a millimetre, so
+/// `tests::the_landing_is_at_the_nooks_ceiling` holds them together.
 pub const UP_WIDE: f32 = 1.2;
 pub const UP_GOING: f32 = 0.28;
-pub const UP_STEPS: u64 = 16;
-pub const UP_FLIGHTS: u64 = 2;
+pub const UP_STEPS: u64 = 17;
+pub const UP_STEPS_ON: u64 = 15;
 
-/// And what falls out of those: one tread's rise, one flight's run, and the
-/// height of the landing between them.
-pub const UP_RISE: f32 = BASE / (UP_FLIGHTS * UP_STEPS) as f32;
+/// And what falls out of those: one tread's rise, the run of each flight,
+/// and the height of the landing between them.
+pub const UP_RISE: f32 = BASE / (UP_STEPS + UP_STEPS_ON) as f32;
 pub const UP_RUN: f32 = UP_GOING * UP_STEPS as f32;
-pub const UP_HALFWAY: f32 = BASE / UP_FLIGHTS as f32;
+pub const UP_RUN_ON: f32 = UP_GOING * UP_STEPS_ON as f32;
+pub const UP_LANDING: f32 = UP_RISE * UP_STEPS as f32;
 
 /// How much room a flight leaves over your head before the thing above it
 /// has to be opened.
@@ -875,7 +893,7 @@ pub fn up_foot() -> f32 {
 
 /// Where the second flight leaves off, which is where you step into the room.
 pub fn up_arrival() -> f32 {
-    up_west() + UP_WIDE + UP_RUN
+    up_west() + UP_WIDE + UP_RUN_ON
 }
 
 /// Every tread of both flights, and the landing they turn on.
@@ -906,35 +924,29 @@ pub fn up_treads() -> Vec<Aabb> {
     // in a plane stop you dead, and `walk` reports nothing at all.
     out.push(Aabb::new(
         vec3(west, -THICK, head - UP_GOING),
-        vec3(west + UP_WIDE, UP_HALFWAY, head + UP_WIDE),
+        vec3(west + UP_WIDE, UP_LANDING, head + UP_WIDE),
     ));
 
     // the second flight, over the nook's ceiling, climbing east.
     //
-    // **No step hangs below the landing it starts from.** A rake `THICK` deep
-    // is right once the flight is in the air, and wrong for the first steps
-    // of it: the landing is at `UP_HALFWAY` and the nook's ceiling is above
-    // that, so a rake put the underside of the first steps four tenths below
-    // the bars. Through the opening you saw a stepped soffit with the
-    // ceiling's own bars crossing it, which reads as the stair bursting out
-    // of the ceiling rather than passing through it. Jake called it a
-    // protrusion and he was reading it right.
+    // **No step hangs below the landing it starts from.** A rake `THICK`
+    // deep is right once the flight is in the air and wrong for the first
+    // steps of it, where it puts their underside four tenths below the
+    // landing. So the rake is floored at the landing's own top, which
+    // clamps the first two steps.
     //
-    // Dressing it with a trim was worse: the trim stood where you walk off
-    // the landing. Carrying every tread down to the landing was worse again,
-    // because the wedge that makes runs out over the hall and through its
-    // ceiling the whole way, which
-    // `tests::the_way_up_leaves_the_halls_ceiling_alone` caught at once.
-    //
-    // So the rake is kept and floored at the landing's own top. Two steps
-    // are clamped by it today. Nothing hangs below a surface you could be
-    // standing on, and the rest of the flight is the raking slab it was.
-    for step in 0..UP_STEPS {
-        let top = UP_HALFWAY + UP_RISE * (step as f32 + 1.0);
+    // While the landing was at 3.00 that floor was still under the nook's
+    // ceiling, and those two steps hung 0.18 into the room below with a
+    // hole cut in the tiles for them. Dressing that was tried twice, a trim
+    // under the landing and every tread carried down to it, and the fault
+    // was never a dressing fault: it was the landing's height, which
+    // `UP_STEPS` now settles.
+    for step in 0..UP_STEPS_ON {
+        let top = UP_LANDING + UP_RISE * (step as f32 + 1.0);
         let at = west + UP_WIDE + UP_GOING * step as f32;
 
         out.push(Aabb::new(
-            vec3(at, (top - UP_RISE - THICK).max(UP_HALFWAY), head),
+            vec3(at, (top - UP_RISE - THICK).max(UP_LANDING), head),
             vec3(at + UP_GOING, top, head + UP_WIDE),
         ));
     }
@@ -980,7 +992,7 @@ pub fn up_drawn() -> Vec<Aabb> {
 pub fn up_hole() -> Aabb {
     let head = up_head();
     let under = BASE - THICK;
-    let steps = ((under - UP_HEADROOM - UP_HALFWAY) / UP_RISE)
+    let steps = ((under - UP_HEADROOM - UP_LANDING) / UP_RISE)
         .floor()
         .max(0.0);
 
@@ -1015,7 +1027,7 @@ pub fn up_well() -> Vec<Aabb> {
     // intact ceiling the rest of the way.
     let crosses = up_treads()
         .iter()
-        .filter(|t| t.max.y > UP_HALFWAY + 1e-4 && t.min.y < crate::room::TALL)
+        .filter(|t| t.max.y > UP_LANDING + 1e-4 && t.min.y < crate::room::TALL)
         .map(|t| t.max.x)
         .fold(west + UP_WIDE, f32::max);
 
@@ -1097,6 +1109,7 @@ pub fn up_shaft() -> Vec<Aabb> {
 
     for (n, well) in wells.iter().enumerate() {
         let (low, high) = (vec3(well.min.x, under, well.min.z), well.max);
+
         let ring = [
             Aabb::new(
                 vec3(low.x - THICK, low.y, low.z - THICK),
@@ -1129,6 +1142,7 @@ pub fn up_shaft() -> Vec<Aabb> {
                 if m == n {
                     continue;
                 }
+
                 pieces = pieces
                     .into_iter()
                     .flat_map(|p| crate::room::minus(p, *other))
@@ -1193,11 +1207,11 @@ pub fn up_sconces() -> Vec<Vec3> {
         ));
     }
 
-    for step in (0..UP_STEPS).step_by(every) {
+    for step in (0..UP_STEPS_ON).step_by(every) {
         let step = step as f32;
         out.push(vec3(
             west + UP_WIDE + UP_GOING * (step + 0.5),
-            UP_HALFWAY + UP_RISE * step + UP_LAMP_UP,
+            UP_LANDING + UP_RISE * step + UP_LAMP_UP,
             head + UP_WIDE,
         ));
     }
@@ -1206,6 +1220,10 @@ pub fn up_sconces() -> Vec<Vec3> {
     // stands free in the middle of the nook, so under the ceiling there is
     // nothing beside it to hang a fitting on, and the nook's own lamps
     // light that part anyway. Above the ceiling the shaft is the wall.
+    //
+    // The parapet is not a wall for this. It stands a metre over the tread
+    // beside it and a fitting sits at 1.9, which is a lamp in the air over
+    // a low wall.
     let shaft = up_shaft();
     out.retain(|at| {
         shaft
@@ -1220,13 +1238,66 @@ pub fn up_lamps() -> Vec<Vec3> {
     up_sconces()
 }
 
-/// The way up as one list: the stair and the shaft round it.
+/// How high the parapet stands over the tread beside it.
+///
+/// A body here is a sphere 0.9 across sitting on your feet, so anything
+/// lower than that is something the walk rolls over the top of. This is a
+/// handrail's height for the same reason a handrail is that height.
+pub const UP_RAIL: f32 = 1.0;
+
+/// The solid sides of the first flight, from the nook's floor to a rail's
+/// height over each tread.
+///
+/// **Because the flight stands free in a room and the drop beside it is
+/// the room's whole height.** The shaft hangs from the nook's ceiling at
+/// 3.19 and everything under that was open air. A body here is a sphere
+/// 0.9 across sitting on your feet, so on the twelfth tread its middle is
+/// at 2.70, under the bottom edge of the lowest wall there was: pressing
+/// sideways took it under that edge and off into a three metre drop. Jake
+/// walked into it twice.
+///
+/// **A parapet and not a wall to the ceiling.** Both stop the fall. A wall
+/// also hides the stair from the lane you walk to reach it, which is the
+/// one view of it this building has, so the sides stop a metre over the
+/// treads and you look over them at a staircase.
+///
+/// Stepped, because every collider in this building is a box and the top
+/// of each piece is the tread it belongs to. Capped where the shaft starts,
+/// so the two meet in a plane neither of them shows.
+pub fn up_sides() -> Vec<Aabb> {
+    let west = up_west();
+    let cap = crate::room::tile_middle();
+    let mut out = Vec::new();
+
+    for tread in up_treads()
+        .iter()
+        .filter(|t| t.max.y <= UP_LANDING + 1e-4 && t.size().z <= UP_GOING + 1e-4)
+    {
+        let high = (tread.max.y + UP_RAIL).min(cap);
+
+        for (from, to) in [
+            (west - THICK, west),
+            (west + UP_WIDE, west + UP_WIDE + THICK),
+        ] {
+            out.push(Aabb::new(
+                vec3(from, -THICK, tread.min.z),
+                vec3(to, high, tread.max.z),
+            ));
+        }
+    }
+
+    out
+}
+
+/// The way up as one list: the stair, the sides of it and the shaft round
+/// it.
 ///
 /// Named once because spec 0026 keeps it, `fillable` leaves it out, and the
 /// drawing walks it. Three places saying what the way up is made of is
 /// three chances for two of them to be right.
 pub fn way_up() -> Vec<Aabb> {
     let mut out = up_treads();
+    out.extend(up_sides());
     out.extend(up_shaft());
     out
 }
@@ -1403,45 +1474,6 @@ mod tests {
                 at,
                 fight.patch.size().x.max(fight.patch.size().y),
                 fight.patch.size().z.max(fight.patch.size().y)
-            );
-        }
-    }
-
-    /// Spec 0012: the shaft meets the nook's ceiling inside its thickness,
-    /// not level with either face of it and not hanging below it.
-    ///
-    /// **The engine's check cannot see this one.** It reads boxes, and a
-    /// suspended ceiling is drawn and never collided, so the bars are in no
-    /// list it is given. Both ways of getting this wrong have shipped: the
-    /// shaft started a tile's drop under the bars and hung across the hall
-    /// as a white beam, then level with their underside and speckled along
-    /// every edge. Jake found each by looking up.
-    #[test]
-    fn the_shaft_meets_the_ceiling_inside_its_thickness() {
-        let room = crate::room::Room::of(crate::games());
-        let (bars, tiles) = room.lattice();
-        let hung = |pieces: &Vec<crate::room::Hung>| {
-            pieces
-                .iter()
-                .fold((f32::MAX, f32::MIN), |(low, high), (at, size)| {
-                    (low.min(at.y - size.y * 0.5), high.max(at.y + size.y * 0.5))
-                })
-        };
-
-        let (bar_low, bar_high) = hung(&bars);
-        let (tile_low, tile_high) = hung(&tiles);
-        let low = bar_low.min(tile_low);
-        let high = bar_high.max(tile_high);
-
-        for (n, wall) in up_shaft().iter().enumerate() {
-            assert!(
-                wall.min.y > low + 1e-3 && wall.min.y < high - 1e-3,
-                "shaft wall {} starts at {:.4}, and the ceiling it comes \
-                 through is {:.4} to {:.4}",
-                n,
-                wall.min.y,
-                low,
-                high
             );
         }
     }
@@ -1778,7 +1810,7 @@ mod tests {
         let flight = |above: bool| {
             let mut out: Vec<&Aabb> = treads
                 .iter()
-                .filter(|t| (rise(t) > UP_HALFWAY + 1e-4) == above)
+                .filter(|t| (rise(t) > UP_LANDING + 1e-4) == above)
                 .filter(|t| t.size().z <= UP_GOING + 1e-4 || t.size().x <= UP_GOING + 1e-4)
                 .collect();
             out.sort_by(|a, b| rise(a).partial_cmp(&rise(b)).unwrap());
@@ -1832,7 +1864,7 @@ mod tests {
 
         let last = treads
             .iter()
-            .filter(|t| t.size().z <= UP_GOING + 1e-4 && t.max.y <= UP_HALFWAY + 1e-4)
+            .filter(|t| t.size().z <= UP_GOING + 1e-4 && t.max.y <= UP_LANDING + 1e-4)
             .max_by(|a, b| a.max.y.partial_cmp(&b.max.y).unwrap())
             .expect("the first flight has no treads");
 
@@ -1865,13 +1897,13 @@ mod tests {
         // depth rather than its height.
         let mut first: Vec<&Aabb> = treads
             .iter()
-            .filter(|t| t.max.y <= UP_HALFWAY + 1e-4 && t.size().z <= UP_GOING + 1e-4)
+            .filter(|t| t.max.y <= UP_LANDING + 1e-4 && t.size().z <= UP_GOING + 1e-4)
             .collect();
         first.sort_by(|a, b| a.min.z.partial_cmp(&b.min.z).unwrap());
 
         let mut second: Vec<&Aabb> = treads
             .iter()
-            .filter(|t| t.max.y > UP_HALFWAY + 1e-4)
+            .filter(|t| t.max.y > UP_LANDING + 1e-4)
             .collect();
         second.sort_by(|a, b| a.min.x.partial_cmp(&b.min.x).unwrap());
 
@@ -2015,7 +2047,7 @@ mod tests {
         let hole = up_hole();
         let under = BASE - THICK;
 
-        for tread in up_treads().iter().filter(|t| t.max.y > UP_HALFWAY + 1e-4) {
+        for tread in up_treads().iter().filter(|t| t.max.y > UP_LANDING + 1e-4) {
             if tread.min.x >= hole.min.x - 1e-4 {
                 continue;
             }
@@ -2056,6 +2088,11 @@ mod tests {
     /// Spec 0012: the way up takes nothing out of the hall's ceiling and
     /// hangs nothing under it.
     ///
+    /// **One rule about one number, after two tests said it twice.** The
+    /// other asked the same of `up_shaft().min.y` against the whole
+    /// ceiling assembly, which is five centimetres looser than the tiles
+    /// and let in the one fault this test exists for.
+    ///
     /// **The fault this caught was in a filmed clip and not in a test.**
     /// The hole in the ceiling was cut along the whole of the second
     /// flight, which runs out over the hall's aisle, and the shaft's wall
@@ -2084,15 +2121,80 @@ mod tests {
         // second flight passed this and the beam was on screen anyway. A
         // test that measures the wrong surface passes for the wrong
         // reason.
-        for (n, wall) in up_shaft().iter().enumerate() {
+        //
+        // **Read off the tiles as they are drawn**, because the engine's
+        // own check cannot see them: it reads boxes, and a suspended
+        // ceiling is drawn and never collided, so no list it is given has
+        // a tile in it.
+        let (_, tiles) = crate::room::Room::of(crate::games()).lattice();
+        let (low, high) = tiles
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(low, high), (at, size)| {
+                (low.min(at.y - size.y * 0.5), high.max(at.y + size.y * 0.5))
+            });
+
+        // **Nothing of the way up hangs under that ceiling.** A piece of
+        // it either stands on the nook's floor, which is where the treads
+        // and the parapet start, or it begins at the tiles or above them.
+        // The band between the two is what hanging is.
+        //
+        // This is the rule the second flight broke for a day. Its first
+        // two treads were floored at a landing 0.18 under the tiles, so
+        // they hung that far into the room below through a hole cut in the
+        // tiles for them. Put `UP_STEPS` back to sixteen and this names
+        // them both at 3.0000.
+        for (n, box_) in way_up().iter().enumerate() {
             assert!(
-                wall.min.y >= crate::room::tile_under() - 1e-4,
-                "piece {} of the shaft starts at {:.4}, under the tiles at {:.4}",
+                (box_.min.y + THICK).abs() < 1e-4 || box_.min.y >= low - 1e-4,
+                "piece {} of the way up starts at {:.4}, under the tiles at \
+                 {:.4} and off the nook's floor",
                 n,
-                wall.min.y,
-                crate::room::tile_under()
+                box_.min.y,
+                low
             );
         }
+
+        // and the shaft meets that ceiling inside a tile's own thickness.
+        // Level with the bars it speckles against them and level with the
+        // tiles against those, so it begins between the two faces a tile
+        // has, where it is hidden and shares a plane with nothing.
+        for (n, wall) in up_shaft().iter().enumerate() {
+            assert!(
+                wall.min.y >= low - 1e-4 && wall.min.y < high - 1e-4,
+                "piece {} of the shaft starts at {:.4}, and the tiles it \
+                 comes through are {:.4} to {:.4}",
+                n,
+                wall.min.y,
+                low,
+                high
+            );
+        }
+    }
+
+    /// Spec 0037: the landing is at the nook's ceiling.
+    ///
+    /// **Two numbers that agree to a millimetre and are arrived at apart.**
+    /// The landing is seventeen rises over the nook's floor, which is the
+    /// stair's own arithmetic; the tiles hang where spec 0012 hung them,
+    /// which is the room's. Neither knows about the other, so the moment
+    /// either moves this is the thing that says the way up has gone back
+    /// to climbing through a ceiling.
+    #[test]
+    fn the_landing_is_at_the_nooks_ceiling() {
+        let (_, tiles) = crate::room::Room::of(crate::games()).lattice();
+        let (low, high) = tiles
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(low, high), (at, size)| {
+                (low.min(at.y - size.y * 0.5), high.max(at.y + size.y * 0.5))
+            });
+
+        assert!(
+            UP_LANDING > low && UP_LANDING < high,
+            "the landing is at {:.4} and the tiles are {:.4} to {:.4}",
+            UP_LANDING,
+            low,
+            high
+        );
     }
 
     /// Spec 0037: the shaft goes round the whole stair and not round the
@@ -2101,7 +2203,7 @@ mod tests {
     fn the_shaft_encloses_the_whole_second_flight() {
         let shaft = up_shaft();
 
-        for tread in up_treads().iter().filter(|t| t.max.y > UP_HALFWAY + 1e-4) {
+        for tread in up_treads().iter().filter(|t| t.max.y > UP_LANDING + 1e-4) {
             let beside = Aabb::new(
                 vec3(tread.min.x, crate::room::soffit() + 0.1, tread.min.z - 0.2),
                 vec3(tread.max.x, BASE - THICK - 0.1, tread.max.z + 0.2),
@@ -2189,6 +2291,107 @@ mod tests {
             "with the treads taken out the same walk still reached y {:.3}",
             stuck.y
         );
+    }
+
+    /// Spec 0037: a body pressed into either side of the first flight
+    /// stays on the stair.
+    ///
+    /// **The fall it exists for.** The shaft hangs from the nook's ceiling
+    /// at 3.19 and everything under that was open air. A body here is a
+    /// sphere 0.9 across sitting on your feet, so on the twelfth tread its
+    /// middle is at 2.70, under the bottom edge of the lowest wall there
+    /// was: pressing west took it under that edge and off into a three
+    /// metre drop. Jake walked into it twice, and the first fix, a trim
+    /// under the landing, left it exactly as it was.
+    ///
+    /// **Walked rather than measured**, because the arithmetic was never
+    /// wrong. Every wall was where the plan said and the plan was right.
+    /// What was missing was anything between the lowest wall and the
+    /// floor.
+    ///
+    /// Every tread of the flight, not only the ones under the opening in
+    /// the ceiling. The parapet runs the whole flight, so the drop beside
+    /// the first tread is held by the same rule as the drop beside the
+    /// last.
+    #[test]
+    fn you_cannot_walk_off_the_side_of_the_way_up() {
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+
+        let standing: Vec<Aabb> = up_treads()
+            .into_iter()
+            .filter(|t| t.max.y <= UP_LANDING + 1e-4 && t.size().z <= UP_GOING + 1e-4)
+            .collect();
+
+        assert_eq!(
+            standing.len(),
+            UP_STEPS as usize,
+            "the first flight is not all here"
+        );
+
+        // the control, which is this building yesterday: take the parapet
+        // out and leave the shaft hanging where it was.
+        let sides = up_sides();
+        let without: Vec<Aabb> = solid
+            .iter()
+            .filter(|box_| !sides.contains(box_))
+            .copied()
+            .collect();
+
+        assert_eq!(
+            without.len() + sides.len(),
+            solid.len(),
+            "the parapet is not in what the building serves"
+        );
+
+        let mut fell = 0;
+
+        for tread in standing.iter() {
+            for sideways in [-Vec3::X, Vec3::X] {
+                let from = vec3(tread.center().x, tread.max.y + 0.01, tread.center().z);
+                let at = pressed(&solid, from, sideways);
+
+                assert!(
+                    at.y > tread.max.y - UP_RISE,
+                    "pressed {} off the tread at {:.2}, a body ended at y {:.2}",
+                    if sideways.x < 0.0 { "west" } else { "east" },
+                    tread.max.y,
+                    at.y
+                );
+
+                if pressed(&without, from, sideways).y <= tread.max.y - UP_RISE {
+                    fell += 1;
+                }
+            }
+        }
+
+        assert!(
+            fell > 0,
+            "without the parapet none of the {} presses walked off the side",
+            standing.len() * 2
+        );
+    }
+
+    /// Walks a body your size sideways off a tread for half a second and
+    /// says where it got to.
+    fn pressed(solid: &[Aabb], from: Vec3, wish: Vec3) -> Vec3 {
+        let (mut at, mut falling) = (from, 0.0);
+
+        for _ in 0..30 {
+            let (next, fell) = crate::walk::walk(
+                at,
+                wish * crate::SPEED,
+                falling,
+                crate::RADIUS,
+                1.0 / 60.0,
+                solid,
+                true,
+            );
+            at = next;
+            falling = fell;
+        }
+
+        at
     }
 
     /// Walks a body your size north up the first flight, then east up the

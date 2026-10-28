@@ -11115,12 +11115,24 @@ mod tests {
     }
 
     /// Spec 0027: the nook, which is where the toys are.
+    ///
+    /// **Along it rather than across it**, from a stride inside the south
+    /// end. Across it was the view from the middle of the floor at the
+    /// books, and the middle of the floor is where the way up stands: with
+    /// the parapet up, that camera stood a hand from it and the picture was
+    /// a grey slab. Along the room you get the benches, the books, the rug
+    /// and the stair between them, which is more of the nook than the old
+    /// one showed.
     #[test]
     fn the_nook_is_drawn() {
         let reaches = reaches();
         let (at, _) = room::nook_floor(reaches);
 
-        looks_right("nook", at + Vec3::X * 1.6, vec3(at.x - 1.0, EYE, at.z));
+        looks_right(
+            "nook",
+            vec3(at.x, EYE, -reaches + 1.4),
+            vec3(at.x, EYE, at.z),
+        );
     }
 
     /// Spec 0027: the way up to the imaginarium, from the nook's own lane.
@@ -11129,6 +11141,11 @@ mod tests {
     /// is a flight and says nothing about where it is; from the side you
     /// get the stair, the wall of books it climbs past and the lane you
     /// walk to reach it, which is the whole of what spec 0037 decided.
+    ///
+    /// **From the foot of it**, standing back by the height of the parapet
+    /// beside the flight. The old mark was level with the fifth tread and a
+    /// metre and a half from the side of the stair, which with the parapet
+    /// up is a picture of the parapet.
     #[test]
     fn the_way_up_is_drawn() {
         let west = aloft::up_west();
@@ -11136,8 +11153,8 @@ mod tests {
 
         looks_right(
             "wayup",
-            vec3(west + 3.4, EYE, foot + 1.5),
-            vec3(west, EYE + 0.6, foot + 2.5),
+            vec3(west + 3.4, EYE, foot - 1.0),
+            vec3(west, EYE + 0.4, foot + 1.0),
         );
     }
 
