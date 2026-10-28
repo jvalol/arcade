@@ -185,9 +185,13 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     let tall = crate::aleph::TALL;
 
     vec![
-        // the floor, lapping under the lobby's rather than meeting it: two
-        // floors at one height that meet edge to edge stop you dead, and
-        // this building found that three times in one day
+        // the floor, lapping under the lobby's. It was written to stop two
+        // floors at one height meeting edge to edge, which this building
+        // found stopped you dead three times in one day, and spec 0007's
+        // step-over has since taken that fault away: see
+        // `behind::tests::the_floors_leave_no_hole_and_no_ledge`. The lap is
+        // kept because it costs nothing and leaves no join to argue about.
+        // What the floor still owes is to meet the lobby's with no gap.
         Aabb::new(
             vec3(middle - ACROSS * 0.5 - THICK, -THICK, to - THICK),
             vec3(middle + ACROSS * 0.5 + THICK, 0.0, from + THICK),

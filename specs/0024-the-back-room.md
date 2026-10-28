@@ -258,8 +258,8 @@ that go with them.
 - The room stands east of the gallery and nothing of the building is in its
   air. — `back::tests::the_back_room_stands_where_nothing_else_does`
 - It is closed, and the doorway is the only way out of it. — `back::tests::the_only_way_out_is_the_door`
-- Its floor laps under the gallery's rather than meeting it, so the threshold
-  is not a face you walk into. — `back::tests::the_floors_lap_rather_than_meet`
+- The threshold has floor under all of it and no step in it, so you walk in
+  across it rather than into it. — `back::tests::the_floors_leave_no_hole_and_no_ledge`
 - You can walk in from the gallery and out again, with both rooms' colliders
   in the walk. — `back::tests::you_can_walk_in_and_out_again`
 - The block stands clear inside the bay at every step of the dial, with the

@@ -177,7 +177,7 @@ stand on.
 - The gap is off centre of where you wake. — `behind::tests::the_way_in_is_not_in_front_of_you`
 - The space is closed but for that gap. — `behind::tests::nothing_else_gets_out`
 - It does not reach into the garden, the hall or the nook. — `behind::tests::it_keeps_out_of_every_other_room`
-- Its floor laps under the hall's rather than meeting it. — `behind::tests::the_floors_lap_rather_than_meet`
+- Its floor and the hall's leave no hole and no ledge. — `behind::tests::the_floors_leave_no_hole_and_no_ledge`
 - And the lap is walked and not drawn. — `behind::tests::nothing_drawn_lies_in_the_halls_floor`
 - No column stands in the way in. — `behind::tests::nothing_stands_in_the_way_in`
 - You can get back out. — `behind::tests::you_can_walk_back_out`

@@ -63,8 +63,14 @@ pub const HIGH: f32 = 3.2;
 
 /// How far this floor runs back under the hall's.
 ///
-/// Far enough that neither slab's end face is anywhere near the join. See the
-/// floor in `built`.
+/// It was far enough that neither slab's end face came near the join, back
+/// when a face at the walking surface stopped you. Spec 0007's step-over
+/// takes a face of no height in its stride, so nothing about walking wants
+/// this any more and `tests::the_floors_leave_no_hole_and_no_ledge` says so
+/// at length. What still reads it is
+/// `tests::the_engines_check_catches_the_lap_and_passes_what_ships`, which
+/// needs two slabs sharing a plane to point the engine's coplanar check at.
+/// See the floor in `built`.
 pub const LAPS: f32 = 3.0;
 
 /// How wide the way through the wall is, and how far off the middle of it.
@@ -1411,48 +1417,81 @@ mod tests {
         );
     }
 
-    /// Spec 0011: its floor laps under the hall's rather than meeting it.
+    /// Spec 0011: its floor and the hall's leave no hole and no ledge.
     ///
-    /// The other way round from how this was first written, and the walk is
-    /// what settled it. Two floors at one height that meet edge to edge put a
-    /// vertical face at the surface you are walking on, and a body resting on a
-    /// surface counts as touching it: the walk through the gap stopped dead
-    /// four centimetres short of the seam. Lapped a good way under, both end
-    /// faces are deep inside the other slab and the join is nothing at all.
+    /// This was a rule about being stopped and it is not one any more. It was
+    /// written because the walk through the gap stopped dead four centimetres
+    /// short of the seam: two floors at one height meeting edge to edge put a
+    /// vertical face at the surface you are walking on, and a body resting on
+    /// a surface counts as touching it. What it asked for was a lap wider than
+    /// a body, so that neither end face came near the join.
     ///
-    /// The lap has to be a good way, not a hair. A face just under the join is
-    /// still a face you cross at the walking surface, only harder to find.
+    /// Walked today, nothing of that reproduces. Spec 0007's step-over retries
+    /// a blocked move from `walk::STEP` higher up and keeps the climb whenever
+    /// it got you further along the floor, and `walk::BLOCKED` is 0.995, so
+    /// anything at all in the way is worth the retry. A face of no height is
+    /// nothing to it. Measured on 2026-10-28: two slabs built to meet edge to
+    /// edge are crossed in both directions with the climb budget full or
+    /// spent, every seam in this building is crossed with the walls taken away
+    /// and only the slabs left, and with `LAPS` set to nought the four walks
+    /// in this room still pass. The only tests that fail then are the two that
+    /// measure the lap itself.
+    ///
+    /// So the lap is no longer what is worth measuring. What a pair of floors
+    /// still owes you is a ground with no hole in it to drop through and no
+    /// ledge in it to stumble up, and neither of those is a question about how
+    /// far one slab runs under the other.
     #[test]
-    fn the_floors_lap_rather_than_meet() {
+    fn the_floors_leave_no_hole_and_no_ledge() {
         let room = room();
         let hall = room.floors()[0];
-        // the floor as walked, found under the foot of somebody who has just
-        // stepped through the gap, rather than by its place in the list
-        let (from, to) = way();
-        let foot = vec3((from + to) * 0.5, -0.05, hall.max.z - crate::RADIUS);
+        // the floor as the building serves it rather than as `ground` builds
+        // it, picked out by what it is. A test that calls the constructor
+        // passes whether or not what it made ever reaches the walk, and one
+        // that gropes for it under a foot reports a floor in the wrong place
+        // as no floor at all, which is a worse answer than the true one.
         let ours = solid(room.reaches)
             .into_iter()
-            .find(|box_| box_.contains_point(foot))
-            .expect("a floor under the way in");
+            .zip(built(room.reaches))
+            .filter(|(_, (_, made))| matches!(made, Made::Ground))
+            // the lower of the two, which is the floor rather than the lid.
+            // By which of them it is and not by a height, so that a floor
+            // put at the wrong height is still found and then reported as
+            // being at the wrong height.
+            .min_by(|(a, _), (b, _)| a.max.y.total_cmp(&b.max.y))
+            .map(|(walked, _)| walked)
+            .expect("the room has a ground");
 
+        // no ledge. One ground across the join, not two at heights a step
+        // apart: a rise nobody built is a rise nobody can see either.
         assert!(
             (ours.max.y - hall.max.y).abs() < 1e-4,
-            "the floors are at different heights"
+            "the floors are {:.3} apart in height",
+            ours.max.y - hall.max.y
         );
 
-        let over = hall.max.z - ours.min.z;
+        // no hole where they face each other. Touching is enough and lapping
+        // is fine; what is not is daylight between them.
+        let apart = ours.min.z - hall.max.z;
         assert!(
-            over > crate::RADIUS * 2.0,
-            "they lap by {:.2} and a body is {:.2} across",
-            over,
-            crate::RADIUS * 2.0
+            apart <= 1e-4,
+            "the floors stop {:.3} apart, which is a hole at the join",
+            apart
         );
-        // and the lap is under the hall rather than the hall under it: this
-        // floor's near face has to be inside the hall's slab in x as well, or
-        // it is a face in the open after all
+
+        // and no hole beside them either: this floor has to reach at least as
+        // wide as the way through the wall, or you walk out of the gap and
+        // into air. The way is where it is rather than where this room's own
+        // middle happens to be, so it is asked for rather than assumed.
+        let (from, to) = way();
         assert!(
-            ours.min.x <= hall.min.x + 1e-4,
-            "this floor starts east of the hall's, so its near face is in the open"
+            ours.min.x <= from + 1e-4 && ours.max.x >= to - 1e-4,
+            "the way in runs {:.2}..{:.2} and this floor covers only \
+             {:.2}..{:.2}",
+            from,
+            to,
+            ours.min.x,
+            ours.max.x
         );
     }
 

@@ -914,10 +914,17 @@ mod tests {
         }
     }
 
-    /// Spec 0024: the floor laps under the gallery's rather than meeting it,
-    /// so the threshold is not a face you walk into.
+    /// Spec 0024: the threshold has floor under all of it and no step in it.
+    ///
+    /// It was written as a rule about the lap, because a face at the walking
+    /// surface used to stop you dead. Spec 0007's step-over takes a face of
+    /// no height in its stride and that fault no longer reproduces, which
+    /// `behind::tests::the_floors_leave_no_hole_and_no_ledge` sets out. What
+    /// the overlap is still worth is that it is an overlap rather than a
+    /// hairline touch, so no arithmetic anywhere near this join can open a
+    /// gap in the doorway.
     #[test]
-    fn the_floors_lap_rather_than_meet() {
+    fn the_floors_leave_no_hole_and_no_ledge() {
         let reaches = reaches();
         let room = crate::room::Room::of(crate::games());
         let (at, size) = crate::room::gallery(reaches);
@@ -931,15 +938,18 @@ mod tests {
         );
         assert!(
             mine.min.x < gallery.max.x - 0.1,
-            "this floor's west face is not buried in the gallery's"
+            "this floor's west edge only reaches the gallery's, so the two \
+             meet on a line rather than overlapping"
         );
         assert!(
             gallery.max.x < mine.max.x - 0.1,
-            "the gallery's east face is not buried in this one"
+            "the gallery's east edge only reaches this floor's, so the two \
+             meet on a line rather than overlapping"
         );
         assert!(
             (mine.max.y - gallery.max.y).abs() < 1e-5,
-            "the two floors are at different heights, which is a step"
+            "the two floors are at different heights, which is a ledge in a \
+             doorway"
         );
 
         // and the doorway has floor under every part of it
