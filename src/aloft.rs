@@ -911,13 +911,30 @@ pub fn up_treads() -> Vec<Aabb> {
 
     // the second flight, over the nook's ceiling, climbing east.
     //
-    // the second flight, over the nook's ceiling, climbing east
+    // **No step hangs below the landing it starts from.** A rake `THICK` deep
+    // is right once the flight is in the air, and wrong for the first steps
+    // of it: the landing is at `UP_HALFWAY` and the nook's ceiling is above
+    // that, so a rake put the underside of the first steps four tenths below
+    // the bars. Through the opening you saw a stepped soffit with the
+    // ceiling's own bars crossing it, which reads as the stair bursting out
+    // of the ceiling rather than passing through it. Jake called it a
+    // protrusion and he was reading it right.
+    //
+    // Dressing it with a trim was worse: the trim stood where you walk off
+    // the landing. Carrying every tread down to the landing was worse again,
+    // because the wedge that makes runs out over the hall and through its
+    // ceiling the whole way, which
+    // `tests::the_way_up_leaves_the_halls_ceiling_alone` caught at once.
+    //
+    // So the rake is kept and floored at the landing's own top. Two steps
+    // are clamped by it today. Nothing hangs below a surface you could be
+    // standing on, and the rest of the flight is the raking slab it was.
     for step in 0..UP_STEPS {
         let top = UP_HALFWAY + UP_RISE * (step as f32 + 1.0);
         let at = west + UP_WIDE + UP_GOING * step as f32;
 
         out.push(Aabb::new(
-            vec3(at, top - UP_RISE - THICK, head),
+            vec3(at, (top - UP_RISE - THICK).max(UP_HALFWAY), head),
             vec3(at + UP_GOING, top, head + UP_WIDE),
         ));
     }

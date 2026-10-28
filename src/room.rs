@@ -744,6 +744,41 @@ pub fn nook_floor(reaches: f32) -> (Vec3, Vec3) {
     )
 }
 
+/// The nook's side of the wall it borrows from the hotel's lobby.
+///
+/// **Finish a shared wall on both sides.** The lobby's north wall is the
+/// nook's south wall. It belongs to `aleph`, and `standing` puts every box of
+/// the hotel into one run wearing the hotel's plaster, so the nook had a
+/// blank pale slab across its whole south end where every other wall in the
+/// room is grained. Jake read it off a screenshot on 2026-10-28. The baths
+/// had a mahogany wall down one side of a tiled room for the same reason and
+/// it was settled the same way.
+///
+/// One of the hall's own walls, drawn and collided like the rest of them.
+/// `standing::tests::the_shells_are_the_colliders` wants every drawn piece to
+/// be a thing that stops you, and a facing that is only a picture is exactly
+/// what that rule is against. A hair proud of the borrowed face so the two
+/// never share a plane, which is the fault this building has fought seven
+/// times, and a hair is all it moves the wall you walk into.
+pub fn nook_lining(reaches: f32) -> Vec<Aabb> {
+    let wall = crate::aleph::lobby_north(reaches);
+    let (at, size) = nook_floor(reaches);
+    let proud = 0.01;
+    // only as far as the nook is wide: the lobby's wall runs on west past it,
+    // and the part past it is in the lobby alone
+    let west = (at.x - size.x * 0.5).max(wall.min.x);
+    let east = (at.x + size.x * 0.5).min(wall.max.x);
+
+    if east - west <= 1e-3 {
+        return Vec::new();
+    }
+
+    vec![Aabb::new(
+        vec3(west, 0.0, wall.max.z),
+        vec3(east, wall.max.y, wall.max.z + proud),
+    )]
+}
+
 /// The open floor of the nook: where it is and how big, as the middle and the
 /// size of a quad lying on it.
 ///
@@ -990,6 +1025,9 @@ impl Room {
                 )
             },
         ];
+
+        let mut walls = walls;
+        walls.extend(nook_lining(reaches));
 
         let benches = benches(-reaches);
         let bookcases = bookcases(-reaches);

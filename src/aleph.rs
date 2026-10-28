@@ -515,6 +515,22 @@ pub fn lid(reaches: f32) -> Aabb {
     )
 }
 
+/// The lobby's north wall, which is also the nook's south wall.
+///
+/// Named because two rooms want it. This room builds it and `standing` puts
+/// it in the hotel's run, so both its faces wear the hotel's plaster, and the
+/// nook's side of it is dressed by `room::nook_lining` with the grain the
+/// rest of that room wears.
+pub fn lobby_north(reaches: f32) -> Aabb {
+    let (west, east) = span();
+    let (_, to) = across(reaches);
+
+    Aabb::new(
+        vec3(west - THICK, 0.0, to),
+        vec3(east, LOBBY_TALL, to + THICK),
+    )
+}
+
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = span();
     let (from, to) = across(reaches);
@@ -559,10 +575,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
                 from,
             ),
         ),
-        Aabb::new(
-            vec3(west - THICK, 0.0, to),
-            vec3(east, LOBBY_TALL, to + THICK),
-        ),
+        lobby_north(reaches),
         // and its west wall, in two pieces with the corridor's mouth between
         // them
         Aabb::new(
