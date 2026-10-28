@@ -1335,6 +1335,63 @@ impl Room {
     /// plane by design, which is a hundred and ten metres of building added
     /// west, and the sun's one map stretched over it until the garden's
     /// shadows went coarse. A picture test caught that before anybody looked.
+    /// Every floor in this building, said once each, with the name of the room
+    /// it belongs to.
+    ///
+    /// **Here rather than in a list of its own**, because `built` below is the
+    /// one place that knows what rooms there are. A room added there and not
+    /// here is a room whose ground nothing holds, and the two sitting in the
+    /// same impl is the shortest distance between them that this building can
+    /// offer. There is no way to make a missing room fail on its own: nothing
+    /// can test for the absence of something nobody wrote down.
+    ///
+    /// Each entry is the floor as the walk meets it. A room whose floor is in
+    /// pieces gives its pieces, because what the rules care about is where one
+    /// room's ground ends and the next one's begins, and a piece's edge is as
+    /// real as a whole slab's.
+    ///
+    /// **The field is not here.** `field::ground` re-centres on a tile grid
+    /// around wherever you stand, so it is not a floor at a place: asked twice
+    /// from two places it gives two different boxes, and a set that changes
+    /// under you is not a set.
+    /// Only the tests ask for this, the same as `fillable` above. Nothing the
+    /// game does while it runs wants the floors as a set.
+    #[cfg(test)]
+    pub fn grounds(&self) -> Vec<(&'static str, Aabb)> {
+        let reaches = self.reaches;
+        let [hall, nook, gallery] = self.floors();
+        let mut out = vec![
+            ("the hall", hall),
+            ("the nook", nook),
+            ("the gallery", gallery),
+            ("the cellar", crate::cellar::ground(reaches)),
+            ("the garden", crate::garden::ground(reaches)),
+            ("the space behind the wall", crate::behind::floor(reaches)),
+            ("the back room", crate::back::floor(reaches)),
+            ("the hotel's lobby", crate::aleph::floor(reaches)),
+            (
+                "the hotel's corridor",
+                crate::aleph::corridor_floor(reaches),
+            ),
+            ("the other corridor", crate::twine::floor(reaches)),
+            ("the register", crate::register::floor(reaches)),
+            ("the space beyond the door", crate::beyond::solid(reaches)),
+        ];
+
+        out.extend(
+            crate::spa::floors(reaches)
+                .into_iter()
+                .map(|slab| ("the baths", slab)),
+        );
+        out.extend(
+            crate::aloft::floors()
+                .into_iter()
+                .map(|slab| ("the imaginarium", slab)),
+        );
+
+        out
+    }
+
     fn built(&self, lit_by_the_sun: bool) -> Vec<Aabb> {
         let mut out = self.walls.clone();
         out.extend(self.floors());
@@ -3654,5 +3711,217 @@ mod tests {
         let way = (bench.at + Vec3::Y * bench.size.y - from).normalize();
 
         assert_ne!(room.looking_at(from, way), Some(Seen::Bench(0)));
+    }
+
+    /// How two floors sit against each other in plan: the daylight between
+    /// them along each axis, negative where they overlap.
+    fn apart_in_plan(a: &Aabb, b: &Aabb) -> (f32, f32) {
+        (
+            (b.min.x - a.max.x).max(a.min.x - b.max.x),
+            (b.min.z - a.max.z).max(a.min.z - b.max.z),
+        )
+    }
+
+    /// Spec 0011: no two rooms leave a hole between their floors.
+    ///
+    /// The fault is a strip of nothing where one room's ground stops and the
+    /// next one's has not started. The garden had it in a doorway and it is
+    /// written up there: you could walk up to the opening from either side and
+    /// not through it, because the width of the wall had no ground under it.
+    ///
+    /// **Not pairwise.** Two floors leaving daylight between them is not by
+    /// itself a fault, because a third can be lying under the strip: the
+    /// gallery's floor stops two tenths short of the other corridor's and the
+    /// lobby's runs under both. So the strip is sampled and the whole set is
+    /// asked, rather than the pair being asked about itself.
+    ///
+    /// A gap wider than a body is not a seam between two rooms at all, so the
+    /// rule stops caring there. What is on the far side of a gap you cannot
+    /// fall into is a different room, and the walls hold that.
+    #[test]
+    fn no_two_rooms_leave_a_hole_between_their_floors() {
+        let room = Room::of(crate::games());
+        let grounds = room.grounds();
+        let body = crate::RADIUS * 2.0;
+
+        for (i, (a_name, a)) in grounds.iter().enumerate() {
+            for (b_name, b) in grounds.iter().skip(i + 1) {
+                if a_name == b_name {
+                    continue;
+                }
+
+                // one storey at a time. Two floors three metres apart in
+                // height have no seam between them to fall through, whatever
+                // their footprints do: what is between them is a wall or the
+                // open air of the room below, and neither is this rule's.
+                if (b.max.y - a.max.y).abs() > crate::walk::STEP {
+                    continue;
+                }
+
+                let (x, z) = apart_in_plan(a, b);
+                // facing each other across a strip: daylight along one axis,
+                // an overlap along the other
+                let (from, to, along_from, along_to, across_x) = if x > 1e-4 && z < -1e-4 {
+                    let (west, east) = if a.max.x <= b.min.x { (a, b) } else { (b, a) };
+
+                    (
+                        west.max.x,
+                        east.min.x,
+                        a.min.z.max(b.min.z),
+                        a.max.z.min(b.max.z),
+                        true,
+                    )
+                } else if z > 1e-4 && x < -1e-4 {
+                    let (south, north) = if a.max.z <= b.min.z { (a, b) } else { (b, a) };
+
+                    (
+                        south.max.z,
+                        north.min.z,
+                        a.min.x.max(b.min.x),
+                        a.max.x.min(b.max.x),
+                        false,
+                    )
+                } else {
+                    continue;
+                };
+
+                if to - from > body {
+                    continue;
+                }
+
+                // Every part of the strip wants ground under it at a height
+                // you could be walking at, which is one of these two floors'
+                // own or a step off it.
+                //
+                // The whole length of the seam and not its middle. The hole
+                // this rule found first was in the cellar's door to the baths
+                // and the middle of that seam is a wall, so a rule that asked
+                // about middles would have found it only by luck. A body is
+                // `RADIUS * 2` across, so a step of `RADIUS` cannot miss a
+                // hole wide enough to matter.
+                let steps =
+                    (((along_to - along_from) / crate::RADIUS).ceil() as usize).clamp(1, 4096);
+
+                for (n, m) in (0..=steps).flat_map(|n| (0..=8).map(move |m| (n, m))) {
+                    let f = m as f32 / 8.0;
+                    let along = along_from + (along_to - along_from) * (n as f32 / steps as f32);
+                    let (at_x, at_z) = if across_x {
+                        (from + (to - from) * f, along)
+                    } else {
+                        (along, from + (to - from) * f)
+                    };
+                    let covered = grounds.iter().any(|(_, under)| {
+                        under.min.x <= at_x + 1e-4
+                            && under.max.x >= at_x - 1e-4
+                            && under.min.z <= at_z + 1e-4
+                            && under.max.z >= at_z - 1e-4
+                            && ((under.max.y - a.max.y).abs() <= crate::walk::STEP
+                                || (under.max.y - b.max.y).abs() <= crate::walk::STEP)
+                    });
+
+                    assert!(
+                        covered,
+                        "{} and {} stop {:.2} apart and nothing floors the strip \
+                         between them at {:.2} {:.2}",
+                        a_name,
+                        b_name,
+                        to - from,
+                        at_x,
+                        at_z
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0011: no two rooms meet at a ledge.
+    ///
+    /// Where two floors touch or lap in plan you may be walking from one onto
+    /// the other, and the step between them has to be one you can take. Over
+    /// `walk::STEP` the body walks into it instead, and a rise nobody built is
+    /// a rise nobody can see.
+    ///
+    /// **Unless it is a storey and not a step.** Three of these rooms stand
+    /// over others: the imaginarium is six above the hall, the cellar three
+    /// under the lobby, the baths three under the garden. A floor more than a
+    /// head above you is a ceiling and cannot trip you, so the rule takes it
+    /// as another storey. The band it leaves is from a step you cannot take up
+    /// to a head, which is where every ledge of this kind lives and where this
+    /// building currently has nothing at all.
+    ///
+    /// What this does not cover is something that is not a floor poking up
+    /// through one, which is the fault the baths' roof had against the
+    /// garden's gravel: that is one room's lid against another room's ground
+    /// and `garden::tests::the_garden_sits_on_the_roof_of_the_baths` is what
+    /// holds it.
+    #[test]
+    fn no_two_rooms_meet_at_a_ledge() {
+        let room = Room::of(crate::games());
+        let grounds = room.grounds();
+
+        for (i, (a_name, a)) in grounds.iter().enumerate() {
+            for (b_name, b) in grounds.iter().skip(i + 1) {
+                if a_name == b_name {
+                    continue;
+                }
+
+                let (x, z) = apart_in_plan(a, b);
+                if x > 1e-4 || z > 1e-4 {
+                    continue;
+                }
+
+                let step = (b.max.y - a.max.y).abs();
+
+                assert!(
+                    step <= crate::walk::STEP + 1e-4 || step >= crate::EYE,
+                    "{} is at {:.2} and {} at {:.2}, which is {:.2}: too high to \
+                     step up and too low to be a storey",
+                    a_name,
+                    a.max.y,
+                    b_name,
+                    b.max.y,
+                    step
+                );
+            }
+        }
+    }
+
+    /// Every ground in the set is a box this building actually serves.
+    ///
+    /// The set is gathered by calling each room for its floor, and a room can
+    /// have more than one thing it calls a floor. The cellar has two: the
+    /// clear floor of the room, inset by a wall on every side and flat, which
+    /// is what you stand things on, and the slab the walk meets. `grounds`
+    /// asked for the first by mistake, and the two differ by half a wall all
+    /// round, which was enough to report a hole along the length of the baths'
+    /// wall that is not there.
+    ///
+    /// So each one is looked for in `solid`. A ground nothing serves is a
+    /// ground the walk never meets, and a rule about it is a rule about
+    /// nothing.
+    #[test]
+    fn every_ground_is_a_box_the_building_serves() {
+        let room = Room::of(crate::games());
+        let solid = room.solid();
+
+        for (name, ground) in room.grounds() {
+            let served = solid.iter().any(|box_| {
+                (box_.min - ground.min).abs().max_element() < 1e-3
+                    && (box_.max - ground.max).abs().max_element() < 1e-3
+            });
+
+            assert!(
+                served,
+                "{}'s floor is x {:.2}..{:.2} y {:.2}..{:.2} z {:.2}..{:.2} and no \
+                 box the building serves is that, so nothing walks on it",
+                name,
+                ground.min.x,
+                ground.max.x,
+                ground.min.y,
+                ground.max.y,
+                ground.min.z,
+                ground.max.z
+            );
+        }
     }
 }

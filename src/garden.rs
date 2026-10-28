@@ -129,6 +129,27 @@ pub fn parapet() -> (f32, f32) {
     (crate::room::TALL, HIGH)
 }
 
+/// The ground of the garden, which `room::Room::grounds` gathers with every
+/// other room's.
+///
+/// A step below the hall's floor, which is deliberate and is why the rule
+/// that holds the building's floors allows a step rather than asking for one
+/// level plane.
+///
+/// It runs under the wall to meet that floor's edge rather than stopping at
+/// the wall's outer face. Stopped there it left the width of the wall with no
+/// ground under it at all, which is a hole in the doorway: you could walk up
+/// to the opening from either side and not through it.
+pub fn ground(reaches: f32) -> Aabb {
+    let middle = at(reaches);
+    let west = middle.x - half().x;
+
+    Aabb::from_center_size(
+        vec3((west + wall_at()) * 0.5, -THICK * 0.5, middle.z),
+        vec3(wall_at() - west, THICK, SPAN),
+    )
+}
+
 /// Everything solid in the garden: its three new walls, and the ground.
 ///
 /// Three and not four. The hall's left wall is the garden's east side and the
@@ -251,16 +272,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             vec3(wall_at(), HIGH * 0.5, (reaches + north + THICK) * 0.5),
             vec3(THICK, HIGH, north + THICK - reaches),
         ),
-        // and the ground, which is a step below the hall's floor.
-        //
-        // It runs under the wall to meet that floor's edge rather than stopping
-        // at the wall's outer face. Stopped there it left the width of the wall
-        // with no ground under it at all, which is a hole in the doorway: you
-        // could walk up to the opening from either side and not through it.
-        Aabb::from_center_size(
-            vec3((west + wall_at()) * 0.5, -THICK * 0.5, middle.z),
-            vec3(wall_at() - west, THICK, SPAN),
-        ),
+        ground(reaches),
     ];
 
     // the pond's stone, which you stand on rather than in

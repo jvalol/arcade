@@ -174,6 +174,26 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
         .collect()
 }
 
+/// The floor of this corridor, which `room::Room::grounds` gathers with every
+/// other room's.
+///
+/// It laps under the lobby's. That was written to stop two floors at one
+/// height meeting edge to edge, which this building found stopped you dead
+/// three times in one day, and spec 0007's step-over has since taken that
+/// fault away: see `behind::tests::the_floors_leave_no_hole_and_no_ledge`.
+/// The lap is kept because it costs nothing and leaves no join to argue
+/// about. What the floor still owes is to meet the lobby's with no gap.
+pub fn floor(reaches: f32) -> Aabb {
+    let middle = middle_x();
+    let from = mouth(reaches);
+    let to = end(reaches);
+
+    Aabb::new(
+        vec3(middle - ACROSS * 0.5 - THICK, -THICK, to - THICK),
+        vec3(middle + ACROSS * 0.5 + THICK, 0.0, from + THICK),
+    )
+}
+
 /// Everything solid in here: the floor, two walls, the ceiling.
 ///
 /// Cut for the mouth the way the gallery is cut for the hotel, which the
@@ -185,17 +205,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     let tall = crate::aleph::TALL;
 
     vec![
-        // the floor, lapping under the lobby's. It was written to stop two
-        // floors at one height meeting edge to edge, which this building
-        // found stopped you dead three times in one day, and spec 0007's
-        // step-over has since taken that fault away: see
-        // `behind::tests::the_floors_leave_no_hole_and_no_ledge`. The lap is
-        // kept because it costs nothing and leaves no join to argue about.
-        // What the floor still owes is to meet the lobby's with no gap.
-        Aabb::new(
-            vec3(middle - ACROSS * 0.5 - THICK, -THICK, to - THICK),
-            vec3(middle + ACROSS * 0.5 + THICK, 0.0, from + THICK),
-        ),
+        floor(reaches),
         // the two long walls
         Aabb::new(
             vec3(middle - ACROSS * 0.5 - THICK, 0.0, to - THICK),

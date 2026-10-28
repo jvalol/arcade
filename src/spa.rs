@@ -363,6 +363,46 @@ fn hole(reaches: f32) -> (f32, f32, f32, f32) {
     )
 }
 
+/// The floor, in four slabs round the hole the pool takes out of it.
+///
+/// One slab with a hole in it is not a thing a box can be, and four is what
+/// the nook's back wall already does round the way down. `room::Room::grounds`
+/// gathers these with every other room's.
+pub fn floors(reaches: f32) -> Vec<Aabb> {
+    let foot = cellar::stair_foot();
+    let side = near(reaches);
+    let floor = -cellar::DOWN;
+    let back = foot - DEEP;
+    let far_side = side + SPAN;
+    // The floor runs south under the wall it shares with the cellar, to meet
+    // that room's slab rather than stopping at the wall's own face. `near` is
+    // the wall's face and the cellar's slab stops at the wall's middle, so
+    // stopped there this left half a wall's width with no ground under it at
+    // all, across the whole of the doorway. `garden::ground` carries the same
+    // sentence for the same fault in the garden's door.
+    let south = side - THICK * 0.5;
+    let (from_x, to_x, from_z, to_z) = hole(reaches);
+    let mut out = Vec::new();
+
+    for (one, two, three, four) in [
+        (back, from_x, south, far_side),
+        (to_x, foot, south, far_side),
+        (from_x, to_x, south, from_z),
+        (from_x, to_x, to_z, far_side),
+    ] {
+        if two - one <= 1e-4 || four - three <= 1e-4 {
+            continue;
+        }
+
+        out.push(Aabb::from_center_size(
+            vec3((one + two) * 0.5, floor - THICK * 0.5, (three + four) * 0.5),
+            vec3(two - one, THICK, four - three),
+        ));
+    }
+
+    out
+}
+
 /// Every box the room is built of, and what each one is.
 ///
 /// The wall it shares with the cellar is the cellar's own, cut round the way
@@ -378,27 +418,7 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     let (from_x, to_x, from_z, to_z) = hole(reaches);
     let mut out = Vec::new();
 
-    // the floor, in four slabs round the hole the pool takes out of it. One
-    // slab with a hole in it is not a thing a box can be, and four is what the
-    // nook's back wall already does round the way down.
-    for (one, two, three, four) in [
-        (back, from_x, side, far_side),
-        (to_x, foot, side, far_side),
-        (from_x, to_x, side, from_z),
-        (from_x, to_x, to_z, far_side),
-    ] {
-        if two - one <= 1e-4 || four - three <= 1e-4 {
-            continue;
-        }
-
-        out.push((
-            Aabb::from_center_size(
-                vec3((one + two) * 0.5, floor - THICK * 0.5, (three + four) * 0.5),
-                vec3(two - one, THICK, four - three),
-            ),
-            Made::Tile,
-        ));
-    }
+    out.extend(floors(reaches).into_iter().map(|slab| (slab, Made::Tile)));
 
     // the basin: its floor, and the four sides of the hole, which are what you
     // see of the pool from anywhere in the room

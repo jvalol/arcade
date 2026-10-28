@@ -909,6 +909,8 @@ pub fn up_treads() -> Vec<Aabb> {
         vec3(west + UP_WIDE, UP_HALFWAY, head + UP_WIDE),
     ));
 
+    // the second flight, over the nook's ceiling, climbing east.
+    //
     // the second flight, over the nook's ceiling, climbing east
     for step in 0..UP_STEPS {
         let top = UP_HALFWAY + UP_RISE * (step as f32 + 1.0);
@@ -1212,19 +1214,35 @@ pub fn way_up() -> Vec<Aabb> {
     out
 }
 
+/// The floor of this room, in the pieces left round the stair's slot.
+///
+/// In pieces because that is what the building serves and what the walk
+/// meets. The slot is a hole on purpose with a stair in it, and a hole inside
+/// one room is that room's own business, which is why the rule over
+/// `room::Room::grounds` asks nothing about two pieces of one floor.
+pub fn floors() -> Vec<Aabb> {
+    let half = ROOM * 0.5;
+
+    crate::room::minus(
+        Aabb::new(
+            vec3(
+                MIDDLE_X - half - THICK,
+                BASE - THICK,
+                MIDDLE_Z - half - THICK,
+            ),
+            vec3(MIDDLE_X + half + THICK, BASE, MIDDLE_Z + half + THICK),
+        ),
+        up_hole(),
+    )
+}
+
 /// Everything solid: the shell, the treads and the landings, and the way up.
 pub fn solid() -> Vec<Aabb> {
     let half = ROOM * 0.5;
     let low = vec3(MIDDLE_X - half, BASE, MIDDLE_Z - half);
     let high = vec3(MIDDLE_X + half, BASE + TALL, MIDDLE_Z + half);
     // the floor you stand on in the middle, with the stair's slot out of it
-    let mut out = crate::room::minus(
-        Aabb::new(
-            vec3(low.x - THICK, BASE - THICK, low.z - THICK),
-            vec3(high.x + THICK, BASE, high.z + THICK),
-        ),
-        up_hole(),
-    );
+    let mut out = floors();
 
     // and the lid over the lot
     out.extend([

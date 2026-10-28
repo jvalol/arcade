@@ -367,10 +367,6 @@ pub fn along(reaches: f32) -> (f32, f32) {
     (door.x - LONG, door.x + crate::aleph::DOOR_WIDE)
 }
 
-/// Everything solid in here: the floor, three walls, the ceiling.
-///
-/// The fourth wall is the corridor's, which stands already and is cut for the
-/// blank door.
 /// The lid over this room, which is what it shows the sky. Spec 0040 lays a
 /// roof on it, and two accounts of where it is would drift.
 pub fn lid(reaches: f32) -> Aabb {
@@ -383,22 +379,33 @@ pub fn lid(reaches: f32) -> Aabb {
     )
 }
 
+/// The floor of this room, which `room::Room::grounds` gathers with every
+/// other room's.
+///
+/// It laps under the corridor's, for the reason `twine::floor` sets out: a
+/// fault that spec 0007's step-over has since taken away, and a lap kept
+/// because it costs nothing. What the floor still owes is to meet the
+/// corridor's with no gap.
+pub fn floor(reaches: f32) -> Aabb {
+    let (west, east) = along(reaches);
+    let (far, near) = across(reaches);
+
+    Aabb::new(
+        vec3(west - THICK, -THICK, far - THICK),
+        vec3(east + THICK, 0.0, near + THICK),
+    )
+}
+
+/// Everything solid in here: the floor, three walls, the ceiling.
+///
+/// The fourth wall is the corridor's, which stands already and is cut for the
+/// blank door.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = along(reaches);
     let (far, near) = across(reaches);
 
     vec![
-        // the floor, lapping under the corridor's. It was written to stop two
-        // floors at one height meeting edge to edge, which this building
-        // found stopped you dead three times in one day, and spec 0007's
-        // step-over has since taken that fault away: see
-        // `behind::tests::the_floors_leave_no_hole_and_no_ledge`. The lap is
-        // kept because it costs nothing and leaves no join to argue about.
-        // What the floor still owes is to meet the corridor's with no gap.
-        Aabb::new(
-            vec3(west - THICK, -THICK, far - THICK),
-            vec3(east + THICK, 0.0, near + THICK),
-        ),
+        floor(reaches),
         // the far wall, which is the one the book is on
         Aabb::new(
             vec3(west - THICK, 0.0, far - THICK),

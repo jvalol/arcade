@@ -1202,6 +1202,24 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     out
 }
 
+/// The slab the cellar's floor actually is, which `room::Room::grounds`
+/// gathers with every other room's.
+///
+/// **Not `floor` above.** That one is the clear floor of the room, inset by
+/// the wall thickness and flat, which is what you place things on. This is
+/// the box the walk meets, wall footings and all. The two differ by half a
+/// wall on every side, and a rule about where one room's ground stops wants
+/// the second: asked with the first it reported a hole along the whole of the
+/// baths' wall that is not there.
+pub fn ground(reaches: f32) -> Aabb {
+    let foot = stair_foot();
+
+    Aabb::from_center_size(
+        vec3(foot - DEEP * 0.5, -DOWN - THICK * 0.5, opening(reaches)),
+        vec3(DEEP, THICK, SPAN),
+    )
+}
+
 /// The shell: the stair, the shaft and the room, and nothing standing in them.
 fn shell(reaches: f32) -> Vec<Aabb> {
     let along = opening(reaches);
@@ -1257,10 +1275,7 @@ fn shell(reaches: f32) -> Vec<Aabb> {
 
     // the cellar's floor
     let foot = stair_foot();
-    out.push(Aabb::from_center_size(
-        vec3(foot - DEEP * 0.5, -DOWN - THICK * 0.5, along),
-        vec3(DEEP, THICK, SPAN),
-    ));
+    out.push(ground(reaches));
 
     // the shaft's two sides, so a stair with no bannister is still a stair you
     // cannot walk off sideways

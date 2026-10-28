@@ -728,16 +728,22 @@ pub fn built(reaches: f32) -> Vec<(Aabb, Made)> {
     out
 }
 
+/// The floor of this room as the walk meets it, lap and all.
+///
+/// `room::Room::grounds` gathers it with every other room's. The lid is a
+/// `Made::Ground` too, which is why this says which of the two it wants.
+pub fn floor(reaches: f32) -> Aabb {
+    ground(at(reaches), LAPS)
+}
+
 /// The same, as what you cannot walk through, with the floor lapped back
 /// under the hall's. See `ground`.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
-    let middle = at(reaches);
-
     built(reaches)
         .into_iter()
         .map(|(box_, made)| match made {
             // the floor, which is the Ground that is not the lid
-            Made::Ground if box_.max.y <= 0.0 => ground(middle, LAPS),
+            Made::Ground if box_.max.y <= 0.0 => floor(reaches),
             _ => box_,
         })
         .collect()
