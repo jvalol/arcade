@@ -9,6 +9,13 @@ enter to play it.
 cargo run --release
 ```
 
+Run it yourself
+
+```
+git clone https://github.com/jvalol/blitzkit-project.git
+cd blitzkit-project && ./play
+```
+
 Each cabinet wears its game's own screenshot and runs its own binary, so every
 game still runs on its own from its own folder exactly as before. One plays at a
 time.
