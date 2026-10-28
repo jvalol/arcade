@@ -5524,7 +5524,14 @@ impl Game for Arcade {
         // plain eight across a quad that narrow is a weave half the size it has
         // always been in here, and the tile is meant to be the same thing on
         // this floor whatever the room is doing.
-        let was = (room::WALL + room::CABINET.x) * 2.0 + room::NOOK_DEEP;
+        //
+        // **11.8 is a width this floor used to be and not one it is**, so it
+        // is written out. It was `(WALL + CABINET.x) * 2 + NOOK_DEEP`, which
+        // is what that came to on the day, and as a formula it put the nook's
+        // depth into the weave of a carpet the nook cannot see: widening the
+        // nook by 1.6 took the tile down by an eighth in the hall and the
+        // gallery both.
+        let was = 11.8;
         self.floor = Some(renderer.add_mesh(&room::tiled_plane(glam::vec2(
             carpet::TILES * (room::WALL + room::CABINET.x) * 2.0 / was,
             carpet::TILES,
@@ -11280,9 +11287,22 @@ mod tests {
     /// Where a body dropped into the room from a quarter up its own boxes
     /// settles, which is what put the camera on the cellar's floor at -3.0
     /// rather than inside the slab or on the hall above it.
+    ///
+    /// **Measured from the stair's foot and not written out.** It was the
+    /// three numbers that walk gave back, and the first thing to move the
+    /// room under them moved the room out from under them: widening the
+    /// nook carried the whole cellar 1.6 west and left the camera where it
+    /// was, which is two metres further back in a room that had not
+    /// changed. The foot of the stair is what everything down here is
+    /// measured from.
     #[test]
     fn the_cellar_is_drawn() {
-        let at = vec3(-16.325, -cellar::DOWN, -4.6);
+        let reaches = reaches();
+        let at = vec3(
+            cellar::stair_foot() - 2.775,
+            -cellar::DOWN,
+            cellar::opening(reaches),
+        );
 
         looks_right("cellar", at, vec3(at.x - 5.0, at.y + EYE, at.z));
     }

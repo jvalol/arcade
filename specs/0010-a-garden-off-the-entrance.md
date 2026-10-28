@@ -26,10 +26,10 @@ into the building's own footprint and the baths were dug off the cellar, but
 past `shut` on the left there is no floor, no wall and no ceiling, so this room
 is not carved out of anything and can be the size it wants to be.
 
-**It is big.** Eleven deep and eleven along, against the nook's six by
+**It is big.** Eleven deep and eleven along, against the nook's ten by
 fourteen. A garden read as a corridor is a planter, and every room in this
-building has been too small on its first build: the nook twice, the baths three
-times. The pond sits off centre with walking room on all four sides, and the
+building has been too small on its first build: the nook three times, the baths
+three times. The pond sits off centre with walking room on all four sides, and the
 widest walk is a little over three bodies.
 
 **The floor is gravel**, raked in lines, with a stone border where it meets the

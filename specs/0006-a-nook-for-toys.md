@@ -108,11 +108,15 @@ and the same confetti carpet as the hall outside. The room out there is a dim
 neon box and that is right for it. This one is the one place in the building
 that is not selling you a game, so it is furnished rather than lit up.
 
-It is 6.4 by 13.0 rather than 3.0 by 8.0, which is 83 square units of floor
-against the first 24.
+It is 10.0 by 14.0 rather than 3.0 by 8.0, which is 140 square units of floor
+against the first 24. It was 6.4 by 14.0 until spec 0037's way up went in: a
+flight 1.2 wide with a parapet either side takes 1.8 out of the middle of the
+floor, and the lanes it left were 1.75 at the books and 1.23 at the benches.
+Both are over the 1.05 a body needs and both read as a corridor, which is the
+thing this room keeps being and keeps having to stop being.
 
 **The benches are set against the open side**, and the bookcases against the
-back wall opposite them, so the floor between the two is one piece 4.9 across
+back wall opposite them, so the floor between the two is one piece 8.46 across
 and every part of it is somewhere you can be. Out in the floor is where the
 benches were, and the aim of that was floor on both sides of them rather than a
 corridor with a counter down it. It got floor on both sides and the far side was

@@ -122,9 +122,12 @@ on it.
 rather than chosen. The footprint above runs x −9.3 to 3.8 and z −10.05 to
 3.05, and three things are under it:
 
-- **The nook**, clear from x −8.63 to −3.77, which is 4.86 across, and
+- **The nook**, clear from x −12.23 to −3.77, which is 8.46 across, and
   13.7 along. Books down the west face at 0.32 deep, benches down the east
-  at 0.9. Room for a flight and a lane past it.
+  at 0.9. Room for a flight and a lane past it. It was 4.86 across when this
+  was written and the flight went in on that; with the parapet either side
+  the lanes came out at 1.75 and 1.23, so the room is 3.6 deeper than it was
+  and they are 3.63 and 3.03.
 - **The hall's aisle**, clear from x −1.45 to 1.45. That is 2.9, it is the
   spine of the building, and `WALL`'s own note says the aisle cannot change
   width without the sight breaking. A stair in it is a stair in the only

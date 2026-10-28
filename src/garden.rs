@@ -200,7 +200,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
             vec3(DEEP, HIGH, THICK),
         ),
         // the south wall, only the part the nook's end wall does not already
-        // close: the nook is 6.4 deep and the garden is 11
+        // close, which is the garden's own depth less the nook's
         Aabb::from_center_size(
             vec3(west + (DEEP - NOOK_DEEP) * 0.5, HIGH * 0.5, south),
             vec3(DEEP - NOOK_DEEP, HIGH, THICK),
@@ -1696,12 +1696,26 @@ pub fn facing(reaches: f32) -> Vec<Face> {
         // and the two that run away from it. These have no cap of their
         // own: `coping` takes one face per wall and these are second faces
         // on walls that are capped already.
-        Face {
-            at: vec3(middle.x, up, middle.z - half.y - THICK - proud),
-            size: vec3(DEEP + THICK * 2.0, HIGH, proud * 2.0),
-            looks: -Vec3::Z,
-            solid: false,
-            caps: false,
+        //
+        // **The south one stops at the nook.** It ran the whole sixteen,
+        // and the south side of this garden is the nook's end wall for all
+        // but the first eight of that: the outside of a wall whose outside
+        // is another room's inside. What it put in the nook was a second
+        // skin of garden plaster a hair in front of that wall, with
+        // `moss` growing up it and a strip of moss laid out over the
+        // floorboards at its foot. Jake walked in and found moss on a wall
+        // of a reading room.
+        {
+            let west = middle.x - half.x - THICK;
+            let east = crate::cellar::back() - THICK;
+
+            Face {
+                at: vec3((west + east) * 0.5, up, middle.z - half.y - THICK - proud),
+                size: vec3(east - west, HIGH, proud * 2.0),
+                looks: -Vec3::Z,
+                solid: false,
+                caps: false,
+            }
         },
         Face {
             at: vec3(middle.x, up, middle.z + half.y + THICK + proud),
@@ -4483,6 +4497,55 @@ mod tests {
                     sky(dz.atan2(dx), out),
                     top,
                     out
+                );
+            }
+        }
+    }
+
+    /// Spec 0040: every face this garden is dressed on is out of doors.
+    ///
+    /// **The inside of it as well as the outside**, because the garden is
+    /// outdoors on both counts: what is wrong is a face of it standing in
+    /// another room. The south wall's outer skin ran the whole sixteen
+    /// metres, and for the last eight of those the far side of that wall is
+    /// the nook. It put garden plaster a hair in front of the nook's end
+    /// wall, moss up it and a strip of moss laid over the floorboards, and
+    /// what Jake saw from the reading room was moss growing on the wall.
+    ///
+    /// **Asked of `out_of_doors` rather than of a plan**, which is the same
+    /// oracle `lids` uses for the faces the sky can see. A list of which
+    /// faces are outward is a list that is wrong the day a room moves, and
+    /// this one was wrong the day the nook got wider: the strip in the nook
+    /// grew with it.
+    ///
+    /// Swept along each face at a body's width, because the fault is a run
+    /// of wall and not a corner, and taken at the height the moss grows at.
+    #[test]
+    fn every_face_of_the_garden_is_out_of_doors() {
+        let room = crate::room::Room::of(crate::games());
+
+        for (n, face) in facing(room.reaches).iter().enumerate() {
+            let (surface, size, looks) = face.plane();
+            let along = if looks.x.abs() > 0.5 {
+                Vec3::Z
+            } else {
+                Vec3::X
+            };
+            let steps = (size.x / crate::RADIUS).ceil().max(1.0);
+
+            for step in 0..=steps as u32 {
+                // the inner nine tenths of the run: the ends of a face are
+                // in the corners of the room, where the walls it returns
+                // into stand and nothing is out of doors.
+                let at = surface
+                    + along * (size.x * (step as f32 / steps - 0.5) * 0.9)
+                    + Vec3::Y * (MOSS_UP - surface.y);
+
+                assert!(
+                    room.out_of_doors(at),
+                    "face {} is dressed at {:?}, which is inside the building",
+                    n,
+                    at
                 );
             }
         }

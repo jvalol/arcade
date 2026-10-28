@@ -64,12 +64,24 @@ pub const BENCH_GAP: f32 = 0.7;
 /// put them in front of the plinths from every angle, which is the one place
 /// nothing should stand.
 ///
-/// Twice over. It was 3.0 by 8.0 with the benches end to end down one wall,
-/// which is 24 square units of floor holding five benches and a wall of books,
-/// and it read as a corridor because it was one. 5.4 by 8.0 furnished it and
-/// still had you turning sideways. It is 6.4 by 13.0, which is 83 against the
-/// first 24, and the open floor between the benches and the books is 4.9 across.
-pub const NOOK_DEEP: f32 = 6.4;
+/// Three times over. It was 3.0 by 8.0 with the benches end to end down one
+/// wall, which is 24 square units of floor holding five benches and a wall of
+/// books, and it read as a corridor because it was one. 5.4 by 8.0 furnished it
+/// and still had you turning sideways. 6.4 by 14.0 was right until the way up
+/// went in: a flight 1.2 wide with a parapet either side takes 1.8 out of the
+/// middle of the floor, and what it left was a lane of 1.75 at the books and
+/// 1.23 at the benches, which is over the 1.05 a body needs and reads as a
+/// corridor either side of a staircase.
+///
+/// It is 10.0 by 14.0. The stair still stands in the middle of it, the lanes
+/// are 3.63 and 3.03, and the open floor between the benches and the books is
+/// 8.46 across.
+///
+/// **What stops it being wider than that is the room over it.** The stair is
+/// in the middle of this floor and the imaginarium is the lid the stair comes
+/// up through, so every metre of nook is half a metre of stair moving west,
+/// and at 11.0 the parapet is outside the room above it.
+pub const NOOK_DEEP: f32 = 10.0;
 pub const NOOK_SPAN: f32 = 14.0;
 
 /// How much room the far end of the room carries past the last cabinet.
