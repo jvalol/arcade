@@ -463,8 +463,8 @@ pub const SAUNA_STOVE: Vec4 = vec4(0.15, 0.14, 0.14, 1.0);
 ///
 /// Alpha under one, so spec 0018 of the engine draws it see-through and the
 /// basin under it shows. A pool you cannot see into is a blue lid.
-pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.62);
-pub const WATER_HOT: Vec4 = vec4(0.32, 0.56, 0.60, 0.74);
+pub const WATER: Vec4 = vec4(0.20, 0.50, 0.60, 0.30);
+pub const WATER_HOT: Vec4 = vec4(0.32, 0.56, 0.60, 0.45);
 /// The sauna's glass, and the steam over hot water.
 ///
 /// Both lean on spec 0018: alpha under one, drawn after everything solid. The

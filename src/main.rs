@@ -5785,7 +5785,7 @@ impl Game for Arcade {
             .iter()
             .map(|seed| renderer.add_mesh(&garden::slab_mesh(*seed)))
             .collect();
-        self.pond_mesh = Some(renderer.add_mesh(&self.pool_in_the_garden.surface()));
+        self.pond_mesh = Some(renderer.add_water_mesh(&self.pool_in_the_garden.surface()));
         // a trunk apiece, because the lean is a share of the height and the
         // thickness is not: one mesh scaled to two heights is a sapling and a
         // log. The pads are one lump per cut, turned and squashed per pad.
@@ -6004,8 +6004,8 @@ impl Game for Arcade {
             .collect();
         self.named = Some(renderer.add_texture(&blitzkit::text::drawn(neon::SAYS, neon::TEXELS)));
         self.baths = Some(renderer.add_texture(&blitzkit::text::drawn(spa::SAYS, spa::TEXELS)));
-        self.pool_mesh = Some(renderer.add_mesh(&self.pool.surface()));
-        self.tub_mesh = Some(renderer.add_mesh(&self.tub.surface()));
+        self.pool_mesh = Some(renderer.add_water_mesh(&self.pool.surface()));
+        self.tub_mesh = Some(renderer.add_water_mesh(&self.tub.surface()));
         self.point_mesh = Some(renderer.add_mesh(&sign::point_mesh()));
         self.hung = Some(renderer.add_mesh(&room::hung_mesh()));
         // counted off the nook rather than off the quad, so a plank is the same
