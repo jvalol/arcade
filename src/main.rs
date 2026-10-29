@@ -112,6 +112,45 @@ const PITCH_LIMIT: f32 = 1.3;
 const TURNS: f32 = 2.4;
 const TILTS: f32 = 1.6;
 
+/// How long an arrow takes to reach that speed, and to let go of it, in
+/// seconds. Spec 0044.
+///
+/// Beside `EYE_LAGS` because it is the same kind of number. A view that is at
+/// full speed one frame after the key goes down and at rest one frame after it
+/// comes up reads as a tripod head being cranked, which is what the arcade's
+/// clip looked like: the walk under it is a person's and the turns were not.
+///
+/// **A fifth of a second, which is most of a quarter turn.** A quarter turn is
+/// 0.655 seconds, so at this the view spends 0.2 winding on, 0.255 at speed
+/// and 0.2 winding off, and what that reads as is one arc. At 0.12 the middle
+/// was longer than either end and the turn still read as a crank at a gentler
+/// speed, which is what Jake said after watching the first clip of it.
+///
+/// The ramps are symmetric, so a hold sweeps exactly `TURNS` times its own
+/// length once the tail after the key is allowed to run. Every route written
+/// against the flat rate still ends up facing where it did. What has to hold
+/// for that is that nothing presses the next key inside this: `play` in
+/// `refresh-examples` waits longer than this on purpose and says so.
+const AIM_LAGS: f32 = 0.2;
+
+/// Smoothstep, carried through nought so a turn reversed is as smooth as one
+/// started. Spec 0044.
+///
+/// **Why the winding is not the speed.** Walking the speed itself toward what
+/// the arrows ask for gives a flat acceleration, which is a corner at each end
+/// of the ramp: the view goes from still to winding on as hard as it ever
+/// will, in one frame. Winding a throttle at a steady rate and easing that
+/// gives a speed that leaves nought and reaches full with no corner in it.
+///
+/// It costs the sweep nothing. Smoothstep is symmetric about a half, so the
+/// area under the curve on the way up and the area missing on the way down are
+/// the same area the flat rate had.
+fn eased(wound: f32) -> f32 {
+    let far = wound.abs().min(1.0);
+
+    wound.signum() * far * far * (3.0 - 2.0 * far)
+}
+
 /// What the toy on the bench falls under.
 const GRAVITY: Vec3 = vec3(0.0, -9.81, 0.0);
 
@@ -718,6 +757,11 @@ struct Arcade {
     eye: f32,
     yaw: f32,
     pitch: f32,
+    /// How far the arrows have wound a turn and a tilt on, from -1 to 1.
+    /// Spec 0044: these wind at a steady rate, `eased` makes a curve of them,
+    /// and the curve is the speed, so a turn leans into itself and out again.
+    turning: f32,
+    tilting: f32,
     /// Whether every collider is outlined over the scene, per spec 0013 and
     /// spec 0046 of the engine. Off until somebody asks.
     showing_solid: bool,
@@ -1067,6 +1111,8 @@ impl Arcade {
                 (_, true) => POSED_PITCH,
                 _ => 0.0,
             },
+            turning: 0.0,
+            tilting: 0.0,
             showing_solid: false,
             showing_cost: false,
             rig_step: 2,
@@ -1318,6 +1364,21 @@ impl Arcade {
         }
     }
 
+    /// The doors of one frame, and you out of their way.
+    ///
+    /// **Pulled out of `update` for the same reason `aimed_and_moved` was.**
+    /// These are the only things in the building that move of their own
+    /// accord, and one of them sweeps the floor you stand on to pull the
+    /// book. Spec 0007. Spec 0042's checker said of itself that a route
+    /// waiting on a door was one nobody had written, which stopped being true
+    /// the day a clip was asked to go down to the baths: that route opens the
+    /// bookcase, waits for it, and walks through where a shut one stood.
+    /// Replayed without this it is a route that walks into a wall.
+    fn the_doors_moved(&mut self, dt: f32) {
+        self.room.ease(dt);
+        self.at = walk::shoved(self.at, RADIUS, &self.room.leaves());
+    }
+
     /// The aiming and the moving of one frame.
     ///
     /// **Pulled out of `update` rather than copied.** `--walk` replays a
@@ -1377,9 +1438,25 @@ impl Arcade {
             self.moving_the_view = false;
             (right, up)
         };
-        if turn != 0.0 || tilt != 0.0 {
-            self.yaw += turn * TURNS * dt;
-            self.pitch = (self.pitch + tilt * TILTS * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        // **Wound on and off rather than switched, and the winding eased.**
+        // Spec 0044. The throttle walks toward what the arrows ask for at a
+        // steady rate, `eased` curves it, and the angle moves by that, so the
+        // view leans into a turn and out of it with no corner at either end.
+        // A hold still sweeps `TURNS` times its own length, because what the
+        // winding on costs the winding off gives back.
+        let wound = |now: f32, wants: f32| {
+            let most = dt / AIM_LAGS;
+
+            (now + (wants - now).clamp(-most, most)).clamp(-1.0, 1.0)
+        };
+
+        self.turning = wound(self.turning, turn);
+        self.tilting = wound(self.tilting, tilt);
+
+        if self.turning != 0.0 || self.tilting != 0.0 {
+            self.yaw += eased(self.turning) * TURNS * dt;
+            self.pitch =
+                (self.pitch + eased(self.tilting) * TILTS * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
         }
 
         let riding = self.riding();
@@ -1406,6 +1483,22 @@ impl Arcade {
         };
         self.at = at;
         self.falling = falling;
+
+        // **The eye catching up with the feet, here rather than in `update`.**
+        // Nothing while you are on the level, because then they are the same
+        // number.
+        //
+        // It sat near the end of `update`, which left `--walk` replaying a
+        // route with its eye on the hall's floor however high the body
+        // climbed: spec 0042's checker reported a cabinet in the hall as what
+        // you were looking at while standing in the imaginarium, two floors
+        // over it. That is the drift this function exists to stop, and the
+        // eye belongs with the feet.
+        let behind = self.at.y - self.eye;
+        self.eye += behind * (dt / EYE_LAGS).min(1.0);
+        if behind.abs() < 1e-4 {
+            self.eye = self.at.y;
+        }
 
         went
     }
@@ -6254,11 +6347,7 @@ impl Game for Arcade {
             );
             self.owed -= cradle::STEP;
         }
-        // the door, and then you out of the door's way. It is the only thing in
-        // the building that moves, and it sweeps the floor you stand on to pull
-        // the book. Spec 0007.
-        self.room.ease(dt);
-        self.at = walk::shoved(self.at, RADIUS, &self.room.leaves());
+        self.the_doors_moved(dt);
         self.metronome.advance(dt);
         self.wrecker.advance(dt);
 
@@ -6533,14 +6622,6 @@ impl Game for Arcade {
             (self.swung - by).max(0.0)
         };
 
-        // the eye catching up with the feet. Nothing while you are on the
-        // level, because then they are the same number.
-        let behind = self.at.y - self.eye;
-        self.eye += behind * (dt / EYE_LAGS).min(1.0);
-        if behind.abs() < 1e-4 {
-            self.eye = self.at.y;
-        }
-
         let playing = self.playing.now().map(|name| name.to_string());
         self.seen = self.what_i_see();
 
@@ -6659,8 +6740,8 @@ impl Game for Arcade {
                     ("the bookcase", "Click or press enter to push it back.")
                 } else {
                     (
-                        "a book",
-                        "This one is not a book. Click or press enter to pull it.",
+                        "a bookcase",
+                        "One of these is not a book. Click or press enter to pull it.",
                     )
                 };
 
@@ -10192,6 +10273,8 @@ struct Step {
     looking: [bool; 4],
     works: bool,
     held: f32,
+    /// Whether this one is meant to end against something. Spec 0042.
+    pins: bool,
 }
 
 impl Step {
@@ -10223,11 +10306,17 @@ impl Step {
     /// Nought for anything that is not a held walking key. Shift is not in
     /// the grammar and there is no way to hold it from a script, so the
     /// pace is always the walking one.
+    ///
+    /// **This is the arc and what is measured against it is the chord**, so a
+    /// step that walks and turns at once keeps less of what it asks for than
+    /// a straight one does. A quarter turn walked through keeps nine tenths
+    /// and a half turn two thirds, both of them well clear of the half this
+    /// is held to.
     fn walks_for(&self) -> f32 {
-        if self.walking.iter().any(|held| *held) {
-            SPEED * self.held
-        } else {
+        if self.pins || !self.walking.iter().any(|held| *held) {
             0.0
+        } else {
+            SPEED * self.held
         }
     }
 
@@ -10271,9 +10360,13 @@ fn read_route(route: &str) -> Result<Vec<Step>, String> {
                 looking: [false; 4],
                 works: false,
                 held: 0.0,
+                pins: word.starts_with("pin:"),
             };
 
-            if let Some(rest) = word.strip_prefix("hold:") {
+            if let Some(rest) = word
+                .strip_prefix("hold:")
+                .or_else(|| word.strip_prefix("pin:"))
+            {
                 let mut bits = rest.split(':');
                 let key = bits.next().unwrap_or_default();
                 let held = bits.next().ok_or(format!("{} says no seconds", word))?;
@@ -10282,11 +10375,18 @@ fn read_route(route: &str) -> Result<Vec<Step>, String> {
                     .parse()
                     .map_err(|_| format!("{} does not say how long in seconds", word))?;
 
-                match slotted(key) {
-                    Some((true, n)) => step.looking[n] = true,
-                    Some((false, n)) => step.walking[n] = true,
-                    None => {
-                        return Err(format!("{} holds a key that neither aims nor walks", word))
+                // **Several at once, joined by a plus.** Spec 0044: stopping
+                // to turn and then setting off again is what reads as a
+                // machine, whatever shape the turn itself is, and the only
+                // way to walk a corner rather than pivot on it is to hold the
+                // walk and the turn together.
+                for key in key.split('+') {
+                    match slotted(key) {
+                        Some((true, n)) => step.looking[n] = true,
+                        Some((false, n)) => step.walking[n] = true,
+                        None => {
+                            return Err(format!("{} holds a key that neither aims nor walks", word))
+                        }
                     }
                 }
             } else if word == "enter" {
@@ -10321,9 +10421,21 @@ fn read_route(route: &str) -> Result<Vec<Step>, String> {
 /// is how the clip finishes and the one thing the panel can be filmed doing.
 /// A route is allowed to end that way. It is not allowed to carry on.
 ///
-/// What this does not replay is the door easing open and the shove that
-/// keeps you out of its leaf. Neither aims you, and a route that waits on a
-/// door is one nobody has written.
+/// **A `pin:` is a walk that is meant to end against something**, and it is
+/// the only thing this does not hold to going somewhere. A route that aims at
+/// a small target across a long room is dead reckoning, and dead reckoning is
+/// what the machine gets wrong where this gets it right: the clip of the four
+/// rooms walked twenty metres down the hall, turned into the nook and pointed
+/// at the bookcase one case along from the one that opens, twice, while this
+/// said the route was sound. Walking into the wall first pins the coordinate
+/// the error was in, and then a short strafe off it lands where it should.
+/// Use the building as the datum wherever a target is tight.
+///
+/// **It replays the doors too**, since the day a route was asked to go down
+/// to the baths. That one opens the bookcase, stands while four hundred books
+/// swing out of the way, and walks through where a shut wall was. This used
+/// to say that a route waiting on a door was one nobody had written, which
+/// was true and is the sort of thing that stops being true.
 fn walked(route: &str) -> bool {
     let steps = match read_route(route) {
         Ok(steps) => steps,
@@ -10354,6 +10466,7 @@ fn walked(route: &str) -> bool {
 
         for _ in 0..(step.held / dt).round() as u32 {
             one.aimed_and_moved(dt);
+            one.the_doors_moved(dt);
             // after the move, the way `update` has it: the sight a frame
             // aims by is the one the frame before it left
             one.seen = one.what_i_see();
@@ -10362,6 +10475,22 @@ fn walked(route: &str) -> bool {
 
         one.walking = [false; 4];
         one.looking = [false; 4];
+
+        // **And then the tail**, before anything is read off. Spec 0044: the
+        // arrows ease off rather than stopping dead, so where you are pointing
+        // is not settled until `AIM_LAGS` after the key is up. `play` in
+        // `refresh-examples` waits longer than that after every key, so this is
+        // the machine's own gap and not slack invented here. Run straight into
+        // the next key instead and every turn in every route reads as short by
+        // exactly the tail this cut off.
+        //
+        // The clock is not advanced, because it counts the route's own holds
+        // and never has counted what `play` spends between them.
+        for _ in 0..(AIM_LAGS / dt).ceil() as u32 {
+            one.aimed_and_moved(dt);
+            one.the_doors_moved(dt);
+            one.seen = one.what_i_see();
+        }
 
         let asks_for = step.asks_for(was.1);
         let moved = step.moved(was, (one.yaw, one.pitch));
@@ -10380,10 +10509,11 @@ fn walked(route: &str) -> bool {
         let stopped = walks_for > 0.01 && covered < walks_for * 0.5;
 
         println!(
-            "{:6.2}s  {:22}  at {:7.2} {:7.2}  facing {:6.1}  sees {}{}",
+            "{:6.2}s  {:22}  at {:7.2} {:7.2} {:7.2}  facing {:6.1}  sees {}{}",
             when,
             step.said,
             one.at.x,
+            one.at.y,
             one.at.z,
             one.yaw.to_degrees(),
             match one.seen {
@@ -11521,6 +11651,349 @@ mod tests {
             one.yaw - yaw,
             one.pitch - pitch
         );
+    }
+
+    /// How many frames a hold of this many seconds runs for.
+    fn frames(seconds: f32) -> u32 {
+        (seconds / (1.0 / 60.0)).round() as u32
+    }
+
+    /// Holds an arrow for a while, lets go, and lets the tail run out.
+    ///
+    /// Spec 0044's two halves in one place, because every test here needs
+    /// both and a test that forgets the tail is testing the old behaviour.
+    fn turned_for(held: f32) -> Arcade {
+        let dt = 1.0 / 60.0;
+        let mut one = Arcade::new();
+
+        one.looking[3] = true;
+        for _ in 0..frames(held) {
+            one.aimed_and_moved(dt);
+        }
+
+        one.looking = [false; 4];
+        for _ in 0..(AIM_LAGS / dt).ceil() as u32 {
+            one.aimed_and_moved(dt);
+        }
+
+        one
+    }
+
+    /// Spec 0044: easing costs the hold nothing, which is what lets every
+    /// route written against the flat rate go on meaning what it meant.
+    ///
+    /// **The tail is the whole claim.** Drop the second loop in `turned_for`
+    /// and this fails by 0.124 radians, which is seven degrees of a quarter
+    /// turn and is exactly the ramp that never ran.
+    #[test]
+    fn a_held_arrow_sweeps_what_it_always_swept() {
+        let dt = 1.0 / 60.0;
+        // a quarter turn, which is the number the arcade's own route is
+        // written in
+        let held = 0.655;
+        let one = turned_for(held);
+        let wanted = TURNS * frames(held) as f32 * dt;
+
+        assert!(
+            (one.yaw - wanted).abs() < 0.01,
+            "a {:.3}s hold swept {:.3} radians and the flat rate sweeps {:.3}",
+            held,
+            one.yaw,
+            wanted
+        );
+    }
+
+    /// Spec 0044: the corner at the near end.
+    #[test]
+    fn a_turn_starts_slower_than_it_gets() {
+        let dt = 1.0 / 60.0;
+        let mut one = Arcade::new();
+
+        one.looking[3] = true;
+        one.aimed_and_moved(dt);
+        let first = one.yaw;
+
+        // well past the ramp, and then one more frame on its own
+        for _ in 0..frames(AIM_LAGS * 2.0) {
+            one.aimed_and_moved(dt);
+        }
+        let before = one.yaw;
+        one.aimed_and_moved(dt);
+        let full = one.yaw - before;
+
+        assert!(
+            (full - TURNS * dt).abs() < 1e-5,
+            "a frame well into the turn moved {:.5} and full speed is {:.5}",
+            full,
+            TURNS * dt
+        );
+        assert!(
+            first < full * 0.5,
+            "the first frame moved {:.5} and a frame at full speed moves {:.5}",
+            first,
+            full
+        );
+    }
+
+    /// Spec 0044: and the start has no corner in it, which is what tells an
+    /// eased winding from a flat one.
+    ///
+    /// **A flat ramp passes every other test here.** Walking the speed itself
+    /// toward full at a steady rate is already slow in its first frame and
+    /// already sweeps the right total, so the tests above cannot see the
+    /// difference. What they differ in is the shape: a flat ramp's second
+    /// frame moves exactly twice its first, and smoothstep's moves getting on
+    /// for four times, because it leaves nought with no slope at all. Put
+    /// `self.turning` straight into the yaw in place of `eased` and this is
+    /// the test that fails.
+    #[test]
+    fn the_turn_has_no_corner_where_it_starts() {
+        let dt = 1.0 / 60.0;
+        let mut one = Arcade::new();
+
+        one.looking[3] = true;
+        one.aimed_and_moved(dt);
+        let first = one.yaw;
+        one.aimed_and_moved(dt);
+        let second = one.yaw - first;
+
+        assert!(
+            second > first * 3.0,
+            "the second frame moved {:.6} and the first {:.6}, which is a flat ramp's two",
+            second,
+            first
+        );
+    }
+
+    /// Spec 0044: the corner at the far end, and that it is a corner rather
+    /// than a drift that never settles.
+    #[test]
+    fn letting_go_does_not_stop_the_turn_dead() {
+        let dt = 1.0 / 60.0;
+        let mut one = Arcade::new();
+
+        one.looking[3] = true;
+        for _ in 0..frames(0.5) {
+            one.aimed_and_moved(dt);
+        }
+        one.looking = [false; 4];
+
+        let let_go_at = one.yaw;
+        one.aimed_and_moved(dt);
+
+        assert!(
+            one.yaw > let_go_at,
+            "the view stopped on the frame the arrow came up"
+        );
+
+        for _ in 1..(AIM_LAGS / dt).ceil() as u32 {
+            one.aimed_and_moved(dt);
+        }
+        let settled = one.yaw;
+        one.aimed_and_moved(dt);
+
+        assert_eq!(
+            one.yaw, settled,
+            "the view is still turning more than AIM_LAGS after the arrow came up"
+        );
+
+        // and the tail is half a ramp, not a rounding error.
+        //
+        // Within a frame at full speed, because the ramp is walked in
+        // frame-sized steps and a staircase sits under the triangle it is
+        // drawn on. Stopping dead would be 0.144 out, which is three and a
+        // half frames.
+        let tail = settled - let_go_at;
+        let half = TURNS * AIM_LAGS * 0.5;
+
+        assert!(
+            (tail - half).abs() < TURNS * dt,
+            "the tail swept {:.3} radians and half a ramp is {:.3}",
+            tail,
+            half
+        );
+    }
+
+    /// Spec 0044: the mouse is per pixel and is not eased, because spec
+    /// 0003's sight has to follow the hand exactly.
+    #[test]
+    fn the_mouse_is_not_eased() {
+        let mut one = Arcade::new();
+
+        one.locked = true;
+        one.mouse_motion(glam::vec2(100.0, 0.0));
+
+        assert!(
+            (one.yaw - 100.0 * LOOK).abs() < 1e-6,
+            "a hundred pixels of mouse turned {:.5} and should turn {:.5}",
+            one.yaw,
+            100.0 * LOOK
+        );
+    }
+
+    /// Spec 0044: the limit clamps the angle and the rate decays as usual,
+    /// so an arrow held into the ceiling stops at the ceiling.
+    #[test]
+    fn an_eased_tilt_still_stops_at_the_limit() {
+        let dt = 1.0 / 60.0;
+        let mut one = Arcade::new();
+
+        one.looking[0] = true;
+        for _ in 0..frames(PITCH_LIMIT / TILTS + AIM_LAGS * 4.0) {
+            one.aimed_and_moved(dt);
+        }
+
+        assert!(
+            (one.pitch - PITCH_LIMIT).abs() < 1e-5,
+            "held into the limit the pitch came out at {:.5} and the limit is {:.5}",
+            one.pitch,
+            PITCH_LIMIT
+        );
+    }
+
+    /// Specs 0042 and 0044: a short turn in a route is still read as the
+    /// turn it is, which is what the checker's tail is for.
+    ///
+    /// **Short, because a quarter turn cannot see this.** The checker calls
+    /// a turn swallowed under nine tenths of what it asked for, and a cut
+    /// tail costs a fixed 0.124 radians however long the hold is. A quarter
+    /// turn loses eight per cent of itself and squeaks through the gate
+    /// proving nothing. The 0.22 second turn the arcade's own route opens
+    /// with loses a quarter of itself and is refused outright, so this is
+    /// the hold that can tell the two behaviours apart.
+    ///
+    /// **Against the checker and not against `aimed_and_moved`.** What
+    /// shipping depends on is `--walk` passing a staged route, and the route
+    /// itself lives in another repo. These are the three keys it opens with.
+    #[test]
+    fn a_short_turn_in_a_route_is_still_read_as_a_turn() {
+        assert!(
+            walked("hold:w:3.10 hold:left:0.22 hold:w:1.60"),
+            "a route opening on a 0.22 second turn was refused"
+        );
+    }
+
+    /// Spec 0042: the eye goes with the feet inside `aimed_and_moved`, so a
+    /// replay's sight is taken from the height it is actually at.
+    #[test]
+    fn the_eye_sets_off_after_the_feet_in_one_frame_of_aiming() {
+        let dt = 1.0 / 60.0;
+        let mut one = Arcade::new();
+
+        // feet well above the eye, which is what a climb looks like a frame
+        // at a time. High enough that the frame cannot close the gap by
+        // falling instead.
+        one.at.y = 4.0;
+        one.eye = 0.0;
+        one.aimed_and_moved(dt);
+
+        assert!(
+            one.eye > 0.0,
+            "a frame of aiming left the eye at {:.3} with the feet at {:.3}",
+            one.eye,
+            one.at.y
+        );
+    }
+
+    /// Spec 0042: and the sight that comes off it is the one you would have
+    /// standing there.
+    ///
+    /// **The second assertion is the control.** The same look from the
+    /// hall's own floor does find something, so a test that passed because
+    /// nothing is pickable in that direction would fail here instead.
+    #[test]
+    fn the_sight_is_taken_from_the_floor_you_are_standing_on() {
+        let room = room::Room::of(games());
+        // where the arcade's own route turns to face into the imaginarium,
+        // which is where this was found
+        let (x, z) = (-1.69, 2.30);
+        let way = -Vec3::Z;
+
+        assert_eq!(
+            room.looking_at(vec3(x, aloft::BASE + EYE, z), way),
+            None,
+            "looking level in the imaginarium, something two floors down is in the sight"
+        );
+        assert!(
+            room.looking_at(vec3(x, EYE, z), way).is_some(),
+            "the same look from the hall's floor sees nothing either, so this proves nothing"
+        );
+    }
+
+    /// Specs 0042 and 0044: a hold can carry several keys joined by a plus.
+    #[test]
+    fn a_hold_can_carry_a_walk_and_a_turn_together() {
+        let steps = read_route("hold:w+left:0.655").expect("the route was refused");
+
+        assert_eq!(
+            steps[0].walking,
+            [true, false, false, false],
+            "the w is lost"
+        );
+        assert_eq!(
+            steps[0].looking,
+            [false, false, true, false],
+            "the left is lost"
+        );
+    }
+
+    /// Spec 0044: and holding them together walks the corner instead of
+    /// pivoting on it.
+    ///
+    /// **Against the pivot it replaces, not against a landmark.** What is
+    /// being claimed is that the two end up pointing the same way and only
+    /// one of them has been anywhere, so both are run and both are asked.
+    #[test]
+    fn a_walked_corner_turns_as_far_as_a_pivot_and_goes_somewhere() {
+        let dt = 1.0 / 60.0;
+        let held = frames(0.655);
+
+        let run = |walking: [bool; 4]| {
+            let mut one = Arcade::new();
+            let from = one.at;
+
+            one.walking = walking;
+            one.looking = [false, false, true, false];
+            for _ in 0..held {
+                one.aimed_and_moved(dt);
+            }
+
+            one.walking = [false; 4];
+            one.looking = [false; 4];
+            for _ in 0..(AIM_LAGS / dt).ceil() as u32 {
+                one.aimed_and_moved(dt);
+            }
+
+            (one.yaw, one.at.distance(from))
+        };
+
+        let (pivot, stood) = run([false; 4]);
+        let (corner, went) = run([true, false, false, false]);
+
+        assert!(
+            (pivot - corner).abs() < 1e-4,
+            "the pivot came round to {:.4} and the walked corner to {:.4}",
+            pivot,
+            corner
+        );
+        assert!(stood < 0.01, "the pivot moved {:.2} metres", stood);
+        assert!(went > 2.0, "the walked corner only went {:.2} metres", went);
+    }
+
+    /// Spec 0042: a `pin:` is a walk meant to end against something, so the
+    /// check that a walk goes somewhere does not apply to it.
+    ///
+    /// **Both halves, because one of them is the control.** The same walk
+    /// written as a `hold:` is refused, which is what says this is exempting
+    /// something rather than passing something that would pass anyway.
+    #[test]
+    fn a_pin_may_walk_into_a_wall_and_a_hold_may_not() {
+        // west out of the hall's own end wall, which stops you at once
+        let into_it = "hold:right:0.655 hold:w:2.0";
+        let pinned = "hold:right:0.655 pin:w:2.0";
+
+        assert!(!walked(into_it), "a hold that goes nowhere was let through");
+        assert!(walked(pinned), "a pin that goes nowhere was refused");
     }
 
     /// Spec 0013: it is off when the building opens.

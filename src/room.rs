@@ -1170,34 +1170,30 @@ impl Room {
         }
     }
 
-    /// The one book that opens the wall, as the box it fills right now.
+    /// The case the one book stands in, as the box it fills right now.
     ///
-    /// It moves with the case it stands in, so it is still the handle when the
-    /// door is open and still the handle halfway through the swing.
+    /// It moves with the swing, so it is still the handle when the door is
+    /// open and still the handle halfway through it.
+    ///
+    /// **The case and not the spine.** This was the book itself: a box 8.6
+    /// centimetres across and 88 up, which is what the comment in
+    /// `looking_at` has always said nobody would ever find. Jake finds it,
+    /// because a hand on a mouse can nudge and look again. A staged route
+    /// cannot. Driving one at it, the aim window came out one seven
+    /// centimetre step wide, so the clip that goes down to the baths opened
+    /// the wall or walked into it depending on where the walk's last frame
+    /// landed, and nothing could tell which until somebody watched it.
+    ///
+    /// What it costs is that the way down is easier to find, which is what
+    /// the comment in `looking_at` was already arguing for. Jake's call,
+    /// 2026-10-29.
     pub fn handle(&self) -> Option<Aabb> {
-        let case = crate::study::CASE;
-        let books = crate::study::stock(cellar::CASE as u32, cellar::BOOK_SHELF);
-        let book = books.get(cellar::BOOK)?;
+        let shelved = self.bookcases.get(cellar::CASE)?;
 
-        let along = crate::study::along(&books, cellar::BOOK) - case.x * 0.5;
-        let up = crate::study::shelf_at(cellar::BOOK_SHELF);
-        // the same frame the book is drawn in, from the same function, so
-        // pointing at it and seeing it cannot come apart. Written out twice
-        // they would be two lists of where a bookcase stands, which in this
-        // room has already hung a sconce in a doorway.
-        let (at, turn) = self.shelf_frame(cellar::CASE);
-        let middle = at
-            + turn
-                * vec3(
-                    along,
-                    up + book.tall * 0.5,
-                    -case.y * 0.5 + crate::study::BOOK_BACK + book.tall * 0.22,
-                );
-        let reach = (book.thick * 0.9).max(book.tall * 0.44) * 0.5;
-
-        Some(Aabb::from_center_size(
-            middle,
-            vec3(reach * 2.0, book.tall, reach * 2.0),
+        Some(Self::swung_box(
+            shelved,
+            self.swings_out(cellar::CASE),
+            self.swing,
         ))
     }
 
@@ -1995,10 +1991,11 @@ impl Room {
                 .map(|far| (Seen::Bench(n), far))
         });
 
-        // and the one book that is not a book, which is a case sized thing
+        // and the one case that is not a case, which is a case sized thing
         // because the book is the handle and the case is the door. Pointing at
         // a single spine on a shelf of four hundred is a thing nobody would
-        // ever find; pointing at the case it is in is a thing you can.
+        // ever find; pointing at the case it is in is a thing you can. It was
+        // the spine until 2026-10-29 and `handle` says what moved it.
         let case = self
             .handle()
             .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
@@ -2920,57 +2917,70 @@ mod tests {
         );
     }
 
-    /// Spec 0007: the handle is one book, not a wall of them.
+    /// Spec 0007: the handle is one case, not a wall of them.
     ///
-    /// The room said one of them is not a book and then let you pull any of
-    /// them: the sight landed on the whole case, so clicking anywhere on either
-    /// leaf worked. That makes the sentence a lie and the door a pair of very
-    /// large buttons.
+    /// **It was one book, and the reason it was is worth keeping.** The room
+    /// said one of them is not a book and then let you pull any of them: the
+    /// sight landed on the whole case, so clicking anywhere on either leaf
+    /// worked, which made the sentence a lie and the door a pair of very large
+    /// buttons. So it was narrowed to the spine.
+    ///
+    /// What that cost came out on 2026-10-29, staging a clip down to the
+    /// baths. A spine is 8.6 centimetres across. Driven at it with `--walk`,
+    /// the aim window was one seven centimetre step wide: at one step the
+    /// sight found it and a step either side it found nothing. Jake can hit
+    /// that because a hand on a mouse nudges and looks again. A route held at
+    /// arm's length cannot, and a miss is a clip of a camera pressed against a
+    /// bookcase that no check can catch, because the route's arithmetic is
+    /// right and only the machine is off.
+    ///
+    /// So it is the one case now, and the sentence was rewritten rather than
+    /// left lying. Jake's call. The other leaf is still not a handle while the
+    /// wall is shut, which is what is left of the secret.
     #[test]
-    fn one_book_opens_the_wall() {
+    fn one_case_opens_the_wall() {
         let room = Room::of(some(13));
-        let book = room.handle().expect("a book to pull");
+        let handle = room.handle().expect("a case to pull");
         let eye = Vec3::Y * 1.55;
 
-        // it is a book sized thing and not a bookcase sized one
+        // one case, and not the pair of them
         let case = crate::study::CASE;
         assert!(
-            book.size().x < case.x * 0.2 && book.size().y < case.z * 0.3,
+            handle.size().x < case.x * 1.2 && handle.size().z < case.x * 1.2,
             "the handle is {:?} and a case is {:?}",
-            book.size(),
+            handle.size(),
             case
         );
 
         // pointing at it finds it
-        let at = book.center();
+        let at = handle.center();
         let from = vec3(at.x + 1.2, eye.y, at.z);
         assert_eq!(
             room.looking_at(from, at - from),
             Some(Seen::Case),
-            "the book is not pickable"
+            "the case is not pickable"
         );
 
-        // and pointing at the rest of the same shelf finds nothing
-        for off in [-0.45f32, -0.3, 0.3, 0.45] {
-            let elsewhere = vec3(at.x, at.y, at.z + off);
-            let stood = vec3(elsewhere.x + 1.2, eye.y, elsewhere.z);
+        // and the far end of that same case is a handle too, which is the
+        // whole of what changed
+        let along = vec3(at.x, at.y, handle.max.z - 0.1);
+        let stood = vec3(along.x + 1.2, eye.y, along.z);
+        assert_eq!(
+            room.looking_at(stood, along - stood),
+            Some(Seen::Case),
+            "only the middle of the case is a handle"
+        );
 
-            assert_ne!(
-                room.looking_at(stood, elsewhere - stood),
-                Some(Seen::Case),
-                "{} along the shelf is also a handle",
-                off
-            );
-        }
-
-        // and so does the other leaf, which has no book in it
+        // the other leaf is not one while the wall is shut, which is what is
+        // left of the secret. `an_open_wall_shuts_from_anywhere_on_a_leaf` is
+        // the other half of this.
         let other = &room.bookcases[cellar::CASE + 1];
         let face = Room::bookcase_box(other);
         let stood = vec3(face.max.x + 1.2, eye.y, other.at.z);
         assert_ne!(
             room.looking_at(stood, vec3(face.max.x, eye.y, other.at.z) - stood),
             Some(Seen::Case),
-            "the whole of the other leaf is a handle"
+            "the other leaf is a handle with the wall shut"
         );
     }
 
@@ -2986,7 +2996,7 @@ mod tests {
         let eye = Vec3::Y * 1.55;
 
         // the leaf with no book in it, which shut is not a handle anywhere on
-        // it: `one_book_opens_the_wall` is the other half of this
+        // it: `one_case_opens_the_wall` is the other half of this
         let other = cellar::CASE + 1;
         room.open = true;
         room.swing = 1.0;

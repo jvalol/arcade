@@ -120,6 +120,25 @@ and not its spine brightened, because the spines come off a seed and some of
 them are nearly black, so a multiplier would have made the handle a slightly
 less dark book on a shelf of dark books.
 
+**What you point at is the case, and what glows is the book.** Those were the
+same thing until the 29th of October 2026. Pointing had to land on the spine
+itself, which is 8.6 centimetres across, and the room said one of these is not
+a book and meant it.
+
+What moved it was a staged clip. A route driven at that spine with `--walk`
+had an aim window one seven centimetre step wide: on it the sight found the
+book and a step either side it found nothing. A hand on a mouse nudges and
+looks again, so Jake never saw a problem. A route held at arm's length gets one
+go, and a miss is a clip of a camera pressed against a bookcase, with no check
+able to say so because the route's arithmetic is right and only the machine is
+off.
+
+So the sight takes the case the book stands in, which is what the note in
+`looking_at` had argued for all along, and the line was rewritten rather than
+left lying. The glow stays on the book: it is still the thing that tells you,
+and it is still the only thing that does. The leaf beside it is not a handle
+while the wall is shut, so there is still something to find. Jake's call.
+
 **It takes its time.** A bookcase on a hinge with four hundred books in it, and
 the whole of what makes a secret door worth having is the moment between pulling
 the book and seeing what is behind it. The box follows the swing rather than
@@ -205,7 +224,7 @@ have no collider at all.
 - You can walk down the stair and back up it. — `cellar::tests::you_can_walk_down_it_and_back_up`
 - Shut, the way down is not there; open, it is, off the middle as well as along it. — `room::tests::the_case_is_a_door`
 - And you can get back up it through the room's own geometry. — `room::tests::you_can_get_back_up_the_stair`
-- One book opens the wall, and the rest of the shelf does not. — `room::tests::one_book_opens_the_wall`
+- One case opens the wall, and the leaf beside it does not. — `room::tests::one_case_opens_the_wall`
 - The door does not open or close through you. — `room::tests::the_door_does_not_open_through_you`
 - Nothing down the way down is inside the room above it. — `room::tests::the_way_down_keeps_out_of_the_room`
 - A stair is climbed at a stair's pace. — `walk::tests::a_stair_is_climbed_at_a_stairs_pace`

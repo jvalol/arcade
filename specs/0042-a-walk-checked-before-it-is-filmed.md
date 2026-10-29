@@ -39,6 +39,37 @@ nothing at all, because it was only ever asked about turns.
 with no window, prints where it went and what it was looking at, and exits
 nonzero if a turn in it did not happen or a walk in it went nowhere.
 
+**A `pin:` is a walk meant to end against something**, written like a hold and
+exempt from the rule that a walk goes somewhere. It is for squaring up on the
+building rather than aiming at a point in it.
+
+That distinction was bought twice. The clip of the four rooms walks twenty
+metres down the hall, turns into the nook and points at the bookcase that
+opens. Dead reckoning over that distance put it one case along, which is a
+camera reading the spines of the wrong bookcase for twenty seconds, and this
+check called the route sound both times because the route is sound: the
+arithmetic is exact here and the machine's is not. Walking into the wall first
+pins the coordinate the error is in, and a short strafe off that lands where
+it should. Use the building as the datum wherever a target is tight.
+
+**A hold may name several keys joined by a plus**, as `hold:w+left:0.8`, and
+the reader sets each of their slots. Spec 0044 is why: a route that can only
+say one key at a time can only pivot, and a corner you stand still to turn is
+what reads as a machine.
+
+**Where it went is three numbers, not two.** It printed x and z while every
+room in the building stood on one floor. The way up and the imaginarium are
+two storeys of it, and a trace without the height cannot tell the nook from
+the room above it.
+
+**And the eye goes with the feet.** The catching up of spec 0005's lagged eye
+sat near the end of `update`, so a replay never moved it: the sight was worked
+out from a camera on the hall's floor however high the body climbed, and this
+reported a cabinet in the hall as what you were looking at while standing in
+the imaginarium. It is in `aimed_and_moved` now, with everything else a replay
+and the game have to agree about. `update` works the sight out straight after
+calling that, so the order inside a frame is unchanged.
+
 - The replay is the game's own. `aimed_and_moved` and `what_i_see` came out of
   `update` for this and are called by both, so there is one account of how
   aiming works and the check is of the building people walk.
@@ -76,6 +107,12 @@ nonzero if a turn in it did not happen or a walk in it went nowhere.
   refused. — `tests::a_walk_a_wall_stops_is_a_fault`
 - And the same walk with room to finish in is let
   through. — `tests::a_walk_with_room_to_finish_is_let_through`
+- The eye goes up with the feet, so a replayed climb's sight is taken from
+  the height it is at. — `tests::the_eye_sets_off_after_the_feet_in_one_frame_of_aiming`
+- And what that sight finds is what you would see standing
+  there. — `tests::the_sight_is_taken_from_the_floor_you_are_standing_on`
+- A `pin:` may walk into a wall and the same walk as a `hold:` may
+  not. — `tests::a_pin_may_walk_into_a_wall_and_a_hold_may_not`
 
 ### Verified by hand
 
