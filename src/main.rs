@@ -2570,16 +2570,27 @@ impl Arcade {
     /// Its shell is handed over once per spec 0026. What is here is the
     /// three frames: a flight apiece, a door at the top of each, and the
     /// fitting each frame's own lamp hangs in.
-    fn draw_the_imaginarium(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
-        scene.push_colored(
-            floor,
-            &Transform::at(vec3(aloft::MIDDLE_X, aloft::BASE, aloft::MIDDLE_Z)).with_scale(vec3(
-                aloft::ROOM,
-                1.0,
-                aloft::ROOM,
-            )),
-            aim::ALOFT_WALL,
-        );
+    fn draw_the_imaginarium(&self, scene: &mut Scene, cube: MeshId) {
+        // the floor, in the pieces it is made of rather than as one quad
+        // over the footprint.
+        //
+        // **One quad covered the way up's own slot.** The stair comes
+        // through this floor and `aloft::floors` cuts the hole for it,
+        // which the colliders have always had and the picture had not: what
+        // you saw was an unbroken floor with the top tread of the stair
+        // lying in it, two faces at one height fighting along their edges,
+        // and a hole you could walk into that was not drawn. Jake called it
+        // clipping and that is what it was.
+        //
+        // Drawn from the same list `solid` reads, so the floor you see is
+        // the floor you walk on.
+        for piece in aloft::floors() {
+            scene.push_colored(
+                cube,
+                &Transform::at(piece.center()).with_scale(piece.size()),
+                aim::ALOFT_WALL,
+            );
+        }
 
         for n in 0..aloft::FRAMES {
             // **A riser is a face and a tread is a face.** What makes a
@@ -2599,6 +2610,16 @@ impl Arcade {
 
             // the path worn across each frame's own floor, which is what
             // says that the surface somebody is standing on is a floor
+            // the border round this frame's floor, which is what says a
+            // floor is a floor and not another pale face
+            for band in aloft::border(n) {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(band.center()).with_scale(band.size()),
+                    aim::ALOFT_BORDER,
+                );
+            }
+
             for leg in aloft::path(n) {
                 scene.push_colored(
                     cube,
@@ -6945,7 +6966,7 @@ impl Game for Arcade {
         self.draw_the_back_room(scene, cube, floor);
         self.draw_the_hotel(scene, cube, floor);
         self.draw_the_twine(scene, cube, floor);
-        self.draw_the_imaginarium(scene, cube, floor);
+        self.draw_the_imaginarium(scene, cube);
         self.draw_the_people(scene);
         self.draw_the_register(scene, cube, floor);
 

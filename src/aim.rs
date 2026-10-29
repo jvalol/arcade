@@ -1115,6 +1115,12 @@ pub const ALOFT_DARK: Vec4 = vec4(0.10, 0.10, 0.11, 1.0);
 /// the floor it is on, because what it has to do is say where the floor is.
 pub const ALOFT_PATH: Vec4 = vec4(0.33, 0.32, 0.31, 1.0);
 
+/// The border laid round each frame's floor, per spec 0038. A half step
+/// down from the floor it is laid on, and lighter than the way worn across
+/// it: the border is what the floor is, the path is what has happened to
+/// it.
+pub const ALOFT_BORDER: Vec4 = vec4(0.43, 0.42, 0.39, 1.0);
+
 /// The casing round each door, per spec 0038. Darker than the wall and
 /// lighter than what is behind the opening, so the three read as three.
 pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);

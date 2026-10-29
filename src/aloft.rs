@@ -649,15 +649,44 @@ pub const STRIDE: f32 = 0.7;
 /// How long somebody is out of sight between journeys.
 pub const WAITS: f32 = 3.0;
 
+/// How far off the middle of the way somebody walks, and how far the four
+/// of them are spread within that.
+///
+/// **They all walked the same line.** One journey, everybody on it, so two
+/// going opposite ways met in the middle of the flight and passed through
+/// each other, and four going the same way trod in one another's steps.
+/// Which side you keep is which way you are going, and the spread inside
+/// that is what stops the four of them being one queue.
+///
+/// A body is 0.41 across at the arms and the flight is `STAIR_WIDE`, so two
+/// lanes a third of a metre either side of the middle leave a hand's
+/// breadth between shoulders.
+pub const LANE: f32 = 0.33;
+pub const LANE_SPREAD: f32 = 0.18;
+
+/// How far either side of somebody the way is read to work out which way
+/// they face.
+///
+/// **A corner is turned over a stride rather than in a frame.** The facing
+/// was the leg's own direction, so at the foot of the flight a walker
+/// swapped from one heading to another between two frames, which is a thing
+/// a cardboard cut-out does. Taken as the chord between where they were
+/// half a stride back and where they will be half a stride on, the turn
+/// takes the whole corner.
+pub const TURNS_IN: f32 = 0.45;
+
 /// The walk through a frame, in that frame's own terms: out of the door at
 /// the top of the flight, down it, along the floor, and out of the door at
 /// the end of that.
 ///
 /// Three corners rather than two, because the turn at the foot is the thing
 /// that says they are going somewhere rather than pacing.
-pub fn journey() -> [Vec3; 4] {
-    let across = STAIR_ACROSS + STAIR_WIDE * 0.5;
-    let over = -HALF + DOOR_WIDE * 1.5;
+///
+/// `lane` moves the whole line sideways, so one walker's way is another's
+/// shifted over: parallel on every leg, and the corners stay square.
+pub fn journey_in(lane: f32) -> [Vec3; 4] {
+    let across = STAIR_ACROSS + STAIR_WIDE * 0.5 + lane;
+    let over = -HALF + DOOR_WIDE * 1.5 + lane;
 
     [
         vec3(HALF, -HALF + STAIR_CLIMB, across),
@@ -665,6 +694,32 @@ pub fn journey() -> [Vec3; 4] {
         vec3(over, -HALF, across),
         vec3(over, -HALF, HALF - THICK),
     ]
+}
+
+/// And the middle of it, which is what the worn path is laid along and what
+/// the room is measured by.
+pub fn journey() -> [Vec3; 4] {
+    journey_in(0.0)
+}
+
+/// How far along a way a walk of `gone` has got.
+fn along_the_way(path: &[Vec3; 4], gone: f32) -> Vec3 {
+    let mut left = gone.max(0.0);
+    let mut leg = 0;
+
+    while leg + 2 < path.len() && left > path[leg].distance(path[leg + 1]) {
+        left -= path[leg].distance(path[leg + 1]);
+        leg += 1;
+    }
+
+    let (from, to) = (path[leg], path[leg + 1]);
+
+    from.lerp(to, (left / from.distance(to)).clamp(0.0, 1.0))
+}
+
+/// How long one of those ways is, corner to corner.
+fn way_long(path: &[Vec3; 4]) -> f32 {
+    path.windows(2).map(|leg| leg[0].distance(leg[1])).sum()
 }
 
 /// The floor leg of that walk, laid on the floor as a path.
@@ -697,6 +752,11 @@ pub fn path(n: u64) -> Vec<Aabb> {
                 ),
             )
         })
+        // **And not across the way up's slot.** The leg to the far door
+        // passes the head of the stairwell and overlapped it by six
+        // tenths, so a strip of worn floor was drawn hanging over a hole.
+        // The floor is cut there and what is laid on it is cut with it.
+        .flat_map(|leg| crate::room::minus(leg, over_the_slot()))
         .collect()
 }
 
@@ -707,12 +767,63 @@ pub fn path(n: u64) -> Vec<Aabb> {
 pub const PATH_WIDE: f32 = 1.4;
 pub const PATH_DEEP: f32 = 0.04;
 
-/// How long that walk is, corner to corner.
-pub fn journey_long() -> f32 {
-    journey()
-        .windows(2)
-        .map(|leg| leg[0].distance(leg[1]))
-        .sum()
+/// The border round each frame's floor: how far in from the wall it runs,
+/// how wide the band is, and how far it stands proud.
+///
+/// **A floor you can tell from a wall.** Three of the six faces of this
+/// room are floors and the other three are not, and nothing about a plain
+/// pale face says which it is. A skirting and a cornice would say it, and
+/// they would also say which way up the room is, which is the one thing it
+/// must not say. A border laid on a floor says floor and says nothing
+/// about up: each of the three gets one, in its own terms.
+///
+/// Lower than the worn path, so where the two cross the path is what you
+/// see. The band's top is inside the path's box there, which is a face
+/// hidden rather than two faces fighting.
+pub const BORDER_IN: f32 = 0.9;
+pub const BORDER_WIDE: f32 = 0.18;
+pub const BORDER_UP: f32 = 0.02;
+
+/// The slot, raised by the proudest thing anything lays on a floor.
+///
+/// **A strip laid on a floor and a hole cut through it only ever touch in
+/// a plane**, so cutting one by the other takes nothing: the path sits at
+/// the floor's top and the hole stops there. Raised, the cut bites.
+fn over_the_slot() -> Aabb {
+    let hole = up_hole();
+
+    Aabb::new(
+        hole.min,
+        vec3(hole.max.x, hole.max.y + PATH_DEEP, hole.max.z),
+    )
+}
+
+/// That border, as the four bands of it.
+///
+/// **Cut to the way up's slot, like the path.** What is laid on a floor is
+/// not laid where the floor is not: the slot reaches the north wall, so a
+/// band run along it would cross the stairwell's mouth. For the other two
+/// frames the cut takes nothing, because the hole is in one floor only.
+pub fn border(n: u64) -> Vec<Aabb> {
+    let out = HALF - BORDER_IN;
+    let inner = out - BORDER_WIDE;
+    let (low, high) = (-HALF, -HALF + BORDER_UP);
+    let mut ring = Vec::new();
+
+    for (near, far) in [(-out, -inner), (inner, out)] {
+        // the two along x take the corners, and the two along z stop at
+        // their faces, so no two of the four lap at a corner
+        ring.push(box_in_frame(n, vec3(-out, low, near), vec3(out, high, far)));
+        ring.push(box_in_frame(
+            n,
+            vec3(near, low, -inner),
+            vec3(far, high, inner),
+        ));
+    }
+
+    ring.into_iter()
+        .flat_map(|band| crate::room::minus(band, over_the_slot()))
+        .collect()
 }
 
 /// Everybody in the room, at `since` seconds.
@@ -732,36 +843,40 @@ pub fn journey_long() -> f32 {
 /// Half of them walk it the other way, so the traffic goes both ways and
 /// people pass each other on the stair.
 pub fn walking(since: f32) -> Vec<Walker> {
-    let path = journey();
-    let long = journey_long();
-    let round = long / WALKS + WAITS;
     let mut out = Vec::new();
 
     for n in 0..FRAMES {
         for who in 0..WALKERS {
+            // the odd ones take it from the other end, and which end you
+            // start from is which side of the way you keep
+            let down = (n + who) % 2 == 0;
+            let lane = if down { LANE } else { -LANE }
+                + (who as f32 / (WALKERS - 1) as f32 - 0.5) * LANE_SPREAD;
+            let path = journey_in(lane);
+            let long = way_long(&path);
+
+            // **Nobody walks at the same pace as anybody else.** Twelve
+            // people crossing a room at one speed is a parade, and the
+            // speed is the first thing the eye reads. A sixth either side
+            // of `WALKS`, which is a slow walk against a brisk one.
+            let pace = WALKS * (0.84 + 0.32 * ((n * WALKERS + who) % 5) as f32 / 4.0);
+            let round = long / pace + WAITS;
+
             // spread along the round, and the frames out of step with each
             // other, so the room is never three of the same thing at once
             let off = round * (who as f32 / WALKERS as f32 + n as f32 * 0.11);
-            let walked = (since + off).rem_euclid(round) * WALKS;
+            let walked = (since + off).rem_euclid(round) * pace;
 
             // out of sight, which is the wait past the end of the walk
             if walked > long {
                 continue;
             }
 
-            // and the odd ones take it from the other end
-            let down = (n + who) % 2 == 0;
             let gone = if down { walked } else { long - walked };
-
-            let mut left = gone;
-            let mut leg = 0;
-            while leg + 2 < path.len() && left > path[leg].distance(path[leg + 1]) {
-                left -= path[leg].distance(path[leg + 1]);
-                leg += 1;
-            }
-            let (from, to) = (path[leg], path[leg + 1]);
-            let at = from.lerp(to, (left / from.distance(to)).clamp(0.0, 1.0));
-            let way = (to - from).normalize_or(Vec3::X) * if down { 1.0 } else { -1.0 };
+            let at = along_the_way(&path, gone);
+            let ahead = along_the_way(&path, (gone + TURNS_IN).min(long));
+            let behind = along_the_way(&path, (gone - TURNS_IN).max(0.0));
+            let way = (ahead - behind).normalize_or(Vec3::X) * if down { 1.0 } else { -1.0 };
 
             // their feet stand on the tread under them rather than on the
             // slope between two, or they ride the flight like a ramp
@@ -786,7 +901,7 @@ pub fn walking(since: f32) -> Vec<Walker> {
                 // `people::swing` takes a fraction of a crossing and puts
                 // `people::STEPS` paces in it, so this is distance walked
                 // over the length of that many strides
-                along: (since + off) * WALKS / (STRIDE * crate::people::STEPS),
+                along: (since + off) * pace / (STRIDE * crate::people::STEPS),
                 shade: (n * WALKERS + who) as usize,
             });
         }
@@ -1682,6 +1797,129 @@ mod tests {
                 n
             );
         }
+    }
+
+    /// Spec 0038: nothing laid on a frame's floor is laid where that floor
+    /// is not.
+    ///
+    /// **The way up's slot is the one hole in any of the three.** It
+    /// reaches the north wall, so anything run along that wall crosses its
+    /// mouth, and the worn path's leg to the far door overlapped it by six
+    /// tenths: a strip of floor wear drawn hanging over a stairwell. The
+    /// border would have done the same.
+    ///
+    /// Asked of the hole itself rather than of a list of what to cut,
+    /// which is the same list `floors` cuts the floor by.
+    #[test]
+    fn nothing_is_laid_over_the_way_ups_slot() {
+        // the slot itself rather than its edges: what is cut to it butts
+        // it on every side, and a box that butts another intersects it
+        let slot = over_the_slot();
+        let hole = Aabb::new(slot.min + Vec3::splat(1e-3), slot.max - Vec3::splat(1e-3));
+
+        for n in 0..FRAMES {
+            for (what, laid) in [("the path", path(n)), ("the border", border(n))] {
+                for piece in laid {
+                    assert!(
+                        !piece.intersects(&hole),
+                        "{} of frame {} at {:?} is laid over the slot",
+                        what,
+                        n,
+                        piece.min
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0038: every frame's floor carries the same border, and it is
+    /// on the floor rather than in it.
+    #[test]
+    fn every_frames_floor_has_a_border_laid_on_it() {
+        for n in 0..FRAMES {
+            let bands = border(n);
+
+            assert!(
+                bands.len() >= 4,
+                "frame {} has {} bands of border",
+                n,
+                bands.len()
+            );
+
+            for band in bands {
+                let thick = band.size().min_element();
+
+                assert!(
+                    (thick - BORDER_UP).abs() < 1e-4,
+                    "a band of frame {}'s border is {:.3} thick rather than {:.3}",
+                    n,
+                    thick,
+                    BORDER_UP
+                );
+                assert!(
+                    thick < PATH_DEEP,
+                    "the border stands as proud as the path worn over it"
+                );
+            }
+        }
+    }
+
+    /// Spec 0038: two people walking a frame the opposite way round pass
+    /// each other rather than through each other.
+    ///
+    /// **They all walked one line.** `journey` was the way and everybody
+    /// was on it, so a pair meeting head on at the foot of a flight walked
+    /// into one another, overlapped for a stride and came out the other
+    /// side. Jake saw it as the room not feeling like people.
+    ///
+    /// Each of them keeps the side of the way their own direction makes
+    /// left, so the two lines are parallel on every leg and nested at the
+    /// corners, and the spread inside a lane keeps the four of one
+    /// direction out of a single queue.
+    ///
+    /// **It does not claim they never touch.** Nobody gives way to anybody
+    /// here and the paces differ, so one walking the same way as another
+    /// catches it up and goes through it. Over the shoulder, at a glance,
+    /// that is a crowd. Head on it is a fault, which is what this holds.
+    #[test]
+    fn nobody_walks_through_anybody_coming_the_other_way() {
+        let round = way_long(&journey()) / WALKS + WAITS;
+        let apart = crate::people::ARMS_APART * 2.0;
+        let mut met = 0;
+
+        for tick in 0..(round * 20.0) as u32 {
+            let since = tick as f32 * 0.05;
+            let walking: Vec<(usize, Walker)> = walking(since)
+                .into_iter()
+                .map(|who| (who.shade / WALKERS as usize, who))
+                .collect();
+
+            for (n, one) in walking.iter() {
+                for (m, two) in walking.iter() {
+                    let facing = (one.facing - two.facing).abs();
+
+                    if n != m || one.shade >= two.shade || facing < std::f32::consts::FRAC_PI_2 {
+                        continue;
+                    }
+
+                    met += 1;
+
+                    assert!(
+                        one.at.distance(two.at) > apart,
+                        "at {:.2} seconds two of frame {} are {:.2} apart, head on",
+                        since,
+                        n,
+                        one.at.distance(two.at)
+                    );
+                }
+            }
+        }
+
+        assert!(
+            met > 100,
+            "only {} pairs ever faced each other, so this proved nothing",
+            met
+        );
     }
 
     /// Spec 0038: somebody is always about, and nobody walks on air.
