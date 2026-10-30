@@ -175,6 +175,41 @@ thing somebody has to decide to do rather than a thing that happens.
 Nothing. Both open questions were answered on 2026-10-24, the day after it
 was written: three frames, and no goal in the first build.
 
+## Making it read
+
+Two things went in on the 30th of October after Jake walked it and called the
+walls and the floor bland, and both come off the same note this project keeps
+about furnishing a room.
+
+**A floor you can tell from the walls**, which is the first thing that note
+asks for and the one this room never had. In here that means three floors:
+three of the six faces are somebody's down and the other three are over
+somebody's head. Nothing said which was which, so all six were drawn as wall
+and the picture came out one value from end to end, in the one room whose
+whole subject is that three surfaces disagree about which way is down.
+
+Splitting them also stopped this room's own floor being drawn twice, once as
+part of the shell and once by hand, the same boxes in the same colour. Two
+faces in one plane that spec 0014's check cannot see, because `solid` is the
+list both of them read.
+
+**And something breaking the long walls**, which is the other thing that note
+asks for. Piers, and there is only one place they can go: on a floor a pier is
+a block in the way of whoever walks there, so they are on the three faces
+nobody stands on, where a beam over your head is a pilaster up the wall to the
+two frames that read that face as a wall.
+
+A pier that meets a doorway or the way up is dropped whole rather than cut
+round. Cutting was tried and makes slivers, and slivers put two drawn faces in
+one plane. A missing pier reads as a gap in a rhythm, which is what a stair
+coming through a wall should look like.
+
+- No pier stands in anybody's way. — `aloft::tests::no_pier_stands_in_anybodys_way`
+- And the way up still arrives, which a pier walled off on the first
+  build. — `aloft::tests::you_can_walk_up_it`
+- And nothing in here shares a plane with anything, which the slivers
+  did. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
+
 ## Acceptance criteria
 
 The first build's are not written yet. This one is, and it is the only one

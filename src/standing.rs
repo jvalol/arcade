@@ -66,6 +66,8 @@ pub enum Made {
     RegisterCeiling,
     TwineWall,
     TwineCeiling,
+    AloftFloor,
+    AloftPier,
     AloftWall,
     AloftCeiling,
     AscentStair,
@@ -195,14 +197,34 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     // from the nook's floor to this room's, so it is in neither of them,
     // and the test that every run is one room is what said so.
     let up = crate::aloft::way_up();
-    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::aloft::solid()
+    // **And the three faces that are somebody's floor are told apart from
+    // the three that are not.** All six were wall, which is one value from
+    // end to end in the one room whose whole subject is that three surfaces
+    // disagree about which way is down. It also drew this room's own floor
+    // twice, once here and once in `draw_the_imaginarium`, the same boxes in
+    // the same colour: two faces in one plane that `solid` cannot see,
+    // because it is the list both of them are reading.
+    let under = crate::aloft::under_each_floor();
+    let piers = crate::aloft::all_piers();
+    let (floors, shell): (Vec<Aabb>, Vec<Aabb>) = crate::aloft::solid()
         .into_iter()
         .filter(|box_| {
             !(0..crate::aloft::FRAMES).any(|n| crate::aloft::treads(n).contains(box_))
                 && !up.contains(box_)
+                && !piers.contains(box_)
         })
+        .partition(|box_| {
+            under
+                .iter()
+                .any(|at| at.cmpge(box_.min).all() && at.cmple(box_.max).all())
+                || crate::aloft::floors().contains(box_)
+        });
+    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = shell
+        .into_iter()
         .partition(|box_| box_.min.y < crate::aloft::BASE + crate::aloft::TALL);
 
+    put(Where::Aloft, Made::AloftFloor, floors);
+    put(Where::Aloft, Made::AloftPier, piers);
     put(Where::Aloft, Made::AloftWall, walls);
     put(Where::Aloft, Made::AloftCeiling, ceiling);
 

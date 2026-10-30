@@ -1439,6 +1439,92 @@ pub fn floors() -> Vec<Aabb> {
     )
 }
 
+/// How far a pier stands off the face it is on, how wide it is across, and
+/// how many run over one face.
+///
+/// **On the three faces nobody stands on, which is the only place they can
+/// go.** Every face of this room is somebody's floor or somebody's ceiling
+/// and there is no such thing as a plain wall in here. On a floor a pier is
+/// a block in the way of whoever walks there. On a ceiling it is a beam, and
+/// a beam over your head is a pilaster up the wall to the two frames that
+/// read that face as a wall, which is the whole of what they are for.
+///
+/// Five, because the room is 12.5 across and four left a gap in the middle
+/// wide enough to read as a gap rather than a rhythm.
+pub const PIER_DEEP: f32 = 0.32;
+pub const PIER_WIDE: f32 = 0.45;
+pub const PIERS: u64 = 5;
+
+/// The piers over frame `n`'s head.
+///
+/// Run the whole span so their ends are buried in the faces either side,
+/// which is this building's rule for not putting two faces in one plane.
+pub fn piers(n: u64) -> Vec<Aabb> {
+    (0..PIERS)
+        .map(|i| {
+            let along = -HALF + ROOM * (i + 1) as f32 / (PIERS + 1) as f32;
+
+            box_in_frame(
+                n,
+                vec3(-HALF, HALF - PIER_DEEP, along - PIER_WIDE * 0.5),
+                vec3(HALF, HALF, along + PIER_WIDE * 0.5),
+            )
+        })
+        .filter(|pier| {
+            // **Dropped whole where something crosses one, not cut round
+            // it.** A pier through a doorway is a bar across a door, and the
+            // way up comes through the north face where frame two's piers
+            // stand: the first build walled the arrival off and
+            // `you_can_walk_up_it` stopped at 5.06 rather than on the floor.
+            //
+            // Cutting was tried first and makes slivers, and slivers put two
+            // drawn faces in one plane, which is what this building has spent
+            // nine sittings on. A missing pier reads as a gap in a rhythm,
+            // which is what a stair coming through a wall should look like.
+            //
+            // A body's width of room round the way up, because the stair's
+            // own boxes are where the stair is and not where somebody
+            // climbing it needs to be.
+            let clear = way_up()
+                .into_iter()
+                .map(|box_| {
+                    Aabb::new(
+                        box_.min - Vec3::splat(crate::RADIUS),
+                        box_.max + Vec3::splat(crate::RADIUS),
+                    )
+                })
+                .chain((0..FRAMES).flat_map(|m| (0..DOORS).map(move |which| doorway(m, which))));
+
+            !clear
+                .into_iter()
+                .any(|cut| pier.min.cmplt(cut.max).all() && cut.min.cmplt(pier.max).all())
+        })
+        .collect()
+}
+
+/// Every pier in the room.
+pub fn all_piers() -> Vec<Aabb> {
+    (0..FRAMES).flat_map(piers).collect()
+}
+
+/// A point just inside each frame's own floor, for telling the three of them
+/// from the rest of the shell.
+///
+/// **Three of this room's six faces are somebody's floor** and the other
+/// three are over somebody's head. Nothing said which was which, so all six
+/// were drawn as wall and the room came out one value from end to end: the
+/// thing it is about is that three surfaces disagree about down, and not one
+/// of them was telling you it was a surface you could stand on.
+///
+/// A point and not a test, because what the shell is made of is a box list
+/// and the question "is this box that floor" is answered by whether the
+/// floor's own middle is inside it.
+pub fn under_each_floor() -> Vec<Vec3> {
+    (0..FRAMES)
+        .map(|n| in_frame(n, vec3(0.0, -HALF - THICK * 0.5, 0.0)))
+        .collect()
+}
+
 /// Everything solid: the shell, the treads and the landings, and the way up.
 pub fn solid() -> Vec<Aabb> {
     let half = ROOM * 0.5;
@@ -1446,6 +1532,12 @@ pub fn solid() -> Vec<Aabb> {
     let high = vec3(MIDDLE_X + half, BASE + TALL, MIDDLE_Z + half);
     // the floor you stand on in the middle, with the stair's slot out of it
     let mut out = floors();
+
+    // and the piers over each frame's head, which are a wall's furniture to
+    // the two frames that read that face as a wall and so have to be solid:
+    // on the lid they are out of anybody's reach, and on the other two they
+    // stand where a body can walk into them.
+    out.extend(all_piers());
 
     // and the lid over the lot
     out.extend([
@@ -2550,6 +2642,55 @@ mod tests {
     /// Every tread of the flight, not only the ones under the opening in
     /// the ceiling. The parapet runs the whole flight, so the drop beside
     /// the first tread is held by the same rule as the drop beside the
+    /// Spec 0038: no pier stands in anybody's way.
+    ///
+    /// **Which is the whole of why they are where they are.** There is no
+    /// plain wall in this room: every face is one frame's floor or another's
+    /// ceiling. A pier on a floor is a block in the way of whoever walks
+    /// there, so they go on the three faces nobody stands on, where a beam
+    /// over your head is a pilaster up the wall to the two frames that read
+    /// that face as a wall.
+    ///
+    /// **Asked of the paths and not of the floors.** The first version of
+    /// this asked whether a pier reached into a floor slab, which a pier
+    /// standing on top of a floor does not, so it passed with the piers laid
+    /// on the floors and proved nothing. What is actually being claimed is
+    /// that the people walking their circuits do not walk into one, and the
+    /// worn path is where they walk.
+    ///
+    /// The count is the other half of the control: without it this passes
+    /// for a room with no piers in it.
+    #[test]
+    fn no_pier_stands_in_anybodys_way() {
+        for n in 0..FRAMES {
+            for leg in path(n) {
+                // the air over the worn strip, which is the body and not the
+                // wear: the strip itself is a film on the floor and nothing
+                // would ever hit it
+                let walked = Aabb::new(
+                    leg.min - vec3(crate::RADIUS, 0.0, crate::RADIUS),
+                    leg.max + vec3(crate::RADIUS, crate::people::TALL, crate::RADIUS),
+                );
+
+                for pier in all_piers() {
+                    assert!(
+                        !(pier.min.cmplt(walked.max).all() && walked.min.cmplt(pier.max).all()),
+                        "a pier at {:?} stands in the way of frame {} at {:?}",
+                        pier.center(),
+                        n,
+                        leg.center()
+                    );
+                }
+            }
+        }
+
+        assert!(
+            all_piers().len() >= FRAMES as usize * 2,
+            "only {} piers in the whole room, so this proves nothing",
+            all_piers().len()
+        );
+    }
+
     /// last.
     #[test]
     fn you_cannot_walk_off_the_side_of_the_way_up() {

@@ -1100,7 +1100,25 @@ pub const HEADS: [Vec4; 4] = [
 /// building with nothing above it and the light should say so. Everything
 /// else here is a cellar, a corridor at night or a hall lit in pools.
 pub const ALOFT_WALL: Vec4 = vec4(0.56, 0.55, 0.52, 1.0);
-pub const ALOFT_CEILING: Vec4 = vec4(0.62, 0.61, 0.58, 1.0);
+/// The three faces somebody is standing on, which are not the three over
+/// somebody's head.
+///
+/// **A floor you can tell from the walls**, which is the first thing this
+/// project's own note on furnishing a room asks for and the one this room
+/// never had: all six faces were `ALOFT_WALL` and the picture came out one
+/// value from end to end. Darker than the wall and lighter than the worn
+/// path on it, so the three planes step away from each other and the wear
+/// still reads as wear.
+pub const ALOFT_FLOOR: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
+pub const ALOFT_CEILING: Vec4 = vec4(0.70, 0.69, 0.66, 1.0);
+/// The piers over each frame's head, which are pilasters up a wall to the
+/// two frames that read that face as a wall.
+///
+/// A shade off the face they stand on rather than a colour of their own. A
+/// long wall with nothing breaking it is one slab, and what breaks it is the
+/// shadow down the side of each pier: the step in tone is there to keep them
+/// from disappearing where the light is flat, not to make them a feature.
+pub const ALOFT_PIER: Vec4 = vec4(0.63, 0.62, 0.59, 1.0);
 pub const ALOFT_TREAD: Vec4 = vec4(0.47, 0.45, 0.42, 1.0);
 pub const ALOFT_LANDING: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
 
@@ -1119,7 +1137,7 @@ pub const ALOFT_PATH: Vec4 = vec4(0.33, 0.32, 0.31, 1.0);
 /// down from the floor it is laid on, and lighter than the way worn across
 /// it: the border is what the floor is, the path is what has happened to
 /// it.
-pub const ALOFT_BORDER: Vec4 = vec4(0.43, 0.42, 0.39, 1.0);
+pub const ALOFT_BORDER: Vec4 = vec4(0.60, 0.59, 0.55, 1.0);
 
 /// The casing round each door, per spec 0038. Darker than the wall and
 /// lighter than what is behind the opening, so the three read as three.

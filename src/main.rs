@@ -2677,13 +2677,13 @@ impl Arcade {
         //
         // Drawn from the same list `solid` reads, so the floor you see is
         // the floor you walk on.
-        for piece in aloft::floors() {
-            scene.push_colored(
-                cube,
-                &Transform::at(piece.center()).with_scale(piece.size()),
-                aim::ALOFT_WALL,
-            );
-        }
+        //
+        // **And drawn once.** It was pushed here and pushed again as part of
+        // the shell, the same boxes in the same colour, which is two faces
+        // in one plane that spec 0014's check cannot see because `solid` is
+        // the list both of them read. The shell tells the three floors from
+        // the three faces over somebody's head now, so this is where it
+        // stopped being needed.
 
         for n in 0..aloft::FRAMES {
             // **A riser is a face and a tread is a face.** What makes a
@@ -3690,6 +3690,8 @@ impl Arcade {
                 // doors moved, so it is made of what that one is made of
                 (_, standing::Made::TwineWall) => (aim::HOTEL_WALL, aim::MATTE),
                 (_, standing::Made::TwineCeiling) => (aim::HOTEL_CEILING, aim::VOID),
+                (_, standing::Made::AloftFloor) => (aim::ALOFT_FLOOR, aim::MATTE),
+                (_, standing::Made::AloftPier) => (aim::ALOFT_PIER, aim::MATTE),
                 (_, standing::Made::AloftWall) => (aim::ALOFT_WALL, aim::MATTE),
                 (_, standing::Made::AloftCeiling) => (aim::ALOFT_CEILING, aim::VOID),
                 // the stair is the nook's own joinery and the shaft over
