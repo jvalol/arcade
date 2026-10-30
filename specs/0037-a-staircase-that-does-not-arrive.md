@@ -206,6 +206,21 @@ loop:
 - Nothing else in the building is up
   here. — `aloft::tests::nothing_in_the_building_is_up_here`
 
+**Walking up it was not a thing anything asked.** `you_can_walk_up_it` walks
+one body up the middle, which is the easy case and the only one that was ever
+tried. Coming at the foot from an angle, a body settled against the bottom
+step and stood there for ever. Jake found it by playing, twice; sampling it by
+hand called it two lanes out of fifteen, and easing the turns in spec 0044
+moved it somewhere else entirely, because it was never about the lane.
+
+It is in the engine: a sweep that starts in contact answers at no distance at
+all, so `move_and_slide` turns the movement along the face, comes round to the
+same contact four times, and the frame ends where it began. The fix is there
+and the proof is here, because this is the room that has the geometry to show
+it: seven hundred ways at the flight, every lane across its width by four
+distances back by seven headings. Eight of them stood still before and none
+after.
+
 The way up:
 
 - It runs from the nook's floor to this room's, and meets its own landing at
@@ -233,6 +248,8 @@ The way up:
   it. — `aloft::tests::the_way_up_leaves_the_halls_ceiling_alone`
 - And a body pressed into either side of the first flight stays on the
   stair. — `aloft::tests::you_cannot_walk_off_the_side_of_the_way_up`
+- And nobody coming at the foot of it from any lane or any angle ends up
+  standing still on it. — `tests::nobody_sticks_at_the_foot_of_the_way_up`
 - The landing is at the nook's
   ceiling. — `aloft::tests::the_landing_is_at_the_nooks_ceiling`
 

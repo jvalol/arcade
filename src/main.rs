@@ -11260,6 +11260,82 @@ mod tests {
         room::Room::of(games()).reaches
     }
 
+    /// Spec 0037: nobody sticks at the foot of the way up.
+    ///
+    /// **Every lane and every heading, because the fault was in neither on
+    /// its own.** Walked straight at from anywhere across its width, the
+    /// flight climbs. Come in at an angle and a body settled against the
+    /// bottom step and stood there for ever, and which angles did it moved
+    /// with anything that shifted the approach by a centimetre: a morning's
+    /// sampling called it two lanes out of fifteen, and easing the turns
+    /// moved it somewhere else entirely.
+    ///
+    /// What it was is in `blitzkit::collision::move_and_slide`, and the fix
+    /// is there. A sweep that starts in contact answers at no distance at
+    /// all, so the slide came round to the same contact four times over and
+    /// the frame ended where it began.
+    ///
+    /// **A body that walks past the flight is not this test's business.** At
+    /// twenty degrees from a stride and a half back you miss the stair
+    /// honestly and cross the nook. What is asked is that nothing ends up
+    /// standing still inside the flight, below the landing. The count of the
+    /// ones that do climb is the control: without it this passes for a stair
+    /// nobody can get onto at all.
+    #[test]
+    fn nobody_sticks_at_the_foot_of_the_way_up() {
+        let room = room::Room::of(games());
+        let solid = room.solid();
+        let west = aloft::up_west();
+        let foot = aloft::up_foot();
+        let step = 1.0 / 60.0;
+        let (mut stuck, mut climbed) = (Vec::new(), 0);
+
+        for lane in 0..=24 {
+            // across the flight's clear width, a body's radius in from each
+            // side, which is every line a body can walk up
+            let room_for = aloft::UP_WIDE - RADIUS * 2.0;
+            let x = west + RADIUS + room_for * lane as f32 / 24.0;
+
+            for back in [0.5f32, 0.8, 1.1, 1.4] {
+                for off in [-20.0f32, -12.0, -6.0, 0.0, 6.0, 12.0, 20.0] {
+                    let way = off.to_radians();
+                    let wish = vec3(way.sin(), 0.0, way.cos()) * SPEED;
+                    let mut at = vec3(x, 0.0, foot - back);
+                    let mut falling = 0.0;
+
+                    for _ in 0..420 {
+                        let (next, fell) =
+                            walk::walk(at, wish, falling, RADIUS, step, &solid, true);
+                        at = next;
+                        falling = fell;
+                    }
+
+                    if at.y >= aloft::UP_LANDING - 0.01 {
+                        climbed += 1;
+                    } else if at.x > west - 0.5
+                        && at.x < west + aloft::UP_WIDE + 0.5
+                        && at.z > foot - 1.0
+                        && at.z < aloft::up_head()
+                    {
+                        stuck.push((x, back, off, at));
+                    }
+                }
+            }
+        }
+
+        assert!(
+            stuck.is_empty(),
+            "{} ways at the flight end standing still on it, first {:?}",
+            stuck.len(),
+            stuck.first()
+        );
+        assert!(
+            climbed > 500,
+            "only {} of 700 ways at the flight climbed it, so this proves nothing",
+            climbed
+        );
+    }
+
     /// Spec 0027: the hall, from the door, down the aisle.
     ///
     /// Where the building opens, which is the view `media/arcade.png` has
