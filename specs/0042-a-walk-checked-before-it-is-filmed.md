@@ -27,11 +27,25 @@ neither repo can check this alone, and a copy of either in the other is the
 drift this building keeps writing down.
 
 **A walk that does not go is the same fault wearing other clothes.** The
-threshold out of the hotel's lobby stops you dead on one heading and lets you
+threshold out of the hotel's lobby stopped you dead on one heading and let you
 through on both of the ones either side of it, which is a two degree band and
-nobody could have guessed it. The route crosses it. The check said every turn
+nobody could have guessed it. The route crossed it. The check said every turn
 turned and the walk went four metres of the eleven it asked for, and said
 nothing at all, because it was only ever asked about turns.
+
+**And it was not the threshold.** It was `move_and_slide` in the engine: a
+sweep that starts in contact answers at no distance, so a body pressed into a
+face at a shallow angle was turned along it four times and left where it
+began. The same fault held a body at the foot of the way up, which is where it
+was finally run down, on the 29th of October 2026. Spec 0014 of the engine
+carries the fix.
+
+Walked again afterwards, twenty one headings in half degree steps across the
+same leg: ten stopped before and six after, and the six that remain cover
+eleven and a half metres and then meet the far wall, which is a walk arriving
+rather than a walk stopping. The band is gone. What is written above is kept
+because it is why this check exists, and because a check that was built for
+one fault and outlived it is worth saying so about.
 
 ## Behavior
 
@@ -121,10 +135,12 @@ calling that, so the order inside a frame is unchanged.
 - `--walk` on the route as restaged: twenty one steps, the desk and both
   corridors in the trace, and the one swallowed key is the last.
 - `refresh-examples arcade` refuses to film when the check fails.
-- The lobby threshold, walked at every heading the frame rate can land on:
-  89.4 degrees is held at the wall for six seconds of walking, and 87.1 and
-  91.7 both go the whole eleven metres. The check names the first and passes
-  the other two.
+- The lobby threshold, walked at every heading the frame rate can land on.
+  It was 89.4 degrees held at the wall for six seconds of walking while 87.1
+  and 91.7 went the whole eleven metres, and the check named the first and
+  passed the other two. Since the engine's fix none of the three is held, and
+  the building has moved under the numbers as well: widening the nook on the
+  28th carried the cellar and the lobby west with it.
 
 ## Out of scope
 
