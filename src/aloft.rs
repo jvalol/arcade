@@ -1,19 +1,25 @@
-//! The imaginarium, above everything else. Spec 0037.
+//! The imaginarium, above everything else. Specs 0037 and 0038.
 //!
-//! **Four flights round a square, each climbing, and the top of the fourth
-//! at the foot of the first.** You go up all the way round and arrive where
-//! you set off, and nothing about any single flight is odd.
+//! **One room with three mutually perpendicular downs**, a flight and two
+//! doors belonging to each, and people walking all three. You keep the
+//! down you came in with and nothing in here changes it. What is
+//! impossible is not a shape: it is that three floors disagree about which
+//! way is down and all three are in use.
 //!
-//! It is shallow on purpose and that is the whole trick. Three metres of
-//! climb over thirty two of run is 5.4 degrees, which the eye reads as level
-//! from anywhere in the room, so a loop that genuinely rises all the way
-//! round looks closed. Twelve metres is 20.6 degrees and is unmistakably a
-//! spiral going away from you: all three were built and looked at before
-//! this one was picked.
+//! Spec 0037 built a Penrose loop here first, four flights round a square
+//! each rising 5.4 degrees so the circuit read as closed. It was honest
+//! geometry and it did not read: at that pitch the risers vanish and what
+//! is left is four shelves. Escher's own closes from one viewpoint and a
+//! player's viewpoint moves. What 0037 settled and 0038 kept is where this
+//! room is, how you get up to it, how big it is and how it is lit.
 //!
-//! **It is not forced perspective.** The geometry is honest and holds up
-//! from every angle, which spec 0037 required, because there is nothing to
-//! hold up. The illusion is in the gentleness.
+//! **It is not forced perspective.** The geometry holds up from every
+//! angle, because there is nothing to hold up.
+//!
+//! Each frame's second door is cut in another frame's floor, which is spec
+//! 0038's one thing you decide: an ordinary door in a wall to the people
+//! who walk through it, and a hole in the ground to whoever's floor it is
+//! in. One of the three is in yours.
 
 use blitzkit::collision::Aabb;
 use glam::{vec2, vec3, Quat, Vec2, Vec3};
@@ -185,6 +191,16 @@ pub fn jutting() -> Vec<(Aabb, Vec3)> {
             let (axis, sign) = door_faces(&hole);
             let mut looks = Vec3::ZERO;
             looks[axis] = sign;
+
+            // **Except the one that comes out downward**, which is the
+            // hatch in the floor you walk in on. It does not stand outside
+            // anything: under this room `outside` is already one mass from
+            // the hall's lid to the top of the walls, and a dressed block
+            // inside that mass is a plastered cap flush with the floor's
+            // own underside, which is two drawn faces in one plane.
+            if looks == -Vec3::Y {
+                continue;
+            }
 
             // the recess is a back and four sides, and the whole of it is
             // what stands out there: taking its bounds rather than writing
@@ -380,7 +396,16 @@ pub const STAIR_ACROSS: f32 = -2.6;
 /// is that every flight is plainly on its way to a door somebody uses.
 pub const DOOR_WIDE: f32 = STAIR_WIDE;
 pub const DOOR_TALL: f32 = 2.0;
-pub const DOOR_BACK: f32 = 0.5;
+/// How deep the dark behind a door goes, and how thick its leaf is.
+///
+/// **Set by `walk::STEP`, because one of these is a hole in a floor.** Spec
+/// 0038's second doors are each cut in another frame's floor, so what is
+/// behind one of them is a pit in the ground somebody stands on, and the
+/// drop into it is the slab's own thickness plus this less the leaf lying
+/// at the bottom. At the half metre this was, you could get down there and
+/// not back out.
+pub const DOOR_BACK: f32 = 0.18;
+pub const LEAF_THICK: f32 = 0.08;
 
 /// Every tread of frame `n`'s flight, in the world.
 ///
@@ -442,8 +467,8 @@ pub fn doorway(n: u64, which: u64) -> Aabb {
         // was two paces and a door.
         _ => box_in_frame(
             n,
-            vec3(-HALF + DOOR_WIDE, -HALF, HALF - THICK),
-            vec3(-HALF + DOOR_WIDE * 2.0, -HALF + DOOR_TALL, HALF + THICK),
+            vec3(-HALF + DOOR_WIDE, -HALF, -HALF - THICK),
+            vec3(-HALF + DOOR_WIDE * 2.0, -HALF + DOOR_TALL, -HALF + THICK),
         ),
     }
 }
@@ -526,6 +551,37 @@ pub fn door_recess(n: u64, which: u64) -> Vec<Aabb> {
     out
 }
 
+/// How long a leaf takes to drop clear of its own doorway.
+pub const LEAF_DROPS: f32 = 0.9;
+
+/// The leaf of frame `n`'s second door, `slid` of the way out of the hole.
+///
+/// **It slides rather than swings**, which is the one thing that works for
+/// all three of these at once: a leaf on a hinge is a flap standing up out
+/// of the floor to the frame whose floor it is in, and the same leaf in a
+/// wall is an ordinary door. Sliding, it is a panel going into the surface
+/// beside it either way, and there is room for it: the hole starts
+/// `DOOR_WIDE` along the wall, so the leaf's own width of surface is what
+/// it slides into.
+///
+/// Shut, its face is the face it is cut in, so a shut hatch is floor you
+/// cannot tell from the floor. Open, it has dropped to the back of its own
+/// recess and is what you stand on if you step down in.
+///
+/// **It drops rather than swinging.** A leaf on a hinge is a door in a
+/// wall to two of these three and a flap standing out of the ground to the
+/// third, and the third is the one you are looking down at. Dropping, it
+/// is the same panel going into the same slot whichever face it is in.
+pub fn leaf(n: u64, slid: f32) -> Aabb {
+    let down = (THICK + DOOR_BACK - LEAF_THICK) * slid.clamp(0.0, 1.0);
+
+    box_in_frame(
+        n,
+        vec3(-HALF + DOOR_WIDE, -HALF, -HALF - LEAF_THICK - down),
+        vec3(-HALF + DOOR_WIDE * 2.0, -HALF + DOOR_TALL, -HALF - down),
+    )
+}
+
 /// How far the casing round a door stands proud of its wall, and how wide
 /// it is.
 ///
@@ -542,13 +598,23 @@ pub fn door_case(n: u64, which: u64) -> Vec<Aabb> {
     let (axis, sign) = door_faces(&hole);
     let (mut low, mut high) = (hole.min.to_array(), hole.max.to_array());
 
-    // it stands on the room's side of the wall, which is the near face
+    // **It stands on the surface, not on the hole's inner edge.** The hole
+    // is cut `THICK` past the face it goes through, which costs nothing
+    // for the cutting and put the casing a third of a metre off the wall.
+    // Edge on, up a wall, that reads as an architrave anyway. In a floor
+    // you look straight down at it and it is a frame hanging in the air
+    // over a hole, which is how this was found.
+    let plane = middle().to_array()[axis] + sign * HALF;
+
+    // and it sits on that face rather than biting into it: a casing sunk
+    // into the wall puts its own cheeks in the plane of the hole's cut,
+    // which the coplanar check names four times over, once per corner.
     if sign > 0.0 {
-        high[axis] = low[axis] + CASE_OUT;
-        low[axis] -= CASE_OUT * 0.4;
+        low[axis] = plane - CASE_OUT;
+        high[axis] = plane;
     } else {
-        low[axis] = high[axis] - CASE_OUT;
-        high[axis] += CASE_OUT * 0.4;
+        low[axis] = plane;
+        high[axis] = plane + CASE_OUT;
     }
 
     let mut out = Vec::new();
@@ -607,24 +673,121 @@ pub const LAMP_DOWN: f32 = 1.0;
 pub const LAMP_RANGE: f32 = 11.0;
 pub const LAMP_LIT: f32 = 0.55;
 
+/// How big the fitting is, which the drawing and the rod both need.
+pub const LAMP_FITTING: Vec3 = vec3(0.3, 0.14, 0.3);
+
+/// How thick the rod is that holds it up.
+pub const LAMP_ROD: f32 = 0.05;
+
+/// Where the lamp hangs, in its own frame's terms.
+///
+/// One place, read by the lamp, the fitting and the rod, because they are
+/// one thing in three pieces rather than three things that agree.
+fn sconce_local() -> Vec3 {
+    vec3(
+        HALF - STAIR_RUN * 0.5,
+        HALF - LAMP_DOWN,
+        STAIR_ACROSS + STAIR_WIDE * 0.5,
+    )
+}
+
 pub fn sconces() -> Vec<Vec3> {
+    (0..FRAMES).map(|n| in_frame(n, sconce_local())).collect()
+}
+
+/// The rod frame `n`'s fitting hangs on, from that frame's own ceiling.
+///
+/// **A fitting with nothing holding it up is a box floating a metre under
+/// the ceiling**, which is what these were from the first build. This
+/// project's rule is that every lamp sits in a fitting, and it had stopped
+/// one step short of asking what the fitting sits in: from the floor the
+/// pool of light on the wall had a slab beside it and no reason for either.
+///
+/// It runs into what it meets at both ends, the ceiling above and the
+/// fitting below, rather than stopping against either. That is this
+/// building's habit for a join and it is not what holds the rod to either
+/// of them: `nothing_drawn_in_here_is_in_one_plane_with_anything` has been
+/// handed the fitting and the rod, which it never had before, and it is
+/// the thing that would name a seam here.
+pub fn sconce_rod(n: u64) -> Aabb {
+    let at = sconce_local();
+    let wide = LAMP_ROD * 0.5;
+
+    box_in_frame(
+        n,
+        vec3(at.x - wide, at.y, at.z - wide),
+        vec3(at.x + wide, HALF + THICK * 0.5, at.z + wide),
+    )
+}
+
+/// How far over its own doorhead each second door's lamp sits, how far it
+/// stands off the wall, and what it gives.
+///
+/// **The corner all three second doors are in had no light in it.** One
+/// lamp per frame is the rule this room was built on and each of them
+/// hangs over its own flight, which puts the three of them at the three
+/// far ends and leaves the corner where the doors meet unlit. Jake walked
+/// it and said so: the hatch in the floor and the floor round it were one
+/// shade of grey.
+///
+/// Smaller than the ceiling lamp and nearer, because what it has to show
+/// is a doorway and not a room.
+pub const DOOR_LAMP_UP: f32 = 0.38;
+pub const DOOR_LAMP_OUT: f32 = 0.30;
+pub const DOOR_LAMP_LIT: f32 = 0.40;
+pub const DOOR_LAMP_RANGE: f32 = 6.0;
+
+/// Where it hangs, in its own frame's terms: over the head of that frame's
+/// second door, standing off the wall it is in.
+fn door_sconce_local() -> Vec3 {
+    vec3(
+        -HALF + DOOR_WIDE * 1.5,
+        -HALF + DOOR_TALL + DOOR_LAMP_UP,
+        -HALF + DOOR_LAMP_OUT,
+    )
+}
+
+/// A lamp over each frame's second door.
+///
+/// **Each one is over a doorhead to the frame it belongs to and something
+/// else to the other two**, which is the same thing the doors themselves
+/// do. Frame nought's is a wall light two and a half metres up. The one
+/// over the door cut in your floor is half a metre off the ground beside
+/// it, because to the frame that owns it that is over the lintel.
+pub fn door_sconces() -> Vec<Vec3> {
     (0..FRAMES)
-        .map(|n| {
-            in_frame(
-                n,
-                vec3(
-                    HALF - STAIR_RUN * 0.5,
-                    HALF - LAMP_DOWN,
-                    STAIR_ACROSS + STAIR_WIDE * 0.5,
-                ),
-            )
-        })
+        .map(|n| in_frame(n, door_sconce_local()))
         .collect()
 }
 
-/// And the lamps, which are those.
-pub fn lamps() -> Vec<Vec3> {
-    sconces()
+/// The arm that holds one off the wall it is on, buried in that wall at
+/// the back the way the ceiling lamps' rods are.
+pub fn door_arm(n: u64) -> Aabb {
+    let at = door_sconce_local();
+    let wide = LAMP_ROD * 0.5;
+
+    box_in_frame(
+        n,
+        vec3(at.x - wide, at.y - wide, -HALF - THICK * 0.5),
+        vec3(at.x + wide, at.y + wide, at.z),
+    )
+}
+
+/// And the lamps: one on each frame's ceiling and one over each frame's
+/// second door, with what each gives.
+pub fn lamps() -> Vec<(Vec3, f32, f32)> {
+    let mut out: Vec<(Vec3, f32, f32)> = sconces()
+        .into_iter()
+        .map(|at| (at, LAMP_LIT, LAMP_RANGE))
+        .collect();
+
+    out.extend(
+        door_sconces()
+            .into_iter()
+            .map(|at| (at, DOOR_LAMP_LIT, DOOR_LAMP_RANGE)),
+    );
+
+    out
 }
 
 /// Somebody on one of the flights: where they are, which way is up to them,
@@ -692,7 +855,7 @@ pub fn journey_in(lane: f32) -> [Vec3; 4] {
         vec3(HALF, -HALF + STAIR_CLIMB, across),
         vec3(HALF - STAIR_RUN, -HALF, across),
         vec3(over, -HALF, across),
-        vec3(over, -HALF, HALF - THICK),
+        vec3(over, -HALF, -HALF + THICK),
     ]
 }
 
@@ -842,7 +1005,14 @@ pub fn border(n: u64) -> Vec<Aabb> {
 ///
 /// Half of them walk it the other way, so the traffic goes both ways and
 /// people pass each other on the stair.
-pub fn walking(since: f32) -> Vec<Walker> {
+///
+/// **`shut` says when each frame's second door was shut**, which is spec
+/// 0038's one thing you decide. A frame whose way out is closed takes
+/// nobody new: anybody who set off before it shut finishes and goes, and
+/// after that the flight is empty until you open it again. Recording the
+/// moment rather than a flag is what keeps twelve people from winking out
+/// in the frame the key goes down.
+pub fn walking(since: f32, shut: [Option<f32>; FRAMES as usize]) -> Vec<Walker> {
     let mut out = Vec::new();
 
     for n in 0..FRAMES {
@@ -870,6 +1040,14 @@ pub fn walking(since: f32) -> Vec<Walker> {
             // out of sight, which is the wait past the end of the walk
             if walked > long {
                 continue;
+            }
+
+            // and nobody sets out through a door that was shut before they
+            // did
+            if let Some(when) = shut[n as usize] {
+                if since - walked / pace > when {
+                    continue;
+                }
             }
 
             let gone = if down { walked } else { long - walked };
@@ -1586,6 +1764,30 @@ pub fn floors() -> Vec<Aabb> {
         ),
         up_hole(),
     )
+    .into_iter()
+    .flat_map(|slab| crate::room::minus(slab, hatch(0)))
+    .collect()
+}
+
+/// The hatch in frame `n`'s floor, which is another frame's doorway.
+///
+/// **Every door in here is in somebody else's floor**, which is what the
+/// second door being in the face opposite the first buys. Frame `m`'s is
+/// in frame `(m + 2) % 3`'s floor, so the one in yours belongs to the
+/// next frame round, and what it is to them is an ordinary door in a wall
+/// they walk through standing up.
+///
+/// This is cut out of `floors` as well as out of the shell, because spec
+/// 0043 asks that every ground the building declares is a box it actually
+/// serves, and a hole the shell has and the ground has not is a floor you
+/// fall through.
+pub fn hatch(n: u64) -> Aabb {
+    doorway(hatch_is(n), 1)
+}
+
+/// And whose door it is, which is the next frame round.
+pub fn hatch_is(n: u64) -> u64 {
+    (n + 1) % FRAMES
 }
 
 /// How far a pier stands off the face it is on, how wide it is across, and
@@ -1811,6 +2013,27 @@ mod tests {
                 .chain(jutting().iter().map(|(whole, _)| jutting_cap(whole)))
                 .map(|(middle, size)| Aabb::new(middle - size * 0.5, middle + size * 0.5)),
         );
+        // **And the lamps' fittings and the rods they hang on**, which
+        // nothing solid carries either, and which are the pieces most
+        // likely to meet a ceiling in its own plane: a rod that stops at a
+        // slab rather than going into it is exactly that fault.
+        drawn.extend((0..FRAMES).flat_map(|n| {
+            // turned into the frame it hangs in, the way it is drawn: the
+            // turn is an axis permutation, so the extents swap round
+            let fitting = (frame(n) * LAMP_FITTING).abs();
+            let on_the_ceiling = sconces()[n as usize];
+            let over_the_door = door_sconces()[n as usize];
+
+            [
+                Aabb::new(
+                    on_the_ceiling - fitting * 0.5,
+                    on_the_ceiling + fitting * 0.5,
+                ),
+                sconce_rod(n),
+                Aabb::new(over_the_door - fitting * 0.5, over_the_door + fitting * 0.5),
+                door_arm(n),
+            ]
+        }));
 
         let mine = Aabb::new(
             middle() - Vec3::splat(HALF + 1.5),
@@ -2014,9 +2237,20 @@ mod tests {
     #[test]
     fn every_frame_is_lit_from_its_own_ceiling() {
         let sconces = sconces();
+        let lit: Vec<Vec3> = lamps().into_iter().map(|(at, _, _)| at).collect();
 
         assert_eq!(sconces.len(), FRAMES as usize, "a frame with no light");
-        assert_eq!(sconces, lamps(), "a lamp that is not in a fitting");
+        assert_eq!(
+            door_sconces().len(),
+            FRAMES as usize,
+            "a door with no light"
+        );
+
+        // **Every lamp in here is in a fitting**, which is this project's
+        // rule, so the two lists of places are exactly the list of lamps.
+        let fittings: Vec<Vec3> = sconces.iter().copied().chain(door_sconces()).collect();
+
+        assert_eq!(lit, fittings, "a lamp that is not in a fitting");
 
         for (n, at) in sconces.iter().enumerate() {
             let up = frame(n as u64) * Vec3::Y;
@@ -2035,6 +2269,115 @@ mod tests {
             assert!(
                 flight.iter().any(|tread| under.intersects(tread)),
                 "frame {}'s lamp lights no part of its own flight",
+                n
+            );
+        }
+    }
+
+    /// Spec 0038: every second door has a light over its own head.
+    ///
+    /// **The corner the three of them meet in had nothing in it.** Each
+    /// frame's one lamp is over its own flight, which puts all three at
+    /// the far ends, and what is left dark is the quarter of the room
+    /// where every second door is: the hatch in your own floor among
+    /// them. Jake walked it and said to light the corner.
+    #[test]
+    fn every_second_door_has_a_light_over_its_head() {
+        for n in 0..FRAMES {
+            let hole = doorway(n, 1);
+            let at = door_sconces()[n as usize];
+            let up = frame(n) * Vec3::Y;
+
+            assert!(
+                (at - hole.center()).dot(up) > DOOR_TALL * 0.4,
+                "frame {}'s door lamp is not over its own head",
+                n
+            );
+            assert!(
+                at.distance(hole.center()) < DOOR_LAMP_RANGE,
+                "frame {}'s door lamp does not reach its own door",
+                n
+            );
+            assert!(
+                door_arm(n).contains_point(at),
+                "frame {}'s door lamp is on no arm",
+                n
+            );
+        }
+    }
+
+    /// And the control: no lamp this room already had was near enough to
+    /// do it, which is why the corner was one shade of grey.
+    #[test]
+    fn the_ceiling_lamps_do_not_reach_the_second_doors() {
+        for n in 0..FRAMES {
+            let hole = doorway(n, 1).center();
+
+            for (which, at) in sconces().iter().enumerate() {
+                assert!(
+                    at.distance(hole) > DOOR_LAMP_RANGE,
+                    "frame {which}'s ceiling lamp is {:.2} from frame {n}'s door, so the new one buys nothing",
+                    at.distance(hole)
+                );
+            }
+        }
+    }
+
+    /// Spec 0038: and the fitting is held up by something.
+    ///
+    /// **It was not.** Every lamp in this building sits in a fitting, which
+    /// is a rule this project wrote down after the baths lit a ceiling at
+    /// nothing, and in here the fitting itself hung a metre under the
+    /// ceiling on air. From the floor you saw a pool of light with a slab
+    /// floating beside it.
+    ///
+    /// The rod has to reach both ways or it is dressing: up into the
+    /// ceiling slab, so no face of it meets the ceiling's in a plane, and
+    /// down into the fitting, so there is no gap you can see daylight
+    /// through.
+    #[test]
+    fn every_fitting_in_here_hangs_from_its_own_ceiling() {
+        for n in 0..FRAMES {
+            let at = sconces()[n as usize];
+            let up = frame(n) * Vec3::Y;
+            let rod = sconce_rod(n);
+
+            // the top of the fitting, which the rod has to come down to
+            let held = at + up * LAMP_FITTING.y * 0.4;
+            // and a point inside the frame's own ceiling slab, which it has
+            // to go up into
+            let ceiling = middle() + up * (HALF + THICK * 0.25) + (at - middle()).reject_from(up);
+
+            assert!(
+                rod.contains_point(held),
+                "frame {}'s rod stops short of its fitting",
+                n
+            );
+            assert!(
+                rod.contains_point(ceiling),
+                "frame {}'s rod does not reach its own ceiling",
+                n
+            );
+        }
+    }
+
+    /// And the control: a rod that stops at the fitting holds nothing up,
+    /// which is the arrangement this room shipped with.
+    #[test]
+    #[should_panic(expected = "does not reach its own ceiling")]
+    fn a_fitting_on_a_stub_is_still_floating() {
+        for n in 0..FRAMES {
+            let at = sconces()[n as usize];
+            let up = frame(n) * Vec3::Y;
+            let stub = Aabb::new(
+                at - Vec3::splat(LAMP_ROD),
+                at + Vec3::splat(LAMP_ROD) + up * LAMP_FITTING.y,
+            );
+            let ceiling = middle() + up * (HALF + THICK * 0.25) + (at - middle()).reject_from(up);
+
+            assert!(
+                stub.contains_point(ceiling),
+                "frame {}'s rod does not reach its own ceiling",
                 n
             );
         }
@@ -2130,7 +2473,7 @@ mod tests {
 
         for tick in 0..(round * 20.0) as u32 {
             let since = tick as f32 * 0.05;
-            let walking: Vec<(usize, Walker)> = walking(since)
+            let walking: Vec<(usize, Walker)> = walking(since, [None; FRAMES as usize])
                 .into_iter()
                 .map(|who| (who.shade / WALKERS as usize, who))
                 .collect();
@@ -2177,7 +2520,7 @@ mod tests {
 
         for tick in 0..600 {
             let since = tick as f32 * 0.1;
-            let who = walking(since);
+            let who = walking(since, [None; FRAMES as usize]);
 
             assert!(!who.is_empty(), "the room emptied at {:.2}s", since);
 
@@ -2258,8 +2601,15 @@ mod tests {
             vec3(MIDDLE_X + ROOM, BASE + TALL + THICK, MIDDLE_Z + ROOM),
         );
 
+        // the three leaves are this room's too, and they are not in
+        // `solid` because where each one is depends on whether you have
+        // shut it. Spec 0038.
+        let leaves: Vec<Aabb> = (0..FRAMES)
+            .map(|n| leaf(n, room.aloft_slid[n as usize]))
+            .collect();
+
         for one in room.solid() {
-            if solid().contains(&one) {
+            if solid().contains(&one) || leaves.contains(&one) {
                 continue;
             }
 
@@ -3055,6 +3405,224 @@ mod tests {
 
     /// Walks a body your size sideways off a tread for half a second and
     /// says where it got to.
+    /// Spec 0038: every second door is cut in another frame's floor.
+    ///
+    /// **This is the whole of what you decide in here.** The first build
+    /// put both of a frame's doors in the faces its own up points at, so
+    /// each of the six was a hatch in somebody's *ceiling*, and nobody
+    /// walks on their ceiling: opening one changed nothing for anybody.
+    /// Put in the opposite faces instead they land in floors, where the
+    /// people are, and the three of them come out one to a floor.
+    #[test]
+    fn every_second_door_is_cut_in_another_frames_floor() {
+        for m in 0..FRAMES {
+            let hole = doorway(m, 1);
+            let whose: Vec<u64> = (0..FRAMES)
+                .filter(|n| {
+                    let down = frame(*n) * Vec3::NEG_Y;
+                    let floor = middle() + down * HALF;
+
+                    (hole.center() - floor).dot(down).abs() < THICK + 1e-3
+                })
+                .collect();
+
+            assert_eq!(whose, vec![(m + 2) % FRAMES], "frame {}'s way out", m);
+            assert_ne!(whose[0], m, "a frame's own floor is not a way out of it");
+            assert_eq!(hatch(whose[0]), hole, "and the floor knows whose it is");
+        }
+    }
+
+    /// And the control: the first doors are the arrangement that did
+    /// nothing, each in a face that is somebody's ceiling.
+    #[test]
+    fn the_first_doors_are_all_in_ceilings() {
+        for m in 0..FRAMES {
+            let hole = doorway(m, 0);
+
+            assert!(
+                (0..FRAMES).any(|n| {
+                    let up = frame(n) * Vec3::Y;
+                    let lid = middle() + up * HALF;
+
+                    (hole.center() - lid).dot(up).abs() < THICK + 1e-3
+                }),
+                "frame {}'s first door is in nobody's ceiling",
+                m
+            );
+        }
+    }
+
+    /// Spec 0038: a shut door takes nobody new, and nobody already walking
+    /// winks out.
+    ///
+    /// **Why the shutting is a moment and not a flag.** A flag takes four
+    /// people off a flight in the frame the key goes down, which is the one
+    /// reading this room cannot afford: a figure vanishing in the open is
+    /// the building looking broken. Reading when it shut, everybody who
+    /// set off before it finishes and leaves, and the flight empties over
+    /// one round instead.
+    #[test]
+    fn a_shut_door_takes_nobody_new() {
+        let at = 30.0;
+        let mut shut = [None; FRAMES as usize];
+        shut[1] = Some(at);
+
+        let on = |since: f32, shut| {
+            walking(since, shut)
+                .into_iter()
+                .filter(|who| who.up == frame(1))
+                .count()
+        };
+
+        assert!(on(at, [None; FRAMES as usize]) > 0, "nobody to shut out");
+        assert_eq!(
+            on(at, shut),
+            on(at, [None; FRAMES as usize]),
+            "somebody went out like a light the moment it shut"
+        );
+        assert_eq!(
+            on(at + 60.0, shut),
+            0,
+            "somebody set off through a shut door"
+        );
+
+        // and the other two frames carry on, because you worked one door
+        for other in [0, 2] {
+            assert!(
+                walking(at + 60.0, shut)
+                    .into_iter()
+                    .any(|who| who.up == frame(other)),
+                "shutting one door emptied frame {}",
+                other
+            );
+        }
+    }
+
+    /// Spec 0038: you can step down into the hatch in your own floor and
+    /// get back out of it.
+    ///
+    /// **It is a pit in the ground you stand on**, which is what a doorway
+    /// is when it is cut in a floor, and the depth of it is the slab plus
+    /// what is behind the door. At `DOOR_BACK` half a metre that came to
+    /// 0.65 against a `walk::STEP` of 0.42, so you got down there and
+    /// stayed.
+    #[test]
+    fn you_can_get_out_of_the_hatch_in_your_floor() {
+        let hole = hatch(0);
+        let solid = crate::room::Room::of(crate::games()).solid();
+        let over = vec3(hole.center().x, BASE + 1.0, hole.center().z);
+
+        let down = pressed(&solid, over, Vec3::ZERO);
+        assert!(
+            down.y < BASE - 0.05,
+            "nothing to step down into: you stopped at {:.2}",
+            down.y
+        );
+
+        let out = climbed(&solid, down);
+        assert!(
+            out.y > BASE - 1e-2,
+            "you got into the hatch at {:.2} and not back out of it",
+            down.y
+        );
+    }
+
+    /// And the control: the pit this shipped with, which you cannot climb.
+    #[test]
+    fn a_deeper_pit_keeps_you() {
+        let hole = hatch(0);
+        let deep = THICK + 0.5 - LEAF_THICK;
+        let mut solid: Vec<Aabb> = crate::room::Room::of(crate::games())
+            .solid()
+            .into_iter()
+            .filter(|box_| !door_recess(hatch_is(0), 1).contains(box_))
+            .filter(|box_| *box_ != leaf(hatch_is(0), 1.0))
+            .collect();
+
+        // a box of the same footprint with its floor where the half metre
+        // put it
+        solid.push(Aabb::new(
+            vec3(hole.min.x - THICK, BASE - deep - THICK, hole.min.z - THICK),
+            vec3(hole.max.x + THICK, BASE - deep, hole.max.z + THICK),
+        ));
+
+        let over = vec3(hole.center().x, BASE + 1.0, hole.center().z);
+        let down = pressed(&solid, over, Vec3::ZERO);
+
+        assert!(down.y < BASE - 0.05, "the control did not get in");
+        assert!(
+            climbed(&solid, down).y < BASE - 1e-2,
+            "a {:.2} pit let you out, so the shallow one proves nothing",
+            deep
+        );
+    }
+
+    /// Spec 0038's acceptance: there is something in here to decide, and
+    /// you can walk to it from the way up.
+    ///
+    /// Three doors, each one cut in somebody's floor, and each of them a
+    /// thing you work by pointing at it. What this asks is the second
+    /// half: that you can get from where the stair puts you to inside
+    /// `room::REACH` of every one of them, walking on your own floor and
+    /// nothing else.
+    #[test]
+    fn you_can_shut_a_door_from_where_you_stand() {
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+        let arrived = vec3(up_arrival(), BASE + 0.1, up_head() + UP_WIDE * 0.5);
+
+        for n in 0..FRAMES {
+            let hole = doorway(n, 1);
+            // the nearest spot on your own floor you could work it from,
+            // a body's width clear of the hole itself
+            let stand = vec3(
+                hole.center()
+                    .x
+                    .clamp(MIDDLE_X - HALF + 1.0, MIDDLE_X + HALF - 1.0),
+                BASE,
+                hole.center()
+                    .z
+                    .clamp(MIDDLE_Z - HALF + 1.0, MIDDLE_Z + HALF - 1.0),
+            );
+
+            assert!(
+                stand.distance(hole.center()) <= crate::room::REACH,
+                "frame {n}'s door is {:.2} off the nearest floor you can stand on",
+                stand.distance(hole.center())
+            );
+
+            let mut at = arrived;
+            let mut falling = 0.0;
+
+            for _ in 0..900 {
+                let wish = (stand - at) * vec3(1.0, 0.0, 1.0);
+                let (next, fell) = crate::walk::walk(
+                    at,
+                    wish.normalize_or_zero() * crate::SPEED,
+                    falling,
+                    crate::RADIUS,
+                    1.0 / 60.0,
+                    &solid,
+                    true,
+                );
+                at = next;
+                falling = fell;
+            }
+
+            assert!(
+                (at * vec3(1.0, 0.0, 1.0)).distance(stand * vec3(1.0, 0.0, 1.0)) < 1.0,
+                "walking from the stair toward frame {}'s door stopped at {:?}",
+                n,
+                at
+            );
+            assert!(
+                (at.y - BASE).abs() < 0.5,
+                "you did not stay on your own floor getting to frame {}'s door",
+                n
+            );
+        }
+    }
+
     fn pressed(solid: &[Aabb], from: Vec3, wish: Vec3) -> Vec3 {
         let (mut at, mut falling) = (from, 0.0);
 
@@ -3227,12 +3795,16 @@ mod outside_tests {
             })
             .collect();
 
-        assert_eq!(out.len(), 30, "five boxes to a recess and six recesses");
+        assert_eq!(
+            out.len(),
+            25,
+            "five boxes to a recess and five recesses out there"
+        );
 
         let dressed = jutting();
 
-        assert_eq!(dressed.len(), 6, "a way out on all six faces");
-        assert_eq!(jutting_faces().len(), 24, "four plastered faces apiece");
+        assert_eq!(dressed.len(), 5, "the five ways out that leave the shell");
+        assert_eq!(jutting_faces().len(), 20, "four plastered faces apiece");
 
         for box_ in out {
             assert!(

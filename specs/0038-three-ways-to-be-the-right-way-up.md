@@ -1,6 +1,6 @@
 # 0038 Three ways to be the right way up
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-10-24
 
 ## Goal
@@ -210,18 +210,113 @@ coming through a wall should look like.
 - And nothing in here shares a plane with anything, which the slivers
   did. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 
+**And something holding the lamps up**, which went in on the 31st after four
+pictures from four places, because the picture is the thing this spec said to
+check from more than one spot and nobody had. Each frame's lamp sits in a
+fitting, which is the rule this project wrote down after the baths lit a
+ceiling at nothing, and the fitting itself hung a metre under its own ceiling
+on air. From the floor that is a pool of light with a slab floating beside it
+and no reason for either.
+
+A rod, into the ceiling above and into the fitting below. On the two frames
+whose ceiling is one of your walls it reads as a bracket lamp, which is the
+right thing for it to say about that surface and is better than the pendant
+it is.
+
+The coplanar check had never been handed the fitting or the rod. It has them
+now, and the control that proves it is looking is a rod as wide as its own
+fitting.
+
+- Every fitting hangs from its own frame's ceiling. —
+  `aloft::tests::every_fitting_in_here_hangs_from_its_own_ceiling`
+- And the control, a fitting on a stub, which is what the room shipped
+  with. — `aloft::tests::a_fitting_on_a_stub_is_still_floating`
+
+## The doors, which is what the room asks
+
+Built on the 31st, and the thing the section above was holding the status
+for.
+
+**Every door in here is cut in somebody else's floor.** That is the whole
+design and it came out of a mistake worth writing down. The first build put
+both of a frame's doors in the faces its own up points at, which reads well
+and does nothing: under these three turns that means each of the six holes
+is a hatch in some other frame's *ceiling*, and nobody walks on their
+ceiling. A door you can open that changes nothing for anybody is not a
+decision, it is a switch.
+
+Put the second door in the opposite face instead and it lands in a floor.
+The three of them come out one to a floor, which is not arranged: it falls
+out of the same cyclic turn that gives the room its three ups. So one of
+them is in the floor you walked in on.
+
+**What it is to them and what it is to you are different things, and that
+is the room.** To the frame it belongs to it is an ordinary door in a wall,
+which they walk through standing up. To the frame whose floor it is cut in
+it is a hole in the ground. Nothing is bent to make that true. It is what
+two frames disagreeing about down already means, and until the doors moved
+the room had never said it.
+
+**You work all three by pointing at them**, which is this building's one
+rule for working anything, and the only one that costs you is the one in
+your own floor. Shut it and your ground is whole and that frame's flight
+goes empty. Open it and somebody comes up through your floor and walks away
+up your wall.
+
+### Two things it had to be taught
+
+**Nobody winks out.** Shutting is recorded as the moment it happened rather
+than as a flag, and `walking` reads it to decide who sets out. A flag took
+four people off a flight in the frame the key went down, which is the one
+reading this room cannot afford.
+
+**You can climb out of it.** A doorway cut in a floor is a pit the depth of
+the slab plus the dark behind the door, and at the half metre that was it
+came to 0.65 against a `walk::STEP` of 0.42. You got down there and stayed.
+`DOOR_BACK` is set by that sum now and the leaf lies at the bottom of it.
+
+- Every second door is cut in another frame's floor. —
+  `aloft::tests::every_second_door_is_cut_in_another_frames_floor`
+- And the control, which is the arrangement that did nothing. —
+  `aloft::tests::the_first_doors_are_all_in_ceilings`
+- A shut door takes nobody new, and takes nobody already walking. —
+  `aloft::tests::a_shut_door_takes_nobody_new`
+- You can step down into the hatch in your floor and get back out. —
+  `aloft::tests::you_can_get_out_of_the_hatch_in_your_floor`
+- And the control, which is the pit this shipped with. —
+  `aloft::tests::a_deeper_pit_keeps_you`
+
+### And the corner it is all in had no light in it
+
+Jake walked it the same day and said to light the corner. He was right and
+the reason is the rule the room was built on: one lamp per frame, each over
+its own flight, which puts the three of them at the three far ends. Every
+second door is at the opposite end of its own frame, so all three of them
+are in one quarter of the room and no lamp was within six metres of any of
+them. Open and shut looked the same because you could not see either.
+
+A second lamp per frame, over the head of that frame's own second door.
+Which does the same thing the doors do: frame nought's is a bracket two and
+a half metres up your wall, and the one over the door cut in your floor
+stands half a metre off the ground beside it, because to the frame that
+owns that door it is over the lintel.
+
+The leaf wanted drawing as well. It had colliders and no picture, so a shut
+hatch and an open one were the same grey tray and the only thing that
+changed was what you could walk on.
+
+- Every second door has a light over its own head. —
+  `aloft::tests::every_second_door_has_a_light_over_its_head`
+- And the control: nothing this room already had was near enough to do
+  it. — `aloft::tests::the_ceiling_lamps_do_not_reach_the_second_doors`
+
 ## Acceptance criteria
 
 The first build's are not written yet. This one is, and it is the only one
 that matters for the status:
 
-- There is something in this room to decide, and it is reachable from the
-  way up. — `aloft::tests::there_is_something_to_do_in_here`
-
-**That name is a placeholder and nobody has written it.** Its whole job is
-to hold this spec at draft while the room is only a picture, per the section
-above. Whoever builds the second half will write the real test and should
-rename this line to match it rather than leaving both.
+- There is something in this room to decide, and you can walk to it from
+  the way up. — `aloft::tests::you_can_shut_a_door_from_where_you_stand`
 
 ---
 

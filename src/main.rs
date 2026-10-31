@@ -1198,6 +1198,17 @@ impl Arcade {
             // and the sauna's glass, which is a door and behaves like one.
             // Spec 0008.
             Some(room::Seen::Sauna) => self.room.sauna_open = !self.room.sauna_open,
+            // and one of the imaginarium's three, per spec 0038. The
+            // moment goes in rather than a flag, because who sets out
+            // reads it.
+            Some(room::Seen::Hatch(n)) => {
+                let shut = &mut self.room.aloft_shut[n as usize];
+
+                *shut = match shut {
+                    Some(_) => None,
+                    None => Some(self.since),
+                };
+            }
             Some(room::Seen::Baths) => self.room.baths_open = !self.room.baths_open,
             // the desk: house whoever is at the door. Spec 0030, and the
             // only thing in the hotel you work. A door names its room and
@@ -2647,7 +2658,7 @@ impl Arcade {
 
         // and the three flights of the imaginarium, per spec 0038, where
         // the whole content of the room is other people using it
-        for who in aloft::walking(self.since) {
+        for who in aloft::walking(self.since, self.room.aloft_shut) {
             stand(who.at, who.up, who.facing, Some(who.along), who.shade);
         }
     }
@@ -2725,6 +2736,20 @@ impl Arcade {
                 );
             }
 
+            // and the leaf of the second one, wherever it has dropped
+            // to: shut, it is the face it is cut in, so a shut hatch is
+            // floor you cannot tell from the floor. Open, it is lying at
+            // the bottom of its own recess and what you see is the dark.
+            // Drawn in the floor's colour because every one of these is
+            // cut in a floor, which is spec 0038's whole point.
+            let leaf = aloft::leaf(n, self.room.aloft_slid[n as usize]);
+
+            scene.push_colored(
+                cube,
+                &Transform::at(leaf.center()).with_scale(leaf.size()),
+                aim::ALOFT_FLOOR,
+            );
+
             // the dark past each door, which is what stops an opening
             // being an opening on to nothing
             for which in 0..aloft::DOORS {
@@ -2748,13 +2773,40 @@ impl Arcade {
             }
         }
 
-        // the fitting each frame's lamp hangs in, on that frame's ceiling
+        // the fitting each frame's lamp hangs in, and the rod it hangs on,
+        // which runs up into that frame's own ceiling
         for (n, at) in aloft::sconces().iter().copied().enumerate() {
+            let rod = aloft::sconce_rod(n as u64);
+
             scene.push_colored(
                 cube,
                 &Transform::at(at)
                     .with_rotation(aloft::frame(n as u64))
-                    .with_scale(vec3(0.3, 0.14, 0.3)),
+                    .with_scale(aloft::LAMP_FITTING),
+                aim::ALOFT_CEILING,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(rod.center()).with_scale(rod.size()),
+                aim::ALOFT_CEILING,
+            );
+        }
+
+        // and one over the head of each frame's second door, on an arm
+        // out of the wall it is in
+        for (n, at) in aloft::door_sconces().iter().copied().enumerate() {
+            let arm = aloft::door_arm(n as u64);
+
+            scene.push_colored(
+                cube,
+                &Transform::at(at)
+                    .with_rotation(aloft::frame(n as u64))
+                    .with_scale(aloft::LAMP_FITTING),
+                aim::ALOFT_CEILING,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(arm.center()).with_scale(arm.size()),
                 aim::ALOFT_CEILING,
             );
         }
@@ -6809,6 +6861,25 @@ impl Game for Arcade {
                     "Click or press enter to open it."
                 })),
             ),
+            // one of the imaginarium's three, per spec 0038. The one cut
+            // in the floor you are standing on is the only one of them
+            // that costs you anything, so it is the only one named apart.
+            (None, Some(room::Seen::Hatch(n))) => {
+                let what = if n == aloft::hatch_is(0) {
+                    "the trapdoor"
+                } else {
+                    "a way through"
+                };
+                // the same line the baths and the sauna say, which is
+                // already his and is not proposed copy
+                let how = if self.room.aloft_shut[n as usize].is_some() {
+                    "Click or press enter to open it."
+                } else {
+                    "Click or press enter to close it."
+                };
+
+                (Some(String::from(what)), Some(String::from(how)))
+            }
             (None, Some(room::Seen::Sauna)) => (
                 Some(String::from("the sauna door")),
                 Some(String::from(if self.room.sauna_open {
@@ -9862,15 +9933,11 @@ impl Game for Arcade {
         // only thing in that room telling you where the walk starts
         // and spec 0035's corridor, one beside every door, so the light
         // thins out the way the doors do
-        // and the imaginarium's four, which light the whole loop at once
-        for at in aloft::lamps() {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                Vec3::ONE,
-                aloft::LAMP_LIT,
-                aloft::LAMP_RANGE,
-            ));
+        // and the imaginarium's six: one on each frame's ceiling over its
+        // own flight, and one over the head of each frame's second door,
+        // which is the corner the three of them meet in
+        for (at, lit, range) in aloft::lamps() {
+            shades.push((eye.distance_squared(at), at, Vec3::ONE, lit, range));
         }
 
         // and the way up to it, one in each fitting on the shaft wall and

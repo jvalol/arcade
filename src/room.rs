@@ -837,6 +837,14 @@ pub enum Seen {
     Book,
     /// The Mandelbrot panel at the end of the gallery's row. Spec 0039.
     Mandel,
+    /// One of the imaginarium's second doors, by the frame it belongs to.
+    /// Spec 0038.
+    ///
+    /// Every one of them is in another frame's floor, so working one is
+    /// the only thing in that room that asks you anything: a way through
+    /// for the people who use it, against a hole in the ground of
+    /// whoever's floor it is cut in. One of the three is in yours.
+    Hatch(u64),
     /// One of the hotel's doors, by its room number. Spec 0029.
     ///
     /// The one thing in that corridor you can work, and the only way there is
@@ -869,6 +877,15 @@ pub struct Room {
     /// And the door to the baths, which is a third thing that swings.
     pub baths_open: bool,
     pub baths_swing: f32,
+    /// And the imaginarium's three second doors, per spec 0038: when each
+    /// was shut, if it is, and how far each leaf has slid.
+    ///
+    /// The moment rather than a flag, because `aloft::walking` reads it to
+    /// decide who sets out, and a flag would take twelve people off the
+    /// stairs in the frame the key goes down. Written by the game, which
+    /// is the thing that knows what `since` is.
+    pub aloft_shut: [Option<f32>; crate::aloft::FRAMES as usize],
+    pub aloft_slid: [f32; crate::aloft::FRAMES as usize],
     /// Which of the hotel's doors are drawn and how far each stands open.
     /// Spec 0029.
     ///
@@ -1052,6 +1069,8 @@ impl Room {
             walls,
             reaches,
             open: false,
+            aloft_shut: [None; crate::aloft::FRAMES as usize],
+            aloft_slid: [1.0; crate::aloft::FRAMES as usize],
             sauna_open: false,
             sauna_swing: 0.0,
             baths_open: false,
@@ -1217,6 +1236,20 @@ impl Room {
         let by = dt / crate::spa::SWINGS;
 
         self.baths_swing += (to - self.baths_swing).clamp(-by, by);
+
+        // and the imaginarium's three leaves, which slide rather than
+        // swing. Spec 0038.
+        let by = dt / crate::aloft::LEAF_DROPS;
+
+        for n in 0..crate::aloft::FRAMES as usize {
+            let to = if self.aloft_shut[n].is_some() {
+                0.0
+            } else {
+                1.0
+            };
+
+            self.aloft_slid[n] += (to - self.aloft_slid[n]).clamp(-by, by);
+        }
     }
 
     /// Where a leaf stands and how it is turned, part way through its swing.
@@ -1347,7 +1380,7 @@ impl Room {
         // heights and cannot be cut by either. Three tests came back empty
         // at once and said so, which is the only reason this is not still a
         // number.
-        let up = crate::aloft::solid();
+        let up = self.aloft();
         let rest: Vec<Aabb> = self
             .built(true)
             .into_iter()
@@ -1438,6 +1471,28 @@ impl Room {
         out
     }
 
+    /// Everything the imaginarium is, its three leaves included.
+    ///
+    /// **One list, because two places need the same one and they need it
+    /// to be the same.** `built` puts it in and `fillable` takes it back
+    /// out, so the fill is not asked to cover eight metres of air over the
+    /// hall. The leaves went into the first and not the second, and three
+    /// fills came back empty: a leaf standing in a wall is nine metres up,
+    /// which is the whole height the filter exists to drop.
+    ///
+    /// A door that is drawn and not solid is a door you walk through,
+    /// which spec 0029's corridor shipped and Jake found by walking into
+    /// one. Here it would be a hole in a floor you cannot fall into.
+    fn aloft(&self) -> Vec<Aabb> {
+        let mut out = crate::aloft::solid();
+
+        out.extend(
+            (0..crate::aloft::FRAMES).map(|n| crate::aloft::leaf(n, self.aloft_slid[n as usize])),
+        );
+
+        out
+    }
+
     fn built(&self, lit_by_the_sun: bool) -> Vec<Aabb> {
         let mut out = self.walls.clone();
         out.extend(self.floors());
@@ -1455,7 +1510,7 @@ impl Room {
             // and the register behind the blank door, per spec 0031
             out.extend(crate::register::solid(self.reaches));
             out.extend(crate::twine::solid(self.reaches));
-            out.extend(crate::aloft::solid());
+            out.extend(self.aloft());
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
@@ -2025,6 +2080,16 @@ impl Room {
         // point at was a door.
         let desk = slab(from, way, &crate::aleph::desk(self.reaches)).map(|far| (Seen::Desk, far));
 
+        // and the imaginarium's three second doors, per spec 0038. The
+        // hole rather than the leaf, because a leaf slid out of sight is
+        // nothing to point at and the one you most want to shut is the
+        // one that is open.
+        let hatches: Vec<(Seen, f32)> = (0..crate::aloft::FRAMES)
+            .filter_map(|n| {
+                slab(from, way, &crate::aloft::doorway(n, 1)).map(|far| (Seen::Hatch(n), far))
+            })
+            .collect();
+
         // the book on the register's far wall, per spec 0031
         let book = {
             // **Only where the book is written**, not the whole wall. It was
@@ -2096,6 +2161,7 @@ impl Room {
             .chain(desk)
             .chain(book)
             .chain(hotel)
+            .chain(hatches)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
@@ -2583,8 +2649,10 @@ mod tests {
                 + crate::register::solid(room.reaches).len()
                 // and the other corridor off that lobby, per spec 0035
                 + crate::twine::solid(room.reaches).len()
-                // and the imaginarium over the hall, per spec 0037
-                + crate::aloft::solid().len()
+                // and the imaginarium over the hall, per spec 0037,
+                // with a leaf for each of its three second doors, per
+                // spec 0038
+                + room.aloft().len()
                 + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
@@ -3473,8 +3541,10 @@ mod tests {
                 + crate::register::solid(room.reaches).len()
                 // and the other corridor off that lobby, per spec 0035
                 + crate::twine::solid(room.reaches).len()
-                // and the imaginarium over the hall, per spec 0037
-                + crate::aloft::solid().len()
+                // and the imaginarium over the hall, per spec 0037,
+                // with a leaf for each of its three second doors, per
+                // spec 0038
+                + room.aloft().len()
                 + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
