@@ -809,6 +809,9 @@ struct Arcade {
     /// engine. One press, one check: it compares every drawn thing with every
     /// other and the answer does not change between frames.
     wants_planes: bool,
+    /// How long the readout of where you are standing has left on screen,
+    /// per spec 0045.
+    showing_place: f32,
     /// The patches the last check found, kept so they can be outlined. A press
     /// asks, the frame after draws them, and they stay up until the next ask.
     fighting: Vec<Aabb>,
@@ -1127,6 +1130,7 @@ impl Arcade {
             timed: false,
             ran: false,
             wants_planes: false,
+            showing_place: 0.0,
             fighting: Vec::new(),
             walking: [false; 4],
             shifted: false,
@@ -2760,6 +2764,34 @@ impl Arcade {
             scene.push_colored(
                 cube,
                 &Transform::at(at).with_scale(vec3(0.16, 0.2, 0.16)),
+                aim::ALOFT_CEILING,
+            );
+        }
+
+        // and a newel lamp on the parapet for each one beside the first
+        // flight: the post it stands on, and the bowl under it that keeps
+        // the light off the treads and sends it at the ceiling
+        for at in aloft::up_newels() {
+            let wide = aloft::UP_NEWEL_WIDE;
+            let bowl = at.y - aloft::UP_NEWEL_BOWL;
+            let stands = at.y - aloft::UP_NEWEL_UP;
+
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(at.x, (stands + bowl) * 0.5, at.z)).with_scale(vec3(
+                    wide * 0.45,
+                    bowl - stands,
+                    wide * 0.45,
+                )),
+                aim::ALOFT_CEILING,
+            );
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(at.x, bowl, at.z)).with_scale(vec3(
+                    wide,
+                    aloft::UP_NEWEL_BOWL,
+                    wide,
+                )),
                 aim::ALOFT_CEILING,
             );
         }
@@ -5237,6 +5269,51 @@ impl Arcade {
         }
     }
 
+    /// How long the readout stays up.
+    ///
+    /// Long enough to take a screenshot without hurrying and short enough
+    /// that it is gone before you have forgotten you pressed anything.
+    const PLACE_SHOWS: f32 = 8.0;
+
+    /// Where you are standing and which way you are looking, as six bare
+    /// numbers: the feet, the eye's height, the yaw and the pitch.
+    ///
+    /// **Because the slow part of a fault Jake can see is finding it.** He
+    /// plays, something looks wrong, and a screenshot arrives. A picture of
+    /// a grey wall in a building of grey walls says nothing about where its
+    /// camera was, and the only way back to that camera is to guess: a
+    /// sweep of poses rendered and held against the picture by eye, which
+    /// on the 30th of October 2026 took the best part of an hour and landed
+    /// on the wrong spot twice before it landed on the right one. Twice in
+    /// one afternoon.
+    ///
+    /// `WALK` and `WHERE` in the walking skill do this already, behind an
+    /// environment variable and a rebuild, which is two steps too many for
+    /// the moment somebody is standing in the thing they want to show you.
+    ///
+    /// **Bare numbers, because the plate is user facing and the words on it
+    /// are Jake's.** A readout that says `at` and `yaw` is copy, and copy
+    /// goes in under a marker and holds the gate until he has rewritten it.
+    /// Six numbers in a fixed order are not, and whoever reads them off a
+    /// screenshot is me.
+    ///
+    /// The feet and the eye both, because they are not the same number and
+    /// a replay set from one alone draws the room from the floor of
+    /// whatever storey it opened on. Spec 0042 paid for that one.
+    ///
+    /// A string rather than a print, so a test can read it.
+    fn where_you_are(&self) -> String {
+        format!(
+            "{:.2} {:.2} {:.2}   {:.2}   {:.1} {:.1}",
+            self.at.x,
+            self.at.y,
+            self.at.z,
+            self.looking_from().y,
+            self.yaw.to_degrees(),
+            self.pitch.to_degrees(),
+        )
+    }
+
     fn looking_from(&self) -> Vec3 {
         vec3(self.at.x, self.eye + EYE, self.at.z)
     }
@@ -6271,6 +6348,9 @@ impl Game for Arcade {
         sound: &SoundSystem,
     ) {
         self.since += dt;
+        // and the readout of where you are standing, which runs out on its
+        // own rather than being turned off. Spec 0045.
+        self.showing_place = (self.showing_place - dt).max(0.0);
         // the hotel's change running away down its corridor, per spec 0029.
         // It ticks whether anybody is in there to watch it or not, the same
         // as the rig in the back room: a building that only runs the room
@@ -6821,7 +6901,7 @@ impl Game for Arcade {
         // right of the window until this went in; the one in the room behind
         // the wall happened to be short enough and did not.
         let room = (self.window.0 - aim::SAYS_AT.x * 2.0).max(aim::SAYS_SIZE * 8.0);
-        let lines: Vec<String> = said
+        let mut lines: Vec<String> = said
             .iter()
             .flat_map(|words| {
                 blitzkit::text::wrapped(words, aim::SAYS_SIZE, room)
@@ -6830,6 +6910,12 @@ impl Game for Arcade {
                     .collect::<Vec<_>>()
             })
             .collect();
+
+        // and where you are standing, under the help and on the same plate,
+        // for the seconds after M. Spec 0045.
+        if self.showing_place > 0.0 {
+            lines.push(self.where_you_are());
+        }
 
         // a plate under them first, because the text is drawn straight over
         // whatever the room is doing and the room is sometimes a neon sign
@@ -9787,15 +9873,10 @@ impl Game for Arcade {
             ));
         }
 
-        // and the way up to it, one in each fitting on the shaft wall
-        for at in aloft::up_lamps() {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                Vec3::ONE,
-                aloft::UP_LAMP_LIT,
-                aloft::UP_LAMP_RANGE,
-            ));
+        // and the way up to it, one in each fitting on the shaft wall and
+        // one on each newel of the parapet below them
+        for (at, lit, range) in aloft::up_lamps() {
+            shades.push((eye.distance_squared(at), at, Vec3::ONE, lit, range));
         }
 
         for at in twine::lamps(self.room.reaches) {
@@ -10184,6 +10265,15 @@ impl Game for Arcade {
             // and the patches it found stay outlined until you ask again.
             KeyboardKey::P if held && !input.repeat => {
                 self.wants_planes = true;
+            }
+            // and where you are standing, for a picture somebody else has to
+            // find. Spec 0045. On the screen, because the point of it is that
+            // a screenshot carries its own pose, and in the log as well
+            // because a log can be grepped.
+            KeyboardKey::M if held && !input.repeat => {
+                self.showing_place = Self::PLACE_SHOWS;
+
+                eprintln!("{}  seeing {:?}", self.where_you_are(), self.what_i_see());
             }
             // back to the door, when flying has lost you. Spec 0041.
             //
@@ -12259,6 +12349,83 @@ mod tests {
 
         press(&mut one, KeyboardKey::P);
         assert!(one.wants_planes, "P did not ask for a check");
+    }
+
+    /// Spec 0045: M says where you are standing, and says it again when you
+    /// have moved.
+    ///
+    /// The control is the second half. A line with the right shape in it
+    /// and the wrong numbers would pass the first half for ever, and the
+    /// whole point of this key is the numbers.
+    #[test]
+    fn m_says_where_you_are() {
+        let mut one = Arcade::new();
+
+        one.at = vec3(-7.70, 1.31, -1.25);
+        one.eye = 1.31;
+        one.yaw = 225f32.to_radians();
+        one.pitch = 25f32.to_radians();
+
+        let said = one.where_you_are();
+
+        assert!(said.contains("-7.70"), "no x in {}", said);
+        assert!(said.contains("-1.25"), "no z in {}", said);
+        assert!(said.contains("2.86"), "no eye in {}", said);
+        assert!(said.contains("225.0"), "no yaw in {}", said);
+        assert!(said.contains("25.0"), "no pitch in {}", said);
+
+        one.at.x += 3.0;
+        one.yaw = 0.0;
+
+        let moved = one.where_you_are();
+
+        assert_ne!(said, moved, "it says the same thing wherever you stand");
+    }
+
+    /// Spec 0045: M puts the line on the screen, and it runs out on its own.
+    ///
+    /// The control is the last line. A readout that never goes away is a
+    /// mode, and a mode wants a key to come out of it.
+    #[test]
+    fn m_shows_where_you_are_for_a_while() {
+        let mut one = Arcade::new();
+
+        assert_eq!(one.showing_place, 0.0, "it opened with the readout up");
+
+        press(&mut one, KeyboardKey::M);
+        assert_eq!(one.showing_place, Arcade::PLACE_SHOWS, "M showed nothing");
+
+        let (mut geometry, mut text) = (Geometry::new(), TextRenderer::new());
+        let sound = SoundSystem::new();
+
+        one.update(Arcade::PLACE_SHOWS * 0.5, &mut geometry, &mut text, &sound);
+        assert!(one.showing_place > 0.0, "it went out half way through");
+
+        one.update(Arcade::PLACE_SHOWS, &mut geometry, &mut text, &sound);
+        assert_eq!(one.showing_place, 0.0, "it never goes out");
+    }
+
+    /// Spec 0045: and asking moves nothing.
+    ///
+    /// A key that teleports you is not a thing this building does, per spec
+    /// 0041, and this one only reads.
+    #[test]
+    fn m_moves_nothing() {
+        let mut one = Arcade::new();
+
+        one.at = vec3(1.0, 0.0, 2.0);
+        one.yaw = 0.5;
+        one.pitch = 0.25;
+
+        let was = (one.at, one.yaw, one.pitch, one.walking, one.wants_planes);
+
+        press(&mut one, KeyboardKey::M);
+
+        assert_eq!(
+            (one.at, one.yaw, one.pitch, one.walking, one.wants_planes),
+            was,
+            "asking where you are moved you"
+        );
     }
 
     /// Spec 0048 of the engine: the repeats of a held key ask for nothing.

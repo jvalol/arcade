@@ -1722,7 +1722,7 @@ impl Room {
     }
 
     pub fn ceiling(&self) -> Vec<Aabb> {
-        let well = crate::aloft::up_well();
+        let well = crate::aloft::up_well_cut();
         let mut out = Vec::new();
 
         for slab in self.floors().iter() {
@@ -1822,7 +1822,7 @@ impl Room {
         // bar and each tile is clipped to the well rather than dropped: the
         // well is cut to the stair and a tile dropped whole leaves the hole
         // wider than the shaft wall that is meant to edge it.
-        let well = crate::aloft::up_well();
+        let well = crate::aloft::up_well_cut();
         let clipped = |hung: &Vec<Hung>| {
             hung.iter()
                 .flat_map(|(at, size)| {

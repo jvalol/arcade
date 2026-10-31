@@ -146,6 +146,92 @@ thing from the other end, where nested treads made a flight of four legal
 rises you could not get out of. Two straight flights are exactly what a box
 describes.
 
+### The gap in the wall
+
+Jake reported one three times over an afternoon, from three places on the
+first flight, and it took two wrong answers to find. The first answer was
+that the dark band was the nook's unlit ceiling seen edge on, which it was,
+and lighting it was worth doing and was not this. The second was that two
+drawn faces shared a plane, which the engine's own check said they did not.
+
+**There were two faults and the measurements found them in this order.**
+
+**A slot between the parapet and the shaft.** The shaft hangs from the tiles
+and the rail stopped a metre over each tread, so for the six treads under
+the hole there was nothing between the two: a metre of open air at the
+bottom of that stretch tapering to twelve centimetres at the top, raking
+with the stair. Nothing had measured it, because the sweep that called the
+stairwell sealed started at the tiles and this is under them.
+
+So the parapet is a rail where there is nothing over it and a wall where
+there is, and the wall is one box for the whole stretch rather than one a
+tread. One box because a box a tread is a join a tread.
+
+**And the ceiling cut flush with the wall.** This is the one that was
+actually in the picture. `up_well` is cut to the stair exactly, so every
+tile and every bar of spec 0012's ceiling stopped at `up_west` and the
+parapet began there, and the end of every one of them was a drawn face in
+the same plane as the drawn face of the wall. Dark navy against pale
+plaster, the whole rake of the flight, broken into dashes. It reads as a
+hole because a broken dark line on a lit wall is what a hole looks like.
+
+`up_well_cut` takes the hole out to the middle of the wall's thickness, on
+every side that has a wall beside it, so the cut ends are buried in solid
+and show from neither side. Not out to the far face, which would move the
+same fault into the nook.
+
+**Why three rounds.** Every check in the building said it was sound. The
+coplanar check in this file was handed `room::solid` and the drawn stair and
+not the ceiling, so the one thing at fault was the one thing it was not
+holding. The engine's own P key saw it and threw it away: the pair is
+`turned` or `shaped` or outside what the reachability fill reached. And the
+sweep for an opening was written against the shaft and started where the
+shaft starts. A check that is given the wrong list is worse than no check,
+because it answers.
+
+### Lighting the first flight
+
+**The fittings on the way up hang on the shaft wall, and the shaft starts
+at the nook's ceiling.** So the whole of the first flight under the tiles
+had no lamp of its own, and the only light on it came from the nook's four,
+across the room and low down. `up_sconces` says why in as many words: this
+stair stands free with a parapet either side, and a sconce at a sconce's
+height over a parapet is a lamp hanging in the air.
+
+What that drew was not a dim stair. It was a ceiling. On the seventh tread
+the tiles are three tenths of a metre over your eyes and you see them edge
+on, so they came out as a flat black band with a dead straight edge where
+the shaft wall comes down to meet them. Jake walked it twice and called it
+a gap in the wall both times.
+
+**Nothing was open.** The stairwell was swept from the tiles to this room's
+floor, seventy two bearings by thirteen pitches at every point through its
+volume, and not one ray leaves it sideways without meeting solid inside the
+wall's thickness. In his own frame thirty five pixels out of 1.9 million
+are near black and all thirty five are on the window border. Of the rays in
+that view that meet no wall of the building, every one lands on a tile. It
+read as a hole because a black band under a lit wall is what a hole looks
+like.
+
+**A lamp on a post, standing on the parapet.** A newel lamp is the fitting
+a parapet is for, and the bowl sits under the lamp rather than over it, so
+what it lights is the ceiling. Lighting the treads was never the problem.
+One every fifth tread, each side, dropped where there is not
+`UP_NEWEL_ROOM` of air left under the tiles, which is what keeps them off
+the top of the flight where the parapet already reaches the ceiling.
+
+**Dimmer and shorter than a sconce**, because a sconce lights a wall you
+walk along and a newel is at your elbow. At the shaft's own 0.5 and five
+metres the one two treads behind you washed the parapet white and the
+stairwell came out lit like the hall it is a way out of. At 0.3 and three
+and a half the band over that seventh tread went from 48 to 64 of 255 and
+the grid in it reads.
+
+**One list of lamps and not two.** `up_lamps` gives every lamp on the way up
+with what it is worth, sconces and newels together, because a room with
+some of its lamps in one place and the rest in another is how the baths
+ended up with a ceiling glowing at nothing.
+
 ## What you do, and the one thing you cannot
 
 You climb. You pass four landings and you are back at the first, higher than
@@ -240,8 +326,14 @@ The way up:
   head. — `aloft::tests::the_second_flight_clears_the_floor_it_comes_up_through`
 - All of it is under this room and none of it is
   outside. — `aloft::tests::the_whole_stair_is_under_the_room`
-- Every lamp on it is in a fitting, in the shaft, and not inside the
+- Every lamp on it stands in a fitting, a sconce in a wall of the shaft or
+  a newel on a parapet with air over it, and none of them is inside the
   stair. — `aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
+- And the first flight has a lamp of its
+  own. — `aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
+- The hole the ceiling is cut to ends inside the wall round it rather than
+  in that wall's own
+  face. — `aloft::tests::the_hole_the_ceiling_is_cut_to_ends_inside_the_wall`
 - And somebody your size, walking, gets from the nook to the
   room. — `aloft::tests::you_can_walk_up_it`
 - The hall's ceiling has nothing of the way up hanging under

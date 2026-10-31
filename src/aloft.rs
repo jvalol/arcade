@@ -1155,6 +1155,42 @@ pub fn up_well() -> Vec<Aabb> {
     ]
 }
 
+/// The hole the nook's ceiling is actually cut to, which is the well taken
+/// out to the middle of the wall round it.
+///
+/// **Because a tile cut flush with a wall ends in that wall's own plane.**
+/// The well is cut to the stair exactly, so the tiles and the bars stopped
+/// at `up_west` and the parapet began there, and the end of every tile was
+/// a drawn face in the same plane as the drawn face of the wall. Dark navy
+/// against pale plaster, the whole rake of the flight, which is what Jake
+/// kept calling a gap in the wall. The building has written this rule down
+/// four times under other names: build behind a wall from its far face,
+/// not its near one.
+///
+/// Half the wall's thickness, so the cut ends sit inside the solid and
+/// show from neither side. Not the far face, which would only move the
+/// same fault out into the nook.
+///
+/// Taken out on every side that has a wall beside it and not at the one
+/// that has none: the second flight's hole stops where the flight leaves
+/// the ceiling, and past that there is nothing over the tiles to hide an
+/// edge behind.
+pub fn up_well_cut() -> Vec<Aabb> {
+    let out = THICK * 0.5;
+    let well = up_well();
+
+    vec![
+        Aabb::new(
+            well[0].min - vec3(out, 0.0, out),
+            well[0].max + vec3(out, 0.0, out),
+        ),
+        Aabb::new(
+            well[1].min - vec3(0.0, 0.0, out),
+            well[1].max + vec3(0.0, 0.0, out),
+        ),
+    ]
+}
+
 /// The stair's own plan, as the two rectangles the well and the shaft are
 /// both built on.
 ///
@@ -1348,9 +1384,94 @@ pub fn up_sconces() -> Vec<Vec3> {
     out
 }
 
-/// And the lamps, which are those.
-pub fn up_lamps() -> Vec<Vec3> {
-    up_sconces()
+/// How high a newel lamp sits over the parapet it stands on, how wide it
+/// is, and how much air it wants under the tiles to be worth standing
+/// there.
+///
+/// One every fifth tread, each side, which is the cadence the sconces
+/// above the tiles already keep.
+pub const UP_NEWEL_UP: f32 = 0.34;
+pub const UP_NEWEL_WIDE: f32 = 0.15;
+pub const UP_NEWEL_ROOM: f32 = 0.55;
+/// Dimmer and shorter than a sconce, because a sconce lights a wall you
+/// walk along and a newel is at your elbow. At the shaft's own 0.5 and 5.0
+/// the one two treads behind you washed the parapet white and the stair
+/// came out lit like the hall it is a way out of.
+pub const UP_NEWEL_LIT: f32 = 0.30;
+pub const UP_NEWEL_RANGE: f32 = 3.5;
+/// How far under the lamp the bowl sits, which is what makes it an
+/// uplighter rather than a lantern.
+pub const UP_NEWEL_BOWL: f32 = 0.07;
+pub const UP_NEWEL_EVERY: usize = 5;
+
+/// The lamps standing on the parapet beside the first flight.
+///
+/// **Because the ceiling over that flight had no light on it at all.** The
+/// fittings on the way up hang on the shaft wall and the shaft starts at
+/// the nook's ceiling, so everything under the tiles was lit by the nook's
+/// own four from across the room. On the seventh tread the tiles are three
+/// tenths of a metre over your eyes and edge on, and what that drew was a
+/// flat black band with a dead straight edge where the shaft wall comes
+/// down to meet it. Jake read it as a hole in the wall twice. Nothing was
+/// open: of the rays in that view that meet no wall of the building, every
+/// one lands on a tile.
+///
+/// **A lamp on a post and not a sconce**, because this stair has no wall
+/// beside it. It stands free in the middle of the nook with a parapet
+/// either side, which is the thing a newel lamp is for, and `up_sconces`
+/// already says in as many words that a fitting at a sconce's height over a
+/// parapet is a lamp hanging in the air.
+///
+/// The bowl sits under the lamp rather than over it, so what it lights is
+/// the ceiling. Lighting the treads was never the problem, and a lamp open
+/// downward over a parapet burns the cap it stands on white.
+pub fn up_newels() -> Vec<Vec3> {
+    let tiles = crate::room::soffit();
+    let middle = up_west() + UP_WIDE * 0.5;
+    let mut out = Vec::new();
+
+    // **Only on the rail, which is the part of the parapet with air over
+    // it.** The stretch the shaft stands over is a wall to the ceiling and
+    // has the shaft's own sconces on it.
+    for west in [true, false] {
+        let mut rails: Vec<Aabb> = up_sides()
+            .into_iter()
+            .filter(|side| side.max.y + UP_NEWEL_UP + UP_NEWEL_ROOM <= tiles)
+            .filter(|side| (side.center().x < middle) == west)
+            .collect();
+
+        rails.sort_by(|one, other| one.min.z.total_cmp(&other.min.z));
+
+        out.extend(
+            rails
+                .iter()
+                .step_by(UP_NEWEL_EVERY)
+                .map(|side| vec3(side.center().x, side.max.y + UP_NEWEL_UP, side.center().z)),
+        );
+    }
+
+    out
+}
+
+/// And the lamps, which are those, each with what it is worth.
+///
+/// **One list and not two.** Two lists of one kind of thing is the fault
+/// this building keeps writing down, and a room with some of its lamps in
+/// one place and the rest in another is how the baths ended up with a
+/// ceiling glowing at nothing.
+pub fn up_lamps() -> Vec<(Vec3, f32, f32)> {
+    let mut out: Vec<(Vec3, f32, f32)> = up_sconces()
+        .into_iter()
+        .map(|at| (at, UP_LAMP_LIT, UP_LAMP_RANGE))
+        .collect();
+
+    out.extend(
+        up_newels()
+            .into_iter()
+            .map(|at| (at, UP_NEWEL_LIT, UP_NEWEL_RANGE)),
+    );
+
+    out
 }
 
 /// How high the parapet stands over the tread beside it.
@@ -1382,21 +1503,49 @@ pub const UP_RAIL: f32 = 1.0;
 pub fn up_sides() -> Vec<Aabb> {
     let west = up_west();
     let cap = crate::room::tile_middle();
+    let shaft = up_shaft();
+    let treads: Vec<Aabb> = up_treads()
+        .into_iter()
+        .filter(|t| t.max.y <= UP_LANDING + 1e-4 && t.size().z <= UP_GOING + 1e-4)
+        .collect();
     let mut out = Vec::new();
 
-    for tread in up_treads()
-        .iter()
-        .filter(|t| t.max.y <= UP_LANDING + 1e-4 && t.size().z <= UP_GOING + 1e-4)
-    {
-        let high = (tread.max.y + UP_RAIL).min(cap);
+    for (from, to) in [
+        (west - THICK, west),
+        (west + UP_WIDE, west + UP_WIDE + THICK),
+    ] {
+        let under = |tread: &&Aabb| {
+            shaft.iter().any(|wall| {
+                wall.min.x < to - 1e-4
+                    && wall.max.x > from + 1e-4
+                    && wall.min.z < tread.max.z - 1e-4
+                    && wall.max.z > tread.min.z + 1e-4
+            })
+        };
 
-        for (from, to) in [
-            (west - THICK, west),
-            (west + UP_WIDE, west + UP_WIDE + THICK),
-        ] {
+        // **A rail where there is nothing over it, and a wall where there
+        // is.** The shaft hangs from the tiles and the rail stopped a metre
+        // over the tread, so for the six treads under the hole there was a
+        // slot between the two, a metre of it at the bottom tapering to
+        // twelve centimetres at the top. Nothing measured it: the sweep
+        // that called the stairwell sealed started at the tiles and this is
+        // under them.
+        for tread in treads.iter().filter(|t| !under(t)) {
             out.push(Aabb::new(
                 vec3(from, -THICK, tread.min.z),
-                vec3(to, high, tread.max.z),
+                vec3(to, (tread.max.y + UP_RAIL).min(cap), tread.max.z),
+            ));
+        }
+
+        // **And the wall is one box for the whole stretch.** A box a tread,
+        // each stopping where the next began, is a join every tread, and
+        // every join is a hairline. One box has none.
+        let walled: Vec<&Aabb> = treads.iter().filter(under).collect();
+
+        if let (Some(first), Some(last)) = (walled.first(), walled.last()) {
+            out.push(Aabb::new(
+                vec3(from, -THICK, first.min.z),
+                vec3(to, cap, last.max.z),
             ));
         }
     }
@@ -2547,29 +2696,182 @@ mod tests {
         }
     }
 
-    /// Spec 0037: every lamp on the way up is in a fitting, in the shaft,
-    /// and not inside the stair.
+    /// Spec 0037: the hole the ceiling is cut to ends inside the wall round
+    /// it, not in that wall's own face.
+    ///
+    /// The well was cut to the stair exactly, so every tile and every bar
+    /// stopped at `up_west` and the parapet began there: a drawn face and a
+    /// drawn face in one plane, dark navy against pale plaster, the whole
+    /// rake of the flight. Jake reported it three times, as a gap in the
+    /// wall, which is what it looks like.
+    ///
+    /// Asked of the hole and not of the ceiling. Spec 0012 lays its grid on
+    /// each piece of the lid and the lid is already split at this stair, so
+    /// asking the tiles themselves asks a question about `floors` instead.
+    /// What this holds is the one thing that changed.
+    ///
+    /// The control is the second half: the well's own faces are those of
+    /// the wall, which is the fault.
+    #[test]
+    fn the_hole_the_ceiling_is_cut_to_ends_inside_the_wall() {
+        let walls: Vec<Aabb> = up_sides().into_iter().chain(up_shaft()).collect();
+
+        // a plane is inside a wall when it falls between that wall's own two
+        // faces rather than on either of them
+        let buried = |at: f32, across: usize, open: &Aabb| {
+            walls.iter().any(|wall| {
+                let (low, high) = match across {
+                    0 => (wall.min.x, wall.max.x),
+                    _ => (wall.min.z, wall.max.z),
+                };
+                let along = match across {
+                    0 => wall.min.z < open.max.z - 1e-3 && wall.max.z > open.min.z + 1e-3,
+                    _ => wall.min.x < open.max.x - 1e-3 && wall.max.x > open.min.x + 1e-3,
+                };
+
+                along && at > low + 1e-4 && at < high - 1e-4
+            })
+        };
+
+        // the faces the widening moved, which are the ones with a wall
+        // beside them
+        let moved = |cut: &[Aabb], well: &[Aabb]| {
+            let mut out = Vec::new();
+
+            for (open, was) in cut.iter().zip(well) {
+                for (at, across) in [
+                    (open.min.x, 0),
+                    (open.max.x, 0),
+                    (open.min.z, 2),
+                    (open.max.z, 2),
+                ] {
+                    let same = match across {
+                        0 => (at - was.min.x).abs() < 1e-4 || (at - was.max.x).abs() < 1e-4,
+                        _ => (at - was.min.z).abs() < 1e-4 || (at - was.max.z).abs() < 1e-4,
+                    };
+
+                    if !same {
+                        out.push((at, across, *open));
+                    }
+                }
+            }
+
+            out
+        };
+
+        let cut = up_well_cut();
+        let well = up_well();
+        let widened = moved(&cut, &well);
+
+        assert!(
+            widened.len() >= 5,
+            "the hole was widened on {} sides, which is fewer than the stair has walls",
+            widened.len()
+        );
+
+        for (at, across, open) in widened {
+            assert!(
+                buried(at, across, &open),
+                "the hole is cut to {:.4} on axis {}, which is in no wall",
+                at,
+                across
+            );
+        }
+
+        // and the control: cut to the stair itself, every one of those is a
+        // face of the wall rather than inside it
+        for open in well.iter() {
+            for (at, across) in [
+                (open.min.x, 0usize),
+                (open.max.x, 0),
+                (open.min.z, 2),
+                (open.max.z, 2),
+            ] {
+                assert!(
+                    !buried(at, across, open),
+                    "the uncut well is already inside a wall at {:.4}, so this proves nothing",
+                    at
+                );
+            }
+        }
+    }
+
+    /// Spec 0037: every lamp on the way up stands in a fitting, and every
+    /// fitting it could stand in is one of two.
     ///
     /// The rule this building keeps breaking. The baths ran their lamps
     /// along a ceiling and stood their sconces on a wall, so every sconce
     /// was dark and the ceiling glowed at nothing.
+    ///
+    /// Two kinds of fitting now, and the test says which each lamp is: a
+    /// sconce is in a wall of the shaft, a newel stands on a parapet with
+    /// air over it. A lamp that is neither is a lamp hanging in a
+    /// stairwell.
     #[test]
     fn every_lamp_on_the_way_up_is_in_a_fitting() {
-        let (sconces, lamps) = (up_sconces(), up_lamps());
+        let (sconces, newels, lamps) = (up_sconces(), up_newels(), up_lamps());
         let shaft = up_shaft();
+        let sides = up_sides();
         let treads = up_treads();
 
         assert!(!lamps.is_empty(), "the way up is climbed in the dark");
-        assert_eq!(sconces, lamps, "a lamp that is not in a fitting");
 
-        for at in lamps {
+        // **And the first flight has one of its own**, which is the whole
+        // of why newels exist. The control is the line under it: every
+        // sconce is above the tiles, because `up_sconces` keeps only the
+        // ones with a shaft wall to hang on, so without a newel the part
+        // of the stair you climb inside the nook has no lamp at all.
+        let tiles = crate::room::soffit();
+
+        assert!(
+            newels.iter().any(|at| at.y < tiles),
+            "the first flight has no lamp of its own"
+        );
+        assert!(
+            sconces.iter().all(|at| at.y > tiles),
+            "a sconce under the tiles, so this test proves nothing"
+        );
+        assert_eq!(
+            lamps.iter().map(|(at, _, _)| *at).collect::<Vec<Vec3>>(),
+            sconces
+                .iter()
+                .chain(newels.iter())
+                .copied()
+                .collect::<Vec<Vec3>>(),
+            "a lamp that is not in a fitting"
+        );
+
+        for at in sconces {
             let bulb = Aabb::new(at - Vec3::splat(0.08), at + Vec3::splat(0.08));
 
             assert!(
                 shaft.iter().any(|wall| wall.intersects(&bulb)),
-                "the lamp at {:?} is in no wall of the shaft",
+                "the sconce at {:?} is in no wall of the shaft",
                 at
             );
+        }
+
+        for at in newels {
+            let post = Aabb::new(
+                vec3(at.x - 0.08, at.y - UP_NEWEL_UP, at.z - 0.08),
+                vec3(at.x + 0.08, at.y, at.z + 0.08),
+            );
+
+            assert!(
+                sides.iter().any(|side| side.intersects(&post)),
+                "the newel at {:?} stands on nothing",
+                at
+            );
+            assert!(
+                at.y + UP_NEWEL_ROOM <= tiles,
+                "the newel at {:?} is in the ceiling",
+                at
+            );
+        }
+
+        for (at, _, _) in lamps {
+            let bulb = Aabb::new(at - Vec3::splat(0.08), at + Vec3::splat(0.08));
+
             assert!(
                 !treads.iter().any(|tread| tread.intersects(&bulb)),
                 "the lamp at {:?} is inside the stair",
