@@ -157,8 +157,22 @@ graze a jamb. This catches a walk that was stopped, not one that arrived
 slightly short.
 
 **Wading.** `spa::WADE` is 0.42, so a walk through the pool covers less than
-half of what it asks for and this would call it stopped. No route goes there.
-The day one does, this asks `pace` where it now assumes `SPEED`.
+half of what it asks for and this would call it stopped. The day a route
+needs to go there, this asks `pace` where it now assumes `SPEED`.
+
+~~No route goes there.~~ One did, from the 26th of October, and this said
+nothing. The arcade's own clip walked out of the cellar into the baths and
+kept walking, into the pool and under the water, and stood on the bottom of
+it for the last seconds of the film with the pool wall in its face. The walk
+asked for 9.24 metres and covered 6.5 of them, because wading the last
+stretch still left it over the half this allows, so the gate it would have
+tripped was the one gate it cleared.
+
+Which is the thing to keep: **a walk that goes somewhere can still end
+nowhere.** This says the camera went where the route said. What the last
+frame is of is off the screen and Jake's, and it took him watching it.
+Restaged on the 30th of October to stop short of the water and arc round on
+to it.
 
 ---
 
