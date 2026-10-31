@@ -877,14 +877,15 @@ pub struct Room {
     /// And the door to the baths, which is a third thing that swings.
     pub baths_open: bool,
     pub baths_swing: f32,
-    /// And the imaginarium's three second doors, per spec 0038: when each
-    /// was shut, if it is, and how far each leaf has slid.
+    /// And the imaginarium's three second doors, per spec 0038: whether
+    /// each is shut and when it was last worked, with how far each leaf
+    /// has dropped.
     ///
-    /// The moment rather than a flag, because `aloft::walking` reads it to
-    /// decide who sets out, and a flag would take twelve people off the
-    /// stairs in the frame the key goes down. Written by the game, which
-    /// is the thing that knows what `since` is.
-    pub aloft_shut: [Option<f32>; crate::aloft::FRAMES as usize],
+    /// The moment as well as the state, because `aloft::walking` reads it
+    /// to decide which walk somebody set out on, and a bare flag would
+    /// change the walk under everybody already on one. Written by the
+    /// game, which is the thing that knows what `since` is.
+    pub aloft_doors: [(bool, f32); crate::aloft::FRAMES as usize],
     pub aloft_slid: [f32; crate::aloft::FRAMES as usize],
     /// Which of the hotel's doors are drawn and how far each stands open.
     /// Spec 0029.
@@ -1069,7 +1070,7 @@ impl Room {
             walls,
             reaches,
             open: false,
-            aloft_shut: [None; crate::aloft::FRAMES as usize],
+            aloft_doors: [(false, f32::MIN); crate::aloft::FRAMES as usize],
             aloft_slid: [1.0; crate::aloft::FRAMES as usize],
             sauna_open: false,
             sauna_swing: 0.0,
@@ -1242,11 +1243,7 @@ impl Room {
         let by = dt / crate::aloft::LEAF_DROPS;
 
         for n in 0..crate::aloft::FRAMES as usize {
-            let to = if self.aloft_shut[n].is_some() {
-                0.0
-            } else {
-                1.0
-            };
+            let to = if self.aloft_doors[n].0 { 0.0 } else { 1.0 };
 
             self.aloft_slid[n] += (to - self.aloft_slid[n]).clamp(-by, by);
         }

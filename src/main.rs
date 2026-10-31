@@ -1202,12 +1202,9 @@ impl Arcade {
             // moment goes in rather than a flag, because who sets out
             // reads it.
             Some(room::Seen::Hatch(n)) => {
-                let shut = &mut self.room.aloft_shut[n as usize];
+                let door = &mut self.room.aloft_doors[n as usize];
 
-                *shut = match shut {
-                    Some(_) => None,
-                    None => Some(self.since),
-                };
+                *door = (!door.0, self.since);
             }
             Some(room::Seen::Baths) => self.room.baths_open = !self.room.baths_open,
             // the desk: house whoever is at the door. Spec 0030, and the
@@ -2658,7 +2655,7 @@ impl Arcade {
 
         // and the three flights of the imaginarium, per spec 0038, where
         // the whole content of the room is other people using it
-        for who in aloft::walking(self.since, self.room.aloft_shut) {
+        for who in aloft::walking(self.since, self.room.aloft_doors) {
             stand(who.at, who.up, who.facing, Some(who.along), who.shade);
         }
     }
@@ -6872,7 +6869,7 @@ impl Game for Arcade {
                 };
                 // the same line the baths and the sauna say, which is
                 // already his and is not proposed copy
-                let how = if self.room.aloft_shut[n as usize].is_some() {
+                let how = if self.room.aloft_doors[n as usize].0 {
                     "Click or press enter to open it."
                 } else {
                     "Click or press enter to close it."

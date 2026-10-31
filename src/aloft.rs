@@ -801,9 +801,12 @@ pub struct Walker {
     pub shade: usize,
 }
 
-/// How many walk each flight, and how fast.
+/// How many walk each flight.
+///
+/// How fast is no longer a number: spec 0038's doors change how far each
+/// of them walks, so the pace comes out of `ROUNDS` and the path they are
+/// on rather than being set and the round following it.
 pub const WALKERS: u64 = 4;
-pub const WALKS: f32 = 0.9;
 
 /// How far one pace carries somebody, which is what turns metres walked into
 /// legs swung.
@@ -866,7 +869,7 @@ pub fn journey() -> [Vec3; 4] {
 }
 
 /// How far along a way a walk of `gone` has got.
-fn along_the_way(path: &[Vec3; 4], gone: f32) -> Vec3 {
+fn along_the_way(path: &[Vec3], gone: f32) -> Vec3 {
     let mut left = gone.max(0.0);
     let mut leg = 0;
 
@@ -880,9 +883,96 @@ fn along_the_way(path: &[Vec3; 4], gone: f32) -> Vec3 {
     from.lerp(to, (left / from.distance(to)).clamp(0.0, 1.0))
 }
 
+/// And which way is up to them there, which only moves where a walk goes
+/// from one frame's floor on to another's.
+fn upright_along(path: &[Vec3], ups: &[Quat], gone: f32) -> Quat {
+    let mut left = gone.max(0.0);
+    let mut leg = 0;
+
+    while leg + 2 < path.len() && left > path[leg].distance(path[leg + 1]) {
+        left -= path[leg].distance(path[leg + 1]);
+        leg += 1;
+    }
+
+    let far = path[leg].distance(path[leg + 1]);
+
+    ups[leg].slerp(ups[leg + 1], (left / far.max(1e-4)).clamp(0.0, 1.0))
+}
+
 /// How long one of those ways is, corner to corner.
-fn way_long(path: &[Vec3; 4]) -> f32 {
+fn way_long(path: &[Vec3]) -> f32 {
     path.windows(2).map(|leg| leg[0].distance(leg[1])).sum()
+}
+
+/// How far somebody takes to come upright again on the floor they step
+/// out on to, which is about a stride.
+pub const TURNS_OVER: f32 = 0.7;
+
+/// How long one walker's whole round takes, the walk and the wait out of
+/// sight together.
+///
+/// **The round is the clock and the path is fitted to it**, not the other
+/// way about. Spec 0038's doors change how far somebody walks: open, they
+/// carry on over the floor they come out on to, and shut, they turn at the
+/// door and go back the way they came. Pace them by the path and the round
+/// changes with the door, so working one puts every walker in that frame
+/// somewhere else in the frame the key goes down. Pace them by the round
+/// and the only thing a door changes is where they go.
+pub const ROUNDS: f32 = 24.0;
+
+/// The whole of somebody's walk, in world terms, with which way is up to
+/// them at each corner of it.
+///
+/// **Open, it crosses out of its own frame.** Every second door is cut in
+/// another frame's floor, per spec 0038, so somebody leaving by one steps
+/// out on to that floor: they come up through it and cross it to its own
+/// way out. The turn from one up to the other happens over `TURNS_OVER`,
+/// which is the one moment in this room where the thing it is about
+/// happens to somebody rather than sitting there being true.
+///
+/// **Shut, they turn at the door and go back.** Which is the walk this
+/// room was told not to have, and is right as an answer rather than as a
+/// state: you shut a door and the next person up against it turns round
+/// where you can see them. The alternative was taking them out of the
+/// room, and a removal is the one change nobody can see. Jake worked the
+/// trapdoor, watched a panel move and nothing else happen, and said so.
+pub fn journey_across(n: u64, lane: f32, open: bool) -> (Vec<Vec3>, Vec<Quat>) {
+    let mine = frame(n);
+    let own = journey_in(lane);
+    let mut way: Vec<Vec3> = own.iter().map(|at| in_frame(n, *at)).collect();
+    let mut ups = vec![mine; way.len()];
+
+    if !open {
+        // back the way they came, which is every corner but the one they
+        // are standing on
+        for at in own.iter().rev().skip(1) {
+            way.push(in_frame(n, *at));
+            ups.push(mine);
+        }
+
+        return (way, ups);
+    }
+
+    // whose floor they step out on to, and where that door is in that
+    // frame's own terms. Taken from the corner they are already standing
+    // on rather than from the hole, so the two halves meet exactly.
+    let theirs = frame(floor_of(n));
+    let over = -HALF + DOOR_WIDE * 1.5 + lane;
+    let mut out = theirs.inverse() * (way[way.len() - 1] - middle());
+    out.y = -HALF;
+
+    let toward = (over - out.x).signum() * TURNS_OVER;
+
+    for at in [
+        vec3(out.x + toward, -HALF, out.z),
+        vec3(over, -HALF, out.z),
+        vec3(over, -HALF, -HALF + THICK),
+    ] {
+        way.push(in_frame(floor_of(n), at));
+        ups.push(theirs);
+    }
+
+    (way, ups)
 }
 
 /// The floor leg of that walk, laid on the floor as a path.
@@ -1012,7 +1102,7 @@ pub fn border(n: u64) -> Vec<Aabb> {
 /// after that the flight is empty until you open it again. Recording the
 /// moment rather than a flag is what keeps twelve people from winking out
 /// in the frame the key goes down.
-pub fn walking(since: f32, shut: [Option<f32>; FRAMES as usize]) -> Vec<Walker> {
+pub fn walking(since: f32, doors: [(bool, f32); FRAMES as usize]) -> Vec<Walker> {
     let mut out = Vec::new();
 
     for n in 0..FRAMES {
@@ -1022,60 +1112,70 @@ pub fn walking(since: f32, shut: [Option<f32>; FRAMES as usize]) -> Vec<Walker> 
             let down = (n + who) % 2 == 0;
             let lane = if down { LANE } else { -LANE }
                 + (who as f32 / (WALKERS - 1) as f32 - 0.5) * LANE_SPREAD;
-            let path = journey_in(lane);
-            let long = way_long(&path);
 
             // **Nobody walks at the same pace as anybody else.** Twelve
             // people crossing a room at one speed is a parade, and the
             // speed is the first thing the eye reads. A sixth either side
-            // of `WALKS`, which is a slow walk against a brisk one.
-            let pace = WALKS * (0.84 + 0.32 * ((n * WALKERS + who) % 5) as f32 / 4.0);
-            let round = long / pace + WAITS;
-
-            // spread along the round, and the frames out of step with each
-            // other, so the room is never three of the same thing at once
+            // of the round, which is a slow walk against a brisk one.
+            //
+            // Spread along it as well, and the frames out of step with
+            // each other, so the room is never three of the same thing
+            // at once.
+            let round = ROUNDS * (0.84 + 0.32 * ((n * WALKERS + who) % 5) as f32 / 4.0);
             let off = round * (who as f32 / WALKERS as f32 + n as f32 * 0.11);
-            let walked = (since + off).rem_euclid(round) * pace;
+            let turn = (since + off).rem_euclid(round);
+
+            // **The walk they set out on is the one they finish.** A door
+            // worked part way through their round would otherwise put
+            // them somewhere else in the frame the key goes down, which
+            // is the one reading this room cannot afford.
+            let (shut, worked) = doors[n as usize];
+            let open = if since - turn >= worked { !shut } else { shut };
+
+            let (way, ups) = journey_across(n, lane, open);
+            let long = way_long(&way);
+            let pace = long / (round - WAITS);
+            let walked = turn * pace;
 
             // out of sight, which is the wait past the end of the walk
             if walked > long {
                 continue;
             }
 
-            // and nobody sets out through a door that was shut before they
-            // did
-            if let Some(when) = shut[n as usize] {
-                if since - walked / pace > when {
-                    continue;
-                }
-            }
-
             let gone = if down { walked } else { long - walked };
-            let at = along_the_way(&path, gone);
-            let ahead = along_the_way(&path, (gone + TURNS_IN).min(long));
-            let behind = along_the_way(&path, (gone - TURNS_IN).max(0.0));
-            let way = (ahead - behind).normalize_or(Vec3::X) * if down { 1.0 } else { -1.0 };
+            let at = along_the_way(&way, gone);
+            let up = upright_along(&way, &ups, gone);
+            let ahead = along_the_way(&way, (gone + TURNS_IN).min(long));
+            let behind = along_the_way(&way, (gone - TURNS_IN).max(0.0));
+            let heading = (ahead - behind).normalize_or(Vec3::X) * if down { 1.0 } else { -1.0 };
+
+            // in their own terms, which is where the flight and the
+            // facing are both measured
+            let mut mine = up.inverse() * (at - middle());
 
             // their feet stand on the tread under them rather than on the
-            // slope between two, or they ride the flight like a ramp
-            let at = if at.y > -HALF + 1e-4 {
+            // slope between two, or they ride the flight like a ramp.
+            // Only while their own frame is still under them: part way
+            // through the turn on to somebody else's floor there is no
+            // flight and `mine` is nobody's terms.
+            if up.abs_diff_eq(frame(n), 1e-3) && mine.y > -HALF + 1e-4 {
                 // clamped, because at the very top they are standing on
                 // the threshold of the door rather than on a thirteenth
                 // tread of a flight with twelve
-                let step = ((at.x - (HALF - STAIR_RUN)) / STAIR_GOING)
+                let step = ((mine.x - (HALF - STAIR_RUN)) / STAIR_GOING)
                     .floor()
                     .clamp(0.0, STAIR_STEPS as f32 - 1.0);
 
-                vec3(at.x, -HALF + (step + 1.0) * STAIR_RISE, at.z)
-            } else {
-                at
-            };
+                mine.y = -HALF + (step + 1.0) * STAIR_RISE;
+            }
+
+            let heading = up.inverse() * heading;
 
             out.push(Walker {
-                at: in_frame(n, at),
-                up: frame(n),
+                at: middle() + up * mine,
+                up,
                 // yaw nought faces -z and grows toward +x
-                facing: way.x.atan2(-way.z),
+                facing: heading.x.atan2(-heading.z),
                 // `people::swing` takes a fraction of a crossing and puts
                 // `people::STEPS` paces in it, so this is distance walked
                 // over the length of that many strides
@@ -1790,6 +1890,17 @@ pub fn hatch_is(n: u64) -> u64 {
     (n + 1) % FRAMES
 }
 
+/// The same fact asked the other way: whose floor frame `n`'s second door
+/// is cut in.
+///
+/// Found by searching rather than written as `(n + 2) % FRAMES`, so the
+/// two of them cannot drift. One number, asked twice.
+pub fn floor_of(n: u64) -> u64 {
+    (0..FRAMES)
+        .find(|k| hatch_is(*k) == n)
+        .expect("every door is in somebody's floor")
+}
+
 /// How far a pier stands off the face it is on, how wide it is across, and
 /// how many run over one face.
 ///
@@ -2467,13 +2578,13 @@ mod tests {
     /// that is a crowd. Head on it is a fault, which is what this holds.
     #[test]
     fn nobody_walks_through_anybody_coming_the_other_way() {
-        let round = way_long(&journey()) / WALKS + WAITS;
+        let round = ROUNDS * 1.2;
         let apart = crate::people::ARMS_APART * 2.0;
         let mut met = 0;
 
         for tick in 0..(round * 20.0) as u32 {
             let since = tick as f32 * 0.05;
-            let walking: Vec<(usize, Walker)> = walking(since, [None; FRAMES as usize])
+            let walking: Vec<(usize, Walker)> = walking(since, all_open())
                 .into_iter()
                 .map(|who| (who.shade / WALKERS as usize, who))
                 .collect();
@@ -2520,13 +2631,20 @@ mod tests {
 
         for tick in 0..600 {
             let since = tick as f32 * 0.1;
-            let who = walking(since, [None; FRAMES as usize]);
+            let who = walking(since, all_open());
 
             assert!(!who.is_empty(), "the room emptied at {:.2}s", since);
 
             for walker in who.iter() {
-                let on = walker.shade as u64 / WALKERS;
-                seen[on as usize] += 1;
+                seen[walker.shade / WALKERS as usize] += 1;
+
+                // **The frame under their feet, not the one they came
+                // from.** Spec 0038's open door puts somebody on another
+                // frame's floor, and part way over the threshold they are
+                // between the two, which is a turn and not a fall.
+                let Some(on) = (0..FRAMES).find(|n| walker.up.abs_diff_eq(frame(*n), 1e-3)) else {
+                    continue;
+                };
 
                 let under = Aabb::new(walker.at - Vec3::splat(0.06), walker.at + Vec3::splat(0.06));
                 let floor = in_frame(on, vec3(0.0, -HALF, 0.0));
@@ -2541,11 +2659,7 @@ mod tests {
                     on,
                     off_the_floor
                 );
-                assert!(
-                    walker.up.is_normalized(),
-                    "somebody on frame {} has no way up",
-                    on
-                );
+                assert!(walker.up.is_normalized(), "somebody here has no way up");
             }
         }
 
@@ -3452,50 +3566,83 @@ mod tests {
         }
     }
 
-    /// Spec 0038: a shut door takes nobody new, and nobody already walking
-    /// winks out.
+    /// Spec 0038: a shut door turns them back, and an open one puts them
+    /// on somebody else's floor.
     ///
-    /// **Why the shutting is a moment and not a flag.** A flag takes four
-    /// people off a flight in the frame the key goes down, which is the one
-    /// reading this room cannot afford: a figure vanishing in the open is
-    /// the building looking broken. Reading when it shut, everybody who
-    /// set off before it finishes and leaves, and the flight empties over
-    /// one round instead.
+    /// **What working a door has to do is something you can see.** The
+    /// first build stopped that frame taking anybody new, which is a
+    /// removal, and a removal is the one change nobody can see: Jake
+    /// worked the trapdoor, watched a panel move and nothing else happen,
+    /// and said it did not do much. Open, the next person through comes
+    /// up out of the floor you are standing on. Shut, the next one up
+    /// against it turns round in front of you.
     #[test]
-    fn a_shut_door_takes_nobody_new() {
-        let at = 30.0;
-        let mut shut = [None; FRAMES as usize];
-        shut[1] = Some(at);
+    fn a_shut_door_turns_them_back() {
+        let mut shut = all_open();
+        shut[1] = (true, 0.0);
 
-        let on = |since: f32, shut| {
-            walking(since, shut)
-                .into_iter()
-                .filter(|who| who.up == frame(1))
-                .count()
+        // read well after the door was worked, so nobody is still
+        // finishing the walk they set out on before it
+        let crosses = |doors| {
+            (0..800).any(|tick| {
+                walking(ROUNDS * 2.0 + tick as f32 * 0.2, doors)
+                    .into_iter()
+                    .any(|who| {
+                        who.shade as u64 / WALKERS == 1
+                            && who.up.abs_diff_eq(frame(floor_of(1)), 1e-3)
+                    })
+            })
         };
 
-        assert!(on(at, [None; FRAMES as usize]) > 0, "nobody to shut out");
-        assert_eq!(
-            on(at, shut),
-            on(at, [None; FRAMES as usize]),
-            "somebody went out like a light the moment it shut"
-        );
-        assert_eq!(
-            on(at + 60.0, shut),
-            0,
-            "somebody set off through a shut door"
-        );
+        assert!(crosses(all_open()), "nobody ever came through an open door");
+        assert!(!crosses(shut), "somebody came through a shut one");
 
-        // and the other two frames carry on, because you worked one door
-        for other in [0, 2] {
+        // and they are still about either way, because the room going
+        // quiet is the thing this replaced
+        for doors in [all_open(), shut] {
             assert!(
-                walking(at + 60.0, shut)
-                    .into_iter()
-                    .any(|who| who.up == frame(other)),
-                "shutting one door emptied frame {}",
-                other
+                (0..800).all(|tick| {
+                    walking(tick as f32 * 0.2 + 60.0, doors)
+                        .into_iter()
+                        .any(|who| who.shade as u64 / WALKERS == 1)
+                }),
+                "shutting it emptied the flight instead of turning them back"
             );
         }
+    }
+
+    /// Spec 0038: and working one moves nobody who is already walking.
+    ///
+    /// Which is why the moment it was worked is kept beside the state: a
+    /// walk is chosen when somebody sets out and not read again.
+    #[test]
+    fn working_a_door_moves_nobody() {
+        let at = 30.0;
+        let mut shut = all_open();
+        shut[1] = (true, at);
+
+        let standing = |since: f32, doors| {
+            let mut all: Vec<(usize, Vec3)> = walking(since, doors)
+                .into_iter()
+                .map(|w| (w.shade, w.at))
+                .collect();
+            all.sort_by_key(|(shade, _)| *shade);
+            all
+        };
+
+        assert_eq!(
+            standing(at, all_open()),
+            standing(at, shut),
+            "working it put somebody somewhere else in that frame"
+        );
+
+        // and the control: the same reading a few rounds later, which has
+        // to differ or the one above is comparing nothing
+        assert_ne!(
+            standing(at + ROUNDS * 2.0, all_open()),
+            standing(at + ROUNDS * 2.0, shut),
+            "the door changes nothing at all, so the check above is empty"
+        );
     }
 
     /// Spec 0038: you can step down into the hatch in your own floor and
@@ -3621,6 +3768,11 @@ mod tests {
                 n
             );
         }
+    }
+
+    /// Three doors, none of them ever worked.
+    fn all_open() -> [(bool, f32); FRAMES as usize] {
+        [(false, f32::MIN); FRAMES as usize]
     }
 
     fn pressed(solid: &[Aabb], from: Vec3, wish: Vec3) -> Vec3 {

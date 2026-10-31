@@ -279,12 +279,46 @@ came to 0.65 against a `walk::STEP` of 0.42. You got down there and stayed.
   `aloft::tests::every_second_door_is_cut_in_another_frames_floor`
 - And the control, which is the arrangement that did nothing. —
   `aloft::tests::the_first_doors_are_all_in_ceilings`
-- A shut door takes nobody new, and takes nobody already walking. —
-  `aloft::tests::a_shut_door_takes_nobody_new`
 - You can step down into the hatch in your floor and get back out. —
   `aloft::tests::you_can_get_out_of_the_hatch_in_your_floor`
 - And the control, which is the pit this shipped with. —
   `aloft::tests::a_deeper_pit_keeps_you`
+
+### What a shut door does, which was nothing you could see
+
+Built first as a removal: a shut door meant that frame took nobody new, so
+its flight emptied. Jake worked the trapdoor, watched a panel move, and
+said it did not do much beyond that. He was right, and the numbers say why.
+A frame's round is about fifteen metres of walking, so the flight is not
+actually empty for the best part of twenty seconds, and what you are being
+shown at the end of it is an absence. Nobody can see an absence. You would
+have had to remember how busy that flight was before you touched anything.
+
+So the door routes rather than stops.
+
+**Open, they cross out of their own frame.** Somebody leaving by a second
+door steps out on to the floor it is cut in, comes up through it, and walks
+across that floor to its own way out. Their down changes at the threshold,
+over `TURNS_OVER`, which is about a stride. That one moment is the only
+place in this room where the thing it is about happens to somebody rather
+than sitting there being true, and it is worth more than the whole still
+picture.
+
+**Shut, they turn at the door and go back.** Which is the there-and-back
+this room was told not to have, and is right as an answer where it was
+wrong as a state: you shut a door and the next person up against it turns
+round in front of you. The room never goes quiet either way.
+
+The round had to become the clock for this. Pace somebody by their path and
+the two states are different lengths, so working a door puts every walker
+in that frame somewhere else in the frame the key goes down. `ROUNDS` is
+the same either way and the pace is fitted to it, and which walk somebody
+is on is settled when they set out and never read again.
+
+- A shut door turns them back, and an open one puts them on somebody
+  else's floor. — `aloft::tests::a_shut_door_turns_them_back`
+- And working one moves nobody already walking. —
+  `aloft::tests::working_a_door_moves_nobody`
 
 ### And the corner it is all in had no light in it
 
