@@ -6889,10 +6889,7 @@ impl Game for Arcade {
                 let (what, how) = if self.room.open {
                     ("the bookcase", "Click or press enter to push it back.")
                 } else {
-                    (
-                        "a bookcase",
-                        "One of these is not a book. Click or press enter to pull it.",
-                    )
+                    ("a bookcase", "one of these is not a book, pull it")
                 };
 
                 (Some(String::from(what)), Some(String::from(how)))

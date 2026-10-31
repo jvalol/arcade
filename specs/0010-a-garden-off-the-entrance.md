@@ -26,11 +26,16 @@ into the building's own footprint and the baths were dug off the cellar, but
 past `shut` on the left there is no floor, no wall and no ceiling, so this room
 is not carved out of anything and can be the size it wants to be.
 
-**It is big.** Eleven deep and eleven along, against the nook's ten by
+**It is big.** Sixteen deep and sixteen along, against the nook's ten by
 fourteen. A garden read as a corridor is a planter, and every room in this
-building has been too small on its first build: the nook three times, the baths
-three times. The pond sits off centre with walking room on all four sides, and the
-widest walk is a little over three bodies.
+building has been too small on its first build: the nook three times, the
+baths three times. The pond sits off centre with walking room on all four
+sides, and the widest walk is a little over three bodies.
+
+It said eleven by eleven until 2026-10-31. It was made bigger before
+anything was built in it, `garden::DEEP` has said sixteen ever since, and
+this paragraph went on saying eleven for as long as nobody read the two
+together.
 
 **The floor is gravel**, raked in lines, with a stone border where it meets the
 walls and flagstones where you walk. Raked gravel is the one thing a zen garden
