@@ -3,6 +3,12 @@
 **Status:** implemented
 **Date:** 2026-10-21
 **Built:** 2026-10-21, the same day it was written.
+**Superseded in part:** 2026-11-01 by
+[0046](0046-somebody-to-stand-next-to.md), which raises the ceiling on the
+animation below. The premise under that ceiling was a corridor seen from one
+end in the dark, and spec 0038's imaginarium is a lit room you walk into and
+stand among. Everything else here holds, the reason for the ceiling
+included.
 
 ## Goal
 
@@ -212,6 +218,11 @@ and there is no sense in which one of them could stand in a hall.
 
 **Animation worth the name.** Legs that swap is the ceiling here. Anything
 beyond it is a character and this spec says not to build one.
+
+Raised on 2026-11-01 by [0046](0046-somebody-to-stand-next-to.md), and only
+as far as the room that asked. The bar in this spec is a figure that reads at
+corridor distance without inviting anybody to walk up to it, and the
+imaginarium issues that invitation on its own.
 
 ---
 

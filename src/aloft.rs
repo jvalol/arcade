@@ -797,7 +797,8 @@ pub struct Walker {
     pub at: Vec3,
     pub up: Quat,
     pub facing: f32,
-    pub along: f32,
+    /// How far they have walked, in metres, which is what swings the legs.
+    pub walked: f32,
     pub shade: usize,
 }
 
@@ -807,10 +808,6 @@ pub struct Walker {
 /// of them walks, so the pace comes out of `ROUNDS` and the path they are
 /// on rather than being set and the round following it.
 pub const WALKERS: u64 = 4;
-
-/// How far one pace carries somebody, which is what turns metres walked into
-/// legs swung.
-pub const STRIDE: f32 = 0.7;
 
 /// How long somebody is out of sight between journeys.
 pub const WAITS: f32 = 3.0;
@@ -1176,10 +1173,10 @@ pub fn walking(since: f32, doors: [(bool, f32); FRAMES as usize]) -> Vec<Walker>
                 up,
                 // yaw nought faces -z and grows toward +x
                 facing: heading.x.atan2(-heading.z),
-                // `people::swing` takes a fraction of a crossing and puts
-                // `people::STEPS` paces in it, so this is distance walked
-                // over the length of that many strides
-                along: (since + off) * pace / (STRIDE * crate::people::STEPS),
+                // the ground they would have covered if they never waited,
+                // which runs on past the end of a round rather than
+                // resetting to nought and snapping both legs straight
+                walked: (since + off) * pace,
                 shade: (n * WALKERS + who) as usize,
             });
         }
@@ -2579,7 +2576,7 @@ mod tests {
     #[test]
     fn nobody_walks_through_anybody_coming_the_other_way() {
         let round = ROUNDS * 1.2;
-        let apart = crate::people::ARMS_APART * 2.0;
+        let apart = crate::people::PASSES;
         let mut met = 0;
 
         for tick in 0..(round * 20.0) as u32 {

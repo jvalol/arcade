@@ -481,7 +481,8 @@ struct Arcade {
     /// barrels and the bell. Spec 0033.
     body: Option<MeshId>,
     head: Option<MeshId>,
-    leg: Option<MeshId>,
+    thigh: Option<MeshId>,
+    shin: Option<MeshId>,
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
     peg: Option<MeshId>,
@@ -966,7 +967,8 @@ impl Arcade {
             barrel: None,
             body: None,
             head: None,
-            leg: None,
+            thigh: None,
+            shin: None,
             view: mandel::View::default(),
             mandel: None,
             sharp: None,
@@ -2532,7 +2534,9 @@ impl Arcade {
     }
 
     fn draw_the_people(&self, scene: &mut Scene) {
-        let (Some(body), Some(head), Some(leg)) = (self.body, self.head, self.leg) else {
+        let (Some(body), Some(head), Some(thigh), Some(shin), Some(cube)) =
+            (self.body, self.head, self.thigh, self.shin, self.cube)
+        else {
             return;
         };
 
@@ -2543,7 +2547,7 @@ impl Arcade {
         // three floors at right angles to each other and people on all of
         // them, so the body is built in its own terms and then turned.
         let mut stand =
-            |at: Vec3, up: glam::Quat, facing: f32, along: Option<f32>, shade: usize| {
+            |at: Vec3, up: glam::Quat, facing: f32, walked: Option<f32>, shade: usize| {
                 let turn = up * glam::Quat::from_rotation_y(facing);
                 // **A coat, trousers and a head.** One colour from crown to
                 // toe is a mannequin by definition: the only thing that says a
@@ -2553,67 +2557,145 @@ impl Arcade {
                 let coat = aim::COATS[which];
                 let trousers = aim::TROUSERS[which];
                 let skin = aim::HEADS[which];
-                // which way is their right, for hanging the legs off
+                // which way is their right, for hanging the limbs off
                 let side = up * vec3(facing.cos(), 0.0, facing.sin());
-                // and which way they are walking, for swinging them along
+                // and which way they are walking, for putting a foot that way
                 let ahead = up * vec3(facing.sin(), 0.0, -facing.cos());
                 // and which way is over their head
                 let over = up * Vec3::Y;
 
+                // **Spec 0046: the hips are not at a fixed height.** The leg
+                // carrying somebody is the long side of its own swing, so
+                // everything from the hip up rides on it. A body held at one
+                // height while the feet move is a glide, and that is most of
+                // what reads as a machine.
+                let rise = match walked {
+                    Some(walked) => people::hips(walked) - people::LEG_TALL,
+                    None => 0.0,
+                };
+                let up_to = |how_high: f32| at + over * (how_high + rise);
+                // **A limb turns about the walker's own right, not about a
+                // local x.** `turn` is `rot_y(facing)` and this building's
+                // yaw convention is `(sin yaw, 0, -cos yaw)`, which is that
+                // rotation mirrored in x: `turn * rot_x` swung every limb
+                // the wrong way across the body while the feet, placed off
+                // `ahead`, went the right way, and the feet came off the
+                // legs. `side` is the axis the rest of this closure already
+                // agrees with.
+                let swung = |angle: f32| glam::Quat::from_axis_angle(side, angle) * turn;
+                let hangs = |by: glam::Quat, far: f32| by * vec3(0.0, -far, 0.0);
+
                 scene.push_material(
                     body,
-                    &Transform::at(at + over * people::TORSO_FROM).with_rotation(turn),
+                    &Transform::at(up_to(people::TORSO_FROM)).with_rotation(turn),
                     coat,
                     aim::DULL,
                 );
                 scene.push_material(
                     head,
-                    &Transform::at(at + over * people::HEAD_FROM).with_rotation(turn),
+                    &Transform::at(up_to(people::HEAD_FROM)).with_rotation(turn),
                     skin,
                     aim::DULL,
                 );
 
-                for which in 0..2 {
-                    let out = if which == 0 { 1.0 } else { -1.0 };
-                    let (fore, lift) = match along {
-                        Some(along) => (people::swing(along, which), people::lift(along, which)),
-                        None => (0.0, 0.0),
+                for leg in 0..2 {
+                    let out = if leg == 0 { 1.0 } else { -1.0 };
+                    let (hip, knee, shoulder, elbow) = match walked {
+                        Some(walked) => (
+                            people::hip(walked, leg),
+                            people::knee(walked, leg),
+                            people::shoulder(walked, leg),
+                            people::elbow(walked, leg),
+                        ),
+                        None => (0.0, 0.0, 0.0, 0.0),
                     };
 
+                    // **The leg, turned about the hip rather than slid away
+                    // from it.** The knee takes the shin back off the thigh's
+                    // line, which is the one direction a knee goes.
+                    let hip_at = up_to(people::LEG_TALL) + side * (people::LEGS_APART * out);
+                    let upper = swung(hip);
+                    let knee_at = hip_at + hangs(upper, people::THIGH_TALL);
+                    let lower = swung(hip - knee);
+
                     scene.push_material(
-                        leg,
-                        &Transform::at(
-                            at + side * (people::LEGS_APART * out) + ahead * fore + over * lift,
-                        )
-                        .with_rotation(turn),
+                        thigh,
+                        &Transform::at(hip_at).with_rotation(upper),
+                        trousers,
+                        aim::DULL,
+                    );
+                    scene.push_material(
+                        shin,
+                        &Transform::at(knee_at).with_rotation(lower),
                         trousers,
                         aim::DULL,
                     );
 
-                    // an arm is the same leg, thinner and shorter, hung off the
-                    // shoulder. One mesh for both is the point of a wheel.
+                    // **The foot stays level, which is what an ankle is
+                    // for.** Hung off the shin it tilts with it, and a figure
+                    // on skis is further from a person than one with no feet
+                    // at all.
                     //
-                    // **Stood on its hand rather than scaled upside down.** The
-                    // first build hung it from the shoulder with a y scale of
-                    // minus one, which turns every triangle in it inside out: a
-                    // face wound away from you is drawn nowhere, so what was on
-                    // screen was the inside of an arm, a pale slab flapping off
-                    // each shoulder. The limb is wide at the top anyway, so it
-                    // only had to start lower.
+                    // Where it goes is `people::ankle` rather than the end
+                    // of the two bones worked out a second time here, which
+                    // would be two answers to where somebody's foot is.
+                    let (fore, off_floor) = match walked {
+                        Some(walked) => people::ankle(walked, leg),
+                        None => (0.0, 0.0),
+                    };
+
                     scene.push_material(
-                        leg,
+                        cube,
                         &Transform::at(
-                            at + side * (people::ARMS_APART * out)
-                                + ahead * (-fore * 0.55)
-                                + over * (people::ARM_FROM - people::ARM_TALL),
+                            at + side * (people::LEGS_APART * out)
+                                + ahead * (fore + people::FOOT_AHEAD)
+                                + over * (off_floor + people::FOOT_TALL * 0.5),
                         )
                         .with_rotation(turn)
                         .with_scale(vec3(
-                            0.62,
-                            people::ARM_TALL / people::LEG_TALL,
-                            0.62,
+                            people::FOOT_WIDE,
+                            people::FOOT_TALL,
+                            people::FOOT_LONG,
                         )),
+                        trousers,
+                        aim::DULL,
+                    );
+
+                    // an arm is the same two bones, thinner and shorter. One
+                    // pair of meshes for both is the point of a wheel.
+                    let thin = vec3(people::ARM_THIN, people::ARM_SHORT, people::ARM_THIN);
+                    let arm_upper = swung(shoulder);
+                    let shoulder_at = up_to(people::ARM_FROM) + side * (people::ARMS_APART * out);
+                    let elbow_at =
+                        shoulder_at + hangs(arm_upper, people::THIGH_TALL * people::ARM_SHORT);
+                    // and an elbow goes the other way
+                    let arm_lower = swung(shoulder + elbow);
+                    let wrist = elbow_at + hangs(arm_lower, people::SHIN_TALL * people::ARM_SHORT);
+
+                    scene.push_material(
+                        thigh,
+                        &Transform::at(shoulder_at)
+                            .with_rotation(arm_upper)
+                            .with_scale(thin),
                         coat,
+                        aim::DULL,
+                    );
+                    scene.push_material(
+                        shin,
+                        &Transform::at(elbow_at)
+                            .with_rotation(arm_lower)
+                            .with_scale(thin),
+                        coat,
+                        aim::DULL,
+                    );
+                    // a hand, which is the head's own egg at a fifth of the
+                    // size and the same colour as the face
+                    scene.push_material(
+                        head,
+                        &Transform::at(wrist + hangs(arm_lower, people::HAND_WIDE))
+                            .with_rotation(arm_lower)
+                            .with_scale(Vec3::splat(people::HAND_WIDE / people::HEAD_WIDE)),
+                        skin,
                         aim::DULL,
                     );
                 }
@@ -2637,7 +2719,7 @@ impl Arcade {
                 who.at,
                 glam::Quat::IDENTITY,
                 who.facing,
-                Some(who.along),
+                Some(who.walked),
                 who.from as usize,
             );
         }
@@ -2656,7 +2738,7 @@ impl Arcade {
         // and the three flights of the imaginarium, per spec 0038, where
         // the whole content of the room is other people using it
         for who in aloft::walking(self.since, self.room.aloft_doors) {
-            stand(who.at, who.up, who.facing, Some(who.along), who.shade);
+            stand(who.at, who.up, who.facing, Some(who.walked), who.shade);
         }
     }
 
@@ -5829,8 +5911,14 @@ impl Game for Arcade {
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 22, people::torso_profile)));
         self.head =
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 16, people::head_profile)));
-        self.leg =
-            Some(renderer.add_mesh(&cellar::turned(people::SIDES, 10, people::limb_profile)));
+        // **Two bones apiece now, per spec 0046.** One lathe standing on
+        // its foot could only ever be slid, and a leg slid out from under
+        // its hip is the thing Jake called stiff and disconnected. Both of
+        // these hang from their joint, so they turn about it.
+        self.thigh =
+            Some(renderer.add_mesh(&cellar::turned(people::SIDES, 8, people::thigh_profile)));
+        self.shin =
+            Some(renderer.add_mesh(&cellar::turned(people::SIDES, 8, people::shin_profile)));
         self.marks = register::MARKS
             .iter()
             .map(|mark| {

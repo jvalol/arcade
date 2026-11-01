@@ -55,9 +55,61 @@ pub const HEAD_WIDE: f32 = 0.2;
 
 /// How far from the middle a leg and an arm hang.
 pub const LEGS_APART: f32 = 0.1;
-pub const ARMS_APART: f32 = 0.205;
+/// **Wide enough to clear the shoulders**, which the first build was not.
+/// The torso is 0.435 across at the shoulder and an arm is 0.051 of radius,
+/// so hung at 0.205 it stood four centimetres proud of the body and read as
+/// a seam rather than as an arm.
+pub const ARMS_APART: f32 = 0.245;
 pub const ARM_FROM: f32 = 1.44;
 pub const ARM_TALL: f32 = 0.56;
+
+/// Where a limb bends, as a fraction of its length down from the joint it
+/// hangs off. Spec 0046.
+///
+/// **A knee is not the middle of a leg.** It sits a little above it, and
+/// getting that wrong is most of what makes a walk read as a puppet's.
+pub const KNEE_AT: f32 = 0.53;
+
+/// The two bones that fall out of it.
+pub const THIGH_TALL: f32 = LEG_TALL * KNEE_AT;
+pub const SHIN_TALL: f32 = LEG_TALL - THIGH_TALL;
+
+/// An arm is the same two bones, thinner and shorter.
+pub const ARM_THIN: f32 = 0.62;
+pub const ARM_SHORT: f32 = ARM_TALL / LEG_TALL;
+
+/// A foot, which is most of what says which way somebody is facing when you
+/// are behind them, and in the imaginarium you usually are.
+pub const FOOT_LONG: f32 = 0.24;
+pub const FOOT_WIDE: f32 = 0.09;
+pub const FOOT_TALL: f32 = 0.05;
+
+/// How much of it is in front of the ankle.
+pub const FOOT_AHEAD: f32 = 0.07;
+
+/// A hand, which is the head's own egg at a fifth of the size.
+pub const HAND_WIDE: f32 = 0.085;
+
+/// How far apart two people have to be before they are passing each other
+/// rather than walking through each other.
+///
+/// **Not `ARMS_APART`, which the imaginarium's crowd used to borrow.** How
+/// wide to hang an arm and how much room two people need to pass are two
+/// questions that happened to have the same answer, and spec 0046 moved
+/// the arms out four centimetres to clear the shoulders and tightened a
+/// test about a different room by eight.
+///
+/// It is less than a body is wide, on purpose. Nobody in that room gives
+/// way and the paces differ, so one walking the same way as another does
+/// catch it up and pass through it, which over the shoulder at a glance is
+/// a crowd. What this holds is that two coming the other way never share a
+/// space.
+///
+/// Nothing draws with it, so it is only compiled for the tests that hold
+/// it. A number that exists to be asserted against should say so rather
+/// than sit in the build pretending somebody reads it.
+#[cfg(test)]
+pub const PASSES: f32 = 0.41;
 
 /// Read a profile off a table of `(how far up, how wide)`, between the two
 /// entries either side.
@@ -118,18 +170,58 @@ pub fn head_profile(v: f32) -> (f32, f32) {
     (v * HEAD_TALL, HEAD_WIDE * round * jaw)
 }
 
-/// A leg, and the same mesh thinner and shorter is an arm.
-pub fn limb_profile(v: f32) -> (f32, f32) {
-    const SHAPE: [(f32, f32); 6] = [
-        (0.00, 0.00),
+/// How wide a limb is, from the foot at nought to the hip at one.
+///
+/// **One table read by both bones.** The bottom of a thigh and the top of a
+/// shin are the same circle, and two tables for one circle is two answers
+/// that will come apart.
+fn limb_wide(v: f32) -> f32 {
+    const SHAPE: [(f32, f32); 8] = [
+        // an ankle, where this used to close to a point. A leg that tapers
+        // to nothing had nothing to meet, and now there is a foot under it:
+        // a point above a flat sole reads as a tile lying beside a leg
+        // rather than as the end of one.
+        (0.00, 0.075),
+        (0.03, 0.095),
         (0.05, 0.105),
         (0.26, 0.14),
         (0.52, 0.12),
         (0.80, 0.175),
-        (1.00, 0.165),
+        // and the joint itself, which the hip and the shoulder both are.
+        // Flat across the top, an arm hung level with the shoulders put a
+        // square corner out over each of them and the figure wore
+        // epaulettes.
+        (0.94, 0.168),
+        (1.00, 0.105),
     ];
 
-    (v * LEG_TALL, through(&SHAPE, v))
+    through(&SHAPE, v)
+}
+
+/// A thigh, hanging from the hip. Spec 0046.
+///
+/// **Hung rather than stood on its own foot, which is the whole of the first
+/// fault that spec names.** `with_rotation` turns a mesh about its origin,
+/// so a limb whose origin is at the floor swings its hip out of the body
+/// when you turn it, and a figure with a leg a third of a metre clear of its
+/// hip is the stiff, disconnected thing Jake saw.
+///
+/// The answer is not to flip the lathe. That reverses the winding and a limb
+/// wound away from you is drawn nowhere at all, which is the trap the first
+/// attempt fell into and the reason the legs were slid instead. It is to run
+/// the profile from minus its length up to nought: the origin is the joint,
+/// `v` still climbs, and the winding never changes.
+pub fn thigh_profile(v: f32) -> (f32, f32) {
+    (
+        (v - 1.0) * THIGH_TALL,
+        limb_wide(1.0 - KNEE_AT + v * KNEE_AT),
+    )
+}
+
+/// And a shin, hanging from the knee, picking up the width the thigh left
+/// off at.
+pub fn shin_profile(v: f32) -> (f32, f32) {
+    ((v - 1.0) * SHIN_TALL, limb_wide(v * (1.0 - KNEE_AT)))
 }
 
 /// How many rooms of the wave's travel somebody takes to cross.
@@ -159,9 +251,17 @@ pub struct Walking {
     pub at: Vec3,
     /// Which way they are facing, as a yaw.
     pub facing: f32,
-    /// How far through the crossing, nought to one, which is what swings the
-    /// legs.
+    /// How far through the crossing, nought to one.
     pub along: f32,
+    /// And how far they have actually walked, in metres, which is what
+    /// swings the legs. Spec 0046.
+    ///
+    /// **Not the same number.** A crossing is a crossing whether the move
+    /// sends somebody next door or to room 1024, and pacing the legs off it
+    /// gave a three metre walk and a four hundred metre walk the same seven
+    /// paces. Under a slid foot that was a skate. Under a hip angle derived
+    /// from the stride it is simply wrong.
+    pub walked: f32,
 }
 
 /// Everybody the wave has reached and who has not got there yet.
@@ -219,39 +319,154 @@ pub fn crossing(
             at: vec3(at.x, 0.0, at.z),
             facing: way.x.atan2(-way.z),
             along,
+            walked: gone,
         });
     }
 
     out
 }
 
-/// How many paces somebody takes to get across.
-pub const STEPS: f32 = 7.0;
+/// How far one step carries somebody. Spec 0046.
+///
+/// **Here rather than in the room that happens to walk people.** It was
+/// `aloft::STRIDE`, which made how far a leg carries you a fact about the
+/// imaginarium. Everything below comes out of it and two rooms read it, so
+/// it belongs beside the gait.
+///
+/// It was also being spent twice as fast as it says. The old phase put a
+/// whole cycle of both legs into one of these, so a figure took two steps
+/// for every one it was paced at and minced. A cycle is two steps.
+pub const STEP: f32 = 0.7;
 
-/// Where a leg is in its swing, as an angle.
-fn pace(along: f32, leg: usize) -> f32 {
-    along * STEPS * std::f32::consts::TAU + leg as f32 * std::f32::consts::PI
+/// Where a leg is in its own cycle, in steps, nought to two.
+///
+/// Nought to one is the stance, when the foot is on the ground and holding
+/// somebody up. One to two is the swing, when it is coming through.
+fn cycle(walked: f32, leg: usize) -> f32 {
+    (walked / STEP + leg as f32).rem_euclid(2.0)
 }
 
-/// How far a leg has swung, fore and aft, in metres.
-///
-/// **The ceiling on animation here.** Legs that swap is what spec 0033 says
-/// is enough, and anything past it is a character, which that spec says not
-/// to build.
-///
-/// Swung rather than turned, because `with_rotation` pivots a mesh about its
-/// own origin and a leg's origin is its foot: rotating one swings the hip off
-/// the body. Flipping the lathe to put the origin at the hip reverses the
-/// winding, and a limb wound away from you is drawn nowhere at all. A foot
-/// that slides fore and aft and lifts as it comes forward is what is left,
-/// and at corridor distance in the dark it is a walk.
-pub fn swing(along: f32, leg: usize) -> f32 {
-    pace(along, leg).sin() * 0.34
+/// Whether this is the leg holding somebody up.
+pub fn planted(walked: f32, leg: usize) -> bool {
+    cycle(walked, leg) < 1.0
 }
 
-/// And how far off the floor it is while it comes forward.
-pub fn lift(along: f32, leg: usize) -> f32 {
-    pace(along, leg).cos().max(0.0) * 0.07
+/// How far a foot is in front of its own hip, in metres.
+///
+/// **A sine cannot do this and that is why the old one skated.** A planted
+/// foot does not move, so while the body travels a step the foot has to
+/// travel exactly one step backwards relative to it, at a constant rate. A
+/// sine is only ever momentarily still. So the stance is a straight line
+/// and the swing is the curve that joins its two ends.
+///
+/// The curve lands at the speed the body is going, which is what keeps the
+/// plant from being a jerk: a foot that arrives with any speed of its own
+/// has to stop dead at the moment it touches, and that is the one place in
+/// a walk where the eye is looking. It leaves at rest instead, because a
+/// cubic made to match at both ends swings the foot three centimetres
+/// further back while the knee has already lifted it ten, which reads as
+/// dragging. What is left is a toe lingering at the push off and a heel
+/// reaching a little past the plant and settling back, which is what a leg
+/// does.
+pub fn foot_fore(walked: f32, leg: usize) -> f32 {
+    let t = cycle(walked, leg);
+
+    if t < 1.0 {
+        STEP * (0.5 - t)
+    } else {
+        let q = t - 1.0;
+
+        STEP * (-3.0 * q * q * q + 4.0 * q * q - 0.5)
+    }
+}
+
+/// Which hangs the leg at this angle, positive forward.
+pub fn hip(walked: f32, leg: usize) -> f32 {
+    (foot_fore(walked, leg) / LEG_TALL).clamp(-1.0, 1.0).asin()
+}
+
+/// How far a knee bends at the middle of a swing.
+pub const KNEE_BENDS: f32 = 1.0;
+
+/// Bent through the swing, when the foot has to clear the ground, and dead
+/// straight through the stance, when it is carrying somebody.
+///
+/// That is the half of the cycle the old `lift` raised the whole leg
+/// through. The foot comes up for the same reason and the hip stays where
+/// it belongs.
+pub fn knee(walked: f32, leg: usize) -> f32 {
+    let t = cycle(walked, leg);
+
+    if t < 1.0 {
+        0.0
+    } else {
+        ((t - 1.0) * std::f32::consts::PI).sin() * KNEE_BENDS
+    }
+}
+
+/// How high the hips are, which is not a constant.
+///
+/// A straight leg carrying somebody is the long side of its own swing, so
+/// the hips are highest when it is upright under them and lowest at either
+/// end of its stance. Twice a cycle, about seven centimetres, and it is the
+/// difference between walking and gliding. Taken off whichever leg is
+/// planted, and the two agree at the handover because they swap at the same
+/// angle.
+pub fn hips(walked: f32) -> f32 {
+    let holding = if planted(walked, 0) { 0 } else { 1 };
+
+    LEG_TALL * hip(walked, holding).cos()
+}
+
+/// Where an ankle ends up in its owner's own terms: how far in front of
+/// their middle, and how far off the floor.
+///
+/// **Nothing sets either number.** Both are where the two bones leave off
+/// once the hips and the two angles are known, so a planted foot comes out
+/// at exactly nothing off the floor and a swinging one comes up because the
+/// knee is bent. The old build raised the whole leg by a number instead,
+/// which is the same foot off the ground and a hip off the body with it.
+///
+/// **And the drawing puts the foot here rather than walking the bones a
+/// second time.** A chain written out twice is two answers to where
+/// somebody's foot is, and the day they disagree is the day a foot comes
+/// off a leg.
+pub fn ankle(walked: f32, leg: usize) -> (f32, f32) {
+    let hip = hip(walked, leg);
+    let knee = knee(walked, leg);
+    let shin = hip - knee;
+
+    (
+        THIGH_TALL * hip.sin() + SHIN_TALL * shin.sin(),
+        hips(walked) - (THIGH_TALL * hip.cos() + SHIN_TALL * shin.cos()),
+    )
+}
+
+/// How far an arm swings against the leg on its own side.
+pub const ARM_SWINGS: f32 = 0.55;
+
+pub fn shoulder(walked: f32, leg: usize) -> f32 {
+    -hip(walked, leg) * ARM_SWINGS
+}
+
+/// How far an elbow bends.
+pub const ELBOW_BENDS: f32 = 0.5;
+
+/// Forwards, where a knee bends back, and while the leg on the same side is
+/// planted, which is when that arm is the one coming through.
+///
+/// **The bend is the only thing in this figure that tells an arm from a
+/// leg.** The two are the same pair of meshes at a different size, neither
+/// hand nor foot is big enough to say it, and a figure whose elbows bend
+/// like knees is walking two ways at once.
+pub fn elbow(walked: f32, leg: usize) -> f32 {
+    let t = cycle(walked, leg);
+
+    if t < 1.0 {
+        (t * std::f32::consts::PI).sin() * ELBOW_BENDS
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -269,7 +484,8 @@ mod tests {
         for (what, profile) in [
             ("the torso", torso_profile as fn(f32) -> (f32, f32)),
             ("the head", head_profile as fn(f32) -> (f32, f32)),
-            ("a limb", limb_profile as fn(f32) -> (f32, f32)),
+            ("a thigh", thigh_profile as fn(f32) -> (f32, f32)),
+            ("a shin", shin_profile as fn(f32) -> (f32, f32)),
         ] {
             let mesh = crate::cellar::turned(16, 24, profile);
 
@@ -310,7 +526,7 @@ mod tests {
         let head = HEAD_FROM + head_profile(1.0).0;
         let skull = head_profile(1.0).0;
         let torso = TORSO_FROM + torso_profile(1.0).0;
-        let leg = limb_profile(1.0).0;
+        let leg = -(thigh_profile(0.0).0 + shin_profile(0.0).0);
 
         assert!(
             (head / skull) > 6.0 && (head / skull) < 9.0,
@@ -379,6 +595,64 @@ mod tests {
                 "two guests are wearing the same coat"
             );
         }
+    }
+
+    /// Spec 0046: the legs are paced off the ground somebody covers, not
+    /// off the crossing they are in the middle of.
+    ///
+    /// **Because a crossing is a crossing however far it goes.** Spec
+    /// 0034's moves send room 3 to room 8 and room 10 to room 1024, and
+    /// `STEPS` paces fitted into either of them gave a four hundred metre
+    /// walk the same seven steps as a three metre one.
+    ///
+    /// The second assertion is the control: the moves this asks about have
+    /// to be far enough apart for the old pacing to have been visibly
+    /// wrong, or a gait that still ignored the ground would pass.
+    ///
+    /// They are not as far apart as the hotel's arithmetic suggests.
+    /// Nobody walks four hundred metres on camera: a crossing caps what it
+    /// covers at `WALKS * CROSSES_IN / TRAVELS_AT`, which is 6.3 metres,
+    /// and whoever is bound for room 1024 goes the rest of the way out of
+    /// the window. So the spread here is about one to one and a half, and
+    /// that is still one and a half times the paces.
+    #[test]
+    fn a_long_move_takes_the_same_step_as_a_short_one() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let out = crossing(reaches, Some(12.0), 1, 40, |n| Arrival::Coaches.sends(n));
+
+        let mut legs: Vec<(u64, f32, f32)> = Vec::new();
+
+        for who in out.iter().filter(|who| who.along > 0.5) {
+            let went = who.at.distance(crate::aleph::at(reaches, who.from));
+
+            assert!(
+                (who.walked - went).abs() < 0.05,
+                "room {}'s guest has walked {:.2} metres and is {:.2} from their door",
+                who.from,
+                who.walked,
+                went
+            );
+
+            legs.push((who.from, went, who.walked / STEP));
+        }
+
+        assert!(legs.len() > 1, "nobody is halfway across");
+
+        let (_, short, _) = *legs
+            .iter()
+            .min_by(|one, two| one.1.total_cmp(&two.1))
+            .expect("somebody is crossing");
+        let (_, long, _) = *legs
+            .iter()
+            .max_by(|one, two| one.1.total_cmp(&two.1))
+            .expect("somebody is crossing");
+
+        assert!(
+            long > short * 1.4,
+            "the longest move is {:.1} metres and the shortest {:.1}, which is not far enough apart to tell",
+            long,
+            short
+        );
     }
 
     /// Spec 0033: nobody is out before the wave reaches them, and everybody
@@ -560,14 +834,16 @@ mod tests {
     fn a_foot_lifts_only_on_the_way_forward() {
         for leg in 0..2 {
             for step in 0..=400 {
-                let along = step as f32 / 400.0;
-                let up = lift(along, leg);
+                let walked = step as f32 / 400.0 * STEP * 2.0;
+                let (_, up) = ankle(walked, leg);
 
-                assert!(up >= 0.0, "a foot is under the floor");
+                assert!(up > -1e-4, "a foot is {:.4} under the floor", up);
 
-                if up > 1e-4 {
-                    let then = swing(along + 1e-4, leg);
-                    let now = swing(along, leg);
+                // a centimetre, which is clear of the floor rather than
+                // the heel settling back onto it at the plant
+                if up > 0.01 {
+                    let then = foot_fore(walked + 1e-4, leg);
+                    let now = foot_fore(walked, leg);
 
                     assert!(
                         then >= now - 1e-6,
@@ -575,6 +851,177 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// Spec 0046: a planted foot does not move.
+    ///
+    /// **The one the old gait could not pass.** A foot slid by a sine is
+    /// only ever momentarily still, so every figure in this building skated.
+    /// Through the stance the body travels a step and the foot travels a
+    /// step backwards against it, at the same rate, so the ground it stands
+    /// on never changes.
+    #[test]
+    fn a_planted_foot_does_not_slide() {
+        let mut worst: f32 = 0.0;
+        let was = 0.2 * STEP + foot_fore(0.2 * STEP, 0);
+
+        for step in 0..=200 {
+            // inside one stance, away from the handover at either end
+            let walked = (0.2 + 0.6 * step as f32 / 200.0) * STEP;
+
+            assert!(planted(walked, 0), "leg nought is not in its stance");
+
+            worst = worst.max((walked + foot_fore(walked, 0) - was).abs());
+        }
+
+        assert!(worst < 1e-4, "a planted foot moved {:.4} metres", worst);
+    }
+
+    /// **Its control:** the sine this replaces does slide, and by a lot.
+    #[test]
+    fn a_slid_foot_does_not_stay_put() {
+        // what the old one did: a foot swung 0.34 either side on a sine,
+        // a whole cycle to the step rather than to the pair of them
+        let slid = |walked: f32| walked + (walked / STEP * std::f32::consts::TAU).sin() * 0.34;
+
+        let was = slid(0.2 * STEP);
+        let mut worst: f32 = 0.0;
+
+        for step in 0..=200 {
+            let walked = (0.2 + 0.6 * step as f32 / 200.0) * STEP;
+
+            worst = worst.max((slid(walked) - was).abs());
+        }
+
+        assert!(
+            worst > 0.1,
+            "the slide only moved a foot {:.3} metres, so this proves nothing",
+            worst
+        );
+    }
+
+    /// Spec 0046: a limb hangs from its joint, so turning it leaves the
+    /// joint where it is.
+    #[test]
+    fn a_limb_never_leaves_its_joint() {
+        for (what, profile) in [
+            ("a thigh", thigh_profile as fn(f32) -> (f32, f32)),
+            ("a shin", shin_profile as fn(f32) -> (f32, f32)),
+        ] {
+            assert!(
+                profile(1.0).0.abs() < 1e-6,
+                "{} tops out {:.3} off its own origin",
+                what,
+                profile(1.0).0
+            );
+
+            // and the whole of it hangs below, so nothing of it is above
+            // the joint to swing out of the body
+            for step in 0..=40 {
+                let v = step as f32 / 40.0;
+
+                assert!(
+                    profile(v).0 <= 1e-6,
+                    "{} reaches {:.3} above its joint",
+                    what,
+                    profile(v).0
+                );
+            }
+        }
+    }
+
+    /// **Its control:** the lathe this replaces stood on its own foot, so
+    /// turning it about its origin took the hip with it.
+    #[test]
+    fn a_limb_stood_on_its_foot_comes_away_from_the_body() {
+        // the profile as it was: nought at the foot, the whole length up,
+        // turned by the widest a straight leg gets, which is half a step
+        // under a leg this long
+        let was = |v: f32| v * LEG_TALL;
+        let swung = (STEP * 0.5 / LEG_TALL).asin();
+        let moved = was(1.0) * swung.sin();
+
+        assert!(
+            moved > 0.2,
+            "turning the old leg by {:.3} moved its hip {:.3} metres, which is not enough to see",
+            swung,
+            moved
+        );
+    }
+
+    /// Spec 0046: a knee bends through the swing and an elbow through the
+    /// stance, and neither of them ever goes past straight.
+    ///
+    /// They are the same pair of meshes at two sizes, so which half of the
+    /// cycle each bends in, and which way, is the whole of what tells an arm
+    /// from a leg.
+    #[test]
+    fn a_knee_and_an_elbow_bend_in_opposite_halves() {
+        for leg in 0..2 {
+            for step in 0..=400 {
+                let walked = step as f32 / 400.0 * STEP * 2.0;
+                let (knee, elbow) = (knee(walked, leg), elbow(walked, leg));
+
+                assert!(knee >= 0.0, "a knee bent {:.3} past straight", knee);
+                assert!(elbow >= 0.0, "an elbow bent {:.3} past straight", elbow);
+
+                if planted(walked, leg) {
+                    assert!(knee < 1e-6, "a knee is bent while the foot is down");
+                } else {
+                    assert!(elbow < 1e-6, "an elbow is bent while the leg swings");
+                }
+            }
+
+            // and both of them do bend, which the three above would pass
+            // just as happily if neither ever did
+            let swinging = STEP * (1.5 - leg as f32);
+            let standing = STEP * (0.5 - leg as f32);
+
+            assert!(
+                knee(swinging.rem_euclid(STEP * 2.0), leg) > 0.5,
+                "the knee never bends"
+            );
+            assert!(
+                elbow(standing.rem_euclid(STEP * 2.0), leg) > 0.25,
+                "the elbow never bends"
+            );
+        }
+    }
+
+    /// Spec 0046: the hips rise and fall twice a stride.
+    ///
+    /// Highest when the leg under them is upright, lowest at either end of
+    /// its stance. The second assertion is the control: a body held at one
+    /// height passes the first and fails this.
+    #[test]
+    fn the_hips_rise_twice_a_stride() {
+        let high = hips(STEP * 0.5);
+        let low = hips(0.0);
+
+        assert!(
+            (high - LEG_TALL).abs() < 1e-5,
+            "the hips are {:.4} at mid stance rather than a leg's length",
+            high
+        );
+        assert!(
+            high - low > 0.03,
+            "the hips only move {:.4} metres, which nobody can see",
+            high - low
+        );
+
+        // twice over a stride of two steps, which is once a step
+        for step in 0..=100 {
+            let walked = step as f32 / 100.0 * STEP;
+
+            assert!(
+                (hips(walked) - hips(walked + STEP)).abs() < 1e-5,
+                "the two steps of a stride are not the same height"
+            );
+            assert!(
+                hips(walked) <= high + 1e-5 && hips(walked) >= low - 1e-5,
+                "the hips went outside their own swing"
+            );
         }
     }
 
@@ -643,19 +1090,14 @@ mod tests {
     #[test]
     fn the_legs_swap() {
         let mut swapped = 0;
-        let mut was = swing(0.0, 0) - swing(0.0, 1);
+        let mut was = hip(0.0, 0) - hip(0.0, 1);
 
         for step in 1..=200 {
-            let along = step as f32 / 200.0;
-            let now = swing(along, 0) - swing(along, 1);
+            // five strides of walking, so there are swaps to count
+            let walked = step as f32 / 200.0 * STEP * 10.0;
+            let now = hip(walked, 0) - hip(walked, 1);
 
-            // the two legs are never in the same place as each other
-            assert!(
-                (swing(along, 0) - swing(along, 1)).abs() > 1e-6 || now.abs() < 1e-6,
-                "both legs are in one place"
-            );
-
-            if now.signum() != was.signum() {
+            if now.signum() != was.signum() && now.abs() > 1e-6 {
                 swapped += 1;
             }
 
@@ -664,7 +1106,7 @@ mod tests {
 
         assert!(
             swapped > 4,
-            "the legs swapped {} times in a crossing",
+            "the legs swapped {} times in five strides",
             swapped
         );
     }
