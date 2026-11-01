@@ -539,6 +539,95 @@ pub fn foot_of_the_flight(n: u64) -> Vec3 {
 /// toward `+x`, so that is a quarter turn.
 pub const FACES_THE_FLIGHT: f32 = std::f32::consts::FRAC_PI_2;
 
+/// Walking in frame `n`'s own terms. Specs 0047 and 0049.
+///
+/// **The building is turned into your frame, `walk` runs on it untouched,
+/// and the answer is turned back.** `walk` is written in `y` from end to
+/// end and this does not change it. A box comes back a box because every
+/// frame here is a right angle, so nothing has to be fitted and no wall
+/// grows by its own diagonal.
+///
+/// **Frame nought does not go through any of it.** Not as an optimisation:
+/// `out_of_frame` is a rotation about the room's middle and so moves the
+/// origin even when the rotation is the identity, and every other room in
+/// this building is entitled to the arithmetic it always had.
+///
+/// It lives here rather than in the game because spec 0049's planner has
+/// to ask the same question, and the one thing this project keeps writing
+/// down is that two accounts of one thing come apart.
+///
+/// It does not take a radius where `walk` does. Everything in this
+/// building that walks is one body wide, both callers were passing
+/// `RADIUS`, and a parameter that only ever has one value is a question
+/// nobody is asking.
+pub fn walked_in_frame(
+    n: u64,
+    at: Vec3,
+    wish: Vec3,
+    falling: f32,
+    dt: f32,
+    solid: &[Aabb],
+    may_climb: bool,
+) -> (Vec3, f32) {
+    if n == 0 {
+        return crate::walk::walk(at, wish, falling, crate::RADIUS, dt, solid, may_climb);
+    }
+
+    let turned: Vec<Aabb> = solid.iter().map(|box_| box_out_of_frame(n, box_)).collect();
+    let (next, fell) = crate::walk::walk(
+        out_of_frame(n, at),
+        frame(n).inverse() * wish,
+        falling,
+        crate::RADIUS,
+        dt,
+        &turned,
+        may_climb,
+    );
+
+    (in_frame(n, next), fell)
+}
+
+/// The three faces of this room that are somebody's floor, each with
+/// whose. Spec 0049.
+///
+/// **`floors` is not this.** That one gives what you can stand on with the
+/// world's own way up, which in here is one face out of six. The other two
+/// are frame one's and frame two's, and to anybody standing in those they
+/// are the ground. A planner that only knew `floors` would have a lattice
+/// over a third of the room and no way to lay one on the rest.
+///
+/// Holes are not cut out of them, because they do not need to be: a place
+/// over a hole is one the walker falls through rather than arrives at, and
+/// the walk test that joins places is what says so.
+pub fn standing_on_each() -> Vec<(u64, Aabb)> {
+    (0..FRAMES)
+        .map(|n| {
+            (
+                n,
+                box_in_frame(
+                    n,
+                    vec3(-HALF, -HALF - THICK, -HALF),
+                    vec3(HALF, -HALF, HALF),
+                ),
+            )
+        })
+        .collect()
+}
+
+/// Whose floor a slab of this room is, and nought for anything that is not
+/// one of them. Spec 0049.
+///
+/// **Asked of the geometry rather than carried alongside it.** `floors`
+/// hands back three slabs in world terms and nothing in them says which
+/// frame each belongs to, so a list here would be a second account that
+/// comes apart the day the room moves. Turned into a frame, that frame's
+/// own floor is the slab whose top lands on its local `-HALF`.
+pub fn frame_of_floor(slab: &Aabb) -> u64 {
+    (0..FRAMES)
+        .find(|n| (box_out_of_frame(*n, slab).max.y + HALF).abs() < THICK)
+        .unwrap_or(0)
+}
+
 /// How far past an aperture you stand when you come through it. Spec 0047.
 ///
 /// **Because all three second doors are in one corner of the room**, which

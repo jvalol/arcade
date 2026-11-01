@@ -29,6 +29,7 @@ mod spa;
 mod standing;
 mod study;
 mod tesseract;
+mod tour;
 mod twine;
 mod walk;
 mod wrecker;
@@ -1515,7 +1516,16 @@ impl Arcade {
         self.climbs = if flight {
             0.0
         } else {
-            (self.climbs - walk::CLIMBS * dt).max(0.0) + (at.y - self.at.y).max(0.0)
+            // **Measured along your own up, per spec 0047**, which is
+            // `y` with your frame at nought and is every other room
+            // unchanged. In a turned frame a climb does not change world
+            // `y` at all, so the budget neither filled nor drained: it
+            // sat a thousandth above nothing, which reads as a step you
+            // may never take, and frame one's flight stopped you dead
+            // four risers up. Found by driving it.
+            let over = self.over();
+
+            (self.climbs - walk::CLIMBS * dt).max(0.0) + (at - self.at).dot(over).max(0.0)
         };
         self.at = at;
         self.falling = falling;
@@ -4989,35 +4999,18 @@ impl Arcade {
         // A box comes back a box because every frame here is a right angle.
         // Anything else would need a bounding box and would grow every wall
         // in the room by its own diagonal.
-        if self.standing_in != 0 {
-            let mine = self.standing_in;
-            let turned: Vec<blitzkit::collision::Aabb> = self
-                .standing_on()
-                .iter()
-                .map(|box_| aloft::box_out_of_frame(mine, box_))
-                .collect();
-
-            let (next, fell) = walk::walk(
-                aloft::out_of_frame(mine, self.at),
-                aloft::frame(mine).inverse() * going,
-                self.falling,
-                RADIUS,
-                dt,
-                &turned,
-                self.climbs <= 0.0,
-            );
-
-            return (aloft::in_frame(mine, next), fell);
-        }
-
         // along the floor, over anything no taller than a step, and down.
         // Spec 0007: the building has a height in it now, so getting about is
         // no longer one call that pushes you sideways.
-        walk::walk(
+        //
+        // And in your own frame, whichever that is, which `aloft` answers
+        // for both this and spec 0049's planner so there is only one
+        // account of it. Frame nought is the arithmetic it always was.
+        aloft::walked_in_frame(
+            self.standing_in,
             self.at,
             going,
             self.falling,
-            RADIUS,
             dt,
             &self.standing_on(),
             // a step costs its own height out of a budget that fills at
@@ -11047,6 +11040,83 @@ fn walked(route: &str) -> bool {
     true
 }
 
+/// Spec 0049: plan a way from the door to somewhere and walk it.
+///
+/// Prints where it got to and says whether it arrived, the way `walked`
+/// does, so a route can be tried without a window.
+fn toured(where_: &str) -> bool {
+    let numbers: Vec<f32> = where_
+        .split(',')
+        .filter_map(|bit| bit.trim().parse().ok())
+        .collect();
+
+    let [x, y, z] = numbers[..] else {
+        println!("--tour wants three numbers, as x,y,z");
+
+        return false;
+    };
+
+    let room = room::Room::of(games());
+    let solid = room.solid();
+    let from = room.doorway();
+    let to = vec3(x, y, z);
+    let spare = vec3(8.0, 4.0, 8.0);
+    let ways = tour::ways(
+        &room.grounds(),
+        &solid,
+        blitzkit::collision::Aabb::new(from.min(to) - spare, from.max(to) + spare),
+    );
+
+    let Some(way) = ways.plan((from, 0), (to, 0), &solid) else {
+        println!("there is no way from the door to {:?}", to);
+
+        return false;
+    };
+
+    println!("{} places over {} laid", way.len(), ways.places());
+
+    let mut follower = tour::Follower::new(way);
+    let mut at = from;
+    let mut falling = 0.0;
+    let step = 1.0 / 60.0;
+    let mut rounds = 0;
+
+    while let Some(steer) = follower.steer(at) {
+        let (went, fell) = walk::walk(at, steer.wish, falling, RADIUS, step, &solid, true);
+
+        at = went;
+        falling = fell;
+        rounds += 1;
+
+        if rounds > 60 * 180 {
+            println!(
+                "still going after three minutes, at {:?}, trying to reach {:?}",
+                at,
+                follower.toward()
+            );
+
+            return false;
+        }
+    }
+
+    if !follower.arrived() {
+        println!("it stopped short, still wanting {:?}", follower.toward());
+
+        return false;
+    }
+
+    println!(
+        "arrived at {:7.2}{:7.2}{:7.2} in {:.1} seconds, {:.2} off",
+        at.x,
+        at.y,
+        at.z,
+        rounds as f32 * step,
+        at.distance(to)
+    );
+
+    at.distance(to) < 1.0
+}
+
 fn main() {
     // asked what it can photograph rather than told, so the list lives in one
     // place and that place is the game
@@ -11056,6 +11126,20 @@ fn main() {
         std::env::args().find_map(|arg| arg.strip_prefix("--walk=").map(str::to_owned))
     {
         if !walked(&route) {
+            std::process::exit(1);
+        }
+
+        return;
+    }
+
+    // **Spec 0049: plan a way somewhere and follow it.** The counterpart
+    // of `--walk`, and the opposite question. That one asks whether a
+    // written route still goes where it says; this one is handed a place
+    // and works the route out, which is the whole point of the spec.
+    if let Some(where_) =
+        std::env::args().find_map(|arg| arg.strip_prefix("--tour=").map(str::to_owned))
+    {
+        if !toured(&where_) {
             std::process::exit(1);
         }
 
@@ -12172,6 +12256,48 @@ mod tests {
                 "{}: the whole of it only turned {:.0} degrees, so nothing was crossed",
                 what,
                 turned
+            );
+        }
+    }
+
+    /// Spec 0047: the step budget counts the climbing you actually do.
+    ///
+    /// **It counted world `y`.** The budget drains at `walk::CLIMBS` and
+    /// fills with the height you gain, and in a turned frame a climb does
+    /// not change world `y` at all, so it filled with whatever sideways
+    /// drift the walk happened to have instead. That reads as a step you
+    /// may never take, and frame one's flight stopped a filmed route dead
+    /// four risers up. Found by routing a clip, not by a test, and this is
+    /// the thing underneath rather than the symptom, which took two tries
+    /// to reproduce and neither of them did.
+    ///
+    /// **Frame nought is the control.** Measuring along your own up has to
+    /// still be `y` there, or every stair in the building changes.
+    #[test]
+    fn the_step_budget_counts_the_climbing_you_do() {
+        for frame in 0..aloft::FRAMES {
+            let mut one = Arcade::new();
+
+            one.standing_in = frame;
+            one.at = aloft::foot_of_the_flight(frame);
+            one.eye = one.at.dot(one.over());
+            one.yaw = aloft::FACES_THE_FLIGHT;
+            one.walking = [true, false, false, false];
+
+            let mut most: f32 = 0.0;
+
+            for _ in 0..60 {
+                one.aimed_and_moved(1.0 / 60.0);
+                most = most.max(one.climbs);
+            }
+
+            // a riser is 0.25 and the budget holds what you just climbed,
+            // so a second of walking up a flight has to have filled it
+            assert!(
+                most > aloft::STAIR_RISE * 0.5,
+                "frame {} climbed a flight for a second and its budget never passed {:.4}",
+                frame,
+                most
             );
         }
     }

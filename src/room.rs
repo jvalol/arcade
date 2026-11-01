@@ -1430,9 +1430,10 @@ impl Room {
     /// around wherever you stand, so it is not a floor at a place: asked twice
     /// from two places it gives two different boxes, and a set that changes
     /// under you is not a set.
-    /// Only the tests ask for this, the same as `fillable` above. Nothing the
-    /// game does while it runs wants the floors as a set.
-    #[cfg(test)]
+    /// It was only the tests, the same as `fillable` above, and the line
+    /// here said nothing the game does while it runs wants the floors as a
+    /// set. Spec 0049 wants exactly that: a planner lays its places on
+    /// them, so it is built now as well as tested with.
     pub fn grounds(&self) -> Vec<(&'static str, Aabb)> {
         let reaches = self.reaches;
         let [hall, nook, gallery] = self.floors();
