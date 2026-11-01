@@ -478,6 +478,7 @@ four places for twenty seconds; without the wall that walk ends seventy
 eight metres inside the building.
 
 ## Acceptance criteria
+- No grass indoors on a descending stair, and the field still in view out past the garden. — `field::tests::there_is_no_grass_on_the_way_down_to_the_cellar`
 
 - You can walk out of the garden into it. — `field::tests::you_can_walk_out_of_the_garden`
 - The ground never gets nearer its own edge, a kilometre out or

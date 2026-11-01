@@ -101,6 +101,33 @@ pub fn afoot(solid: &[Aabb], at: Vec3) -> bool {
         return false;
     }
 
+    // **And nothing of the building is over your head.** The rule below
+    // is that a floor only counts if it is at least as high as the
+    // field's, which is what keeps the baths' roof from taking the grass
+    // away over the whole of it. A descending stair's treads are under
+    // that line too, so walking down into the cellar nothing counted as
+    // holding you up, the field decided you must be standing in it, and
+    // the grass was drawn across the stairwell. Jake filmed it on
+    // 2026-11-01; the guard above does not catch it because the eye is
+    // still over -2 for the whole flight.
+    //
+    // A height cannot tell a stair from a garden and a region cannot
+    // either. What can is the sky: the field is what is under you when
+    // there is nothing of this building between you and it. The garden's
+    // own doorway keeps working because `in_view` asks
+    // `garden::under_the_sky` as well, and that is a question about the
+    // garden rather than about what is overhead.
+    if solid.iter().any(|box_| {
+        box_.min.x <= at.x
+            && box_.max.x >= at.x
+            && box_.min.z <= at.z
+            && box_.max.z >= at.z
+            && box_.min.y >= at.y
+            && box_.min.y <= at.y + OVERHEAD
+    }) {
+        return false;
+    }
+
     // and a body inside a box of the building is in the building,
     // whatever is under it. The picture of the space behind the wall
     // stands at the bottom of that room's own boxes, a floor's thickness
@@ -202,6 +229,15 @@ pub fn grown(at: Vec3) -> f32 {
 /// What it costs is a two centimetre step down on the way out, which `walk`
 /// takes as a step and nobody can see.
 pub const DROP: f32 = 0.02;
+
+/// How close over your head something of the building has to be before you
+/// are under it rather than beside it.
+///
+/// **Not anything at all overhead.** The imaginarium floats six metres over
+/// the ground west of the hall, and counted as a lid it took the field's
+/// ground away from open air: the sweep found fifty such spots at once. A
+/// ceiling you could touch is a roof and a room six metres up is weather.
+pub const OVERHEAD: f32 = 3.0;
 
 /// Whether the field can be seen from here, which is a different question
 /// from whether you are standing in it.
@@ -1165,6 +1201,53 @@ mod tests {
         }
 
         solid
+    }
+
+    /// Spec 0040: and no grass indoors, going down the stair to the
+    /// cellar.
+    ///
+    /// **Filmed rather than found.** Walking down from the bookcase, a
+    /// dark green plane cut across the stairwell and flickered as the eye
+    /// went down. `in_view` asks `afoot` about the eye, and the rule that
+    /// a floor only counts if it is at least as high as the field's threw
+    /// away every tread of a descending stair: nothing was holding you up,
+    /// so the field decided you must be standing in it.
+    ///
+    /// **The second half is the control.** Out past the garden's west face
+    /// the field is in view, so a test that answered no everywhere would
+    /// fail there rather than pass here.
+    #[test]
+    fn there_is_no_grass_on_the_way_down_to_the_cellar() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+        let solid = room.solid();
+        let mut indoors = 0;
+
+        // down the flight behind the bookcase, eye height above each tread
+        for step in 0..=80 {
+            let t = step as f32 / 80.0;
+            let eye = vec3(-11.0 - 6.6 * t, -3.0 * t + crate::EYE, -5.1);
+
+            assert!(
+                !in_view(reaches, &solid, eye),
+                "the field is in view from {:?}, on the stair to the cellar",
+                eye
+            );
+
+            indoors += 1;
+        }
+
+        assert_eq!(indoors, 81, "the sweep did not run");
+
+        // and out of the garden's west side it still is, which is what
+        // makes the assertion above worth anything
+        let out = vec3(starts(reaches) - 4.0, crate::EYE, 0.0);
+
+        assert!(
+            in_view(reaches, &solid, out),
+            "the field is not in view from {:?}, which is out in it",
+            out
+        );
     }
 
     /// Spec 0040: there is ground under every spot a body could be.
