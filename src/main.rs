@@ -756,6 +756,8 @@ struct Arcade {
     /// Which way the view thinks is up, which chases `over` rather than
     /// being it. Spec 0047.
     rolling: Vec3,
+    /// The room turning round you, out of the top of a flight. Spec 0048.
+    crossing: Option<aloft::Crossing>,
     /// Whether you are still inside the aperture you last came through, so
     /// that standing in one does not swap you back and forth every frame.
     came_through: bool,
@@ -943,6 +945,7 @@ impl Arcade {
             },
             standing_in: 0,
             rolling: Vec3::Y,
+            crossing: None,
             came_through: false,
             falling: 0.0,
             eye: 0.0,
@@ -1564,7 +1567,28 @@ impl Arcade {
     /// up at sixty a second. It clears when your feet are out of every
     /// aperture in the room.
     fn through_an_aperture(&mut self) {
+        // the room is already taking you somewhere
+        if self.crossing.is_some() {
+            return;
+        }
+
         let mine = self.standing_in;
+
+        // **Spec 0048: the door at the top of your own flight.** Nothing to
+        // check about its state, because a top door has no leaf and never
+        // had one: an aperture with nothing in it is open. Only your own
+        // frame can reach it, since the other two see that face as their
+        // ceiling.
+        if aloft::doorway(mine, 0).contains_point(self.at) {
+            self.crossing = Some(aloft::Crossing::out_of(
+                mine,
+                self.at,
+                (self.yaw, self.pitch),
+            ));
+
+            return;
+        }
+
         let mut inside = false;
 
         for k in 0..aloft::FRAMES {
@@ -1591,22 +1615,20 @@ impl Arcade {
                 continue;
             }
 
-            self.standing_in = other;
+            // **A crossing rather than a swap, since spec 0048 built
+            // one.** 0047 did all of this in a single frame and rolled the
+            // camera after it, and driving it showed what that costs. The
+            // ends are the same: you come out past the threshold, looking
+            // the way you went, which is into the room with your own floor
+            // standing up in it.
             self.came_through = true;
             self.falling = 0.0;
-            self.at = aloft::arrive_through(k, other);
-
-            // **Facing the way you came through, which is into the room.**
-            // Carrying the old heading over was tried first and it is a
-            // mess: a hundred and twenty degrees of turn puts whatever you
-            // were looking at into a surface, and you arrive with your nose
-            // against a wall and no horizon anywhere. You walked through a
-            // door, so you are looking the way you went, and what is in
-            // front of you is the room with your own floor standing up in
-            // it.
-            self.yaw = std::f32::consts::PI;
-            self.pitch = 0.0;
-            self.eye = self.at.dot(self.over());
+            self.crossing = Some(aloft::Crossing::down_through(
+                k,
+                other,
+                self.at,
+                (self.yaw, self.pitch),
+            ));
         }
 
         if !inside {
@@ -4806,6 +4828,7 @@ impl Arcade {
         self.at = self.room.doorway();
         self.standing_in = 0;
         self.rolling = Vec3::Y;
+        self.crossing = None;
         self.came_through = false;
         self.eye = self.at.y;
         self.yaw = 0.0;
@@ -4817,6 +4840,47 @@ impl Arcade {
     }
 
     fn gone(&mut self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
+        // **The room going round you, out of the top of a flight.** Spec
+        // 0048, which borrows the shape of spec 0021's crossing rather than
+        // 0047's swap: the two ends are a dozen metres apart and swapping
+        // in one frame is a blink across the room.
+        //
+        // Nothing else moves you while it runs, for the tesseract's reason.
+        // The path is not in the room, so there is nothing on it to collide
+        // with and a body that could still walk would be walking off it.
+        if let Some(mut crossing) = self.crossing {
+            crossing.through = (crossing.through + dt / crossing.over).min(1.0);
+
+            // **Your place, your up and your heading, all three on the same
+            // clock.** Measured on 2026-11-01, the first two moved smoothly
+            // and the third snapped, which is what made a crossing hard to
+            // read: ninety degrees at the hatch and a hundred and fifty at
+            // the top door, in one frame apiece.
+            let (yaw, pitch) = crossing.looking();
+
+            self.yaw = yaw;
+            self.pitch = pitch;
+
+            if crossing.through >= 1.0 {
+                self.standing_in = crossing.joining;
+                self.crossing = None;
+                self.eye = crossing.to.dot(self.over());
+                self.rolling = self.over();
+
+                return (crossing.to, 0.0);
+            }
+
+            let at = crossing.at();
+
+            self.crossing = Some(crossing);
+            // the view is the scripted turn rather than 0047's lag chasing
+            // it, or the two would fight over the same half second
+            self.rolling = crossing.turned() * Vec3::Y;
+            self.eye = at.dot(self.rolling);
+
+            return (at, 0.0);
+        }
+
         // inside the tesseract, where the room is a cube with four ways out
         // and the only things that stop you are the floor, the ceiling and
         // the plinth. Spec 0021.
@@ -5606,7 +5670,14 @@ impl Arcade {
     /// The identity everywhere but the imaginarium, which is what keeps
     /// every other room walking the arithmetic it always did.
     fn turned(&self) -> glam::Quat {
-        aloft::frame(self.standing_in)
+        match self.crossing {
+            // **Spec 0048: part way round, which is nobody's frame.** It is
+            // safe to be between two only because walking is suspended for
+            // the whole of a crossing, so nothing asks this to hold anybody
+            // up while it is turning.
+            Some(crossing) => crossing.turned(),
+            None => aloft::frame(self.standing_in),
+        }
     }
 
     /// Which way is over your head.
@@ -11793,6 +11864,316 @@ mod tests {
             "two seconds of walking covered {:.1} metres",
             one.at.distance(from)
         );
+    }
+
+    /// Spec 0048: up its own flight and out of the top puts you one frame
+    /// back round the three.
+    #[test]
+    fn the_top_of_a_flight_goes_the_other_way() {
+        let mut one = Arcade::new();
+
+        // on frame nought's floor, at the foot of its own flight
+        one.at = aloft::foot_of_the_flight(0);
+        one.eye = one.at.dot(one.over());
+        one.yaw = aloft::FACES_THE_FLIGHT;
+        one.pitch = 0.0;
+        one.walking = [true, false, false, false];
+
+        for _ in 0..300 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert_eq!(
+            one.standing_in,
+            aloft::round_the_other_way(0),
+            "you are in frame {} at {:?}",
+            one.standing_in,
+            one.at
+        );
+        assert!(one.crossing.is_none(), "the crossing never finished");
+    }
+
+    /// **Its control:** the hatch in your floor still goes the other way,
+    /// so the two of them are opposite and the room can be walked round
+    /// either way.
+    #[test]
+    fn the_hatch_and_the_top_door_go_opposite_ways() {
+        for n in 0..aloft::FRAMES {
+            assert_ne!(
+                aloft::round_the_other_way(n),
+                aloft::hatch_is(n),
+                "frame {}'s two doors go to the same place",
+                n
+            );
+            assert_eq!(
+                aloft::round_the_other_way(aloft::hatch_is(n)),
+                n,
+                "frame {}'s hatch and the top door there do not undo each other",
+                n
+            );
+        }
+    }
+
+    /// Spec 0048: and you come out at the foot of a flight rather than
+    /// inside anything.
+    #[test]
+    fn you_come_out_at_the_foot_of_a_flight() {
+        let room = room::Room::of(games());
+        let solid = room.solid();
+
+        for n in 0..aloft::FRAMES {
+            let feet = aloft::foot_of_the_flight(n);
+            let middle = feet + aloft::frame(n) * (Vec3::Y * RADIUS);
+
+            for box_ in solid.iter() {
+                let near = middle.clamp(box_.min, box_.max);
+
+                assert!(
+                    near.distance(middle) > RADIUS - 1e-3,
+                    "frame {} comes out inside {:?}",
+                    n,
+                    box_
+                );
+            }
+
+            // and on that frame's own floor, which is the bottom of its
+            // own terms
+            let mine = aloft::out_of_frame(n, feet);
+
+            assert!(
+                (mine.y + aloft::HALF).abs() < 1e-3,
+                "frame {} comes out {:.2} off its floor",
+                n,
+                mine.y + aloft::HALF
+            );
+        }
+    }
+
+    /// Spec 0048: nothing else moves you while the room is going round.
+    ///
+    /// **Because the path is not in the room.** There is nothing on it to
+    /// collide with, and a body that could still walk would be walking off
+    /// it. Asked by running the same crossing twice, once with the keys
+    /// held down and once with nothing pressed, and holding the two paths
+    /// against each other: measuring a line would only have caught a
+    /// straight one, and this one bows through the middle of the room.
+    ///
+    /// The last assertion is the control: the same keys with no crossing
+    /// running do move you, so a game that ignored them everywhere would
+    /// fail rather than pass.
+    #[test]
+    fn a_crossing_cannot_be_walked_out_of() {
+        let ran = |keys: [bool; 4]| {
+            let mut one = Arcade::new();
+
+            one.at = aloft::foot_of_the_flight(0);
+            one.eye = one.at.dot(one.over());
+            one.yaw = aloft::FACES_THE_FLIGHT;
+            one.crossing = Some(aloft::Crossing::out_of(0, one.at, (one.yaw, 0.0)));
+            one.walking = keys;
+
+            let mut went = Vec::new();
+
+            for _ in 0..40 {
+                one.aimed_and_moved(1.0 / 60.0);
+                went.push(one.at);
+            }
+
+            went
+        };
+
+        let still = ran([false; 4]);
+        // forward and strafing, hard, the whole way
+        let shoved = ran([true, false, true, false]);
+
+        for (n, (one, two)) in still.iter().zip(shoved.iter()).enumerate() {
+            assert!(
+                one.abs_diff_eq(*two, 1e-4),
+                "frame {} of the crossing went to {:?} pressed and {:?} not",
+                n,
+                two,
+                one
+            );
+        }
+
+        let mut two = Arcade::new();
+
+        two.at = aloft::foot_of_the_flight(0);
+        two.eye = two.at.dot(two.over());
+        two.yaw = aloft::FACES_THE_FLIGHT;
+        two.walking = [true, false, true, false];
+
+        let from = two.at;
+
+        for _ in 0..40 {
+            two.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert!(
+            two.at.distance(from) > 0.5,
+            "the same keys with no crossing only moved you {:.2}, so this proves nothing",
+            two.at.distance(from)
+        );
+    }
+
+    /// Spec 0048: how a crossing of this room reads, driven and measured
+    /// rather than watched.
+    ///
+    /// **Because Jake could not tell what was happening and neither could
+    /// I.** Walking through either portal was hard to follow and no
+    /// picture of one frame says why. So this drives one, renders every
+    /// fourth frame, and asks four questions of each pair in turn: how far
+    /// the eye moved, how far the heading turned, how far the up rolled,
+    /// and how much of the picture changed. The last of those is
+    /// `blitzkit::picture::how_far_apart`, which the reference pictures
+    /// already use for a different purpose.
+    ///
+    /// What it found on 2026-11-01 was one fault at both portals. The
+    /// place and the up moved smoothly and the heading snapped: ninety
+    /// degrees in one frame at the hatch, taking ninety three per cent of
+    /// the picture with it, and a hundred and fifty at the top door, at
+    /// each end. The middle of a crossing was never the problem, which is
+    /// not what either of us would have guessed from watching.
+    ///
+    /// It returns what it measured so the caller can say what is allowed,
+    /// because the two crossings are different lengths and a number that
+    /// suited both would suit neither.
+    fn crossed(from: Vec3, frame: u64, yaw: f32, rounds: u32) -> Vec<(f32, f32, f32, f32)> {
+        let (wide, tall) = (320u32, 240u32);
+        let Some(mut renderer) =
+            pollster::block_on(blitzkit::renderer::Renderer::offscreen(wide, tall))
+        else {
+            eprintln!("no adapter here, so no crossing was driven");
+
+            return Vec::new();
+        };
+        let mut arcade = Arcade::new();
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+
+        arcade.load(&mut renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (wide as f32, tall as f32));
+        arcade.room.aloft_doors = [(false, f32::MIN); aloft::FRAMES as usize];
+        arcade.room.aloft_slid = [1.0; aloft::FRAMES as usize];
+        arcade.standing_in = frame;
+        arcade.at = from;
+        arcade.eye = from.dot(arcade.over());
+        arcade.yaw = yaw;
+        arcade.rolling = arcade.over();
+        arcade.walking = [true, false, false, false];
+
+        let mut out = Vec::new();
+        let mut was: Option<(blitzkit::renderer::Picture, Vec3, Vec3, Vec3)> = None;
+
+        for n in 0..rounds {
+            arcade.aimed_and_moved(1.0 / 60.0);
+            arcade.since += 1.0 / 60.0;
+
+            if n % 4 != 0 {
+                continue;
+            }
+
+            arcade.before_frame(&mut renderer);
+
+            let mut scene = Scene::new();
+            let mut camera = Camera::new();
+
+            arcade.draw(&mut scene, &mut camera);
+            renderer.set_camera(camera);
+
+            let now = renderer.picture(&scene, &Geometry::new(), &TextRenderer::new());
+            let eye = arcade.looking_from();
+            let ahead = arcade.facing();
+            let over = arcade.rolling;
+
+            if let Some((before, at, facing, up)) = &was {
+                out.push((
+                    eye.distance(*at),
+                    ahead.dot(*facing).clamp(-1.0, 1.0).acos().to_degrees(),
+                    over.dot(*up).clamp(-1.0, 1.0).acos().to_degrees(),
+                    blitzkit::picture::how_far_apart(before, &now),
+                ));
+            }
+
+            was = Some((now, eye, ahead, over));
+        }
+
+        out
+    }
+
+    /// Spec 0048: no crossing of this room snaps.
+    ///
+    /// **The control is the last assertion**, which asks that something
+    /// happened at all. Every threshold here passes trivially on a camera
+    /// that never moves, and the first version of this room's crossing
+    /// would have failed it in one sample.
+    #[test]
+    fn no_crossing_in_here_snaps() {
+        let hole = aloft::doorway(1, 1);
+        let at = hole.center() + vec3(1.6, 0.0, 2.6);
+        let toward = hole.center() - at;
+
+        for (what, went) in [
+            (
+                "the hatch in your own floor",
+                crossed(
+                    vec3(at.x, aloft::BASE, at.z),
+                    0,
+                    toward.x.atan2(-toward.z),
+                    140,
+                ),
+            ),
+            (
+                "the door at the top of your flight",
+                crossed(
+                    aloft::foot_of_the_flight(0),
+                    0,
+                    aloft::FACES_THE_FLIGHT,
+                    260,
+                ),
+            ),
+        ] {
+            if went.is_empty() {
+                continue;
+            }
+
+            for (n, (jump, swing, roll, apart)) in went.iter().enumerate() {
+                assert!(
+                    *swing < 25.0 && *roll < 25.0,
+                    "{}: the view turned {:.0} and rolled {:.0} degrees between two frames, at sample {}",
+                    what,
+                    swing,
+                    roll,
+                    n
+                );
+                assert!(
+                    *apart < 0.9,
+                    "{}: {:.0} per cent of the picture changed between two frames, at sample {}",
+                    what,
+                    apart * 100.0,
+                    n
+                );
+                assert!(
+                    *jump < 1.5,
+                    "{}: the eye moved {:.2} metres between two frames, at sample {}",
+                    what,
+                    jump,
+                    n
+                );
+            }
+
+            // and it did cross, rather than standing still and passing
+            // every line above
+            let turned: f32 = went.iter().map(|(_, swing, _, _)| swing).sum();
+
+            assert!(
+                turned > 90.0,
+                "{}: the whole of it only turned {:.0} degrees, so nothing was crossed",
+                what,
+                turned
+            );
+        }
     }
 
     /// How far the building reaches, which every room is measured from.

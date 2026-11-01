@@ -387,6 +387,158 @@ pub fn box_out_of_frame(n: u64, box_: &Aabb) -> Aabb {
     Aabb::new(a.min(b), a.max(b))
 }
 
+/// The room turning round you, out of the top of a flight. Spec 0048.
+///
+/// Carried the way spec 0021's tesseract carries its own: the two ends and
+/// how far between them, because a crossing is a move the room makes and
+/// not a move you make.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Crossing {
+    pub leaving: u64,
+    pub joining: u64,
+    pub from: Vec3,
+    pub to: Vec3,
+    /// Which way you were looking when it started and which way you will
+    /// be looking at the end, as a yaw and a pitch in each frame's own
+    /// terms.
+    ///
+    /// **Carried, because a heading that snaps is what made these hard to
+    /// follow.** Driven and measured on 2026-11-01: the position and the
+    /// up both moved smoothly and the heading changed ninety degrees at
+    /// the hatch and a hundred and fifty at the top door in one frame
+    /// apiece, taking most of the picture with it. The middle of a
+    /// crossing was never the problem.
+    pub from_look: (f32, f32),
+    pub to_look: (f32, f32),
+    /// How long the whole of it takes.
+    pub over: f32,
+    /// Nought to one.
+    pub through: f32,
+}
+
+impl Crossing {
+    /// Out of the top of frame `n`'s flight, from where you are standing
+    /// and looking.
+    pub fn out_of(n: u64, at: Vec3, look: (f32, f32)) -> Self {
+        let joining = round_the_other_way(n);
+
+        Self {
+            leaving: n,
+            joining,
+            from: at,
+            to: foot_of_the_flight(joining),
+            from_look: look,
+            to_look: (FACES_THE_FLIGHT, 0.0),
+            over: TURNS_ROUND,
+            through: 0.0,
+        }
+    }
+
+    /// And down through the hatch in frame `n`'s floor, which is frame
+    /// `k`'s second door. Spec 0047 swapped you in one frame of animation;
+    /// this is the same move at the shorter length the two ends deserve.
+    pub fn down_through(k: u64, joining: u64, at: Vec3, look: (f32, f32)) -> Self {
+        Self {
+            leaving: if joining == k { floor_of(k) } else { k },
+            joining,
+            from: at,
+            to: arrive_through(k, joining),
+            from_look: look,
+            to_look: (std::f32::consts::PI, 0.0),
+            over: TURNS_YOU,
+            through: 0.0,
+        }
+    }
+
+    /// Which way you are looking part way through, the short way round.
+    pub fn looking(&self) -> (f32, f32) {
+        let t = eased(self.through);
+        let turn = std::f32::consts::TAU;
+        let mut by = (self.to_look.0 - self.from_look.0).rem_euclid(turn);
+
+        if by > turn * 0.5 {
+            by -= turn;
+        }
+
+        (
+            self.from_look.0 + by * t,
+            self.from_look.1 + (self.to_look.1 - self.from_look.1) * t,
+        )
+    }
+
+    /// Where you are part way through, eased so neither end is a jerk.
+    ///
+    /// **Bowed through the middle of the room rather than straight.** The
+    /// two ends are a door high on one face and the foot of a flight on
+    /// another, and the line between them goes through whatever is in the
+    /// way: filmed straight, the crossing spends half its length inside a
+    /// flight with the camera against grey. The middle of this cube is the
+    /// one part of it that is open by construction, because all three
+    /// flights run along the faces, so that is where the path goes.
+    pub fn at(&self) -> Vec3 {
+        let t = eased(self.through);
+        let one = self.from.lerp(middle(), t);
+        let two = middle().lerp(self.to, t);
+
+        one.lerp(two, t)
+    }
+
+    /// And which way is up, turning with you.
+    pub fn turned(&self) -> Quat {
+        frame(self.leaving).slerp(frame(self.joining), eased(self.through))
+    }
+}
+
+/// Smooth at both ends, which is the same shape the tesseract eases its own
+/// crossing with.
+fn eased(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// How long the room takes to turn round you, going out of the top of a
+/// flight. Spec 0048.
+///
+/// **Not 0047's instant swap.** That is right for a step over a threshold
+/// and wrong here, where the two ends are a dozen metres apart: swapped in
+/// one frame it is a blink from one side of the room to the other.
+pub const TURNS_ROUND: f32 = 1.1;
+
+/// Which frame the door at the top of frame `n`'s flight puts you in.
+///
+/// **The other way round from the hatch in your floor**, which goes to
+/// `hatch_is`. Jake's call, and it makes the room somewhere you can move
+/// about deliberately rather than a one way carousel.
+///
+/// It has nothing to do with whose ceiling the door is cut in. The three
+/// top doors take the room's three ceilings and nobody walks on a ceiling,
+/// so there is no far side and the destination is chosen rather than
+/// found. Choosing the one that makes the room traversable beats choosing
+/// the one that looks like it follows from the geometry when it does not.
+pub fn round_the_other_way(n: u64) -> u64 {
+    (n + FRAMES - 1) % FRAMES
+}
+
+/// Where your feet land at the foot of frame `n`'s flight, a stride clear
+/// of the first tread and on their floor.
+pub fn foot_of_the_flight(n: u64) -> Vec3 {
+    in_frame(
+        n,
+        vec3(
+            HALF - STAIR_RUN - crate::RADIUS - STEPS_OUT * 2.0,
+            -HALF,
+            STAIR_ACROSS + STAIR_WIDE * 0.5,
+        ),
+    )
+}
+
+/// And which way you face when you get there, which is up the flight.
+///
+/// A flight climbs toward local `+x`, and yaw nought faces `-z` and grows
+/// toward `+x`, so that is a quarter turn.
+pub const FACES_THE_FLIGHT: f32 = std::f32::consts::FRAC_PI_2;
+
 /// How far past an aperture you stand when you come through it. Spec 0047.
 ///
 /// **Because all three second doors are in one corner of the room**, which
@@ -878,12 +1030,17 @@ pub struct Walker {
 /// on rather than being set and the round following it.
 pub const WALKERS: u64 = 4;
 
-/// How long the view takes to roll over when you change frames. Spec 0047.
+/// How long going through a hatch in a floor takes. Specs 0047 and 0048.
 ///
-/// **Only the view.** Gravity and the walking change the instant you are
-/// through an aperture, because a frame half way between two is a frame
-/// nobody can stand in.
-pub const TURNS_YOU: f32 = 0.55;
+/// **It was only the view, and that was the fault.** 0047 changed your
+/// frame and your place and your heading in one frame of animation and
+/// rolled the camera after them over this long. Driven and measured, that
+/// came out as a metre and a half of movement, ninety degrees of turn and
+/// ninety three per cent of the picture in a single frame, with the
+/// horizon still righting itself a second and a half later. The parts of
+/// a move have to move together, so this is the whole crossing now and
+/// 0048's machinery carries it.
+pub const TURNS_YOU: f32 = 0.85;
 
 /// How long somebody is out of sight between journeys.
 pub const WAITS: f32 = 3.0;
@@ -2678,6 +2835,50 @@ mod tests {
                 n,
                 one,
                 two
+            );
+        }
+    }
+
+    /// Spec 0048: the two ways round reach every frame from every frame.
+    ///
+    /// Three is small enough that this could be read off, which is why it
+    /// is written as a search rather than as three assertions: the claim
+    /// is about the room being traversable and not about these particular
+    /// three numbers.
+    #[test]
+    fn the_two_ways_round_cover_all_three_frames() {
+        for from in 0..FRAMES {
+            for to in 0..FRAMES {
+                let mut reached = vec![from];
+                let mut n = 0;
+
+                while n < reached.len() {
+                    let here = reached[n];
+                    n += 1;
+
+                    for next in [hatch_is(here), round_the_other_way(here)] {
+                        if !reached.contains(&next) {
+                            reached.push(next);
+                        }
+                    }
+                }
+
+                assert!(
+                    reached.contains(&to),
+                    "frame {} cannot be reached from frame {}",
+                    to,
+                    from
+                );
+            }
+        }
+
+        // and the two are opposite rather than the same cycle twice
+        for n in 0..FRAMES {
+            assert_ne!(
+                hatch_is(n),
+                round_the_other_way(n),
+                "frame {}'s two doors go to one place",
+                n
             );
         }
     }
