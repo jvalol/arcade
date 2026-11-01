@@ -368,6 +368,50 @@ pub fn box_in_frame(n: u64, low: Vec3, high: Vec3) -> Aabb {
     Aabb::new(a.min(b), a.max(b))
 }
 
+/// A point in the world, put into frame `n`'s own terms. Spec 0047.
+pub fn out_of_frame(n: u64, world: Vec3) -> Vec3 {
+    frame(n).inverse() * (world - middle())
+}
+
+/// And a box, which comes back a box for the reason `box_in_frame` gives:
+/// the turn is a right angle, so the two corners are two corners of one box
+/// with their names shuffled.
+///
+/// **This is the whole reason spec 0047 is affordable.** Walking in somebody
+/// else's frame means handing `walk` the building turned into that frame,
+/// and a turn that had to be fitted with a bounding box would grow every
+/// wall in the room by its own diagonal.
+pub fn box_out_of_frame(n: u64, box_: &Aabb) -> Aabb {
+    let (a, b) = (out_of_frame(n, box_.min), out_of_frame(n, box_.max));
+
+    Aabb::new(a.min(b), a.max(b))
+}
+
+/// How far past an aperture you stand when you come through it. Spec 0047.
+///
+/// **Because all three second doors are in one corner of the room**, which
+/// is where all three floors meet, and arriving on the threshold wedges you
+/// between two of them: the body is 0.45 of radius and the floor it came
+/// from is right there, so `move_and_slide` starts inside something and
+/// answers with no distance at all. A doorway has a threshold and you
+/// arrive past it.
+pub const STEPS_OUT: f32 = 0.25;
+
+/// Where your feet land coming through frame `k`'s second door into frame
+/// `into`, which is one of the two frames that share it.
+pub fn arrive_through(k: u64, into: u64) -> Vec3 {
+    let hole = box_out_of_frame(into, &doorway(k, 1));
+
+    in_frame(
+        into,
+        vec3(
+            hole.center().x,
+            -HALF,
+            hole.max.z + crate::RADIUS + STEPS_OUT,
+        ),
+    )
+}
+
 /// One flight: how wide, how deep a tread, how high a rise, and how many.
 ///
 /// **A stair you can read as a stair**, which is the whole reason 0038
@@ -551,7 +595,11 @@ pub fn door_recess(n: u64, which: u64) -> Vec<Aabb> {
     out
 }
 
-/// How long a leaf takes to drop clear of its own doorway.
+/// How far a leaf tucks under the floor as it slides clear of its own
+/// doorway, which is enough to take its faces out of that floor's planes.
+pub const LEAF_SINKS: f32 = 0.05;
+
+/// How long a leaf takes to slide clear of its own doorway.
 pub const LEAF_DROPS: f32 = 0.9;
 
 /// The leaf of frame `n`'s second door, `slid` of the way out of the hole.
@@ -573,12 +621,33 @@ pub const LEAF_DROPS: f32 = 0.9;
 /// third, and the third is the one you are looking down at. Dropping, it
 /// is the same panel going into the same slot whichever face it is in.
 pub fn leaf(n: u64, slid: f32) -> Aabb {
-    let down = (THICK + DOOR_BACK - LEAF_THICK) * slid.clamp(0.0, 1.0);
+    // **Sideways into the slab beside it, not back out of its own plane.**
+    // Spec 0038 slid it the way a door in a wall swings clear, which in a
+    // door cut in a floor means forty centimetres straight down: open was a
+    // kerb with a panel sitting in a tray under it, and Jake read it as a
+    // panel shifting back and forth, which is exactly what it was. Spec
+    // 0047 makes the aperture a way you can take, and a shelf hanging in
+    // the middle of it is something to land on rather than a way through.
+    let slid = slid.clamp(0.0, 1.0);
+    // One width takes it out of the opening and the extra takes its
+    // trailing face off the opening's own edge, which the two of them would
+    // otherwise share.
+    let aside = (DOOR_WIDE + LEAF_SINKS) * slid;
+    // **And a little further into the slab as it goes.** Slid flush it put
+    // its own outer face in the floor's plane over two metres by 1.6, which
+    // is the fault this building has fought ten times. Shut it is in the
+    // hole rather than over the slab and there is nothing to fight, so the
+    // sinking goes with the sliding.
+    let sink = LEAF_SINKS * slid;
 
     box_in_frame(
         n,
-        vec3(-HALF + DOOR_WIDE, -HALF, -HALF - LEAF_THICK - down),
-        vec3(-HALF + DOOR_WIDE * 2.0, -HALF + DOOR_TALL, -HALF - down),
+        vec3(-HALF + DOOR_WIDE + aside, -HALF, -HALF - LEAF_THICK - sink),
+        vec3(
+            -HALF + DOOR_WIDE * 2.0 + aside,
+            -HALF + DOOR_TALL,
+            -HALF - sink,
+        ),
     )
 }
 
@@ -808,6 +877,13 @@ pub struct Walker {
 /// of them walks, so the pace comes out of `ROUNDS` and the path they are
 /// on rather than being set and the round following it.
 pub const WALKERS: u64 = 4;
+
+/// How long the view takes to roll over when you change frames. Spec 0047.
+///
+/// **Only the view.** Gravity and the walking change the instant you are
+/// through an aperture, because a frame half way between two is a frame
+/// nobody can stand in.
+pub const TURNS_YOU: f32 = 0.55;
 
 /// How long somebody is out of sight between journeys.
 pub const WAITS: f32 = 3.0;
@@ -2569,6 +2645,43 @@ mod tests {
     /// corners, and the spread inside a lane keeps the four of one
     /// direction out of a single queue.
     ///
+    /// Spec 0047: a box turned into a frame and back is the box it was.
+    ///
+    /// **Which is the whole reason walking in somebody else's frame is
+    /// affordable.** Every frame here is a right angle, so no corner has to
+    /// be fitted and no wall grows by its own diagonal. Break that and the
+    /// imaginarium fills with boxes a third again too big.
+    #[test]
+    fn a_box_turned_into_a_frame_comes_back() {
+        let was = Aabb::new(vec3(-3.1, 0.4, -7.7), vec3(1.9, 2.6, -2.2));
+
+        for n in 0..FRAMES {
+            let there = box_out_of_frame(n, &was);
+            let back = box_in_frame(n, there.min, there.max);
+
+            assert!(
+                back.min.abs_diff_eq(was.min, 1e-4) && back.max.abs_diff_eq(was.max, 1e-4),
+                "frame {} turned {:?} into {:?} and back to {:?}",
+                n,
+                was,
+                there,
+                back
+            );
+
+            // and it is the same size, rather than a bounding box of the
+            // turn, which is the thing that would quietly be wrong
+            let (one, two) = (was.max - was.min, there.max - there.min);
+
+            assert!(
+                (one.x * one.y * one.z - two.x * two.y * two.z).abs() < 1e-3,
+                "frame {} turned a box of {:?} into one of {:?}",
+                n,
+                one,
+                two
+            );
+        }
+    }
+
     /// **It does not claim they never touch.** Nobody gives way to anybody
     /// here and the paces differ, so one walking the same way as another
     /// catches it up and goes through it. Over the shoulder, at a glance,

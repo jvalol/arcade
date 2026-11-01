@@ -745,6 +745,20 @@ struct Arcade {
     /// asked for is one width drawn.
     thing_sizes: Vec<f32>,
     at: Vec3,
+    /// Which of the imaginarium's frames you are standing in. Spec 0047.
+    ///
+    /// **A frame and not an up vector.** The three are the room's own, a
+    /// cyclic permutation of the axes about its long diagonal, and because
+    /// each is a right angle a box turns into a box exactly. Nought is the
+    /// world's own way up and is where you are everywhere else in the
+    /// building, so every turn below is the identity outside this room.
+    standing_in: u64,
+    /// Which way the view thinks is up, which chases `over` rather than
+    /// being it. Spec 0047.
+    rolling: Vec3,
+    /// Whether you are still inside the aperture you last came through, so
+    /// that standing in one does not swap you back and forth every frame.
+    came_through: bool,
     /// How fast you are going down, which until spec 0007 was never.
     falling: f32,
     /// How high your eye is, which is not quite how high your feet are.
@@ -927,6 +941,9 @@ impl Arcade {
                 (_, _, true) => posed_at,
                 _ => doorway,
             },
+            standing_in: 0,
+            rolling: Vec3::Y,
+            came_through: false,
             falling: 0.0,
             eye: 0.0,
             room,
@@ -1414,7 +1431,9 @@ impl Arcade {
         } else {
             self.forward()
         };
-        let right = self.forward().cross(Vec3::Y);
+        // your right, which is across your own up rather than the world's.
+        // Spec 0047.
+        let right = self.forward().cross(self.over());
         for (held, way) in self.walking.iter().zip([ahead, -ahead, -right, right]) {
             if *held {
                 wish += way;
@@ -1498,6 +1517,13 @@ impl Arcade {
         self.at = at;
         self.falling = falling;
 
+        self.through_an_aperture();
+
+        // and the view rolls after the frame rather than with it
+        let over = self.over();
+        let by = (dt / aloft::TURNS_YOU).min(1.0);
+        self.rolling = self.rolling.lerp(over, by).normalize_or(over);
+
         // **The eye catching up with the feet, here rather than in `update`.**
         // Nothing while you are on the level, because then they are the same
         // number.
@@ -1508,13 +1534,84 @@ impl Arcade {
         // you were looking at while standing in the imaginarium, two floors
         // over it. That is the drift this function exists to stop, and the
         // eye belongs with the feet.
-        let behind = self.at.y - self.eye;
+        // **Measured along your own up, per spec 0047**, which is `y` with
+        // your frame at nought and is every other room unchanged.
+        let behind = self.at.dot(self.over()) - self.eye;
         self.eye += behind * (dt / EYE_LAGS).min(1.0);
         if behind.abs() < 1e-4 {
-            self.eye = self.at.y;
+            self.eye = self.at.dot(self.over());
         }
 
         went
+    }
+
+    /// Spec 0047: an open second door is a way through, and going through
+    /// it turns you over.
+    ///
+    /// **The same aperture both ways.** `doorway(k, 1)` is cut in frame
+    /// `floor_of(k)`'s floor and stands on frame `k`'s, so the two frames
+    /// that share it are the two it swaps between. Whichever of them you
+    /// are in, you come out in the other.
+    ///
+    /// Your feet are what is tested, because the hole is a slot the
+    /// thickness of a floor and that is the part of you that is in it. With
+    /// the door open the floor is cut, so you are in the slot on your way
+    /// down through it; with the door shut the leaf is solid and you stand
+    /// on it.
+    ///
+    /// **And a latch, because without one you are in the aperture the frame
+    /// after you arrive.** That read as a figure flickering between two ways
+    /// up at sixty a second. It clears when your feet are out of every
+    /// aperture in the room.
+    fn through_an_aperture(&mut self) {
+        let mine = self.standing_in;
+        let mut inside = false;
+
+        for k in 0..aloft::FRAMES {
+            if !aloft::doorway(k, 1).contains_point(self.at) {
+                continue;
+            }
+
+            inside = true;
+
+            // shut, so it is a floor and not a way anywhere
+            if self.room.aloft_doors[k as usize].0 {
+                continue;
+            }
+
+            let other = if k == mine {
+                aloft::floor_of(k)
+            } else if aloft::floor_of(k) == mine {
+                k
+            } else {
+                continue;
+            };
+
+            if self.came_through {
+                continue;
+            }
+
+            self.standing_in = other;
+            self.came_through = true;
+            self.falling = 0.0;
+            self.at = aloft::arrive_through(k, other);
+
+            // **Facing the way you came through, which is into the room.**
+            // Carrying the old heading over was tried first and it is a
+            // mess: a hundred and twenty degrees of turn puts whatever you
+            // were looking at into a surface, and you arrive with your nose
+            // against a wall and no horizon anywhere. You walked through a
+            // door, so you are looking the way you went, and what is in
+            // front of you is the room with your own floor standing up in
+            // it.
+            self.yaw = std::f32::consts::PI;
+            self.pitch = 0.0;
+            self.eye = self.at.dot(self.over());
+        }
+
+        if !inside {
+            self.came_through = false;
+        }
     }
 
     /// Whether you are standing in the pool.
@@ -4707,6 +4804,9 @@ impl Arcade {
     /// at the door still riding.
     fn back_to_the_door(&mut self) {
         self.at = self.room.doorway();
+        self.standing_in = 0;
+        self.rolling = Vec3::Y;
+        self.came_through = false;
         self.eye = self.at.y;
         self.yaw = 0.0;
         self.pitch = 0.0;
@@ -4810,16 +4910,48 @@ impl Arcade {
             return (at, 0.0);
         }
 
+        let going = if wish.length_squared() > 1e-6 {
+            wish.normalize() * pace
+        } else {
+            Vec3::ZERO
+        };
+
+        // **Spec 0047: in your own frame, whichever that is.** `walk` is
+        // written in `y` from end to end and this does not change it. The
+        // building is turned into your terms, walked, and the answer turned
+        // back, which costs one pass over the solid boxes and only while
+        // you are standing somewhere other than the world's own way up.
+        //
+        // A box comes back a box because every frame here is a right angle.
+        // Anything else would need a bounding box and would grow every wall
+        // in the room by its own diagonal.
+        if self.standing_in != 0 {
+            let mine = self.standing_in;
+            let turned: Vec<blitzkit::collision::Aabb> = self
+                .standing_on()
+                .iter()
+                .map(|box_| aloft::box_out_of_frame(mine, box_))
+                .collect();
+
+            let (next, fell) = walk::walk(
+                aloft::out_of_frame(mine, self.at),
+                aloft::frame(mine).inverse() * going,
+                self.falling,
+                RADIUS,
+                dt,
+                &turned,
+                self.climbs <= 0.0,
+            );
+
+            return (aloft::in_frame(mine, next), fell);
+        }
+
         // along the floor, over anything no taller than a step, and down.
         // Spec 0007: the building has a height in it now, so getting about is
         // no longer one call that pushes you sideways.
         walk::walk(
             self.at,
-            if wish.length_squared() > 1e-6 {
-                wish.normalize() * pace
-            } else {
-                Vec3::ZERO
-            },
+            going,
             self.falling,
             RADIUS,
             dt,
@@ -5445,20 +5577,41 @@ impl Arcade {
         )
     }
 
+    /// Where the camera stands: your feet, with the eased height put back
+    /// along your own up and `EYE` on top of it.
+    ///
+    /// With your frame at nought this is `(at.x, eye + EYE, at.z)`, which
+    /// is what it has always been.
     fn looking_from(&self) -> Vec3 {
-        vec3(self.at.x, self.eye + EYE, self.at.z)
+        let over = self.over();
+
+        self.at + over * (self.eye - self.at.dot(over) + EYE)
     }
 
     fn facing(&self) -> Vec3 {
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
 
-        vec3(sin_yaw * cos_pitch, sin_pitch, -cos_yaw * cos_pitch)
+        self.turned() * vec3(sin_yaw * cos_pitch, sin_pitch, -cos_yaw * cos_pitch)
     }
 
     fn forward(&self) -> Vec3 {
         let (sin, cos) = self.yaw.sin_cos();
-        vec3(sin, 0.0, -cos)
+
+        self.turned() * vec3(sin, 0.0, -cos)
+    }
+
+    /// The turn out of your own terms into the world's. Spec 0047.
+    ///
+    /// The identity everywhere but the imaginarium, which is what keeps
+    /// every other room walking the arithmetic it always did.
+    fn turned(&self) -> glam::Quat {
+        aloft::frame(self.standing_in)
+    }
+
+    /// Which way is over your head.
+    fn over(&self) -> Vec3 {
+        self.turned() * Vec3::Y
     }
 }
 
@@ -7176,6 +7329,12 @@ impl Game for Arcade {
 
         camera.position = self.looking_from();
         camera.target = camera.position + self.facing();
+        // **And which way is up, which is yours and not the world's.** Spec
+        // 0047. It eases rather than snapping: gravity and the walking
+        // change the instant you are through an aperture, because a frame
+        // half way between two is a frame nobody can stand in, and the view
+        // rolls after it.
+        camera.up = self.rolling;
         // and how far it sees, which is the building's hundred metres indoors
         // and the length of the floor out past the door. Spec 0018: a hundred
         // metres out there culls the sun from everywhere past Mercury, and a
@@ -11494,6 +11653,146 @@ mod tests {
         if let Err(why) = blitzkit::picture::looks_right(&picture, &reference(name)) {
             panic!("{}", why);
         }
+    }
+
+    /// Spec 0047: walked into an open door in your floor, you come out in
+    /// the frame whose floor it is cut in.
+    #[test]
+    fn an_open_door_turns_you_over() {
+        let mut one = Arcade::new();
+
+        one.room.aloft_doors = [(false, f32::MIN); aloft::FRAMES as usize];
+        one.room.aloft_slid = [1.0; aloft::FRAMES as usize];
+        // on the imaginarium's own floor, a stride south of the hatch
+        one.at = vec3(-8.0, aloft::BASE, -5.3);
+        one.eye = one.at.y;
+        one.yaw = 0.0;
+        one.walking = [true, false, false, false];
+
+        for _ in 0..180 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert_eq!(
+            one.standing_in, 1,
+            "you are still in frame {} at {:?}",
+            one.standing_in, one.at
+        );
+
+        // and standing on what was the west wall, which is frame one's
+        // floor. Its face is at the room's own west side.
+        let floor = aloft::middle().x - aloft::HALF;
+
+        assert!(
+            (one.at.x - floor).abs() < 0.2,
+            "you came to rest at x {:.2} and frame one's floor is at {:.2}",
+            one.at.x,
+            floor
+        );
+    }
+
+    /// **Its control:** shut, the same walk leaves you standing on it in
+    /// your own frame.
+    #[test]
+    fn a_shut_door_is_a_floor() {
+        let mut one = Arcade::new();
+
+        one.room.aloft_doors = [(true, f32::MIN); aloft::FRAMES as usize];
+        one.room.aloft_slid = [0.0; aloft::FRAMES as usize];
+        one.at = vec3(-8.0, aloft::BASE, -5.3);
+        one.eye = one.at.y;
+        one.yaw = 0.0;
+        one.walking = [true, false, false, false];
+
+        for _ in 0..180 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert_eq!(
+            one.standing_in, 0,
+            "a shut door turned you over anyway, to {:?}",
+            one.at
+        );
+        assert!(
+            (one.at.y - aloft::BASE).abs() < 0.3,
+            "you went through a shut door, down to {:.2}",
+            one.at.y
+        );
+    }
+
+    /// Spec 0047: and the same aperture works from the other side.
+    ///
+    /// **Walked at, not navigated to.** From frame one's floor the hole in
+    /// frame nought's is a doorway standing in a wall, and this asks that
+    /// walking through it puts you back where you came from. Finding it
+    /// from wherever you landed is a different question and the room's
+    /// rather than this spec's.
+    #[test]
+    fn the_same_aperture_works_both_ways() {
+        let mut one = Arcade::new();
+
+        one.room.aloft_doors = [(false, f32::MIN); aloft::FRAMES as usize];
+        one.room.aloft_slid = [1.0; aloft::FRAMES as usize];
+
+        // on frame one's own floor, two metres square in front of the
+        // doorway that frame nought sees as a hole underfoot
+        let hole = aloft::box_out_of_frame(1, &aloft::doorway(1, 1));
+        one.standing_in = 1;
+        one.at = aloft::in_frame(1, vec3(hole.center().x, -aloft::HALF, hole.max.z + 2.0));
+        one.eye = one.at.dot(one.over());
+        one.yaw = 0.0;
+        one.walking = [true, false, false, false];
+
+        for _ in 0..180 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert_eq!(
+            one.standing_in, 0,
+            "you are still in frame {} at {:?}",
+            one.standing_in, one.at
+        );
+        assert!(
+            (one.at.y - aloft::BASE).abs() < 0.4,
+            "you came out at {:.2} rather than on the imaginarium's floor",
+            one.at.y
+        );
+    }
+
+    /// Spec 0047: and nothing outside the imaginarium knows about any of
+    /// it.
+    ///
+    /// **The control on the whole spec.** Walking is now two paths and the
+    /// second one turns the building into somebody's frame. This asks that
+    /// the first is still what the rest of the building takes: walked from
+    /// the door down the hall, you stay in frame nought, you stay on the
+    /// hall's floor, and you cover the ground.
+    #[test]
+    fn the_building_walks_as_it_did() {
+        let mut one = Arcade::new();
+
+        one.at = one.room.doorway();
+        one.eye = one.at.y;
+        one.yaw = 0.0;
+        one.walking = [true, false, false, false];
+
+        let from = one.at;
+
+        for _ in 0..120 {
+            one.aimed_and_moved(1.0 / 60.0);
+        }
+
+        assert_eq!(one.standing_in, 0, "the hall turned you over");
+        assert!(
+            one.at.y.abs() < 1e-3,
+            "you left the hall's floor, to {:.3}",
+            one.at.y
+        );
+        assert!(
+            one.at.distance(from) > 6.0,
+            "two seconds of walking covered {:.1} metres",
+            one.at.distance(from)
+        );
     }
 
     /// How far the building reaches, which every room is measured from.
