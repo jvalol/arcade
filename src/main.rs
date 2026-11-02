@@ -12320,6 +12320,128 @@ mod tests {
         }
     }
 
+    /// Spec 0049: the clip walks the whole route, in a test.
+    ///
+    /// **Because until now only the film could say.** The route test in
+    /// `tour` walks each leg with a `Follower` against the room's boxes,
+    /// which is not the body in the game: it skips the legs that change
+    /// frame, it starts each leg from the place the one before was aimed
+    /// at rather than from where the body actually got to, and nothing
+    /// in it has a camera. Three faults went through it untouched on
+    /// 2026-11-01 and all three were found by filming, watching, and
+    /// working a timestamp back to a position, at a minute a round.
+    ///
+    /// `update` is four calls around a tour and none of them wants a
+    /// renderer, because spec 0042 pulled them out for its own replay.
+    /// They go in `update`'s order here: the doors move, the tour presses
+    /// the keys, the body walks, and the sight it leaves is what the next
+    /// frame aims and works by. Thirty-six seconds of film is 2160 frames
+    /// of that.
+    ///
+    /// What it asks is what the takes were being watched for: that every
+    /// place the route names is arrived at, that the route finishes, and
+    /// how long it takes, which is the number `refresh-examples` wants
+    /// for the camera and which was being read off a log by hand.
+    #[test]
+    fn the_clip_walks_the_whole_route() {
+        let tick = 1.0 / 60.0;
+        let mut game = Arcade::new();
+        let steps = tour::clip(&game.room);
+        let places = steps.len();
+
+        game.filming = Some(Filming {
+            steps,
+            at: 0,
+            following: None,
+            waiting: 0.0,
+        });
+
+        // a stride, which is a body that walked there rather than one
+        // that gave the place up
+        let near = 1.0;
+        let mut missed = Vec::new();
+        let mut rounds = 0;
+        let most = 60 * 180;
+
+        while rounds < most {
+            let was = game.filming.as_ref().map_or(places, |film| film.at);
+
+            game.the_doors_moved(tick);
+            game.on_the_tour(tick);
+            game.aimed_and_moved(tick);
+            // the sight a frame aims by is the one the frame before it
+            // left, which is where `update` puts it and is what the Work
+            // steps act on. Without it `self.seen` is never anything and
+            // every door on the route stays shut: the clip got as far as
+            // the bookcase, found no way through it, and the test said
+            // the route was walked.
+            game.seen = game.what_i_see();
+            rounds += 1;
+
+            let Some(film) = game.filming.as_ref() else {
+                break;
+            };
+
+            // **Every step it got through this frame, and not just the
+            // one it started on.** A frame can finish a stand, fail to
+            // plan the leg after it and land on the look after that, all
+            // before it returns. Asked of the step it started on, the
+            // leg that had no way was the one in the middle and went
+            // unreported.
+            for step in film.steps[was..film.at].iter() {
+                let tour::Step::At(place, _) = step else {
+                    continue;
+                };
+
+                if game.at.distance(*place) > near {
+                    missed.push(format!(
+                        "{:?}, which it left {:.1} away at {:7.2}{:7.2}{:7.2}",
+                        place,
+                        game.at.distance(*place),
+                        game.at.x,
+                        game.at.y,
+                        game.at.z
+                    ));
+                }
+            }
+
+            if film.at >= places {
+                break;
+            }
+        }
+
+        println!(
+            "the clip is {:.1} seconds of film over {} steps",
+            rounds as f32 * tick,
+            places
+        );
+
+        assert!(
+            missed.is_empty(),
+            "{} of the route's places were not walked to: {}",
+            missed.len(),
+            missed.join("; ")
+        );
+        assert!(
+            rounds < most,
+            "the route had not finished after {:.0} seconds",
+            most as f32 * tick
+        );
+
+        // **And the two doors it works are open at the end.** A `Work`
+        // acts on the sight the frame before left, so a loop that never
+        // takes one works nothing. Both doors stayed shut, the legs past
+        // them had no way, and what said so was a place the route never
+        // got to rather than anything about a door. Named here so the
+        // next loop that drops a call says which call it dropped.
+        assert!(
+            game.room.open && game.room.baths_open,
+            "it finished the route with the bookcase {} and the baths' leaf {}",
+            if game.room.open { "open" } else { "shut" },
+            if game.room.baths_open { "open" } else { "shut" }
+        );
+    }
+
     /// Spec 0049: a `Look` ends up with the thing it names in shot.
     ///
     /// **Turning is only half of pointing.** A `Look` that sets the yaw

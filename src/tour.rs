@@ -1874,10 +1874,13 @@ mod tests {
                             // again, which `aloft`'s aperture tests have
                             // no reason to look for.
                             // `a_mouth_you_have_crossed_is_not_aimed_at_again`
-                            // holds that rule now. What is still not
-                            // walked anywhere is a whole crossing, and
-                            // walking one needs an `Arcade` rather than a
-                            // follower.
+                            // holds that rule now, and
+                            // `the_clip_walks_the_whole_route` in `main`
+                            // walks the route through a real `Arcade`,
+                            // crossings and doors and all, which is what
+                            // this cannot do. The clip has not crossed a
+                            // frame since the imaginarium came out of it,
+                            // so nothing is exercising one today.
                             if from.1 == *frame {
                                 let ended = followed(from, facing, way, &solid, reaches);
 
