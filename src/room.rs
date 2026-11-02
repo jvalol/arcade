@@ -631,6 +631,37 @@ impl Benched {
         self.at.y >= 0.0 && self.at.x < 0.0
     }
 
+    /// Where you stand to work it: the floor in front of it, on the side it
+    /// is worked from.
+    ///
+    /// **One account of it.** It was written out in
+    /// `you_can_walk_to_every_bench` and nowhere else, which was right
+    /// while a test was the only thing that wanted it. The filmed route
+    /// stops at one of these now, and a route that works out the place
+    /// itself is a route that can stand somewhere the test never asked
+    /// about.
+    pub fn worked_at(&self) -> Vec3 {
+        self.at + self.worked_from * (self.size.x * 0.5 + crate::RADIUS + 0.1)
+    }
+
+    /// Where to aim to work it: inside the top of it, under whatever is
+    /// standing there.
+    ///
+    /// **The toy itself is not what the sight tests.** `looking_at` casts
+    /// at one box per bench and that box stops at the bench's own top, so
+    /// a ray laid on the cube standing 0.3 above it passes clean over the
+    /// thing it is trying to work. Aimed at the cube's middle from the
+    /// place this bench is worked from, the ray clipped the far top
+    /// corner of the box and half a metre further back it missed
+    /// altogether.
+    ///
+    /// A tenth of the bench's height under the top, which is a point
+    /// inside the box from anywhere you can stand and still high enough
+    /// that what is on the bench is in the shot rather than over it.
+    pub fn looked_at(&self) -> Vec3 {
+        self.at + Vec3::Y * self.size.y * 0.9
+    }
+
     /// Which way is away from you, and which way is your right hand, stood at
     /// this bench to work it.
     ///
@@ -2771,11 +2802,8 @@ mod tests {
         // flooding. The back room's is through a door off the gallery and is
         // walked by `back::tests::you_can_walk_in_and_out_again`.
         for bench in room.benches.iter().filter(|one| one.in_the_nook()) {
-            // the floor in front of it, on the side you stand to work it
-            let at = bench.at + bench.worked_from * (bench.size.x * 0.5 + crate::RADIUS + 0.1);
-
             assert!(
-                reaches(at),
+                reaches(bench.worked_at()),
                 "you cannot walk from the door to the {}",
                 bench.name
             );

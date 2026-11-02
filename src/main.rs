@@ -9961,7 +9961,7 @@ impl Game for Arcade {
             .iter()
             .find(|bench| bench.name == kociemba::NAME)
         {
-            let middle = bench.at + Vec3::Y * (bench.size.y + kociemba::ACROSS * 0.5 + 0.01);
+            let middle = kociemba::middle_on(bench.at, bench.size.y);
             let on = kociemba::facelets(&self.puzzle.cube);
 
             // **The face part way through its turn is swept here and
@@ -12598,11 +12598,22 @@ mod tests {
         let steps = tour::clip(&room);
         let tick = 1.0 / 60.0;
 
-        // the two things on this route that are worked, said the way the
+        // the three things on this route that are worked, said the way the
         // route says them, so there is one account of each
-        let case = room.handle().expect("the cellar has a way down into it");
-        let leaf = spa::leaf_box(room.reaches, 0.0);
         let middle = |box_: Aabb| (box_.min + box_.max) * 0.5;
+        let cube = room
+            .benches
+            .iter()
+            .position(|one| one.name == kociemba::NAME)
+            .expect("the nook's row has the cube in it");
+        let worked = [
+            (
+                middle(room.handle().expect("the cellar has a way down into it")),
+                room::Seen::Case,
+            ),
+            (middle(spa::leaf_box(room.reaches, 0.0)), room::Seen::Baths),
+            (room.benches[cube].looked_at(), room::Seen::Bench(cube)),
+        ];
 
         let mut stood = (room.doorway(), 0u64);
         let mut look: Option<tour::Step> = None;
@@ -12617,11 +12628,13 @@ mod tests {
                     let tour::Step::Look(toward) = look else {
                         unreachable!("a Look is a Look")
                     };
-                    let want = if toward.distance(middle(case)) < toward.distance(middle(leaf)) {
-                        room::Seen::Case
-                    } else {
-                        room::Seen::Baths
-                    };
+                    let want = worked
+                        .iter()
+                        .min_by(|one, two| {
+                            toward.distance(one.0).total_cmp(&toward.distance(two.0))
+                        })
+                        .map(|(_, seen)| *seen)
+                        .expect("there are things on this route to work");
 
                     works += 1;
 
@@ -12666,7 +12679,13 @@ mod tests {
             }
         }
 
-        assert_eq!(works, 2, "the route works {} things rather than two", works);
+        assert_eq!(
+            works,
+            worked.len(),
+            "the route works {} things rather than {}",
+            works,
+            worked.len()
+        );
     }
 
     /// Spec 0049: a `Look` ends up with the thing it names in shot.

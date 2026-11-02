@@ -933,6 +933,33 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
     // fault that wedged the camera for a whole take got through this
     // route without a word.
 
+    // **The cube, before the way down, because the row is on the way in.**
+    // Spec 0050. The nook's door is at the foot of the bench row and the
+    // bookcase is across the room from it, so a stop at the cube costs the
+    // walk up the row and back rather than a journey of its own.
+    //
+    // **Working it scrambles it**, because it stands solved, and a
+    // scramble is twenty-five quarter turns at the toy's own pace. What
+    // the clip shows is the first four or five of them: nine cubies
+    // turning about an axis that belongs to neither them nor the whole,
+    // which is the thing nothing else on that shelf does and the whole of
+    // why it has a bench.
+    //
+    // Stood where the row's toys are worked from and aimed where they are
+    // aimed at, each of which the bench is the one account of. Not at the
+    // cube: `looked_at` says why, and it is the bookcase's fault below in
+    // another room.
+    let cube = room
+        .benches
+        .iter()
+        .find(|one| one.name == crate::kociemba::NAME)
+        .expect("the nook's row has the cube in it");
+
+    route.push(Step::At(cube.worked_at(), 0));
+    route.push(Step::Look(cube.looked_at()));
+    route.push(Step::Work);
+    route.push(Step::Stand(4.0));
+
     // **The bookcase, which is worked and not walked through.** Spec
     // 0007: pull the book and four hundred of them swing out of the way.
     // `cellar::opening` is the one account of which of them it is.
@@ -1825,6 +1852,12 @@ mod tests {
         // accessors the route reads, so there is one account of each
         let case = vec3(room.floors()[1].min.x, 0.0, crate::cellar::opening(reaches));
         let leaf = crate::spa::doorway(reaches);
+        // **And how near a `Work` has to be to one of them to be one.** Not
+        // every `Work` on this route is a door: spec 0050's cube is worked
+        // too, and asked which of the two doors it was nearer this opened
+        // the bookcase ten seconds before the route reaches it. The room
+        // reads as having been through a door nobody has been through yet.
+        let at_a_door = crate::room::REACH;
 
         let mut solid = room.solid();
         let mut sight = Vec3::ZERO;
@@ -1849,10 +1882,10 @@ mod tests {
                     }
                 }
                 Step::Work => {
-                    if sight.distance(case) < sight.distance(leaf) {
+                    if sight.distance(case) < at_a_door {
                         room.open = true;
                         room.swing = 1.0;
-                    } else {
+                    } else if sight.distance(leaf) < at_a_door {
                         room.baths_open = true;
                         room.baths_swing = 1.0;
                     }
