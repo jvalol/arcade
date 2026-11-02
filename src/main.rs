@@ -12579,6 +12579,67 @@ mod tests {
         );
     }
 
+    /// Spec 0049: a crossing is the room's move, so the tour waits it out.
+    ///
+    /// **You cannot steer while you are being carried.** Spec 0047's
+    /// hatch and spec 0048's way out each take most of a second, and for
+    /// that second where the body is and which way is down are the
+    /// crossing's to say. A follower asked to steer through one aims from
+    /// a place it is being carried away from, in a frame that is about to
+    /// change under it.
+    ///
+    /// **Its control is the same call with the crossing off**, because a
+    /// gate that is never open and a gate that is never shut both make
+    /// every assertion above it pass.
+    #[test]
+    fn a_passenger_does_not_steer() {
+        let tick = 1.0 / 60.0;
+        let mut game = Arcade::new();
+        // the clip's second place, which is the first of them that is a
+        // walk. Its first is the arcade's own doorway, a stride from
+        // where a run starts, and a leg that is arrived at in the frame
+        // it was planned in leaves nothing to look at: a gate that held
+        // and a gate that was never there both show an empty follower.
+        // Nowhere further on will do either, because the route's later
+        // places are behind doors this one call cannot have opened.
+        let walked = tour::clip(&game.room)
+            .into_iter()
+            .filter(|step| matches!(step, tour::Step::At(..)))
+            .nth(1)
+            .expect("the clip walks somewhere after the doorway");
+
+        game.filming = Some(Filming {
+            steps: vec![walked],
+            at: 0,
+            following: None,
+            waiting: 0.0,
+        });
+        game.crossing = Some(aloft::Crossing::out_of(1, game.at, (game.yaw, game.pitch)));
+
+        game.on_the_tour(tick);
+
+        let film = game.filming.as_ref().expect("the tour is still on");
+
+        assert!(
+            film.following.is_none(),
+            "it planned a leg while the room was carrying it"
+        );
+        assert_eq!(film.at, 0, "it took a step of the route mid crossing");
+        assert_eq!(game.walking, [false; 4], "it walked mid crossing");
+
+        game.crossing = None;
+        game.on_the_tour(tick);
+
+        assert!(
+            game.filming
+                .as_ref()
+                .expect("the tour is still on")
+                .following
+                .is_some(),
+            "nothing was planned with the crossing off either, so the check above proves nothing"
+        );
+    }
+
     /// Spec 0049: the sight finds what every `Work` in the clip works.
     ///
     /// **In shot is not the same as pointed at.** The test above asks

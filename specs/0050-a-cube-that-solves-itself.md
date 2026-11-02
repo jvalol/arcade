@@ -1,6 +1,6 @@
 # 0050 A cube that solves itself
 
-**Status:** draft
+**Status:** implemented
 **Date:** 2026-11-02
 
 ## Goal
@@ -148,13 +148,13 @@ scrambles it instead.
 
 ## Acceptance criteria
 
-- A scramble followed by a solve leaves every cubie home. — `kociemba::tests::a_scramble_is_undone`
+- A scramble followed by a solve leaves every cubie home. — `kociemba::tests::solving_a_scramble_puts_every_colour_home`
 - Every move the solver emits is a legal quarter or half turn of one face. — `kociemba::tests::nothing_but_turns_comes_out`
 - Phase two uses only half turns on the four faces it is allowed to half turn. — `kociemba::tests::the_second_phase_keeps_to_its_subgroup`
 - A solved cube is left alone by the solver rather than churned. — `kociemba::tests::a_solved_cube_needs_no_moves`
 - A few hundred random scrambles all solve, and none exceeds the search's own bound. — `kociemba::tests::every_scramble_comes_out`
-- The bench is in the nook's row and a body can stand where it is worked from. — `room::tests::the_benches_are_reachable`
-- No two drawn faces of a cubie share a plane with its neighbour's. — `kociemba::tests::no_two_stickers_fight`
+- The bench is in the nook's row and a body can stand where it is worked from. — `room::tests::you_can_walk_to_every_bench`
+- No two drawn faces of a cubie share a plane with its neighbour's. — `kociemba::tests::no_sticker_lies_in_its_cubie_s_face` and `kociemba::tests::the_cubies_make_one_cube_without_touching`
 
 ### Verified by hand
 
