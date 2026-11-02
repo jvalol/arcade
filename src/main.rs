@@ -11675,61 +11675,74 @@ mod tests {
     const WIDE: u32 = 320;
     const TALL: u32 = 240;
 
-    /// Draws the building from one place, looking one way, with the clock
-    /// at nought. Spec 0027.
+    /// The building from one place, looking one way, with the clock at
+    /// nought, in the shape the engine's spec 0076 asks for. Spec 0027.
     ///
     /// **Nothing in the picture may move.** The pool has a surface, the
     /// neon flickers, the metronome swings and the toys run, so a picture
     /// of any of them is a picture of what time it was. This builds the
-    /// game, loads it, stands it somewhere and draws one frame. There is no
-    /// `update`, so nothing has been given any time to happen in.
+    /// game, loads it and stands it somewhere. There is no `update` after
+    /// the one below, so nothing has been given any time to happen in.
+    fn standing(
+        at: Vec3,
+        looking_at: Vec3,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        move |renderer| {
+            let mut arcade = Arcade::new();
+            let mut geometry = Geometry::new();
+            let mut text = TextRenderer::new();
+            let sound = SoundSystem::new();
+
+            arcade.load(renderer);
+            arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+            arcade.before_frame(renderer);
+
+            // where it stands and which way it looks, set on the game's own
+            // fields rather than on the camera: `draw` works the camera out
+            // from these, and two ways of saying where somebody is standing
+            // would come apart.
+            //
+            // `at` is where the feet are. The angles are worked out from where
+            // the eyes are, which is `EYE` above that, or a target on the floor
+            // nearby comes out looking at the floor.
+            let look = looking_at - vec3(at.x, at.y + EYE, at.z);
+
+            arcade.at = at;
+            // **And the height, which is not `at.y`.** The camera stands at
+            // `eye`, which eases toward `at.y` over `EYE_LAGS` seconds so that
+            // walking down a step is not a jump. With `dt` at nought it never
+            // eases at all, so a pose set only through `at` is a pose at
+            // whatever height the game opened on: the cellar came out black
+            // and the baths came out looking at the garden, both from a camera
+            // standing on the hall's floor.
+            arcade.eye = at.y;
+            arcade.yaw = look.x.atan2(-look.z);
+            arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+
+            // **One update, at no time at all.** A room's lamps are worked out
+            // from where you are standing, so a frame drawn without this is a
+            // room with the lights off: the cellar came out black the first
+            // time. `dt` of nought is what keeps the pool's surface, the neon
+            // and the metronome where they started.
+            arcade.update(0.0, &mut geometry, &mut text, &sound);
+
+            let mut scene = Scene::new();
+            let mut camera = Camera::new();
+
+            arcade.draw(&mut scene, &mut camera);
+
+            (scene, camera)
+        }
+    }
+
+    /// The same frame as pixels, for the controls that want to measure one
+    /// rather than hold it against a file.
     ///
     /// Nothing at all on a machine with no adapter, which is a skip rather
     /// than a failure, the same as the engine's pictures.
     fn drawn_from(at: Vec3, looking_at: Vec3) -> Option<blitzkit::renderer::Picture> {
         let mut renderer = pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))?;
-        let mut arcade = Arcade::new();
-        let mut geometry = Geometry::new();
-        let mut text = TextRenderer::new();
-        let sound = SoundSystem::new();
-
-        arcade.load(&mut renderer);
-        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
-        arcade.before_frame(&mut renderer);
-
-        // where it stands and which way it looks, set on the game's own
-        // fields rather than on the camera: `draw` works the camera out
-        // from these, and two ways of saying where somebody is standing
-        // would come apart.
-        //
-        // `at` is where the feet are. The angles are worked out from where
-        // the eyes are, which is `EYE` above that, or a target on the floor
-        // nearby comes out looking at the floor.
-        let look = looking_at - vec3(at.x, at.y + EYE, at.z);
-
-        arcade.at = at;
-        // **And the height, which is not `at.y`.** The camera stands at
-        // `eye`, which eases toward `at.y` over `EYE_LAGS` seconds so that
-        // walking down a step is not a jump. With `dt` at nought it never
-        // eases at all, so a pose set only through `at` is a pose at
-        // whatever height the game opened on: the cellar came out black
-        // and the baths came out looking at the garden, both from a camera
-        // standing on the hall's floor.
-        arcade.eye = at.y;
-        arcade.yaw = look.x.atan2(-look.z);
-        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
-
-        // **One update, at no time at all.** A room's lamps are worked out
-        // from where you are standing, so a frame drawn without this is a
-        // room with the lights off: the cellar came out black the first
-        // time. `dt` of nought is what keeps the pool's surface, the neon
-        // and the metronome where they started.
-        arcade.update(0.0, &mut geometry, &mut text, &sound);
-
-        let mut scene = Scene::new();
-        let mut camera = Camera::new();
-
-        arcade.draw(&mut scene, &mut camera);
+        let (scene, camera) = standing(at, looking_at)(&mut renderer);
 
         renderer.set_camera(camera);
 
@@ -11738,7 +11751,9 @@ mod tests {
         // help fills the frame and leaves no room for the building. What
         // these pictures are of is the 3D, so the quads and the text are
         // left out of them, which also means a reference does not change
-        // when a line of help does.
+        // when a line of help does. The engine's own harness leaves them
+        // out for the same reason, so what is written here is what that
+        // one does.
         Some(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()))
     }
 
@@ -12222,16 +12237,16 @@ mod tests {
     }
 
     /// Draws a room and holds it against the picture that was right.
+    ///
+    /// The engine's spec 0076 owns the renderer, the empty overlay, the
+    /// comparison and what to do on a machine with no adapter, so what is
+    /// left here is which room and which file.
     fn looks_right(name: &str, at: Vec3, looking_at: Vec3) {
-        let Some(picture) = drawn_from(at, looking_at) else {
-            eprintln!("no adapter here, so the {} was not drawn", name);
-
-            return;
-        };
-
-        if let Err(why) = blitzkit::picture::looks_right(&picture, &reference(name)) {
-            panic!("{}", why);
-        }
+        blitzkit::picture::drawn_looks_right(
+            &reference(name),
+            (WIDE, TALL),
+            standing(at, looking_at),
+        );
     }
 
     /// Spec 0047: walked into an open door in your floor, you come out in
