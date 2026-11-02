@@ -198,6 +198,18 @@ impl Default for Cube {
     }
 }
 
+use blitzkit::collision::Aabb;
+use glam::{vec3, Vec3};
+
+/// What the bench it stands on is called, and what the sight says you are
+/// looking at.
+///
+/// Jake's, 2026-11-02, and named for the algorithm rather than the puzzle:
+/// the trademark on the latter is live, and this bench is the first in the
+/// building whose subject is an algorithm, so the name is accurate as well
+/// as clear of anybody's mark. Spec 0050 has the rest of that.
+pub const NAME: &str = "kociemba";
+
 /// How many of each coordinate there is.
 ///
 /// **Every one of these is a count rather than a size.** A coordinate is a
@@ -872,6 +884,416 @@ fn pointless(last: usize, turn: usize) -> bool {
     before == now || (before == now.across() && last / 3 > turn / 3)
 }
 
+/// How big the whole cube is, across a face.
+///
+/// **Scaled to the room rather than to life.** A cube you could hold is
+/// 57 millimetres and would be a speck on a bench 0.9 deep, which is the
+/// same argument the Newton's cradle settled by taking a bench of 2.1.
+/// Spec 0050 asks for the turning to be watchable from where you stand,
+/// and 0.3 reads across the nook.
+pub const ACROSS: f32 = 0.3;
+
+/// The space between one cubie and the next, and so the black line you
+/// see between the colours. Three cubies and two gaps make `ACROSS`.
+pub const GAP: f32 = 0.004;
+
+/// How far a sticker stands out from the cubie under it, and how far in
+/// from its edges.
+///
+/// **Out, rather than flush.** Spec 0014: two drawn faces in one plane
+/// speckle against each other as you move, and this building has hit that
+/// seven times. A sticker laid on a cubie is that fault 54 times over, so
+/// it stands off it, and the standing off is also what gives the colour
+/// an edge to catch the light on.
+pub const STICKER_OUT: f32 = 0.0015;
+pub const STICKER_IN: f32 = 0.008;
+
+/// A cubie's side, which is what is left of `ACROSS` after the gaps.
+pub fn cubie() -> f32 {
+    (ACROSS - GAP * 2.0) / 3.0
+}
+
+/// The six faces, in `Face::ALL`'s order: up, right, front, down, left,
+/// back. Four hues to burn at the hall's own neon, and two that do not
+/// burn at all.
+///
+/// **Neon against black and white.** Jake's, 2026-11-02.
+///
+/// **Saturated harder than the hall's own signs, and for a reason.** The
+/// first pass used the ARCADE sign's exact pink and cyan, on the argument
+/// that a cube glowing some other pink would be a stranger in the
+/// building. The picture refuted it: those hues carry two channels near
+/// one, and at 3.2 both clip, so a sign's thin tube reads as cyan while a
+/// whole cube face reads as pale mint. A large glowing face keeps its
+/// colour only if one channel does the glowing and the others stay under
+/// one after the multiply, which means under about 0.31 before it.
+const FACE_HUE: [glam::Vec3; 6] = [
+    vec3(1.0, 1.0, 0.97),      // up, white
+    vec3(1.0, 0.07, 0.34),     // right, pink
+    vec3(0.04, 0.27, 1.0),     // front, blue
+    vec3(0.055, 0.055, 0.065), // down, black
+    vec3(0.10, 1.0, 0.16),     // left, green
+    vec3(1.0, 0.40, 0.02),     // back, amber
+];
+
+/// How bright the white face is.
+///
+/// **Above one, because the nook is dim.** Colour here is an unclamped
+/// multiplier: at one, a face is lit by the room and nothing else, and
+/// four sconces at 0.55 make that a pale grey. The first picture of this
+/// cube had a grey top for exactly that reason. Well under the neon
+/// though, because what white is for here is being the bright thing that
+/// is not glowing.
+pub const WHITE_AT: f32 = 1.4;
+
+/// What each face is drawn in.
+///
+/// A function rather than a table, so the four that glow are written as
+/// the hall's own number rather than as that number already multiplied
+/// out. `aim::NEON` is 3.2 and is the one place this room says how hot
+/// its neon runs.
+pub fn face_colour(n: usize) -> Vec3 {
+    match n {
+        0 => FACE_HUE[0] * WHITE_AT,
+        3 => FACE_HUE[3],
+        _ => FACE_HUE[n] * crate::aim::NEON,
+    }
+}
+
+/// Which way each face looks, in the same order.
+pub fn face_way(n: usize) -> Vec3 {
+    [Vec3::Y, Vec3::X, Vec3::Z, -Vec3::Y, -Vec3::X, -Vec3::Z][n]
+}
+
+/// Every cubie of a cube standing with its middle here: twenty-six boxes,
+/// the core left out because nobody can see it.
+pub fn cubies(middle: Vec3) -> Vec<Aabb> {
+    let side = cubie();
+    let step = side + GAP;
+    let mut out = Vec::with_capacity(26);
+
+    for x in -1..=1 {
+        for y in -1..=1 {
+            for z in -1..=1 {
+                if (x, y, z) == (0, 0, 0) {
+                    continue;
+                }
+
+                let at = middle + vec3(x as f32, y as f32, z as f32) * step;
+
+                out.push(Aabb::from_center_size(at, Vec3::splat(side)));
+            }
+        }
+    }
+
+    out
+}
+
+/// Every sticker on it, as a box and which face's colour it carries.
+///
+/// A cubie on the outside of the cube shows a sticker on each of its
+/// faces that is on the outside, which is one for a middle, two for an
+/// edge and three for a corner: nine on each of six faces, 54 in all.
+///
+/// This is the cube solved. What a scrambled one shows is the same
+/// boxes with the colours moved about, which is the state's business and
+/// not the geometry's.
+pub fn stickers(middle: Vec3) -> Vec<(Aabb, usize)> {
+    // the second of each pair is which of the fifty-four it is, not what
+    // colour it is: the colour depends on how the cube is turned and is
+    // `facelets`'s answer, read with this as the index
+    let side = cubie();
+    let step = side + GAP;
+    let wide = side - STICKER_IN * 2.0;
+    let mut out = Vec::with_capacity(54);
+
+    for x in -1..=1 {
+        for y in -1..=1 {
+            for z in -1..=1 {
+                if (x, y, z) == (0, 0, 0) {
+                    continue;
+                }
+
+                let at = middle + vec3(x as f32, y as f32, z as f32) * step;
+
+                let cell = vec3(x as f32, y as f32, z as f32);
+
+                for n in 0..6 {
+                    let way = face_way(n);
+
+                    // a cubie carries a sticker on a face only when it is
+                    // one of that face's nine, which is to say its
+                    // coordinate along that way is the outer one
+                    if cell.dot(way) < 0.5 {
+                        continue;
+                    }
+
+                    let size = (Vec3::ONE - way.abs()) * wide + way.abs() * STICKER_OUT;
+
+                    out.push((
+                        Aabb::from_center_size(at + way * (side * 0.5 + STICKER_OUT * 0.5), size),
+                        facelet_of((x, y, z), n),
+                    ));
+                }
+            }
+        }
+    }
+
+    out
+}
+
+/// Where each cubie slot sits, as a cell of the three by three, and which
+/// faces its stickers are on.
+///
+/// **The order of the faces is the piece's own and is not arbitrary.** A
+/// corner's three are read starting at the up or down face and going round
+/// the corner the same way for every one of them, because that is what a
+/// twist of one means: the sticker that was on the first face is now on
+/// the second. Get the order wrong on one corner and that corner alone
+/// shows the wrong colours whenever it is twisted.
+const CORNER_CELL: [(i32, i32, i32); CORNERS] = [
+    (1, 1, 1),
+    (-1, 1, 1),
+    (-1, 1, -1),
+    (1, 1, -1),
+    (1, -1, 1),
+    (-1, -1, 1),
+    (-1, -1, -1),
+    (1, -1, -1),
+];
+const CORNER_FACE: [[usize; 3]; CORNERS] = [
+    [0, 1, 2],
+    [0, 2, 4],
+    [0, 4, 5],
+    [0, 5, 1],
+    [3, 2, 1],
+    [3, 4, 2],
+    [3, 5, 4],
+    [3, 1, 5],
+];
+
+const EDGE_CELL: [(i32, i32, i32); EDGES] = [
+    (1, 1, 0),
+    (0, 1, 1),
+    (-1, 1, 0),
+    (0, 1, -1),
+    (1, -1, 0),
+    (0, -1, 1),
+    (-1, -1, 0),
+    (0, -1, -1),
+    (1, 0, 1),
+    (-1, 0, 1),
+    (-1, 0, -1),
+    (1, 0, -1),
+];
+const EDGE_FACE: [[usize; 2]; EDGES] = [
+    [0, 1],
+    [0, 2],
+    [0, 4],
+    [0, 5],
+    [3, 1],
+    [3, 2],
+    [3, 4],
+    [3, 5],
+    [2, 1],
+    [2, 4],
+    [5, 4],
+    [5, 1],
+];
+
+/// Which of the fifty-four a cell's sticker on a given face is.
+///
+/// **Worked out rather than listed.** Every published account of this
+/// writes out all fifty-four by hand, twice, once for corners and once for
+/// edges. A face is a three by three read from outside it with up at the
+/// top, so where a sticker falls on it is two of the cell's three numbers
+/// with the signs the view puts them in, and that is all this is.
+pub fn facelet_of(cell: (i32, i32, i32), face: usize) -> usize {
+    let (x, y, z) = cell;
+    let (row, col) = match face {
+        0 => (z, x),
+        1 => (-y, -z),
+        2 => (-y, x),
+        3 => (-z, x),
+        4 => (-y, z),
+        _ => (-y, -x),
+    };
+
+    face * 9 + ((row + 1) * 3 + (col + 1)) as usize
+}
+
+/// Which face's colour each of the fifty-four stickers carries, for this
+/// cube.
+///
+/// The piece sitting in a slot brought its own colours with it, and its
+/// twist says which of its faces ended up where.
+pub fn facelets(cube: &Cube) -> [usize; 54] {
+    let mut out = [0usize; 54];
+
+    // the six centres, which never move and are what the faces mean
+    for (n, face) in out.chunks_mut(9).enumerate() {
+        face[4] = n;
+    }
+
+    for slot in 0..CORNERS {
+        let piece = cube.corner_at[slot] as usize;
+        let twist = cube.corner_spun[slot] as usize;
+
+        for n in 0..3 {
+            let here = facelet_of(CORNER_CELL[slot], CORNER_FACE[slot][(n + twist) % 3]);
+
+            out[here] = CORNER_FACE[piece][n];
+        }
+    }
+
+    for slot in 0..EDGES {
+        let piece = cube.edge_at[slot] as usize;
+        let flipped = cube.edge_flipped[slot] as usize;
+
+        for n in 0..2 {
+            let here = facelet_of(EDGE_CELL[slot], EDGE_FACE[slot][(n + flipped) % 2]);
+
+            out[here] = EDGE_FACE[piece][n];
+        }
+    }
+
+    out
+}
+
+/// How long one quarter turn takes on the bench.
+///
+/// **Slow enough to watch and no slower.** Spec 0050 settles that the
+/// pace is a constant rather than a property of the algorithm: a solve is
+/// twenty-odd turns, so this is twenty-odd seconds, which is the length
+/// of the other things on that shelf. The gyroscope holds its axis for
+/// about as long and the globe takes about as long to run down.
+pub const TURNS_AT: f32 = 0.9;
+
+/// How many turns a scramble is.
+///
+/// Past about twenty, more turns do not make a cube any more scrambled:
+/// every position is twenty from home whatever you did to it.
+pub const SCRAMBLE: u32 = 25;
+
+/// The cube as the bench holds it: how it is turned, what it has left to
+/// do, and the tables, once anybody has asked for them.
+pub struct Toy {
+    pub cube: Cube,
+    /// **Built on first approach, not at load.** Spec 0050, on the
+    /// measurement: 6.46 MB and 139 ms, against a wasm of 7.8. Nobody who
+    /// never walks up to this bench pays for it, and nothing shipped can
+    /// go stale, because it is made from `Cube` every time.
+    solver: Option<Solver>,
+    /// what is left to play, last first, so the next one is a pop
+    left: Vec<usize>,
+    /// the one it is in the middle of, and how far through it is
+    doing: Option<(usize, f32)>,
+    seed: u32,
+}
+
+impl Default for Toy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Toy {
+    pub fn new() -> Toy {
+        Toy {
+            cube: Cube::SOLVED,
+            solver: None,
+            left: Vec::new(),
+            doing: None,
+            seed: 0x5eed,
+        }
+    }
+
+    /// Whether it is in the middle of something.
+    pub fn going(&self) -> bool {
+        !self.left.is_empty() || self.doing.is_some()
+    }
+
+    /// The turn it is part way through: which face, how far round it has
+    /// got in radians, and the sign the drawing turns by.
+    ///
+    /// **The short way round, not the way the move is written.** Three
+    /// quarters clockwise is one quarter the other way, and a face that
+    /// sweeps 270 degrees to end where a 90 would have put it is a thing
+    /// nobody does to a cube. A half turn covers twice the angle in the
+    /// same time, which is what keeps the pace one move a `TURNS_AT`
+    /// however the move is written.
+    pub fn part_way(&self) -> Option<(Face, f32)> {
+        let (turn, through) = self.doing?;
+        let (face, quarters) = turn_number(turn);
+        let round = match quarters {
+            1 => 1.0,
+            2 => 2.0,
+            _ => -1.0,
+        };
+
+        Some((face, through * round * std::f32::consts::FRAC_PI_2))
+    }
+
+    /// What the key does: scramble a solved cube, solve a scrambled one,
+    /// and leave a cube that is already busy alone.
+    ///
+    /// **It never says you have won.** Spec 0050: the study is the one
+    /// room not trying to sell you a game, so this has no score, keeps
+    /// nothing, and the only thing it can tell you is what it is doing.
+    pub fn worked(&mut self) {
+        if self.going() {
+            return;
+        }
+
+        if self.cube.solved() {
+            for _ in 0..SCRAMBLE {
+                self.seed = self.seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                self.left.push((self.seed >> 13) as usize % TURNS_IN_ALL);
+            }
+
+            return;
+        }
+
+        let solver = self.solver.get_or_insert_with(Solver::new);
+        let mut moves = solver.solve(&self.cube);
+
+        moves.reverse();
+        self.left = moves;
+    }
+
+    /// One frame of it.
+    ///
+    /// A move is swept rather than snapped: it is taken off the list, run
+    /// through over `TURNS_AT`, and only put into the cube's state at the
+    /// end of it. Between those two the state is still what it was and
+    /// `part_way` is what the drawing turns the face by, which means
+    /// there is one account of where every piece is and the sweep is a
+    /// way of looking at it rather than a second copy.
+    pub fn advance(&mut self, dt: f32) {
+        if self.doing.is_none() {
+            match self.left.pop() {
+                Some(turn) => self.doing = Some((turn, 0.0)),
+                None => return,
+            }
+        }
+
+        let Some((turn, through)) = self.doing.as_mut() else {
+            return;
+        };
+
+        *through += dt / TURNS_AT;
+
+        if *through < 1.0 {
+            return;
+        }
+
+        let (face, quarters) = turn_number(*turn);
+
+        self.cube = self.cube.turned(face, quarters);
+        self.doing = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -954,6 +1376,300 @@ mod tests {
                 n
             );
         }
+    }
+
+    /// Spec 0050: twenty-six cubies, fifty-four stickers, nine a face.
+    #[test]
+    fn the_cube_is_the_shape_of_a_cube() {
+        let at = vec3(1.0, 2.0, 3.0);
+        let cubies = cubies(at);
+        let stickers = stickers(at);
+
+        assert_eq!(cubies.len(), 26, "cubies");
+        assert_eq!(stickers.len(), 54, "stickers");
+
+        for n in 0..6 {
+            let mine = stickers.iter().filter(|(_, at)| at / 9 == n).count();
+
+            assert_eq!(mine, 9, "face {} has {} stickers", n, mine);
+        }
+
+        // and each of the fifty-four is there once
+        let mut seen = [false; 54];
+
+        for (_, at) in stickers.iter() {
+            assert!(!seen[*at], "two stickers are both facelet {}", at);
+            seen[*at] = true;
+        }
+
+        assert!(seen.iter().all(|&hit| hit), "a facelet has no sticker");
+    }
+
+    /// Spec 0050: the key scrambles a solved cube and solves a scrambled
+    /// one, and says nothing either way.
+    #[test]
+    fn working_it_scrambles_then_solves() {
+        let mut toy = Toy::new();
+
+        assert!(!toy.going(), "it starts busy");
+
+        toy.worked();
+
+        assert!(toy.going(), "working a solved cube did nothing");
+
+        // a second press while it is going is ignored rather than queued
+        let left = toy.left.len();
+
+        toy.worked();
+
+        assert_eq!(toy.left.len(), left, "pressing twice queued more");
+
+        for _ in 0..60 * 60 {
+            toy.advance(1.0 / 60.0);
+        }
+
+        assert!(!toy.going(), "the scramble never finished");
+        assert!(!toy.cube.solved(), "it scrambled to nothing");
+
+        toy.worked();
+
+        for _ in 0..60 * 120 {
+            toy.advance(1.0 / 60.0);
+        }
+
+        assert!(!toy.going(), "the solve never finished");
+        assert!(toy.cube.solved(), "it did not come home");
+    }
+
+    /// Spec 0050: it turns at a pace somebody can watch.
+    ///
+    /// The pace is the whole of why this is worth standing in front of
+    /// rather than a blur, so it is worth asking that it takes about as
+    /// long as it should: a scramble is `SCRAMBLE` turns at `TURNS_AT`
+    /// each.
+    #[test]
+    fn it_turns_at_a_pace_somebody_can_watch() {
+        let mut toy = Toy::new();
+        let step = 1.0 / 60.0;
+        let mut took = 0.0;
+
+        toy.worked();
+
+        while toy.going() && took < 120.0 {
+            toy.advance(step);
+            took += step;
+        }
+
+        let wants = SCRAMBLE as f32 * TURNS_AT;
+
+        assert!(
+            (took - wants).abs() < wants * 0.1,
+            "a scramble of {} turns took {:.1} seconds and not about {:.1}",
+            SCRAMBLE,
+            took,
+            wants
+        );
+    }
+
+    /// Spec 0050: a solved cube wears each face's own colour.
+    #[test]
+    fn a_solved_cube_is_six_plain_faces() {
+        let on = facelets(&Cube::SOLVED);
+
+        for (n, &colour) in on.iter().enumerate() {
+            assert_eq!(colour, n / 9, "facelet {} carries face {}", n, colour);
+        }
+    }
+
+    /// Spec 0050: turning moves colours about and never makes or loses
+    /// one.
+    ///
+    /// Nine of each is what a cube is. A mapping that reads a twist the
+    /// wrong way round still puts a colour on every sticker, and the count
+    /// is what notices.
+    #[test]
+    fn there_are_always_nine_of_each_colour() {
+        let mut cube = Cube::SOLVED;
+        let mut seed = 0xfaceu32;
+
+        for _ in 0..500 {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            cube = cube.turned(Face::ALL[(seed >> 16) as usize % 6], 1);
+
+            let on = facelets(&cube);
+            let mut how_many = [0usize; 6];
+
+            for &colour in on.iter() {
+                how_many[colour] += 1;
+            }
+
+            assert_eq!(how_many, [9; 6], "the colours came out {:?}", how_many);
+
+            for n in 0..6 {
+                assert_eq!(on[n * 9 + 4], n, "the centre of face {} moved", n);
+            }
+        }
+    }
+
+    /// Spec 0050: one quarter turn changes twelve stickers and no more.
+    ///
+    /// **A fact about a cube rather than about this code.** Turning the
+    /// top moves the top row of the four faces round it, which is twelve,
+    /// and the top face's own nine come back the same colour because they
+    /// were all that colour. So twelve is the whole of what a watcher
+    /// sees, and a mapping that is out by a rotation somewhere changes a
+    /// different number.
+    #[test]
+    fn a_quarter_turn_changes_twelve_stickers() {
+        for face in Face::ALL {
+            let before = facelets(&Cube::SOLVED);
+            let after = facelets(&Cube::SOLVED.turned(face, 1));
+            let moved = before
+                .iter()
+                .zip(after.iter())
+                .filter(|(one, two)| one != two)
+                .count();
+
+            assert_eq!(moved, 12, "{:?} changed {} stickers", face, moved);
+        }
+    }
+
+    /// Spec 0050: and what the solver hands back puts them all home.
+    ///
+    /// The mapping and the solver held against each other, which is the
+    /// pair the bench actually runs.
+    #[test]
+    fn solving_a_scramble_puts_every_colour_home() {
+        let solver = Solver::new();
+
+        for seed in 1..12u32 {
+            let cube = scrambled(seed, 20);
+            let mut went = cube;
+
+            for &turn in solver.solve(&cube).iter() {
+                let (face, quarters) = turn_number(turn);
+
+                went = went.turned(face, quarters);
+            }
+
+            assert_eq!(
+                facelets(&went),
+                facelets(&Cube::SOLVED),
+                "seed {} solved to a cube that does not look solved",
+                seed
+            );
+        }
+    }
+
+    /// Spec 0050: it is `ACROSS` across, and the cubies do not touch.
+    ///
+    /// **The gap is the black line you see between the colours**, so it
+    /// being there is not a detail. Cubies that touch are a cube with no
+    /// lines on it, which reads as a painted block.
+    #[test]
+    fn the_cubies_make_one_cube_without_touching() {
+        let at = Vec3::ZERO;
+        let cubies = cubies(at);
+        let (mut low, mut high) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+
+        for box_ in cubies.iter() {
+            low = low.min(box_.min);
+            high = high.max(box_.max);
+        }
+
+        assert!(
+            (high - low - Vec3::splat(ACROSS)).abs().max_element() < 1e-5,
+            "it measures {:?} and not {} across",
+            high - low,
+            ACROSS
+        );
+
+        for (n, one) in cubies.iter().enumerate() {
+            for two in cubies[n + 1..].iter() {
+                assert!(
+                    !one.intersects(two),
+                    "two cubies touch at {:?} and {:?}",
+                    one.center(),
+                    two.center()
+                );
+            }
+        }
+    }
+
+    /// Spec 0014: no sticker lies in the same plane as the cubie under it.
+    ///
+    /// **This building has hit that seven times** and a cube laid flush is
+    /// the fault fifty-four times over: two drawn faces in one plane
+    /// speckle against each other as the camera moves, and no single frame
+    /// of it looks wrong. So every sticker stands off its cubie, and what
+    /// this asks is that the standing off is real on the axis it stands
+    /// along and that the sticker is inside the cubie's outline on the
+    /// other two.
+    #[test]
+    fn no_sticker_lies_in_its_cubie_s_face() {
+        let at = Vec3::ZERO;
+        let cubies = cubies(at);
+
+        for (sticker, facelet) in stickers(at).iter() {
+            let face = facelet / 9;
+            let way = face_way(face);
+            let under = cubies
+                .iter()
+                .min_by(|one, two| {
+                    one.center()
+                        .distance(sticker.center())
+                        .total_cmp(&two.center().distance(sticker.center()))
+                })
+                .expect("a cubie under it");
+
+            // clear of the face it sits on, along the way it faces
+            let stands = (sticker.center() - under.center()).dot(way) - cubie() * 0.5;
+
+            assert!(
+                stands > 1e-6,
+                "a sticker on face {} sits {:.5} into its cubie",
+                face,
+                -stands
+            );
+
+            // and inside the outline on the other two, so no edge of it
+            // shares a plane with an edge of the cubie either
+            let flat = Vec3::ONE - way.abs();
+            let room = (under.size() - sticker.size()) * flat;
+
+            assert!(
+                room.max_element() > 1e-6 && room.min_element() >= -1e-6,
+                "a sticker on face {} is not inside its cubie's outline",
+                face
+            );
+        }
+    }
+
+    /// Spec 0050: four faces burn at the hall's neon and two do not burn.
+    ///
+    /// **Colour here is an unclamped multiplier**, so what a number past
+    /// one buys is a face that is bright with no light on it. The first
+    /// version of these sat at 1.9, which I argued for and a picture
+    /// refuted: under four sconces at 0.55 it read as paint. The four are
+    /// the hall's own 3.2 now.
+    ///
+    /// What keeps it a cube rather than a lantern is the other two. White
+    /// is above one, because at one the nook's light is all it has and
+    /// that came out grey, and well under the neon, because being the
+    /// bright thing that is not glowing is its whole job. Black does not
+    /// glow at all.
+    #[test]
+    fn four_faces_burn_and_two_do_not() {
+        let hot: Vec<f32> = (0..6).map(|n| face_colour(n).max_element()).collect();
+        let burning = hot.iter().filter(|&&n| n >= crate::aim::NEON).count();
+
+        assert_eq!(burning, 4, "{} of the six burn at the hall's neon", burning);
+        assert!(
+            hot[0] > 1.0 && hot[0] < crate::aim::NEON * 0.5,
+            "the white face is at {:.2}",
+            hot[0]
+        );
+        assert!(hot[3] < 1.0, "the black face is at {:.2}", hot[3]);
     }
 
     /// Spec 0050: a solved cube is nought in every coordinate.

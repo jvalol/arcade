@@ -262,6 +262,13 @@ pub const TRIM: Vec4 = vec4(0.34, 0.21, 0.12, 1.0);
 /// A shade past 1 in every channel burns with no light on it, the way a
 /// cabinet's band does, so the fitting looks lit rather than painted.
 pub const SCONCE: Vec4 = vec4(0.46, 0.34, 0.14, 1.0);
+
+/// The body of spec 0050's cube, which every sticker is bright against.
+///
+/// Near black rather than black. A true black cubie against a near black
+/// gap between cubies is one shape with no lines in it, and the lines are
+/// what say it is twenty-six things.
+pub const CUBIE: Vec4 = vec4(0.055, 0.055, 0.065, 1.0);
 pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 
 /// What the room says about something nobody has compiled.

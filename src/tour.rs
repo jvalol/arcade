@@ -943,7 +943,26 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
         down + vec3(STANDS_BACK + crate::RADIUS, 0.0, 0.0),
         0,
     ));
-    route.push(Step::Look(vec3(down.x, crate::EYE, down.z)));
+    // **Aimed at the middle of the leaf and not at the middle of the
+    // opening.** Those are not the same point. `opening` is the mean of
+    // the cases that swing, so it is the seam between the pair of them,
+    // and `handle` is the one of the two you can point at: its box ends
+    // exactly on that seam. A look along it was a ray laid on the box's
+    // own edge, and the body does not stand where the route says it does
+    // because a leg ends at the lattice place nearest the place it names.
+    // Thirty centimetres east of here the ray cleared the north face by
+    // four millimetres, the sight found nothing, `Work` worked nothing,
+    // and the bookcase the next leg walks through stayed shut.
+    //
+    // Any interior point is proof against that, because the aim is taken
+    // from wherever the body actually is, every frame. The middle is the
+    // one that stays interior whatever the leaf's size.
+    //
+    // Read off a shut room, which is what `clip` is handed. The swing is
+    // nought until the route's own `Work` opens it.
+    let leaf = room.handle().expect("the cellar has a way down into it");
+
+    route.push(Step::Look((leaf.min + leaf.max) * 0.5));
     route.push(Step::Work);
     route.push(Step::Stand(1.6));
 
@@ -957,7 +976,19 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
     // so the leg had to walk through the leaf to reach the place it was
     // going in order to open the leaf.
     route.push(Step::At(baths - vec3(0.0, 0.0, STANDS_BACK), 0));
-    route.push(Step::Look(baths + vec3(0.0, crate::EYE, 0.0)));
+
+    // and aimed at the middle of that leaf, so the rule above is written
+    // one way in both places. `doorway` is not a point on the leaf
+    // either: it stands fifteen centimetres short of it and a metre
+    // under its middle.
+    //
+    // **No control fails on this half of it.** Put back, the sight still
+    // finds the leaf, because the ray is level and a leaf two metres tall
+    // is still in front of it fifteen centimetres further on. It is the
+    // bookcase's aim that the test holds.
+    let leaf = crate::spa::leaf_box(reaches, 0.0);
+
+    route.push(Step::Look((leaf.min + leaf.max) * 0.5));
     route.push(Step::Work);
     route.push(Step::Stand(1.4));
 

@@ -82,7 +82,7 @@ pub const BENCH_GAP: f32 = 0.7;
 /// up through, so every metre of nook is half a metre of stair moving west,
 /// and at 11.0 the parapet is outside the room above it.
 pub const NOOK_DEEP: f32 = 10.0;
-pub const NOOK_SPAN: f32 = 14.0;
+pub const NOOK_SPAN: f32 = 16.5;
 
 /// How much room the far end of the room carries past the last cabinet.
 ///
@@ -95,7 +95,7 @@ pub const NOOK_SPAN: f32 = 14.0;
 /// Flooded rather than worked out. The way opens between 2.35 and 2.4, and this
 /// is the next round number clear of that, which leaves about half a step of
 /// room either side of you going through.
-pub const END: f32 = 2.8;
+pub const END: f32 = 4.0;
 
 /// How wide the way in is.
 ///
@@ -569,12 +569,13 @@ pub struct Benched {
 /// bench in the doorway.
 pub fn benches(far: f32) -> Vec<Benched> {
     /// What is on them, and how much of the nook's length each one takes.
-    const ON_THEM: [(&str, f32); 6] = [
+    const ON_THEM: [(&str, f32); 7] = [
         ("ball and chain", 1.4),
         ("gyroscope", 0.9),
         ("newton's cradle", 2.1),
         ("metronome", 0.9),
         ("globe", 0.9),
+        (crate::kociemba::NAME, 0.9),
         // last, at the shut end. It is the one that opens a window, so it comes
         // after the five you work where they stand rather than before them.
         (crate::cascada::NAME, crate::cascada::LONG),
@@ -4051,5 +4052,24 @@ mod tests {
                 ground.max.z
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod zz_pose {
+    #[test]
+    #[ignore]
+    fn say() {
+        let room = crate::room::Room::of(crate::games());
+        let b = room
+            .benches
+            .iter()
+            .find(|b| b.name == crate::kociemba::NAME)
+            .unwrap();
+        let top = b.at.y + b.size.y + crate::kociemba::ACROSS * 0.5 + 0.01;
+        let eye = b.at + b.worked_from * 0.95;
+
+        println!("CUBE {:.2},{:.2},{:.2}", b.at.x, top, b.at.z);
+        println!("EYE {:.2},{:.2},{:.2}", eye.x, 0.0, eye.z);
     }
 }

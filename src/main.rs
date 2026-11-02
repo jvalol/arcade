@@ -766,6 +766,8 @@ struct Arcade {
     gyro: gyro::Gyro,
     wheel_mesh: Option<MeshId>,
     globe: globe::Globe,
+    /// Spec 0050's cube: how it is turned, and what it has left to do.
+    puzzle: kociemba::Toy,
     /// A sphere fine enough to be a globe, and the world drawn on it.
     globe_mesh: Option<MeshId>,
     world: Option<TextureId>,
@@ -1161,6 +1163,7 @@ impl Arcade {
             metronome: metronome::Metronome::new(),
             wrecker: wrecker::Wrecker::new(),
             gyro: gyro::Gyro::new(),
+            puzzle: kociemba::Toy::new(),
             wheel_mesh: None,
             globe: globe::Globe::new(),
             globe_mesh: None,
@@ -1306,6 +1309,7 @@ impl Arcade {
                 gyro::NAME => self.gyro.press(),
                 // a hand on the ball, which is the other thing you do to one
                 globe::NAME => self.globe.spin = 0.0,
+                kociemba::NAME => self.puzzle.worked(),
                 cascada::NAME => {
                     if self.playing.start(&self.cascada.clone()) {
                         // it wants the mouse now, the way a game does
@@ -7043,6 +7047,7 @@ impl Game for Arcade {
         };
         self.gyro.advance(dt);
         self.globe.advance(dt);
+        self.puzzle.advance(dt);
 
         // in the water you are slower, which is most of what says you are in it
         // rather than beside it. Spec 0008.
@@ -9938,6 +9943,73 @@ impl Game for Arcade {
             }
         }
 
+        // the cube on its bench. Spec 0050.
+        //
+        // **Twenty-six boxes and fifty-four more, and no mesh of its
+        // own.** Everything here is the unit cube the room is already
+        // drawn out of, which is the whole of why a cube is a cheap thing
+        // to put in this building and an expensive thing to solve. The
+        // stickers stand off their cubies rather than lying on them, per
+        // spec 0014, and `kociemba::stickers` is what knows by how much.
+        //
+        // The colours come from the state rather than from the geometry:
+        // which of the six a sticker carries is `facelets`, read with the
+        // facelet number the sticker came with.
+        if let Some(bench) = self
+            .room
+            .benches
+            .iter()
+            .find(|bench| bench.name == kociemba::NAME)
+        {
+            let middle = bench.at + Vec3::Y * (bench.size.y + kociemba::ACROSS * 0.5 + 0.01);
+            let on = kociemba::facelets(&self.puzzle.cube);
+
+            // **The face part way through its turn is swept here and
+            // nowhere else.** The cube's own state is still what it was
+            // until the turn finishes, which is spec 0050's one account
+            // of where every piece is. What a sweep does is look at that
+            // state with nine of its cubies turned, so there is nothing
+            // to keep in step and nothing that can disagree.
+            let sweep = self.puzzle.part_way().map(|(face, round)| {
+                let way = kociemba::face_way(face as usize);
+
+                (way, glam::Quat::from_axis_angle(way, -round))
+            });
+            let swept = |at: Vec3| match sweep {
+                // the nine on that face are the ones whose cell sits at
+                // the far end of the way it looks
+                Some((way, spin)) if (at - middle).dot(way) > kociemba::cubie() * 0.5 => {
+                    (middle + spin * (at - middle), spin)
+                }
+                _ => (at, glam::Quat::IDENTITY),
+            };
+
+            for box_ in kociemba::cubies(middle).iter() {
+                let (at, spin) = swept(box_.center());
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(at)
+                        .with_rotation(spin)
+                        .with_scale(box_.size()),
+                    aim::CUBIE,
+                );
+            }
+
+            for (sticker, facelet) in kociemba::stickers(middle).iter() {
+                let colour = kociemba::face_colour(on[*facelet]);
+                let (at, spin) = swept(sticker.center());
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(at)
+                        .with_rotation(spin)
+                        .with_scale(sticker.size()),
+                    colour.extend(1.0),
+                );
+            }
+        }
+
         // the globe on its bench. Spec 0006.
         if let (Some(globe_mesh), Some(world), Some(bench)) = (
             self.globe_mesh,
@@ -11143,11 +11215,27 @@ fn read_route(route: &str) -> Result<Vec<Step>, String> {
 /// to say that a route waiting on a door was one nobody had written, which
 /// was true and is the sort of thing that stops being true.
 fn walked(route: &str) -> bool {
+    walk_through(route).0
+}
+
+/// And what it was looking at when it finished.
+///
+/// **Which is the half a bool cannot carry.** Three of the routes in
+/// spec 0042's own tests are built on walking up to the gallery's panel
+/// until it takes the sight, and the length of that walk is the hall's
+/// length. The hall grew by 2.4 metres for spec 0050's bench, every one
+/// of those routes stopped short of the panel, and two of the three went
+/// on passing: a route whose turn nothing swallows is a route with no
+/// fault in it. The one that said so was the one asking for a fault.
+///
+/// So the sight comes back with the verdict, and the control says which
+/// thing it walked up to rather than only that it was let through.
+fn walk_through(route: &str) -> (bool, Option<room::Seen>) {
     let steps = match read_route(route) {
         Ok(steps) => steps,
         Err(why) => {
             println!("{}", why);
-            return false;
+            return (false, None);
         }
     };
 
@@ -11268,7 +11356,7 @@ fn walked(route: &str) -> bool {
     }
 
     if !faults.is_empty() || !stuck.is_empty() {
-        return false;
+        return (false, one.seen);
     }
 
     match eaten.last() {
@@ -11279,7 +11367,7 @@ fn walked(route: &str) -> bool {
         None => println!("every turn in this route turns you, and every walk goes somewhere"),
     }
 
-    true
+    (true, one.seen)
 }
 
 /// Spec 0049: plan a way from the door to somewhere and walk it.
@@ -11454,6 +11542,27 @@ fn main() {
 mod tests {
     use super::*;
 
+    /// How long to hold `w` from the door to be standing in front of the
+    /// gallery's panel, with it in the sight.
+    ///
+    /// **Worked out rather than written down**, because it is the length
+    /// of the hall and the hall is not a fixed number. It was 4.6
+    /// seconds, measured once against a hall that then grew by 2.4 metres
+    /// for spec 0050's bench: every route below walked up to a point five
+    /// metres short of the panel with nothing in the sight at all, and
+    /// only the one asking for a fault said so.
+    ///
+    /// **Half the reach rather than all of it.** What a jamb costs you on
+    /// the way is not in this arithmetic and does not have to be: there
+    /// are two metres of slack either side, and the walk measures at a
+    /// metre and a bit inside them.
+    fn up_to_the_panel() -> f32 {
+        let room = room::Room::of(games());
+        let (panel, _) = mandel::panel(room.reaches);
+
+        (room.doorway().z - (panel.z + room::REACH * 0.5)) / SPEED
+    }
+
     /// Spec 0042: a staged route may not go on past a turn that was eaten.
     ///
     /// The route walks the gallery's centre line until the panel takes the
@@ -11463,7 +11572,10 @@ mod tests {
     #[test]
     fn a_turn_the_panel_eats_is_a_fault_when_the_route_carries_on() {
         assert!(
-            !walked("hold:w:4.6 hold:left:0.655 hold:w:1.0"),
+            !walked(&format!(
+                "hold:w:{:.2} hold:left:0.655 hold:w:1.0",
+                up_to_the_panel()
+            )),
             "a route whose turn was swallowed was let through"
         );
     }
@@ -11473,26 +11585,43 @@ mod tests {
     ///
     /// Ending on the panel is how the clip finishes, so this has to pass or
     /// the check refuses the one thing the panel can be filmed doing.
+    ///
+    /// **And it says what it walked up to.** A route that never reaches
+    /// the panel is a route with no turn to swallow, which this passed
+    /// just as readily and for none of its own reasons.
     #[test]
     fn a_route_may_end_by_holding_an_arrow_into_the_panel() {
+        let walk = up_to_the_panel();
+
+        assert_eq!(
+            walk_through(&format!("hold:w:{:.2}", walk)),
+            (true, Some(room::Seen::Mandel)),
+            "the walk up to the panel does not end with it in the sight"
+        );
+
         assert!(
-            walked("hold:w:4.6 hold:up:0.4"),
+            walked(&format!("hold:w:{:.2} hold:up:0.4", walk)),
             "a route that ends in the panel was refused"
         );
 
         // and a rest on the panel after it is still an ending, because a
         // bare wait has nothing to aim
         assert!(
-            walked("hold:w:4.6 hold:up:0.4 1.0"),
+            walked(&format!("hold:w:{:.2} hold:up:0.4 1.0", walk)),
             "a route that rests on the panel after the pan was refused"
         );
     }
 
     /// Spec 0042: and a walk that keeps off the panel is nobody's business.
+    ///
+    /// **Which it has to be shown doing.** Nothing here is measured off
+    /// the panel, so the name is a claim about the sight and the sight is
+    /// what it says: let through, with nothing in it.
     #[test]
     fn a_route_that_stays_out_of_the_panels_reach_is_let_through() {
-        assert!(
-            walked("hold:w:3.1 hold:left:0.22 hold:w:1.6 hold:left:0.44 hold:w:0.96"),
+        assert_eq!(
+            walk_through("hold:w:3.1 hold:left:0.22 hold:w:1.6 hold:left:0.44 hold:w:0.96"),
+            (true, None),
             "a route with nothing in its way was refused"
         );
     }
@@ -11505,7 +11634,7 @@ mod tests {
     /// hotel's lobby stops you dead on one heading and lets you through on
     /// both of the ones either side of it, and nothing in the trace said
     /// so. This one walks the gallery into its own end wall, so it asks for
-    /// eighty-four metres and keeps twenty-one.
+    /// eighty-four metres and keeps twenty-four.
     #[test]
     fn a_walk_a_wall_stops_is_a_fault() {
         assert!(
@@ -12446,6 +12575,98 @@ mod tests {
             if game.room.open { "open" } else { "shut" },
             if game.room.baths_open { "open" } else { "shut" }
         );
+    }
+
+    /// Spec 0049: the sight finds what every `Work` in the clip works.
+    ///
+    /// **In shot is not the same as pointed at.** The test above asks
+    /// whether the thing the route names is within half the camera, which
+    /// it was: the clip looked at the middle of the bookcase's opening
+    /// from thirty centimetres off the place it names and the ray cleared
+    /// the leaf's north face by four millimetres. The sight found nothing,
+    /// `Work` worked nothing, the bookcase stayed shut, and what said so
+    /// was two places at the far end of the route that the body never got
+    /// to. Nothing in the route or the sight was named at all.
+    ///
+    /// **Asked from a ring and not from the place alone**, because a leg
+    /// ends where the lattice has a place rather than where the route
+    /// says. The ring is `tour::APART`, which is how far apart those
+    /// places are and so how far out the body can finish.
+    #[test]
+    fn the_sight_finds_what_each_work_in_the_clip_works() {
+        let room = room::Room::of(games());
+        let steps = tour::clip(&room);
+        let tick = 1.0 / 60.0;
+
+        // the two things on this route that are worked, said the way the
+        // route says them, so there is one account of each
+        let case = room.handle().expect("the cellar has a way down into it");
+        let leaf = spa::leaf_box(room.reaches, 0.0);
+        let middle = |box_: Aabb| (box_.min + box_.max) * 0.5;
+
+        let mut stood = (room.doorway(), 0u64);
+        let mut look: Option<tour::Step> = None;
+        let mut works = 0;
+
+        for step in steps.iter() {
+            match step {
+                tour::Step::At(at, frame) => stood = (*at, *frame),
+                tour::Step::Look(_) => look = Some(*step),
+                tour::Step::Work => {
+                    let look = look.expect("a Work follows a Look");
+                    let tour::Step::Look(toward) = look else {
+                        unreachable!("a Look is a Look")
+                    };
+                    let want = if toward.distance(middle(case)) < toward.distance(middle(leaf)) {
+                        room::Seen::Case
+                    } else {
+                        room::Seen::Baths
+                    };
+
+                    works += 1;
+
+                    for (dx, dz) in [
+                        (0.0, 0.0),
+                        (1.0, 0.0),
+                        (-1.0, 0.0),
+                        (0.0, 1.0),
+                        (0.0, -1.0),
+                        (0.7, 0.7),
+                        (0.7, -0.7),
+                        (-0.7, 0.7),
+                        (-0.7, -0.7),
+                    ] {
+                        let from = stood.0 + vec3(dx, 0.0, dz) * tour::APART;
+                        let mut game = Arcade::new();
+
+                        game.at = from;
+                        game.standing_in = stood.1;
+                        game.filming = Some(Filming {
+                            steps: vec![look],
+                            at: 0,
+                            following: None,
+                            waiting: 0.0,
+                        });
+
+                        for _ in 0..(60 * 5) {
+                            game.on_the_tour(tick);
+                        }
+
+                        assert_eq!(
+                            game.what_i_see(),
+                            Some(want),
+                            "looking at {:?} from {:?} works {:?} instead",
+                            toward,
+                            from,
+                            game.what_i_see()
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        assert_eq!(works, 2, "the route works {} things rather than two", works);
     }
 
     /// Spec 0049: a `Look` ends up with the thing it names in shot.
