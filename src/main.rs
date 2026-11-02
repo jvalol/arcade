@@ -9961,7 +9961,9 @@ impl Game for Arcade {
             .iter()
             .find(|bench| bench.name == kociemba::NAME)
         {
-            let middle = kociemba::middle_on(bench.at, bench.size.y);
+            // a centimetre clear of the top, so the bottom row of
+            // stickers is not in the bench's own plane. Spec 0014.
+            let middle = bench.at + Vec3::Y * (bench.size.y + kociemba::ACROSS * 0.5 + 0.01);
             let on = kociemba::facelets(&self.puzzle.cube);
 
             // **The face part way through its turn is swept here and

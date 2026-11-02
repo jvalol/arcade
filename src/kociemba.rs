@@ -893,17 +893,6 @@ fn pointless(last: usize, turn: usize) -> bool {
 /// and 0.3 reads across the nook.
 pub const ACROSS: f32 = 0.3;
 
-/// Where the cube's middle sits on a bench, given the bench's own place
-/// and how tall it stands.
-///
-/// **One account of it**, because the drawing wants this point and so
-/// does the route that stops to look at the thing. A centimetre clear of
-/// the top, so the bottom row of stickers is not in the bench's own
-/// plane. Spec 0014.
-pub fn middle_on(at: Vec3, tall: f32) -> Vec3 {
-    at + Vec3::Y * (tall + ACROSS * 0.5 + 0.01)
-}
-
 /// The space between one cubie and the next, and so the black line you
 /// see between the colours. Three cubies and two gaps make `ACROSS`.
 pub const GAP: f32 = 0.004;
