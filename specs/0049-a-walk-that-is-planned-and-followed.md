@@ -107,6 +107,19 @@ the baths, with a stand or a look or a working at each. How long each leg
 takes stops being written down, because it stops being something anybody
 sets.
 
+**The places are named in the arcade and not in the table**, which is a
+change from the paragraph above it and the reason is the drift rule. Twenty
+places written into a shell script would be a second account of where the
+pond, the planets, the bookcase and the baths are, and every one of them
+already has an owner: `garden::pond`, `orrery::stands`, `cellar::opening`,
+`spa::doorway`, `spa::pool`. So the route is `tour::clip`, which calls
+those, and the column says `film:clip`.
+
+What the table still sets is how long to run the camera, because that is a
+fact about the film and not about the route. The route's own length is
+printed by the test below: 341 metres of walking, which is about 98
+seconds before the turns.
+
 ## What stops being tested, which is the cost
 
 Today the clip's keys go through System Events into a window, and that is
@@ -137,6 +150,9 @@ something and reads the readout, run by the gate rather than by the camera.
 - A path through the imaginarium's hatch comes out in the frame on the
   other side. — `tour::tests::a_portal_edge_changes_which_way_is_down`
 - The follower does not steer during a crossing. — `tour::tests::a_passenger_does_not_steer`
+- The region a journey lays its lattice over holds the way into a room
+  whose only doorway is at the far end from the
+  journey. — `tour::tests::the_region_holds_the_way_into_the_nook`
 - The whole filmed tour reaches its last place. — `tour::tests::the_clip_s_tour_gets_all_the_way_round`
 
 ### Verified by hand

@@ -111,6 +111,16 @@ const PITCH_LIMIT: f32 = 1.3;
 /// same number in different clothes. Turning is quicker than tilting because
 /// there is a whole room around you and only so much ceiling.
 const TURNS: f32 = 2.4;
+
+/// How far off the way you are going you may be and still walk it. Spec
+/// 0049.
+///
+/// **Because a walk is a turning circle.** At `SPEED` and `TURNS` that
+/// circle is 1.75 metres across and the planner's places are half a metre
+/// apart, so a tour that walked flat out while turning orbited the next
+/// place for ever. Thirty degrees is wide enough that a tour still rounds
+/// a corner rather than stopping to aim at it.
+const WALKS_WHEN: f32 = 0.52;
 const TILTS: f32 = 1.6;
 
 /// How long an arrow takes to reach that speed, and to let go of it, in
@@ -191,6 +201,38 @@ const GIMBAL_WIDE: f32 = 0.022;
 /// of work; the measurement in spec 0015 is why this is enough for now.
 fn inside_its_reach(how_far: f32, reach: f32) -> f32 {
     how_far / (reach * reach).max(1e-6)
+}
+
+/// A tour of the building, walked rather than replayed. Spec 0049.
+///
+/// **It drives the same keys a player would**, rather than setting the
+/// body down where the plan says. The turning goes at `TURNS` and the
+/// walking is the ordinary walk, so what comes out still looks like
+/// somebody getting about. What is different is that it aims again every
+/// frame, which is the whole of why it cannot drift.
+struct Filming {
+    steps: Vec<tour::Step>,
+    at: usize,
+    /// The plan for the leg being walked, made when the leg starts.
+    following: Option<tour::Follower>,
+    /// What is left of a stand.
+    waiting: f32,
+}
+
+/// What `--film` was given: the clip's own route, or a tour written out.
+///
+/// **`clip` names the route rather than spelling it.** The route is a score
+/// of places that each have an owner in the building, and writing them into
+/// the shell script that films it would be a second account of every one of
+/// them. `tour::clip` reads the owners.
+fn filmed(room: &room::Room) -> Option<Result<Vec<tour::Step>, String>> {
+    let given = std::env::args().find_map(|arg| arg.strip_prefix("--film=").map(str::to_owned))?;
+
+    Some(if given == "clip" {
+        Ok(tour::clip(room))
+    } else {
+        tour::read(&given)
+    })
 }
 
 fn staged() -> bool {
@@ -759,6 +801,8 @@ struct Arcade {
     rolling: Vec3,
     /// The room turning round you, out of the top of a flight. Spec 0048.
     crossing: Option<aloft::Crossing>,
+    /// A tour being walked rather than a route being replayed. Spec 0049.
+    filming: Option<Filming>,
     /// Whether you are still inside the aperture you last came through, so
     /// that standing in one does not swap you back and forth every frame.
     came_through: bool,
@@ -947,6 +991,7 @@ impl Arcade {
             standing_in: 0,
             rolling: Vec3::Y,
             crossing: None,
+            filming: None,
             came_through: false,
             falling: 0.0,
             eye: 0.0,
@@ -1644,6 +1689,139 @@ impl Arcade {
         if !inside {
             self.came_through = false;
         }
+    }
+
+    /// Walk the tour, if there is one. Spec 0049.
+    ///
+    /// **Closed loop, which is the point.** Every frame it asks where the
+    /// body actually is and aims from there. A turn that sweeps short, a
+    /// graze on a jamb, a tread that costs a frame of the climbing budget:
+    /// each is only a slightly different place to aim from next time.
+    ///
+    /// Nothing in here is timed except the standing, because the standing
+    /// is the one thing that is about how long rather than about where.
+    fn on_the_tour(&mut self, dt: f32) {
+        let Some(mut film) = self.filming.take() else {
+            return;
+        };
+
+        self.walking = [false; 4];
+
+        // a crossing is the room's move and not yours, so wait it out
+        if self.crossing.is_some() {
+            self.filming = Some(film);
+
+            return;
+        }
+
+        while let Some(step) = film.steps.get(film.at).copied() {
+            match step {
+                tour::Step::Stand(how_long) => {
+                    if film.waiting <= 0.0 {
+                        film.waiting = how_long;
+                    }
+
+                    film.waiting -= dt;
+
+                    if film.waiting > 0.0 {
+                        break;
+                    }
+
+                    film.waiting = 0.0;
+                    film.at += 1;
+                }
+                tour::Step::Work => {
+                    self.use_what_i_see();
+                    film.at += 1;
+                }
+                tour::Step::Look(toward) => {
+                    let at = self.looking_from();
+                    let way = self.turned().inverse() * (toward - at);
+
+                    if self.turned_toward(way.x.atan2(-way.z), dt) <= 0.0 {
+                        film.at += 1;
+                    }
+
+                    break;
+                }
+                tour::Step::At(place, frame) => {
+                    if film.following.is_none() {
+                        let solid = self.standing_on();
+                        let spare = vec3(8.0, 5.0, 8.0);
+                        let ways = tour::ways(
+                            &self.room.grounds(),
+                            &solid,
+                            blitzkit::collision::Aabb::new(
+                                self.at.min(place) - spare,
+                                self.at.max(place) + spare,
+                            ),
+                        );
+
+                        match ways.plan((self.at, self.standing_in), (place, frame), &solid) {
+                            Some(way) => film.following = Some(tour::Follower::new(way)),
+                            None => {
+                                eprintln!("no way from {:?} to {:?}", self.at, place);
+                                film.at += 1;
+
+                                continue;
+                            }
+                        }
+                    }
+
+                    let steer = film
+                        .following
+                        .as_mut()
+                        .and_then(|following| following.steer(self.at, self.standing_in));
+
+                    match steer {
+                        Some(steer) => {
+                            // **Forward only once you are roughly pointing
+                            // at it.** Walking flat out while still turning
+                            // gives a circle of 1.75 metres, the lattice's
+                            // places are half a metre apart, and the first
+                            // build of this orbited the next one for ever
+                            // without ever reaching it.
+                            let left = self.turned_toward(steer.yaw, dt);
+
+                            self.walking[0] = left < WALKS_WHEN;
+                        }
+                        None => {
+                            film.following = None;
+                            film.at += 1;
+
+                            continue;
+                        }
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        self.filming = Some(film);
+    }
+
+    /// Turn toward a heading at the rate the arrows turn, and say whether
+    /// you are there. Spec 0049.
+    fn turned_toward(&mut self, yaw: f32, dt: f32) -> f32 {
+        let turn = std::f32::consts::TAU;
+        let mut by = (yaw - self.yaw).rem_euclid(turn);
+
+        if by > turn * 0.5 {
+            by -= turn;
+        }
+
+        let most = TURNS * dt;
+
+        if by.abs() <= most {
+            self.yaw = yaw;
+
+            return 0.0;
+        }
+
+        self.yaw += most * by.signum();
+
+        by.abs() - most
     }
 
     /// Whether you are standing in the pool.
@@ -6623,6 +6801,18 @@ impl Game for Arcade {
             self.gyro.set_going();
         }
 
+        // **Spec 0049: the tour, if this run is being filmed off one.**
+        // Read in `main` as well, so a route with a typo in it says so and
+        // stops rather than opening a window and standing still.
+        self.filming = filmed(&self.room)
+            .and_then(Result::ok)
+            .map(|steps| Filming {
+                steps,
+                at: 0,
+                following: None,
+                waiting: 0.0,
+            });
+
         // the footsteps, read out of the files bundled beside this. A file
         // that will not read is dropped rather than taken as a crash: a
         // footstep is not worth refusing to open the building over, and the
@@ -6811,6 +7001,12 @@ impl Game for Arcade {
         // in the water you are slower, which is most of what says you are in it
         // rather than beside it. Spec 0008.
         let wading = self.wading();
+        // **Spec 0049: a tour drives the keys before the keys are read.**
+        // Set here rather than anywhere later, so the walking and the
+        // aiming that follow are the ordinary ones and a tour is somebody
+        // pressing the same things a player would.
+        self.on_the_tour(dt);
+
         let went = self.aimed_and_moved(dt);
 
         // the ears, which go where your eye is and point where you look, so
@@ -11070,6 +11266,44 @@ fn toured(where_: &str) -> bool {
     let Some(way) = ways.plan((from, 0), (to, 0), &solid) else {
         println!("there is no way from the door to {:?}", to);
 
+        // and enough to tell apart the two ways that happens: nowhere to
+        // stand at one end, or places at both ends that join nothing
+        match (ways.nearest(from, 0, &solid), ways.nearest(to, 0, &solid)) {
+            (None, _) => println!("  nothing is laid near the door"),
+            (_, None) => println!("  nothing is laid near {:?}", to),
+            (Some(start), Some(end)) => {
+                let reached = ways.reached_from(start);
+
+                println!(
+                    "  {} of {} places are reachable from the door, and {:?} on {} is not among them",
+                    reached.len(),
+                    ways.places(),
+                    ways.spot(end).at,
+                    ways.spot(end).ground
+                );
+
+                // **Which rooms, rather than how high.** Saying the
+                // reachable set tops out at some height sent me up a
+                // staircase three times for a fault that was two rooms
+                // earlier. Where it stops is a question about which
+                // floors it got to.
+                let mut all: std::collections::BTreeMap<&str, (usize, usize)> =
+                    std::collections::BTreeMap::new();
+
+                for n in 0..ways.places() {
+                    all.entry(ways.spot(n).ground).or_default().1 += 1;
+                }
+
+                for n in reached.iter() {
+                    all.entry(ways.spot(*n).ground).or_default().0 += 1;
+                }
+
+                for (ground, (got, laid)) in all {
+                    println!("    {:28} {:5} of {:5}", ground, got, laid);
+                }
+            }
+        }
+
         return false;
     };
 
@@ -11081,7 +11315,7 @@ fn toured(where_: &str) -> bool {
     let step = 1.0 / 60.0;
     let mut rounds = 0;
 
-    while let Some(steer) = follower.steer(at) {
+    while let Some(steer) = follower.steer(at, 0) {
         let (went, fell) = walk::walk(at, steer.wish, falling, RADIUS, step, &solid, true);
 
         at = went;
@@ -11144,6 +11378,24 @@ fn main() {
         }
 
         return;
+    }
+
+    // **Spec 0049: and the clip is filmed off one of these.** A tour is
+    // given to a window that is running, where `--tour` above only checks
+    // one with no window at all.
+    if let Some(read) = filmed(&room::Room::of(games())) {
+        match read {
+            Ok(steps) => {
+                if steps.is_empty() {
+                    println!("--film was given no places to go");
+                    std::process::exit(1);
+                }
+            }
+            Err(why) => {
+                println!("{}", why);
+                std::process::exit(1);
+            }
+        }
     }
 
     if std::env::args().any(|arg| arg == "--screenshots") {

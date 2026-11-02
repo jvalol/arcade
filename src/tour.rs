@@ -27,6 +27,18 @@ pub const APART: f32 = 0.5;
 /// for the follower.
 pub const NEAR: f32 = APART * 0.45;
 
+/// How close in height two places have to be before they are the same
+/// place.
+///
+/// **Not `APART`.** Laying places on the tops of solids means laying one
+/// on every tread, and the dog-leg's risers are 0.1875. Rounded to the
+/// lattice's own half metre, the first tread of a flight lands in the
+/// same cell as the floor it rises from and is thrown away as a
+/// duplicate, which takes the one place that bridges the floor to the
+/// stair. The whole flight was then an island: seventeen treads joined to
+/// each other and to nothing else, and no way up from the nook.
+pub const SAME_HEIGHT: f32 = 0.06;
+
 /// A place the lattice knows: where a pair of feet can be.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spot {
@@ -70,14 +82,84 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
             .map(|(_, slab)| ("the imaginarium", slab)),
     );
 
+    // **Grown to hold every meeting of the rooms in play, because that is
+    // where the doorways are.** The nook opens through one gap south of the
+    // last cabinet, at z -8.3 to -5.975, and a journey to the top of its
+    // stair bounded the region at z -5.8. That cut the doorway off by 0.175
+    // metres, so the only edges from the hall to the nook ran through
+    // places buried in the dividing wall, and the nook came out 0 of 504
+    // reachable. The stair looked like the fault for three rounds.
+    //
+    // Laying an admitted ground whole was the first fix and is not
+    // available: the field behind the wall is a hundred and sixty metres
+    // square and the space beyond the door runs to thirty three thousand,
+    // so whole rooms came out at a hundred and seven thousand places.
+    // Growing the region itself cascades, because a bigger region admits
+    // more rooms, which grow it again: two hundred and twelve thousand.
+    //
+    // Where two rooms meet is neither. It is the strip they share, it is
+    // the only place a way between them can be, and it is small.
+    // **Asked in the ground's own frame, because thin upward is a claim
+    // about a floor and not about the world.** The imaginarium's other two
+    // floors are walls in world terms: three tenths thick in x or z and
+    // twelve metres tall in y. Asked in world terms, frame one's floor has
+    // a `max.y` of eighteen, so a journey across that floor at y twelve
+    // threw the floor out and found no way across a room it was standing
+    // in.
+    let admits = |ground: &Aabb, region: &Aabb| {
+        let frame = crate::aloft::frame_of_floor(ground);
+        let (flat, there) = if frame == 0 {
+            (*ground, *region)
+        } else {
+            (
+                crate::aloft::box_out_of_frame(frame, ground),
+                crate::aloft::box_out_of_frame(frame, region),
+            )
+        };
+
+        !(flat.min.x > there.max.x
+            || flat.max.x < there.min.x
+            || flat.min.z > there.max.z
+            || flat.max.z < there.min.z
+            || flat.max.y > there.max.y
+            || flat.max.y < there.min.y)
+    };
+
+    let within = {
+        let in_play: Vec<Aabb> = all
+            .iter()
+            .filter(|(_, ground)| admits(ground, &within))
+            .map(|(_, ground)| *ground)
+            .collect();
+        let mut grown = within;
+
+        for (n, one) in in_play.iter().enumerate() {
+            for two in in_play[n + 1..].iter() {
+                // abutting counts as meeting: a shared wall's two floors
+                // stop at the same plane and share no volume at all
+                if one.min.x > two.max.x + APART
+                    || two.min.x > one.max.x + APART
+                    || one.min.z > two.max.z + APART
+                    || two.min.z > one.max.z + APART
+                {
+                    continue;
+                }
+
+                let low = one.min.max(two.min) - vec3(APART, 0.0, APART);
+                let high = one.max.min(two.max) + vec3(APART, 0.0, APART);
+
+                grown.min.x = grown.min.x.min(low.x);
+                grown.min.z = grown.min.z.min(low.z);
+                grown.max.x = grown.max.x.max(high.x);
+                grown.max.z = grown.max.z.max(high.z);
+            }
+        }
+
+        grown
+    };
+
     for (name, ground) in all.iter() {
-        if ground.min.x > within.max.x
-            || ground.max.x < within.min.x
-            || ground.min.z > within.max.z
-            || ground.max.z < within.min.z
-            || ground.max.y > within.max.y
-            || ground.max.y < within.min.y
-        {
+        if !admits(ground, &within) {
             continue;
         }
 
@@ -146,6 +228,87 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
         })
         .copied()
         .collect();
+
+    // **And the top of anything else you could stand on.** `grounds` is
+    // spec 0043's list of rooms' floors, and a stair's treads are not a
+    // room: planned off that list alone there was no way from the hall's
+    // door to the dog-leg's own landing, because nothing in the lattice
+    // was on a tread. A walkable place is the top of any solid, and the
+    // walk test still decides what joins to what, so a wall's top simply
+    // joins nothing.
+    //
+    // Skipped where a place is already laid, or every floor gets a second
+    // lattice over the first.
+    let cell_of = |at: Vec3| {
+        (
+            (at.x / APART).round() as i32,
+            (at.y / SAME_HEIGHT).round() as i32,
+            (at.z / APART).round() as i32,
+        )
+    };
+    let mut laid: std::collections::HashSet<(i32, i32, i32)> =
+        spots.iter().map(|spot| cell_of(spot.at)).collect();
+    let mut more = Vec::new();
+
+    for box_ in near.iter() {
+        if box_.max.y < within.min.y || box_.max.y > within.max.y {
+            continue;
+        }
+
+        let low = box_.min.max(within.min);
+        let high = box_.max.min(within.max);
+        let (across, along) = (
+            ((high.x - low.x) / APART).floor() as i32,
+            ((high.z - low.z) / APART).floor() as i32,
+        );
+
+        // **A box narrower than the lattice step puts its one place in
+        // the middle.** From the corner is right for a floor, where the
+        // next place along is half a metre away, and wrong for a stair
+        // tread: the cellar's treads are 0.35 across, so the one place on
+        // each sat on its west edge with a body 0.9 wide hanging over the
+        // tread below, and `stood` threw two treads in every three away.
+        // The way down came out 0 of 399 cellar places.
+        let put = |lo: f32, hi: f32, n: i32| {
+            if hi - lo < APART {
+                (lo + hi) * 0.5
+            } else {
+                lo + n as f32 * APART
+            }
+        };
+
+        for i in 0..=across.max(0) {
+            for j in 0..=along.max(0) {
+                let at = vec3(put(low.x, high.x, i), box_.max.y, put(low.z, high.z, j));
+                if !laid.insert(cell_of(at)) {
+                    continue;
+                }
+
+                more.push(Spot {
+                    at,
+                    ground: "a step",
+                    frame: 0,
+                });
+            }
+        }
+    }
+
+    spots.extend(more);
+
+    // **And a place is only a place if a body fits in it.** This was an
+    // inset of a radius from each ground's edge to begin with, which is
+    // right about a wall and wrong about a doorway: two grounds that abut
+    // ended up with 0.9 metres of nothing between them and the hall and
+    // the garden were two islands. Taking the inset out fixed that and
+    // broke stairs, because a tread's own edge is where its side wall is,
+    // so every place on the dog-leg sat half inside the flight and the
+    // walker lifted out of it and fell. The arcade's own stair test says
+    // the same thing from the other side: it walks bodies up this flight
+    // at `west + RADIUS` and no closer.
+    //
+    // Neither inset nor no inset is the answer. The question is whether a
+    // body fits, so that is what is asked, of every place.
+    spots.retain(|spot| stood(spot.frame, spot.at, &near));
 
     let mut next = vec![Vec::new(); spots.len()];
     // **Bucketed, because this is the expensive part.** Every pair that is
@@ -280,6 +443,41 @@ impl Ways {
         }
     }
 
+    /// Everywhere you can get to from a place, for saying why a plan
+    /// failed.
+    ///
+    /// **A planner that only says no is a planner you cannot debug.** The
+    /// first time this said there was no way up the dog-leg, the question
+    /// was whether the stair had no places on it or places that joined
+    /// nothing, and nothing in the answer told them apart.
+    pub fn reached_from(&self, start: usize) -> Vec<usize> {
+        let mut seen = vec![false; self.spots.len()];
+        let mut queue = vec![start];
+
+        seen[start] = true;
+
+        let mut n = 0;
+
+        while n < queue.len() {
+            let here = queue[n];
+            n += 1;
+
+            for &there in self.next[here].iter() {
+                if !seen[there] {
+                    seen[there] = true;
+                    queue.push(there);
+                }
+            }
+        }
+
+        queue
+    }
+
+    /// And which place is where, for the same reason.
+    pub fn spot(&self, n: usize) -> Spot {
+        self.spots[n]
+    }
+
     fn nearest_in(&self, to: Vec3, frame: u64) -> Option<usize> {
         self.spots
             .iter()
@@ -288,6 +486,29 @@ impl Ways {
             .min_by(|one, two| one.1.at.distance(to).total_cmp(&two.1.at.distance(to)))
             .map(|(n, _)| n)
     }
+}
+
+/// Whether somebody can stand here, asked of the walker.
+///
+/// **A sphere that does not overlap anything is the wrong question.** On
+/// any stair a body standing on a tread overlaps the next riser, because
+/// the riser is 0.1875 tall and 0.28 away while the body is 0.45 across,
+/// and the walker deals with that by stepping. Asked geometrically, every
+/// tread in the building is "does not fit" and no flight has a place on
+/// it. Asked of the walker, standing still on a tread stays put.
+fn stood(frame: u64, at: Vec3, solid: &[Aabb]) -> bool {
+    let step = 1.0 / 60.0;
+    let (mut went, mut falling) = (at, 0.0);
+
+    for _ in 0..8 {
+        let (next, fell) =
+            crate::aloft::walked_in_frame(frame, went, Vec3::ZERO, falling, step, solid, true);
+
+        went = next;
+        falling = fell;
+    }
+
+    went.distance(at) < NEAR
 }
 
 /// Whether the walker gets from one place to another, asked of the walker.
@@ -396,7 +617,7 @@ impl Ways {
 
                 way.reverse();
 
-                return Some(way);
+                return Some(thinned(way, solid));
             }
 
             for &there in self.next[here].iter() {
@@ -412,6 +633,228 @@ impl Ways {
 
         None
     }
+}
+
+/// One step of a filmed tour. Spec 0049.
+///
+/// **Places and what to do at them, which is what a route is now.** How
+/// long a leg takes stops being written down, because it stops being
+/// something anybody sets.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Step {
+    /// Walk to here, in this frame.
+    At(Vec3, u64),
+    /// Stand still for this long.
+    Stand(f32),
+    /// Turn to face this point, however long that takes.
+    Look(Vec3),
+    /// And work whatever the sight is on, which is the bookcase and the
+    /// baths' leaf.
+    Work,
+}
+
+/// Read a tour off a line of text, the way `refresh-examples` writes one.
+///
+/// `at:x,y,z` or `at:x,y,z:frame`, `stand:seconds`, `look:x,y,z`, `work`.
+pub fn read(tour: &str) -> Result<Vec<Step>, String> {
+    let point = |bit: &str| -> Result<Vec3, String> {
+        let n: Vec<f32> = bit
+            .split(',')
+            .map(|one| {
+                one.trim()
+                    .parse::<f32>()
+                    .map_err(|_| format!("{} is not a number", one))
+            })
+            .collect::<Result<_, _>>()?;
+
+        match n[..] {
+            [x, y, z] => Ok(vec3(x, y, z)),
+            _ => Err(format!("{} is not three numbers", bit)),
+        }
+    };
+
+    tour.split_whitespace()
+        .map(|word| {
+            let mut bits = word.split(':');
+
+            match (bits.next(), bits.next(), bits.next()) {
+                (Some("at"), Some(where_), frame) => Ok(Step::At(
+                    point(where_)?,
+                    frame.unwrap_or("0").parse().unwrap_or(0),
+                )),
+                (Some("stand"), Some(how_long), _) => how_long
+                    .parse()
+                    .map(Step::Stand)
+                    .map_err(|_| format!("{} is not a number of seconds", how_long)),
+                (Some("look"), Some(where_), _) => Ok(Step::Look(point(where_)?)),
+                (Some("work"), None, _) => Ok(Step::Work),
+                _ => Err(format!("{} is not a step of a tour", word)),
+            }
+        })
+        .collect()
+}
+
+/// How far back a place stands from the thing it is there to look at.
+///
+/// A body is 0.9 across and the lattice steps half a metre, so anything
+/// much under a metre is a place that may turn out not to exist. This is
+/// what "in front of" means everywhere in the route below.
+const STANDS_BACK: f32 = 1.4;
+
+/// The clip's route, as places in the building rather than as keys.
+///
+/// **Out of the building's own accessors, every one of them.** A route
+/// written as coordinates would be a second account of where everything
+/// is, and it would be the longest such list in the project: a score of
+/// places that each already have an owner elsewhere. `cellar::stair_foot`
+/// and `spa::doorway` exist because two lists of one thing drift, and a
+/// route is where that drift would show up as a camera walking into a
+/// wall six months after somebody moved the wall.
+///
+/// What this does not say is how to get from any one place to the next.
+/// That is the planner's, and it is the whole of spec 0049. It is also why
+/// the imaginarium's hatch and its top door are not named here: specs 0047
+/// and 0048 made both of them ways you take rather than things you press,
+/// so a place in frame one is the whole of the instruction and the portal
+/// edges are what know where the way through is.
+///
+/// The order is the building's and not a preference. The garden's way in
+/// and the hole into the solarium are both a couple of metres from the
+/// front door, so they come first. The hall is walked once, end to end.
+/// The nook is at the far end of it and holds both of the remaining ways
+/// on, so it is walked twice with the climb between the visits.
+pub fn clip(room: &crate::room::Room) -> Vec<Step> {
+    let reaches = room.reaches;
+    let mut route = vec![Step::At(room.doorway(), 0)];
+
+    // **The garden, and the koi in it.** Stood off the pond's east bank,
+    // which is the side the way in is on, with the garden's depth behind
+    // it rather than its wall.
+    let (pond, pond_size, _) = crate::garden::pond(reaches);
+
+    route.push(Step::At(
+        vec3(pond.x + pond_size.x * 0.5 + STANDS_BACK, 0.0, pond.z),
+        0,
+    ));
+    route.push(Step::Look(pond));
+    route.push(Step::Stand(2.0));
+
+    // **The solarium, in along the planet line.** Every planet rests on
+    // the line between its sun and its way in, which is `orrery::stands`
+    // with no swing on it, so walking in is walking past them in order.
+    // Jake watched a take on 2026-11-01 that turned along the right wall
+    // instead and said so: the planets and the moons and the sun are the
+    // room, and the wall is not.
+    let middle = crate::behind::at(reaches);
+    let sun = vec3(middle.x, crate::orrery::PLANE, middle.z);
+    let (west, east) = crate::behind::way();
+    let along =
+        (vec3((west + east) * 0.5, crate::orrery::PLANE, reaches) - sun).normalize_or_zero();
+    let on_the_floor = |at: Vec3| vec3(at.x, 0.0, at.z);
+
+    // the two with something to see on them, outermost first, which is
+    // the order you meet them walking in
+    for named in ["Saturn", "Jupiter"] {
+        let planet = crate::orrery::PLANETS
+            .iter()
+            .find(|planet| planet.body.name == named)
+            .expect("the solar system has lost a planet");
+        let at = sun + along * planet.far();
+
+        route.push(Step::At(on_the_floor(at + along * STANDS_BACK), 0));
+        route.push(Step::Look(at));
+        route.push(Step::Stand(1.4));
+    }
+
+    route.push(Step::At(
+        on_the_floor(sun + along * (crate::orrery::sun_drawn() * 0.5 + STANDS_BACK)),
+        0,
+    ));
+    route.push(Step::Look(sun));
+    route.push(Step::Stand(2.4));
+
+    // **The imaginarium, named as a place in each frame.** One circuit of
+    // it is both apertures, and which aperture that takes is the
+    // planner's to work out.
+    let floor_of = |n: u64| crate::aloft::in_frame(n, vec3(0.0, -crate::aloft::HALF, 0.0));
+
+    route.push(Step::At(floor_of(0), 0));
+    route.push(Step::Look(crate::aloft::middle()));
+    route.push(Step::Stand(2.4));
+    route.push(Step::At(floor_of(1), 1));
+    route.push(Step::Look(crate::aloft::middle()));
+    route.push(Step::Stand(2.0));
+    route.push(Step::At(crate::aloft::foot_of_the_flight(1), 1));
+
+    // **The bookcase, which is worked and not walked through.** Spec
+    // 0007: pull the book and four hundred of them swing out of the way.
+    // `cellar::opening` is the one account of which of them it is.
+    let nook = room.floors()[1];
+    let down = vec3(nook.min.x, 0.0, crate::cellar::opening(reaches));
+
+    route.push(Step::At(
+        down + vec3(STANDS_BACK + crate::RADIUS, 0.0, 0.0),
+        0,
+    ));
+    route.push(Step::Look(vec3(down.x, crate::EYE, down.z)));
+    route.push(Step::Work);
+    route.push(Step::Stand(1.6));
+
+    // **The baths' leaf, which is the other one.** Spec 0008. Spec 0042's
+    // checker could not replay either of these until a route needed them,
+    // and said so in as many words.
+    let baths = crate::spa::doorway(reaches);
+
+    // Stood short of it on the cellar's side, which is the side you
+    // arrive from. The first version of this stood on the baths' side,
+    // so the leg had to walk through the leaf to reach the place it was
+    // going in order to open the leaf.
+    route.push(Step::At(baths - vec3(0.0, 0.0, STANDS_BACK), 0));
+    route.push(Step::Look(baths + vec3(0.0, crate::EYE, 0.0)));
+    route.push(Step::Work);
+    route.push(Step::Stand(1.4));
+
+    // and it finishes at the pool, looking the length of it
+    let (pool, pool_size, _) = crate::spa::pool(reaches);
+
+    route.push(Step::At(
+        vec3(pool.x, pool.y, pool.z - pool_size.y * 0.5 - STANDS_BACK),
+        0,
+    ));
+    route.push(Step::Look(pool));
+    route.push(Step::Stand(2.4));
+
+    route
+}
+
+/// Drop the places a walk does not need.
+///
+/// **A path of half metre steps is a path of half metre steps.** Each one
+/// is a thing to aim at, and aiming at something half a metre away while
+/// walking is how the first build of the follower came to orbit its own
+/// waypoints. A place can go whenever the walker gets from the one before
+/// it to the one after without it, which is asked of `walk` like
+/// everything else here.
+fn thinned(way: Vec<Spot>, solid: &[Aabb]) -> Vec<Spot> {
+    let mut out: Vec<Spot> = Vec::new();
+
+    for spot in way.into_iter() {
+        out.push(spot);
+
+        while out.len() >= 3 {
+            let last = out.len() - 1;
+
+            if out[last - 2].frame != out[last].frame
+                || !walked(out[last].frame, out[last - 2].at, out[last].at, solid)
+            {
+                break;
+            }
+
+            out.remove(last - 1);
+        }
+    }
+
+    out
 }
 
 /// Which way to walk and which way to look, this frame.
@@ -451,9 +894,28 @@ impl Follower {
     /// The places behind you are dropped rather than walked back to: a
     /// follower that overshoots a corner should carry on to the next place
     /// rather than turn round for one it has already passed.
-    pub fn steer(&mut self, from: Vec3) -> Option<Steer> {
+    /// `frame` is the frame the walker is standing in, and it matters.
+    ///
+    /// **Flat is a claim about a floor, not about the world.** In the
+    /// imaginarium's other two frames the floor's plane is not x and z,
+    /// so a heading worked out from world x and z throws away the part of
+    /// the journey that is world y and keeps a part that is straight into
+    /// the floor. `Step::Look` already turns its target out of the frame
+    /// before taking an angle off it; this did not, and the game hands
+    /// this yaw to a camera whose yaw is the frame's own.
+    pub fn steer(&mut self, from: Vec3, frame: u64) -> Option<Steer> {
+        let out = |at: Vec3| {
+            if frame == 0 {
+                at
+            } else {
+                crate::aloft::out_of_frame(frame, at)
+            }
+        };
+        let from = out(from);
+
         while let Some(spot) = self.way.get(self.at) {
-            let flat = vec3(spot.at.x - from.x, 0.0, spot.at.z - from.z);
+            let there = out(spot.at);
+            let flat = vec3(there.x - from.x, 0.0, there.z - from.z);
 
             if flat.length() < NEAR {
                 self.at += 1;
@@ -504,7 +966,20 @@ mod tests {
             .plan((from, 0), (to, 0), &solid)
             .expect("no way across the hall");
 
-        assert!(way.len() > 4, "the path is {} places long", way.len());
+        // **Not a count.** The first version of this asked for more than
+        // four places and then thinning, which is a good thing, took the
+        // path down to two and failed it. What is wanted is that the path
+        // spans the journey, which is a thing about its ends.
+        assert!(
+            way[0].at.distance(from) < APART * 4.0,
+            "the path starts {:.2} from where it was asked to",
+            way[0].at.distance(from)
+        );
+        assert!(
+            way[way.len() - 1].at.distance(to) < APART * 4.0,
+            "the path ends {:.2} from where it was going",
+            way[way.len() - 1].at.distance(to)
+        );
 
         for pair in way.windows(2) {
             assert!(
@@ -557,7 +1032,7 @@ mod tests {
         let step = 1.0 / 60.0;
 
         for _ in 0..1200 {
-            let Some(steer) = follower.steer(at) else {
+            let Some(steer) = follower.steer(at, 0) else {
                 break;
             };
             let (went, fell) =
@@ -625,7 +1100,7 @@ mod tests {
         let mut falling = 0.0;
 
         for _ in 0..1200 {
-            let Some(steer) = follower.steer(at) else {
+            let Some(steer) = follower.steer(at, 0) else {
                 break;
             };
             let (went, fell) =
@@ -677,6 +1152,248 @@ mod tests {
         assert!(
             way.iter().any(|spot| spot.ground == "a way through"),
             "it got there without going through a portal"
+        );
+    }
+
+    /// Spec 0049: a journey's region may not clip the doorway it needs.
+    ///
+    /// **The nook opens at one end and the journey is at the other.** Its
+    /// only way in is the gap south of the last cabinet, which `room`
+    /// puts at `-reaches + NOOK_DOOR`, and a walk from the front door to
+    /// the top of the nook's stair has a bounding box that stops short of
+    /// it by about two tenths of a metre. With the doorway outside the
+    /// lattice the hall and the nook joined only through places buried in
+    /// the dividing wall, which join nothing walkable, so the nook came
+    /// out 0 of 504 reachable and the stair looked like the fault.
+    ///
+    /// Asked of the nook's own doorway rather than of a route, because a
+    /// route that happens to work is not the claim. The claim is that the
+    /// region a journey lays its lattice over holds the way in.
+    #[test]
+    fn the_region_holds_the_way_into_the_nook() {
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+        let from = room.doorway();
+        // the top of the nook's stair, which is what sent this wrong
+        let to = vec3(-7.85, crate::aloft::UP_LANDING, 2.2);
+
+        let ways = ways(&room.grounds(), &solid, between(from, to));
+
+        // the gap itself: the stretch of the nook's open side south of the
+        // last cabinet, at the plane the two rooms share
+        let door = -room.reaches + crate::room::NOOK_DOOR;
+        let mut through = 0;
+
+        for n in 0..ways.places() {
+            let at = ways.spot(n).at;
+
+            if at.z < door && at.x > -crate::room::WALL - crate::room::CABINET.x - 1.0 {
+                through += 1;
+            }
+        }
+
+        assert!(
+            through > 0,
+            "nothing is laid in the way into the nook, which is z below {:.2}",
+            door
+        );
+
+        assert!(
+            ways.plan((from, 0), (to, 0), &solid).is_some(),
+            "there is no way from the door to the top of the nook's stair"
+        );
+    }
+
+    /// Spec 0049: the whole filmed tour reaches its last place.
+    ///
+    /// **Leg by leg, and it says which legs failed rather than that one
+    /// did.** A route is a score of places, and the useful answer when it
+    /// breaks is which pair of them has no way between it. Four legs
+    /// failed the first time this ran and three of them were one fault in
+    /// `admits`, which a single pass or fail would have hidden.
+    ///
+    /// **And it works the doors on the way, because the planner does not.**
+    /// Spec 0049 puts opening things out of scope on purpose: the bookcase
+    /// and the baths' leaf are pointed at and pressed, and until they are,
+    /// there is genuinely no way through them. So this walks the route's
+    /// own state rather than the building's resting state, which is the
+    /// thing `Room::open` was made for.
+    ///
+    /// The region is built per leg because that is how the clip runs it. A
+    /// lattice over the whole building is the hundred thousand places
+    /// `ways` is commented about.
+    #[test]
+    fn the_clip_s_tour_gets_all_the_way_round() {
+        let mut room = crate::room::Room::of(crate::games());
+        let steps = clip(&room);
+        let reaches = room.reaches;
+
+        // the two things on this route that swing, read off the same
+        // accessors the route reads, so there is one account of each
+        let case = vec3(room.floors()[1].min.x, 0.0, crate::cellar::opening(reaches));
+        let leaf = crate::spa::doorway(reaches);
+
+        let mut solid = room.solid();
+        let mut sight = Vec3::ZERO;
+        let mut last: Option<(Vec3, u64)> = None;
+        let mut legs = 0;
+        let mut walking = 0.0;
+        let mut standing = 0.0;
+        let mut broken = Vec::new();
+
+        for step in steps.iter() {
+            match step {
+                Step::Look(at) => sight = *at,
+                Step::Work => {
+                    if sight.distance(case) < sight.distance(leaf) {
+                        room.open = true;
+                        room.swing = 1.0;
+                    } else {
+                        room.baths_open = true;
+                        room.baths_swing = 1.0;
+                    }
+
+                    solid = room.solid();
+                }
+                Step::Stand(how_long) => standing += *how_long,
+                Step::At(at, frame) => {
+                    if let Some(from) = last {
+                        legs += 1;
+
+                        let ways = ways(&room.grounds(), &solid, between(from.0, *at));
+
+                        if let Some(way) = ways.plan(from, (*at, *frame), &solid) {
+                            // how far the walking is, which is what the
+                            // clip's length in `refresh-examples` is made of
+                            let mut was = from.0;
+
+                            for spot in way.iter() {
+                                walking += was.distance(spot.at);
+                                was = spot.at;
+                            }
+                        } else {
+                            broken.push(format!("{:?} to {:?}", from, (*at, *frame)));
+
+                            // **And where it stopped, not just that it
+                            // did.** Which rooms a leg got to is the
+                            // question; a height is what sent this up a
+                            // staircase three times for a fault two rooms
+                            // earlier.
+                            if let (Some(one), Some(two)) = (
+                                ways.nearest(from.0, from.1, &solid),
+                                ways.nearest(*at, *frame, &solid),
+                            ) {
+                                let got = ways.reached_from(one);
+                                let mut all: std::collections::BTreeMap<&str, (usize, usize)> =
+                                    std::collections::BTreeMap::new();
+
+                                for n in 0..ways.places() {
+                                    all.entry(ways.spot(n).ground).or_default().1 += 1;
+                                }
+
+                                for n in got.iter() {
+                                    all.entry(ways.spot(*n).ground).or_default().0 += 1;
+                                }
+
+                                println!(
+                                    "  leg to {:?} on {}: {} of {} reachable",
+                                    ways.spot(two).at,
+                                    ways.spot(two).ground,
+                                    got.len(),
+                                    ways.places()
+                                );
+
+                                for (ground, (reached, laid)) in all {
+                                    println!("    {:28} {:5} of {:5}", ground, reached, laid);
+                                }
+                            }
+                        }
+                    }
+
+                    last = Some((*at, *frame));
+                }
+            }
+        }
+
+        println!(
+            "{:.0} metres of walking at {} plus {:.0} of standing is about {:.0} seconds",
+            walking,
+            crate::SPEED,
+            standing,
+            walking / crate::SPEED + standing
+        );
+
+        assert!(legs > 8, "the route only has {} legs", legs);
+
+        // **And it fits in the film.** `refresh-examples` runs the camera
+        // for 145 seconds on this row. A route that outgrows that is not a
+        // route that fails, it is a clip that stops in the middle of the
+        // baths, and no frame of it looks wrong. The slack is the turning,
+        // which this does not count, and the margin.
+        let takes = walking / crate::SPEED + standing;
+
+        assert!(
+            takes < 120.0,
+            "the route is {:.0} seconds of walking and standing against a camera \
+             that runs for 145, which leaves nothing for the turns",
+            takes
+        );
+        assert!(
+            broken.is_empty(),
+            "{} of {} legs have no way: {}",
+            broken.len(),
+            legs,
+            broken.join("; ")
+        );
+    }
+
+    /// Spec 0049: a heading is worked out in the frame the walker is in.
+    ///
+    /// **Because flat is a claim about a floor.** Frame one carries local y
+    /// to world x, so world x is up in there and the floor's plane is world
+    /// z and world y. A heading taken off world x and z keeps the first of
+    /// those and throws the second away. The game hands this yaw to a
+    /// camera whose yaw is the frame's own, and `Step::Look` beside it
+    /// already turns its target out of the frame before taking an angle.
+    ///
+    /// Asked of a step along the frame's own z, which is world y, and
+    /// which world x and z cannot see at all: the two places are two
+    /// metres apart and a flat world reading of them is nought apart. So
+    /// it was not a worse heading, it was no heading.
+    #[test]
+    fn a_heading_is_taken_in_the_frame_you_are_standing_in() {
+        let half = crate::aloft::HALF;
+        let here = crate::aloft::in_frame(1, vec3(0.0, -half, 0.0));
+        let there = crate::aloft::in_frame(1, vec3(0.0, -half, 2.0));
+
+        let mut follower = Follower::new(vec![Spot {
+            at: there,
+            ground: "the imaginarium",
+            frame: 1,
+        }]);
+
+        let steer = follower
+            .steer(here, 1)
+            .expect("it will not steer to a place two metres away");
+
+        // local +z is a half turn, by the convention `steer` writes down:
+        // yaw nought faces -z and grows toward +x
+        assert!(
+            (steer.yaw.abs() - std::f32::consts::PI).abs() < 0.05,
+            "it steers on {:.3} where the way across the frame is a half turn",
+            steer.yaw
+        );
+
+        // **Its control.** Read in world x and z those two places are the
+        // same place, so there is no heading in them to get right and this
+        // test would pass on any reading that happened to be in the frame.
+        let flat = vec3(there.x - here.x, 0.0, there.z - here.z);
+
+        assert!(
+            flat.length() < NEAR,
+            "world x and z tell these two places apart by {:.3}, so this test \
+             is not asking what it says it asks",
+            flat.length()
         );
     }
 }
