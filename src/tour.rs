@@ -497,6 +497,38 @@ impl Ways {
 /// tread in the building is "does not fit" and no flight has a place on
 /// it. Asked of the walker, standing still on a tread stays put.
 fn stood(frame: u64, at: Vec3, solid: &[Aabb]) -> bool {
+    // **And not inside a wall, which the drop cannot ask.** A sweep that
+    // starts inside a box answers by direction: into it is blocked, out
+    // of it or along it is free. So a body let go inside a wall is never
+    // pushed out of one. It stands there, eight frames later it has not
+    // moved, and the place reads as somewhere to stand. Nothing walking
+    // can ever reach it, because the wall is in the way of every
+    // approach, and a follower sent to one leans on that wall for the
+    // rest of the film. Two sat 0.2 inside the garden's, four metres
+    // from the door the clip starts at.
+    //
+    // **Taller than a step, which is what tells a wall from a stair.**
+    // A body on a tread overlaps the riser in front of it every time,
+    // and that riser is a thing to climb rather than a thing you are
+    // inside. Asked of every box instead, the cellar's flight and the
+    // imaginarium's both lost their treads and two legs of the clip lost
+    // their way altogether.
+    //
+    // And `SLACK` of it, because nought is the wrong answer: this
+    // building has gaps built to exactly a body's width, the nook's only
+    // way in among them, so a place in one touches both jambs.
+    let (here, boxes) = in_frame_terms(frame, at, solid);
+    let middle = here + Vec3::Y * crate::RADIUS;
+    let room_for = crate::RADIUS - SLACK;
+    let walled = boxes.iter().any(|box_| {
+        box_.max.y > here.y + crate::walk::STEP
+            && box_.closest_point(middle).distance_squared(middle) < room_for * room_for
+    });
+
+    if walled {
+        return false;
+    }
+
     let step = 1.0 / 60.0;
     let (mut went, mut falling) = (at, 0.0);
 
@@ -511,15 +543,117 @@ fn stood(frame: u64, at: Vec3, solid: &[Aabb]) -> bool {
     went.distance(at) < NEAR
 }
 
-/// Whether the walker gets from one place to another, asked of the walker.
-fn walked(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb]) -> bool {
-    let step = 1.0 / 60.0;
-    // the ground it asks for, and half as long again for a step up or a
-    // graze on a jamb
-    let rounds = ((from.distance(to) / crate::SPEED / step) * 1.5).ceil() as u32 + 8;
-    let (mut at, mut falling) = (from, 0.0);
+/// How far inside something a place may be and still be a place.
+///
+/// **Nought is the wrong answer, and it was tried.** A body is 0.9
+/// across and this building has gaps built to exactly that: the nook's
+/// only way in is 0.9 wide, so a place in it touches both jambs and any
+/// overlap at all refuses it. Asked that way the nook had no way in and
+/// three more legs went with it. Five centimetres tells that apart from
+/// the places that had to go, which were a fifth of a metre in.
+const SLACK: f32 = 0.05;
 
+/// A place and the building, both turned into the frame's own terms,
+/// where `walk` does its arithmetic. Spec 0047.
+fn in_frame_terms(frame: u64, at: Vec3, solid: &[Aabb]) -> (Vec3, Vec<Aabb>) {
+    if frame == 0 {
+        return (at, solid.to_vec());
+    }
+
+    (
+        crate::aloft::out_of_frame(frame, at),
+        solid
+            .iter()
+            .map(|box_| crate::aloft::box_out_of_frame(frame, box_))
+            .collect(),
+    )
+}
+
+/// How far round the two ends of a leg the lattice is laid.
+///
+/// **One account, because three disagreed.** The film said eight by five
+/// by eight, `--tour` said eight by four by eight, and the test that
+/// walks the whole route said six by three by six. They are all the same
+/// question: a region holds what a leg may plan through, and a leg that
+/// has to step round something needs room either side of the straight
+/// line. Three answers meant the test was planning a route the film
+/// never walks, and the first leg it failed on was a plan nothing in the
+/// film had ever made.
+///
+/// Taller than it is wide would be wrong the other way: the imaginarium
+/// is twelve metres of height over the nook, so a leg into it carries
+/// five rather than three.
+pub fn spare() -> Vec3 {
+    vec3(8.0, 5.0, 8.0)
+}
+
+/// The region a leg of a route is planned in: the two ends and `spare`.
+pub fn region(from: Vec3, to: Vec3) -> Aabb {
+    Aabb::new(from.min(to) - spare(), from.max(to) + spare())
+}
+
+/// Whether the walker gets from one place to another, asked of the walker.
+///
+/// **On the walker's own climbing budget, which is the whole of it.** A
+/// step costs its own height out of a budget that fills at `walk::CLIMBS`
+/// a second, and until it covers the next riser the walker simply walks
+/// into it. Asked with an unlimited budget this said yes to a straight
+/// line from the eleventh tread of the imaginarium's way up to the floor
+/// at the top of it, because a body that may climb every frame ratchets
+/// up a flight however little of its pace is pointed along it. `thinned`
+/// then dropped the twenty treads between the two, the follower aimed at
+/// the far one, and the camera walked into the shaft wall at an angle for
+/// the last hundred seconds of the film with four risers to go.
+///
+/// It is the same arithmetic as the game's, in the frame's own up per
+/// spec 0047, because the one thing this has to be is the walker.
+fn walked(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb]) -> bool {
+    walk_between(frame, from, to, solid, f32::INFINITY)
+}
+
+/// Whether the walker gets there **without going round anything**.
+///
+/// **Which is the question thinning is really asking.** `walked` lets the
+/// body lean on a wall and slide along it, and a body that arrives that
+/// way did get there, so an edge half a metre long is right to count it.
+/// A place dropped out of a plan is a different matter: the follower that
+/// walks the thinned way is never standing exactly where the thinning
+/// stood, so a run that only works by sliding works from one spot and not
+/// from the one a metre off it.
+///
+/// It cost two takes. Thinning collapsed the garden to the hall into one
+/// eight metre diagonal, which `walked` allowed by grazing the wall
+/// between them; the camera started the leg a hand's width from where the
+/// plan did, met the wall at a slightly different angle, and leaned on it
+/// for the rest of the film.
+fn walked_straight(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb]) -> bool {
+    walk_between(frame, from, to, solid, crate::RADIUS)
+}
+
+/// The walk both of those are, with how far it may stray from the straight
+/// line between the two places before it does not count.
+fn walk_between(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb], stray: f32) -> bool {
+    let step = 1.0 / 60.0;
     let over = crate::aloft::frame(frame) * Vec3::Y;
+    let up = (to - from).dot(over).max(0.0);
+    let line = to - from;
+    let along = line.length();
+    let off = |at: Vec3| {
+        if along < 1e-4 {
+            0.0
+        } else {
+            let how_far = ((at - from).dot(line) / (along * along)).clamp(0.0, 1.0);
+
+            at.distance(from + line * how_far)
+        }
+    };
+    // the ground it asks for, and half as long again for a graze on a
+    // jamb, plus what the climbing in it is rationed to take
+    let rounds = (((from.distance(to) / crate::SPEED) * 1.5 + up / crate::walk::CLIMBS) / step)
+        .ceil() as u32
+        + 8;
+    let (mut at, mut falling) = (from, 0.0);
+    let mut climbs = 0.0;
 
     for _ in 0..rounds {
         let left = to - at;
@@ -532,10 +666,15 @@ fn walked(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb]) -> bool {
 
         let wish = flat.normalize_or_zero() * crate::SPEED;
         let (went, fell) =
-            crate::aloft::walked_in_frame(frame, at, wish, falling, step, solid, true);
+            crate::aloft::walked_in_frame(frame, at, wish, falling, step, solid, climbs <= 0.0);
 
+        climbs = (climbs - crate::walk::CLIMBS * step).max(0.0) + (went - at).dot(over).max(0.0);
         at = went;
         falling = fell;
+
+        if off(at) > stray {
+            return false;
+        }
     }
 
     false
@@ -701,6 +840,14 @@ pub fn read(tour: &str) -> Result<Vec<Step>, String> {
 /// what "in front of" means everywhere in the route below.
 const STANDS_BACK: f32 = 1.4;
 
+/// How far past the solarium's threshold the clip stands to look down it.
+///
+/// Its own number rather than `room::INSIDE`, which is how far inside the
+/// front door you wake. The two agree to within a metre and are answering
+/// different questions: that one is where a body fits past a door, this
+/// one is where the jamb stops being in shot.
+const INSIDE_THE_FIELD: f32 = 2.0;
+
 /// The clip's route, as places in the building rather than as keys.
 ///
 /// **Out of the building's own accessors, every one of them.** A route
@@ -739,52 +886,52 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
     route.push(Step::Look(pond));
     route.push(Step::Stand(2.0));
 
-    // **The solarium, in along the planet line.** Every planet rests on
-    // the line between its sun and its way in, which is `orrery::stands`
-    // with no swing on it, so walking in is walking past them in order.
-    // Jake watched a take on 2026-11-01 that turned along the right wall
-    // instead and said so: the planets and the moons and the sun are the
-    // room, and the wall is not.
+    // **The solarium, down the line rather than along it.** Every planet
+    // rests on the line between its sun and its way in, which is
+    // `orrery::stands` with no swing on it, so the whole room is in one
+    // view from inside the door: the planets recede along that line in
+    // order, the sun at the end of it.
+    //
+    // **Walked to, it was half the film.** The sun stands a hundred and
+    // nine metres from this threshold, so going to it and coming back is
+    // a hundred and sixty of the route's three hundred and forty-eight
+    // metres, and almost all of it across a dark empty field. Worse, a
+    // leg that long is a lattice ninety-four metres by a hundred and six:
+    // sixty-seven thousand places, laid on the frame that asks for them,
+    // which stopped the picture for twenty-five seconds of a hundred and
+    // forty-five second take. Both of those are the same eighty metres.
+    // Jake's call, on 2026-11-01, with the take in front of him.
     let middle = crate::behind::at(reaches);
     let sun = vec3(middle.x, crate::orrery::PLANE, middle.z);
     let (west, east) = crate::behind::way();
-    let along =
-        (vec3((west + east) * 0.5, crate::orrery::PLANE, reaches) - sun).normalize_or_zero();
-    let on_the_floor = |at: Vec3| vec3(at.x, 0.0, at.z);
-
-    // the two with something to see on them, outermost first, which is
-    // the order you meet them walking in
-    for named in ["Saturn", "Jupiter"] {
-        let planet = crate::orrery::PLANETS
-            .iter()
-            .find(|planet| planet.body.name == named)
-            .expect("the solar system has lost a planet");
-        let at = sun + along * planet.far();
-
-        route.push(Step::At(on_the_floor(at + along * STANDS_BACK), 0));
-        route.push(Step::Look(at));
-        route.push(Step::Stand(1.4));
-    }
 
     route.push(Step::At(
-        on_the_floor(sun + along * (crate::orrery::sun_drawn() * 0.5 + STANDS_BACK)),
+        vec3((west + east) * 0.5, 0.0, reaches + INSIDE_THE_FIELD),
         0,
     ));
     route.push(Step::Look(sun));
-    route.push(Step::Stand(2.4));
+    route.push(Step::Stand(3.0));
 
-    // **The imaginarium, named as a place in each frame.** One circuit of
-    // it is both apertures, and which aperture that takes is the
-    // planner's to work out.
-    let floor_of = |n: u64| crate::aloft::in_frame(n, vec3(0.0, -crate::aloft::HALF, 0.0));
-
-    route.push(Step::At(floor_of(0), 0));
-    route.push(Step::Look(crate::aloft::middle()));
-    route.push(Step::Stand(2.4));
-    route.push(Step::At(floor_of(1), 1));
-    route.push(Step::Look(crate::aloft::middle()));
-    route.push(Step::Stand(2.0));
-    route.push(Step::At(crate::aloft::foot_of_the_flight(1), 1));
+    // **The imaginarium is not on this route, and that is the second cut
+    // of the same kind.** It was a place in each frame, one circuit of
+    // it, both apertures, and the planner's to work out which.
+    //
+    // It cost twenty-two of the clip's sixty-six seconds and about eight
+    // of those were worth having. The rest is the dog-leg, climbed and
+    // then descended, seven seconds of a pale shaft with nothing on its
+    // walls, and the walks across the room's own floors, which are
+    // plaster. Measured by edge density over the take of 2026-11-01, the
+    // room and its stair held nearly every blank frame in the film.
+    // Jake's call, with the take in front of him, the same call and the
+    // same reason as the solarium's above.
+    //
+    // What goes with it is the only part of the film that crossed a
+    // frame, so nothing in the clip exercises spec 0047's apertures now.
+    // `aloft`'s own tests and
+    // `tour::tests::a_mouth_you_have_crossed_is_not_aimed_at_again` are
+    // what hold that, and they were already what held it: the crossing
+    // fault that wedged the camera for a whole take got through this
+    // route without a word.
 
     // **The bookcase, which is worked and not walked through.** Spec
     // 0007: pull the book and four hundred of them swing out of the way.
@@ -814,11 +961,17 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
     route.push(Step::Work);
     route.push(Step::Stand(1.4));
 
-    // and it finishes at the pool, looking the length of it
+    // and it finishes at the pool, looking the length of it.
+    //
+    // **Stood at the floor's height and not the pool's.** `pool.y` is the
+    // water, which is seven centimetres under the coping you stand on, so
+    // a place taken from it is a place in the floor: the leg planned,
+    // walked most of the way and stopped three and a half metres short.
+    // The leaf's own height is the one account of what that floor is.
     let (pool, pool_size, _) = crate::spa::pool(reaches);
 
     route.push(Step::At(
-        vec3(pool.x, pool.y, pool.z - pool_size.y * 0.5 - STANDS_BACK),
+        vec3(pool.x, baths.y, pool.z - pool_size.y * 0.5 - STANDS_BACK),
         0,
     ));
     route.push(Step::Look(pool));
@@ -835,6 +988,15 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
 /// waypoints. A place can go whenever the walker gets from the one before
 /// it to the one after without it, which is asked of `walk` like
 /// everything else here.
+///
+/// **Level ground only, because a stair is not ground you cross.** On the
+/// flat a place is a corner to cut and the walk either gets there or does
+/// not. On a flight it is a tread, the walker climbs one riser at a time
+/// out of a rationed budget, and the far end of a thinned run is up and
+/// away rather than along: aim at it and you lean on the wall beside the
+/// stair for the whole climb, taking what little of your pace still
+/// points along the treads. That is what emptied the last hundred seconds
+/// of the film, four risers from the top of the imaginarium's way up.
 fn thinned(way: Vec<Spot>, solid: &[Aabb]) -> Vec<Spot> {
     let mut out: Vec<Spot> = Vec::new();
 
@@ -843,9 +1005,13 @@ fn thinned(way: Vec<Spot>, solid: &[Aabb]) -> Vec<Spot> {
 
         while out.len() >= 3 {
             let last = out.len() - 1;
+            let over = crate::aloft::frame(out[last].frame) * Vec3::Y;
+            let level = |one: Vec3, two: Vec3| (two - one).dot(over).abs() < SAME_HEIGHT;
 
             if out[last - 2].frame != out[last].frame
-                || !walked(out[last].frame, out[last - 2].at, out[last].at, solid)
+                || !level(out[last - 2].at, out[last - 1].at)
+                || !level(out[last - 1].at, out[last].at)
+                || !walked_straight(out[last].frame, out[last - 2].at, out[last].at, solid)
             {
                 break;
             }
@@ -873,11 +1039,23 @@ pub struct Steer {
 pub struct Follower {
     way: Vec<Spot>,
     at: usize,
+    /// The closest it has come to the place it is aiming at, and how many
+    /// frames since that last improved.
+    nearest: f32,
+    stuck: u32,
+    /// How many places it has given up on this way.
+    gave_up: u32,
 }
 
 impl Follower {
     pub fn new(way: Vec<Spot>) -> Self {
-        Self { way, at: 0 }
+        Self {
+            way,
+            at: 0,
+            nearest: f32::INFINITY,
+            stuck: 0,
+            gave_up: 0,
+        }
     }
 
     /// Where it is trying to get to, if it is still going anywhere.
@@ -903,7 +1081,9 @@ impl Follower {
     /// the floor. `Step::Look` already turns its target out of the frame
     /// before taking an angle off it; this did not, and the game hands
     /// this yaw to a camera whose yaw is the frame's own.
-    pub fn steer(&mut self, from: Vec3, frame: u64) -> Option<Steer> {
+    /// `walking` is whether the body was walking the last time it asked,
+    /// which is what tells a jam from a turn.
+    pub fn steer(&mut self, from: Vec3, frame: u64, walking: bool) -> Option<Steer> {
         let out = |at: Vec3| {
             if frame == 0 {
                 at
@@ -914,13 +1094,90 @@ impl Follower {
         let from = out(from);
 
         while let Some(spot) = self.way.get(self.at) {
+            // **A place in a frame you are not standing in is a place you
+            // have been carried away from.** A portal's mouth is used by
+            // walking into it, and walking into it puts you somewhere
+            // else, so the mouth is never arrived at: the distance test
+            // that retires an ordinary place can never fire on one. The
+            // follower went on aiming at the aperture it had just come
+            // through, walked back into it, and crossed again. Nine round
+            // trips between two of the imaginarium's three frames, driven
+            // on 2026-11-01, and then it wedged in the aperture and never
+            // walked again: every step of the route past the imaginarium
+            // was taken standing in one spot.
+            //
+            // Frames only go round by crossing, so the frame changing
+            // under you is itself the news that the mouth is behind you.
+            if spot.frame != frame {
+                self.at += 1;
+                self.nearest = f32::INFINITY;
+                self.stuck = 0;
+
+                continue;
+            }
+
             let there = out(spot.at);
             let flat = vec3(there.x - from.x, 0.0, there.z - from.z);
 
             if flat.length() < NEAR {
                 self.at += 1;
+                self.nearest = f32::INFINITY;
+                self.stuck = 0;
 
                 continue;
+            }
+
+            // **And a place you cannot reach is a place you give up.**
+            // The lattice lays its places on a grid and asks of each one
+            // that a body dropped there stays put, which a body standing
+            // inside a wall does: nothing pushes it out, so nothing says
+            // the place is no good. The edge into it then turns on
+            // whether the walk ends a hair inside `NEAR` or a hair
+            // outside, and the follower coming in from somewhere else
+            // ends the hair the other way and leans on the wall for the
+            // rest of the film. One such place sat 0.2 from the garden's
+            // wall, two metres from the door the clip starts at.
+            //
+            // A second of no progress, which is four metres of walking,
+            // so nothing that is still getting anywhere gives up.
+            // **And it only counts while the body is walking.** A body
+            // finishing its turn is standing still on purpose and gets no
+            // closer to anything while it does, so counting those frames
+            // makes a turn look exactly like a wall. The rate is 2.4
+            // radians a second, so a second of it is 137 degrees: every
+            // leg that opens with an about-turn gave up the place it was
+            // turning toward before it took a step, and set off for the
+            // one after instead.
+            if flat.length() < self.nearest - 1e-3 {
+                self.nearest = flat.length();
+                self.stuck = 0;
+            } else if walking {
+                self.stuck += 1;
+
+                if self.stuck > 60 {
+                    // **And the second one ends the leg.** Giving up a
+                    // place and aiming at the next is right for one bad
+                    // place in an otherwise good way. Keep doing it and
+                    // the places left are all on the far side of
+                    // whatever is in the way, so each is given up in
+                    // turn and the body walks the length of the wall and
+                    // back for as long as the film runs. A camera that
+                    // moves on to the next thing is a cut; a camera
+                    // pacing a wall is a fault anybody can see.
+                    self.gave_up += 1;
+
+                    if self.gave_up > 1 {
+                        self.at = self.way.len();
+
+                        return None;
+                    }
+
+                    self.at += 1;
+                    self.nearest = f32::INFINITY;
+                    self.stuck = 0;
+
+                    continue;
+                }
             }
 
             let wish = flat.normalize_or_zero();
@@ -940,11 +1197,121 @@ impl Follower {
 mod tests {
     use super::*;
 
-    /// A box round two places with room to get between them.
+    /// A box round two places with room to get between them, which is
+    /// `region` and is the film's own.
     fn between(one: Vec3, two: Vec3) -> Aabb {
-        let spare = vec3(6.0, 3.0, 6.0);
+        region(one, two)
+    }
 
-        Aabb::new(one.min(two) - spare, one.max(two) + spare)
+    /// What `Arcade::standing_on` is: the room, and the field under you
+    /// when you are out in it.
+    fn underfoot(solid: &[Aabb], at: Vec3, reaches: f32) -> Vec<Aabb> {
+        let mut out = solid.to_vec();
+
+        if crate::field::afoot(&out, at) {
+            out.extend(crate::field::solid(reaches, at));
+        }
+
+        out
+    }
+
+    /// Walk a planned way the way the game walks it, and say where it
+    /// ended up.
+    ///
+    /// **Where it ended up, rather than whether it finished.** The first
+    /// build of this returned nothing when the follower stopped steering
+    /// and read that as having arrived, which is exactly what a follower
+    /// does when it gives a leg up: every leg of the route passed while
+    /// the film walked a third of the first one and stopped. What a leg
+    /// is owed is the place it was going to, so that is what the caller
+    /// is handed and what it asks about.
+    ///
+    /// **The game's own driving and not the planner's.** It turns at the
+    /// rate the arrows turn and only walks once it is roughly pointed at
+    /// the next place, and it climbs out of a ration that fills at
+    /// `walk::CLIMBS` a second. Both of those are in `Arcade::update` and
+    /// neither is in `walk`, so a follower simulated without them is a
+    /// different body from the one in the film.
+    ///
+    /// **And it starts facing where the step before left it facing.** A
+    /// leg begun facing nowhere in particular has a turn in it that the
+    /// film does not have, and the turn is not free: a body standing
+    /// still to finish one is a body not walking. This read the last leg
+    /// of the clip as a body that walks into the doorjamb, when what the
+    /// film does there is turn seven degrees and go through.
+    fn followed(
+        from: (Vec3, u64),
+        facing: f32,
+        way: Vec<Spot>,
+        solid: &[Aabb],
+        reaches: f32,
+    ) -> Vec3 {
+        let step = 1.0 / 60.0;
+        let over = crate::aloft::frame(from.1) * Vec3::Y;
+        let mut following = Follower::new(way);
+        let (mut at, mut falling) = (from.0, 0.0);
+        let mut yaw = facing;
+        let mut climbs = 0.0;
+        let mut walking = false;
+
+        for _ in 0..(60 * 180) {
+            let Some(steer) = following.steer(at, from.1, walking) else {
+                break;
+            };
+
+            // `turned_toward`, which is the same arithmetic in `main`
+            let turn = std::f32::consts::TAU;
+            let mut by = (steer.yaw - yaw).rem_euclid(turn);
+
+            if by > turn * 0.5 {
+                by -= turn;
+            }
+
+            let most = crate::TURNS * step;
+            let left = if by.abs() <= most {
+                yaw = steer.yaw;
+
+                0.0
+            } else {
+                yaw += most * by.signum();
+
+                by.abs() - most
+            };
+
+            let (sin, cos) = yaw.sin_cos();
+
+            walking = left < crate::WALKS_WHEN;
+
+            let wish = if walking {
+                crate::aloft::frame(from.1) * vec3(sin, 0.0, -cos) * crate::SPEED
+            } else {
+                Vec3::ZERO
+            };
+            // **What the game is standing on, which is not the room.**
+            // `Arcade::standing_on` adds the field under you whenever
+            // there is sky over you, and the field is ground, a wall and
+            // trees. A follower walked against the room's boxes alone is
+            // a body in a different building: it walks through the
+            // garden's trees, and the plan it is following was laid
+            // against them.
+            let standing_on = underfoot(solid, at, reaches);
+            let (went, fell) = crate::aloft::walked_in_frame(
+                from.1,
+                at,
+                wish,
+                falling,
+                step,
+                &standing_on,
+                climbs <= 0.0,
+            );
+
+            climbs =
+                (climbs - crate::walk::CLIMBS * step).max(0.0) + (went - at).dot(over).max(0.0);
+            at = went;
+            falling = fell;
+        }
+
+        at
     }
 
     /// Spec 0049: every step of a planned path is one the walker can walk.
@@ -1032,7 +1399,7 @@ mod tests {
         let step = 1.0 / 60.0;
 
         for _ in 0..1200 {
-            let Some(steer) = follower.steer(at, 0) else {
+            let Some(steer) = follower.steer(at, 0, true) else {
                 break;
             };
             let (went, fell) =
@@ -1052,6 +1419,201 @@ mod tests {
             at.distance(to) < 1.0,
             "it came to rest {:.2} metres from where it was going",
             at.distance(to)
+        );
+    }
+
+    /// Spec 0049: a place the body cannot reach is given up rather than
+    /// leaned on.
+    ///
+    /// **Hand-laid, because the fault is about one place and not about a
+    /// plan.** A wall, a way whose middle place is set a fifth of a metre
+    /// inside it, and a last place out in the open beyond. The body has
+    /// to finish at the last one.
+    ///
+    /// Its control is the middle place itself: the walk must never come
+    /// within `NEAR` of it, or the way was walkable all along and this
+    /// proves nothing.
+    #[test]
+    fn a_place_it_cannot_reach_is_given_up() {
+        let floor = Aabb::new(vec3(-10.0, -1.0, -10.0), vec3(10.0, 0.0, 10.0));
+        let wall = Aabb::new(vec3(-1.0, 0.0, 2.0), vec3(1.0, 3.0, 4.0));
+        let solid = [floor, wall];
+        let hidden = vec3(0.0, 0.0, 1.8);
+        let way = vec![
+            Spot {
+                at: vec3(0.0, 0.0, -2.0),
+                frame: 0,
+                ground: "the floor",
+            },
+            Spot {
+                at: hidden,
+                frame: 0,
+                ground: "the floor",
+            },
+            Spot {
+                at: vec3(4.0, 0.0, -2.0),
+                frame: 0,
+                ground: "the floor",
+            },
+        ];
+        let mut follower = Follower::new(way);
+        let mut at = vec3(0.0, 0.0, -4.0);
+        let mut falling = 0.0;
+        let step = 1.0 / 60.0;
+        let mut closest = f32::INFINITY;
+
+        for _ in 0..1200 {
+            let Some(steer) = follower.steer(at, 0, true) else {
+                break;
+            };
+            let (went, fell) =
+                crate::walk::walk(at, steer.wish, falling, crate::RADIUS, step, &solid, true);
+
+            at = went;
+            falling = fell;
+            closest = closest.min(vec3(at.x - hidden.x, 0.0, at.z - hidden.z).length());
+        }
+
+        assert!(
+            closest > NEAR,
+            "the place in the wall came within {:.3}, so nothing was ever given up",
+            closest
+        );
+        assert!(
+            follower.arrived() && at.distance(vec3(4.0, 0.0, -2.0)) < 1.0,
+            "it ended {:7.2}{:7.2}{:7.2}, still wanting {:?}",
+            at.x,
+            at.y,
+            at.z,
+            follower.toward()
+        );
+    }
+
+    /// Specs 0047 and 0049: a mouth you have come through is behind you.
+    ///
+    /// **Which the distance test cannot tell you.** Every other place is
+    /// retired by being got to; a portal's mouth is used by being walked
+    /// into, and walking into it carries you somewhere else, so the body
+    /// is further from it after using it than before. Aiming at it again
+    /// walks back into it. The film crossed between the imaginarium's
+    /// frames four times over and wedged in the aperture.
+    ///
+    /// The mouth and where it lands you are the building's own, out of
+    /// `join_the_portals`, rather than a pair of invented points.
+    #[test]
+    fn a_mouth_you_have_crossed_is_not_aimed_at_again() {
+        let out = crate::aloft::round_the_other_way(1);
+        let mouth = crate::aloft::doorway(1, 0).center();
+        let lands = crate::aloft::foot_of_the_flight(out);
+        let on = lands + crate::aloft::frame(out) * vec3(1.0, 0.0, 0.0);
+        let way = vec![
+            Spot {
+                at: mouth,
+                ground: "a way through",
+                frame: 1,
+            },
+            Spot {
+                at: on,
+                ground: "the imaginarium",
+                frame: out,
+            },
+        ];
+        let mut follower = Follower::new(way);
+
+        // walking up to it in its own frame, it is what you are aiming at
+        follower
+            .steer(crate::aloft::foot_of_the_flight(1), 1, true)
+            .expect("a heading toward the mouth");
+
+        assert_eq!(
+            follower.toward().map(|spot| spot.at),
+            Some(mouth),
+            "the mouth is not what it is walking into"
+        );
+
+        // and then the crossing happens, which is a change of frame
+        follower
+            .steer(lands, out, false)
+            .expect("a heading after the crossing");
+
+        assert_eq!(
+            follower.toward().map(|spot| spot.at),
+            Some(on),
+            "it is still aiming at the mouth it came through"
+        );
+    }
+
+    /// Spec 0049: a place behind you is still a place you get to.
+    ///
+    /// **Which is a test about the turn and not about the walk.** An
+    /// about-turn is 180 degrees and the arrows turn 2.4 radians a
+    /// second, so it is 78 frames in which the body stands still and gets
+    /// no closer to anything. Counted as frames of no progress that is a
+    /// second and a half of wall, and the place is given up before the
+    /// first step. Nothing in the clip's route opens with a turn that
+    /// big, which is why this is written out rather than left to the
+    /// route to catch.
+    #[test]
+    fn a_place_behind_you_is_walked_to_and_not_given_up() {
+        let solid = [Aabb::new(vec3(-10.0, -1.0, -10.0), vec3(10.0, 0.0, 10.0))];
+        let behind = vec3(0.0, 0.0, 4.0);
+        let way = vec![Spot {
+            at: behind,
+            frame: 0,
+            ground: "the floor",
+        }];
+        let mut follower = Follower::new(way);
+        let mut at = Vec3::ZERO;
+        let mut falling = 0.0;
+        // nought faces -z, so the place is a half turn away
+        let mut yaw = 0.0f32;
+        let mut walking = false;
+        let step = 1.0 / 60.0;
+
+        for _ in 0..600 {
+            let Some(steer) = follower.steer(at, 0, walking) else {
+                break;
+            };
+            let turn = std::f32::consts::TAU;
+            let mut by = (steer.yaw - yaw).rem_euclid(turn);
+
+            if by > turn * 0.5 {
+                by -= turn;
+            }
+
+            let most = crate::TURNS * step;
+            let left = if by.abs() <= most {
+                yaw = steer.yaw;
+
+                0.0
+            } else {
+                yaw += most * by.signum();
+
+                by.abs() - most
+            };
+            let (sin, cos) = yaw.sin_cos();
+
+            walking = left < crate::WALKS_WHEN;
+
+            let wish = if walking {
+                vec3(sin, 0.0, -cos) * crate::SPEED
+            } else {
+                Vec3::ZERO
+            };
+            let (went, fell) =
+                crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
+
+            at = went;
+            falling = fell;
+        }
+
+        assert!(
+            at.distance(behind) < NEAR,
+            "it ended {:7.2}{:7.2}{:7.2}, {:.2} from a place on open floor",
+            at.x,
+            at.y,
+            at.z,
+            at.distance(behind)
         );
     }
 
@@ -1100,7 +1662,7 @@ mod tests {
         let mut falling = 0.0;
 
         for _ in 0..1200 {
-            let Some(steer) = follower.steer(at, 0) else {
+            let Some(steer) = follower.steer(at, 0, true) else {
                 break;
             };
             let (went, fell) =
@@ -1235,6 +1797,7 @@ mod tests {
 
         let mut solid = room.solid();
         let mut sight = Vec3::ZERO;
+        let mut facing = 0.0;
         let mut last: Option<(Vec3, u64)> = None;
         let mut legs = 0;
         let mut walking = 0.0;
@@ -1243,7 +1806,17 @@ mod tests {
 
         for step in steps.iter() {
             match step {
-                Step::Look(at) => sight = *at,
+                Step::Look(at) => {
+                    sight = *at;
+
+                    // which is where the body is left pointing, worked
+                    // out the way the film's own `Look` works it out
+                    if let Some((here, frame)) = last {
+                        let way = crate::aloft::frame(frame).inverse() * (sight - here);
+
+                        facing = way.x.atan2(-way.z);
+                    }
+                }
                 Step::Work => {
                     if sight.distance(case) < sight.distance(leaf) {
                         room.open = true;
@@ -1260,9 +1833,13 @@ mod tests {
                     if let Some(from) = last {
                         legs += 1;
 
-                        let ways = ways(&room.grounds(), &solid, between(from.0, *at));
+                        // the leg's boxes are the game's: it asks
+                        // `standing_on` once, where it is standing, and
+                        // lays the lattice against that
+                        let here = underfoot(&solid, from.0, reaches);
+                        let ways = ways(&room.grounds(), &here, between(from.0, *at));
 
-                        if let Some(way) = ways.plan(from, (*at, *frame), &solid) {
+                        if let Some(way) = ways.plan(from, (*at, *frame), &here) {
                             // how far the walking is, which is what the
                             // clip's length in `refresh-examples` is made of
                             let mut was = from.0;
@@ -1270,6 +1847,54 @@ mod tests {
                             for spot in way.iter() {
                                 walking += was.distance(spot.at);
                                 was = spot.at;
+                            }
+
+                            // and then walk it, which is a different
+                            // question. A leg the planner is happy with
+                            // is a leg the body may still not get down:
+                            // the plan's places were joined by a walker
+                            // that could climb every frame, and the one
+                            // in the game climbs out of a ration. That
+                            // gap stood the camera on a seam in the
+                            // imaginarium's floor for the last hundred
+                            // seconds of a take, with every leg of this
+                            // route planning clean.
+                            //
+                            // The legs that change frame are left out,
+                            // because what carries you between frames is
+                            // a crossing, which is the room's move rather
+                            // than the walker's and is not in `walk` at
+                            // all.
+                            //
+                            // **Which is a hole in this, and the film has
+                            // already fallen through it.** The one leg
+                            // left out was the one that broke, and it
+                            // broke in the follower rather than in the
+                            // aperture: a mouth crossed and then aimed at
+                            // again, which `aloft`'s aperture tests have
+                            // no reason to look for.
+                            // `a_mouth_you_have_crossed_is_not_aimed_at_again`
+                            // holds that rule now. What is still not
+                            // walked anywhere is a whole crossing, and
+                            // walking one needs an `Arcade` rather than a
+                            // follower.
+                            if from.1 == *frame {
+                                let ended = followed(from, facing, way, &solid, reaches);
+
+                                // a stride short is a body that walked
+                                // it; anything further is a leg the film
+                                // does not finish
+                                if ended.distance(*at) > 1.0 {
+                                    broken.push(format!(
+                                        "{:?} to {:?}, which planned but ended {:.1} away at {:7.2}{:7.2}{:7.2}",
+                                        from,
+                                        (*at, *frame),
+                                        ended.distance(*at),
+                                        ended.x,
+                                        ended.y,
+                                        ended.z
+                                    ));
+                                }
                             }
                         } else {
                             broken.push(format!("{:?} to {:?}", from, (*at, *frame)));
@@ -1280,8 +1905,8 @@ mod tests {
                             // staircase three times for a fault two rooms
                             // earlier.
                             if let (Some(one), Some(two)) = (
-                                ways.nearest(from.0, from.1, &solid),
-                                ways.nearest(*at, *frame, &solid),
+                                ways.nearest(from.0, from.1, &here),
+                                ways.nearest(*at, *frame, &here),
                             ) {
                                 let got = ways.reached_from(one);
                                 let mut all: std::collections::BTreeMap<&str, (usize, usize)> =
@@ -1323,19 +1948,27 @@ mod tests {
             walking / crate::SPEED + standing
         );
 
-        assert!(legs > 8, "the route only has {} legs", legs);
+        // the garden, the solarium, the bookcase, the baths and the pool:
+        // five, and the point of counting is that a room cannot drop out
+        // of the clip without this saying so. It was eight until the
+        // imaginarium came out of the route on 2026-11-02.
+        assert!(legs > 4, "the route only has {} legs", legs);
 
-        // **And it fits in the film.** `refresh-examples` runs the camera
-        // for 145 seconds on this row. A route that outgrows that is not a
-        // route that fails, it is a clip that stops in the middle of the
-        // baths, and no frame of it looks wrong. The slack is the turning,
-        // which this does not count, and the margin.
+        // **And it leaves room for the turns.** How long the camera runs
+        // is in `refresh-examples` and is deliberately not repeated here:
+        // this crate is its own repo and a clone of it has no such file.
+        // What this can say is the shape of the answer. The turning is
+        // not counted above and is worth a fair part of the walking on a
+        // route with this many stops, so anything approaching a minute
+        // before a single turn is a route somebody has to go and check
+        // the camera against.
         let takes = walking / crate::SPEED + standing;
 
         assert!(
-            takes < 120.0,
-            "the route is {:.0} seconds of walking and standing against a camera \
-             that runs for 145, which leaves nothing for the turns",
+            takes < 60.0,
+            "the route is {:.0} seconds of walking and standing before any \
+             turning, which is long enough that the camera's own run in \
+             refresh-examples has to be looked at",
             takes
         );
         assert!(
@@ -1373,7 +2006,7 @@ mod tests {
         }]);
 
         let steer = follower
-            .steer(here, 1)
+            .steer(here, 1, true)
             .expect("it will not steer to a place two metres away");
 
         // local +z is a half turn, by the convention `steer` writes down:

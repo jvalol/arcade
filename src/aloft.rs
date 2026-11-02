@@ -3789,6 +3789,83 @@ mod tests {
         );
     }
 
+    /// Spec 0037: nobody sticks on the seams this floor is cut along.
+    ///
+    /// **A floor with a hole in it is several slabs, and they butt.**
+    /// `room::minus` tiles what is left of a box round the cut, so the
+    /// pieces meet edge to edge, and two floors at one height that meet
+    /// edge to edge put a vertical face in the surface you are walking
+    /// on. The building has met that three times and answered it by
+    /// lapping one slab under the other; here the slabs are what the room
+    /// draws as well as what it walks, so there is nothing to lap and the
+    /// seam has to be crossable as it stands.
+    ///
+    /// **Along it rather than across it.** Walked straight at, the seam is
+    /// nothing: the sweep reads the slab you are stepping onto as ground
+    /// and lets you by. Walked along, a hair of the stride pointing into
+    /// the slab you are leaving, the sweep answers at no distance on a
+    /// normal that is almost straight up, `move_and_slide` turns the
+    /// stride along that normal and comes round to the same contact four
+    /// times, and the frame ends where it began. It cost the last hundred
+    /// seconds of `media/arcade.mp4`: the camera reached the imaginarium's
+    /// floor, turned for the middle of it and stood on the seam for the
+    /// rest of the film.
+    ///
+    /// The count that cross is the control, because a test that walks
+    /// nobody anywhere passes.
+    #[test]
+    fn nobody_sticks_on_the_seams_of_this_floor() {
+        let room = crate::room::Room::of(crate::games());
+        let solid = room.solid();
+        let step = 1.0 / 60.0;
+        let seam = up_hole().max.x;
+        let (mut stuck, mut crossed) = (Vec::new(), 0);
+
+        for lane in 0..=20 {
+            let x = seam - 0.1 + 0.2 * lane as f32 / 20.0;
+
+            for z in [-8.0f32, -5.0, -2.5, 0.0] {
+                for off in [-30.0f32, -20.0, -10.0, -4.0, 4.0, 10.0, 20.0, 30.0] {
+                    // off nought is straight along the seam; the sign is
+                    // which slab the stride leans into
+                    let way = off.to_radians();
+                    let wish = vec3(-way.sin(), 0.0, -way.cos()) * crate::SPEED;
+                    let from = vec3(x, BASE, z);
+                    let (mut at, mut falling) = (from, 0.0);
+
+                    for _ in 0..60 {
+                        let (next, fell) =
+                            crate::walk::walk(at, wish, falling, crate::RADIUS, step, &solid, true);
+
+                        at = next;
+                        falling = fell;
+                    }
+
+                    // a second of walking is four metres, and anything
+                    // that has not made one of them is standing still
+                    if at.distance(from) < 1.0 {
+                        stuck.push((x, z, off, at));
+                    } else {
+                        crossed += 1;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            stuck.is_empty(),
+            "{} ways along the seam at x {:.2} end standing still, first {:?}",
+            stuck.len(),
+            seam,
+            stuck.first()
+        );
+        assert!(
+            crossed > 600,
+            "only {} of 672 ways along the seam got anywhere, so this proves nothing",
+            crossed
+        );
+    }
+
     /// Spec 0037: a body pressed into either side of the first flight
     /// stays on the stair.
     ///

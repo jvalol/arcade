@@ -1735,10 +1735,22 @@ impl Arcade {
                     film.at += 1;
                 }
                 tour::Step::Look(toward) => {
+                    // **Tilted as well as turned.** A `Look` that only
+                    // turns faces the right way along the floor and goes
+                    // on looking at the horizon, which in a room is a
+                    // wall. Standing under the imaginarium and looking at
+                    // the middle of it, six metres up, filmed two and a
+                    // half seconds of plaster; the route had already
+                    // worked round this twice by naming the bookcase and
+                    // the baths' leaf at eye height rather than where
+                    // their handles are.
                     let at = self.looking_from();
                     let way = self.turned().inverse() * (toward - at);
+                    let flat = vec3(way.x, 0.0, way.z).length();
+                    let turned = self.turned_toward(way.x.atan2(-way.z), dt);
+                    let tilted = self.tilted_toward(way.y.atan2(flat), dt);
 
-                    if self.turned_toward(way.x.atan2(-way.z), dt) <= 0.0 {
+                    if turned <= 0.0 && tilted <= 0.0 {
                         film.at += 1;
                     }
 
@@ -1747,15 +1759,8 @@ impl Arcade {
                 tour::Step::At(place, frame) => {
                     if film.following.is_none() {
                         let solid = self.standing_on();
-                        let spare = vec3(8.0, 5.0, 8.0);
-                        let ways = tour::ways(
-                            &self.room.grounds(),
-                            &solid,
-                            blitzkit::collision::Aabb::new(
-                                self.at.min(place) - spare,
-                                self.at.max(place) + spare,
-                            ),
-                        );
+                        let ways =
+                            tour::ways(&self.room.grounds(), &solid, tour::region(self.at, place));
 
                         match ways.plan((self.at, self.standing_in), (place, frame), &solid) {
                             Some(way) => film.following = Some(tour::Follower::new(way)),
@@ -1768,10 +1773,9 @@ impl Arcade {
                         }
                     }
 
-                    let steer = film
-                        .following
-                        .as_mut()
-                        .and_then(|following| following.steer(self.at, self.standing_in));
+                    let steer = film.following.as_mut().and_then(|following| {
+                        following.steer(self.at, self.standing_in, self.walking[0])
+                    });
 
                     match steer {
                         Some(steer) => {
@@ -1782,6 +1786,16 @@ impl Arcade {
                             // build of this orbited the next one for ever
                             // without ever reaching it.
                             let left = self.turned_toward(steer.yaw, dt);
+
+                            // **And level, because a walk looks where it
+                            // is going.** Nothing but a `Look` ever moved
+                            // the pitch, so the first `Look` that tilted
+                            // left it tilted: the route stood under the
+                            // imaginarium, looked at the middle of it 74
+                            // degrees up, and then walked the next four
+                            // legs at the ceiling. Eight seconds of
+                            // plaster going by.
+                            self.tilted_toward(0.0, dt);
 
                             self.walking[0] = left < WALKS_WHEN;
                         }
@@ -1820,6 +1834,28 @@ impl Arcade {
         }
 
         self.yaw += most * by.signum();
+
+        by.abs() - most
+    }
+
+    /// Tilt toward a pitch at the rate the arrows tilt, and say whether
+    /// you are there. Spec 0049, and the twin of `turned_toward`.
+    ///
+    /// Clamped where the arrows are clamped, so a route that names
+    /// something straight overhead gets as far up as a player can and
+    /// then stops, rather than rolling past the top.
+    fn tilted_toward(&mut self, pitch: f32, dt: f32) -> f32 {
+        let want = pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
+        let by = want - self.pitch;
+        let most = TILTS * dt;
+
+        if by.abs() <= most {
+            self.pitch = want;
+
+            return 0.0;
+        }
+
+        self.pitch += most * by.signum();
 
         by.abs() - most
     }
@@ -6926,21 +6962,25 @@ impl Game for Arcade {
         // same frame could be rendered with one thing changed at a time.
         //
         // Off unless asked for, so it costs a string lookup a frame and
-        // nothing else. It prints the room as well as the pose, because which
-        // room the building thinks you are in is itself a thing that has been
-        // wrong.
+        // nothing else. It prints the room and the frame as well as the pose,
+        // because which room the building thinks you are in is itself a thing
+        // that has been wrong, and because the frame is how spec 0049's
+        // follower was caught crossing the imaginarium's aperture and
+        // crossing straight back: in the log that is the number flipping
+        // twice a second while the body paces the same four metres.
         if std::env::var("WHERE").is_ok() {
             self.said += dt;
             if self.said >= 0.5 {
                 self.said = 0.0;
                 eprintln!(
-                    "WHERE at {:.2} {:.2} {:.2}  yaw {:.3}  pitch {:.3}  room {:?}",
+                    "WHERE at {:.2} {:.2} {:.2}  yaw {:.3}  pitch {:.3}  room {:?}  frame {}",
                     self.at.x,
                     self.at.y,
                     self.at.z,
                     self.yaw,
                     self.pitch,
-                    noise::room_at(self.room.reaches, self.at)
+                    noise::room_at(self.room.reaches, self.at),
+                    self.standing_in
                 );
             }
         }
@@ -11256,12 +11296,7 @@ fn toured(where_: &str) -> bool {
     let solid = room.solid();
     let from = room.doorway();
     let to = vec3(x, y, z);
-    let spare = vec3(8.0, 4.0, 8.0);
-    let ways = tour::ways(
-        &room.grounds(),
-        &solid,
-        blitzkit::collision::Aabb::new(from.min(to) - spare, from.max(to) + spare),
-    );
+    let ways = tour::ways(&room.grounds(), &solid, tour::region(from, to));
 
     let Some(way) = ways.plan((from, 0), (to, 0), &solid) else {
         println!("there is no way from the door to {:?}", to);
@@ -11315,7 +11350,7 @@ fn toured(where_: &str) -> bool {
     let step = 1.0 / 60.0;
     let mut rounds = 0;
 
-    while let Some(steer) = follower.steer(at, 0) {
+    while let Some(steer) = follower.steer(at, 0, true) {
         let (went, fell) = walk::walk(at, steer.wish, falling, RADIUS, step, &solid, true);
 
         at = went;
@@ -12283,6 +12318,103 @@ mod tests {
                 mine.y + aloft::HALF
             );
         }
+    }
+
+    /// Spec 0049: a `Look` ends up with the thing it names in shot.
+    ///
+    /// **Turning is only half of pointing.** A `Look` that sets the yaw
+    /// and leaves the pitch faces the right way along the floor and goes
+    /// on looking at the horizon, which indoors is a wall. The clip stood
+    /// in the middle of the imaginarium's floor, named the middle of the
+    /// room, and filmed two and a half seconds of plaster; the route had
+    /// already worked round it twice, by naming the bookcase and the
+    /// baths' leaf at eye height rather than at their handles.
+    ///
+    /// In shot rather than dead centre, because the pitch is clamped
+    /// where a player's is. The middle of that room is straight up from
+    /// the middle of its floor, and 74 degrees is as far up as anybody
+    /// gets. Half the camera's 60 is what "in shot" means vertically, and
+    /// it is the tighter half.
+    ///
+    /// The pairs are the route's own: every `Look` in it, from whatever
+    /// place the step before left the body standing in.
+    #[test]
+    fn every_look_in_the_clip_ends_with_what_it_names_in_shot() {
+        let room = room::Room::of(games());
+        let steps = tour::clip(&room);
+        let tick = 1.0 / 60.0;
+        let most = 30f32.to_radians();
+        let mut stood = (room.doorway(), 0u64);
+        let mut looks = 0;
+
+        for step in steps.iter() {
+            match step {
+                tour::Step::At(at, frame) => stood = (*at, *frame),
+                tour::Step::Look(toward) => {
+                    let mut game = Arcade::new();
+
+                    game.at = stood.0;
+                    game.standing_in = stood.1;
+                    game.filming = Some(Filming {
+                        steps: vec![*step],
+                        at: 0,
+                        following: None,
+                        waiting: 0.0,
+                    });
+
+                    for _ in 0..(60 * 5) {
+                        game.on_the_tour(tick);
+                    }
+
+                    let want = (*toward - game.looking_from()).normalize();
+                    let off = game.facing().dot(want).clamp(-1.0, 1.0).acos();
+
+                    looks += 1;
+
+                    assert!(
+                        off < most,
+                        "looking at {:?} from {:?} ends up {:.0} degrees off it",
+                        toward,
+                        stood,
+                        off.to_degrees()
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        assert!(looks >= 5, "only {} of the route's looks were asked", looks);
+    }
+
+    /// Spec 0049: walking a leg puts the camera back on the level.
+    ///
+    /// **Because only a `Look` ever moves the pitch.** Tilt up at
+    /// something and nothing tilts down again: the clip looked at the
+    /// middle of the imaginarium, 74 degrees up, and then walked four
+    /// legs with the camera still on the ceiling.
+    #[test]
+    fn a_leg_of_the_route_brings_the_camera_back_to_level() {
+        let mut game = Arcade::new();
+        let from = game.room.doorway();
+
+        game.at = from;
+        game.pitch = PITCH_LIMIT;
+        game.filming = Some(Filming {
+            steps: vec![tour::Step::At(from + vec3(0.0, 0.0, -6.0), 0)],
+            at: 0,
+            following: None,
+            waiting: 0.0,
+        });
+
+        for _ in 0..(60 * 2) {
+            game.on_the_tour(1.0 / 60.0);
+        }
+
+        assert!(
+            game.pitch.abs() < 0.01,
+            "it walked the leg at {:.0} degrees off the level",
+            game.pitch.to_degrees()
+        );
     }
 
     /// Spec 0048: nothing else moves you while the room is going round.
