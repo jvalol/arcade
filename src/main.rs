@@ -16,6 +16,12 @@ mod field;
 mod garden;
 mod globe;
 mod gyro;
+// **Allowed to be unused until the bench exists.** Spec 0050's cube is being
+// built state first: what a turn does to twenty pieces is provable without a
+// bench, a colour or a mesh, and none of those are decided yet. The allow
+// comes off with the seventh bench in `room::benches`.
+#[allow(dead_code)]
+mod kociemba;
 mod mandel;
 mod metronome;
 mod neon;
