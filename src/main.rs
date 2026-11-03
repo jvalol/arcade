@@ -487,6 +487,15 @@ struct Arcade {
     /// One per cabinet, in the room's own order. A game with no screenshot gets
     /// none and its screen stays blank.
     art: Vec<Option<TextureId>>,
+    /// Where a cabinet's picture comes from.
+    ///
+    /// **A field rather than a call, so a picture test can hand the hall
+    /// art of its own.** `art_of` reads `games/<name>/media/screenshot.png`
+    /// off the disk, which puts thirteen other repos inside this one's
+    /// reference: retaking any of those photographs moves the hall's
+    /// picture, and on 2026-11-03 that stopped a release at its own gate
+    /// and took nine commits to clear. Spec 0053.
+    art_from: fn(&str) -> Option<TextureData>,
     /// What colour each cabinet's screenshot lends the room when it is lit.
     glows: Vec<Vec3>,
     /// Each game's name, drawn into a texture for its marquee. Spec 0037.
@@ -1016,6 +1025,7 @@ impl Arcade {
             cascada: Cabinet::found(cascada::NAME, &beside()),
             poolhall: Cabinet::found(cellar::POOLHALL, &beside()),
             art: Vec::new(),
+            art_from: art_of,
             glows: Vec::new(),
             signs: Vec::new(),
             cell_words: Vec::new(),
@@ -6875,7 +6885,7 @@ impl Game for Arcade {
             .room
             .stood
             .iter()
-            .map(|stood| art_of(&stood.cabinet.name))
+            .map(|stood| (self.art_from)(&stood.cabinet.name))
             .collect();
         self.glows = pictures
             .iter()
@@ -11780,12 +11790,51 @@ mod tests {
     /// of any of them is a picture of what time it was. This builds the
     /// game, loads it and stands it somewhere. There is no `update` after
     /// the one below, so nothing has been given any time to happen in.
+    /// A cabinet's picture, for a reference that has to hold still.
+    ///
+    /// **The games' own screenshots are thirteen other repos.** `art_of`
+    /// reads each one off the disk, so a cabinet carries whatever that
+    /// game was last photographed as, the hall's reference moves whenever
+    /// any of them is retaken, and the glow each cabinet lends the room
+    /// moves with it. The 0.15.0 release takes all thirteen before the
+    /// gate and then failed on the hall by 0.6%, which cost nine commits
+    /// to clear and would cost them again every release.
+    ///
+    /// So a picture test hands the hall art of its own. Flat, and a
+    /// different colour per cabinet worked out from the name, so the
+    /// screens are still lit and still differ from each other and nothing
+    /// outside this repo decides what they look like.
+    ///
+    /// **What this gives up**, and it is worth saying: the hall's light is
+    /// partly the games' own colours, and under this it is not. The
+    /// picture holds the room, and `every_cabinet_finds_its_art` holds the
+    /// thing it stopped holding. Spec 0053.
+    fn stand_in_art(name: &str) -> Option<TextureData> {
+        let mut hash = 0x811c_9dc5u32;
+        for byte in name.as_bytes() {
+            hash ^= *byte as u32;
+            hash = hash.wrapping_mul(0x0100_0193);
+        }
+
+        // kept off black and off white, so a screen reads as a screen
+        let channel = |shift: u32| 70 + ((hash >> shift) & 0xff) as u8 / 2;
+        let texel = [channel(0), channel(8), channel(16), 255];
+
+        Some(TextureData::from_pixels(
+            2,
+            2,
+            texel.iter().copied().cycle().take(16).collect(),
+        ))
+    }
+
     fn standing(
         at: Vec3,
         looking_at: Vec3,
     ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
         move |renderer| {
             let mut arcade = Arcade::new();
+
+            arcade.art_from = stand_in_art;
             let mut geometry = Geometry::new();
             let mut text = TextRenderer::new();
             let sound = SoundSystem::new();
@@ -12121,6 +12170,41 @@ mod tests {
                 trail::Asked::HousedTheCarried
             ],
             "the desk took the guest and the building did not notice"
+        );
+    }
+
+    /// Spec 0053: every cabinet finds the art the hall would show on it.
+    ///
+    /// **This is what the hall's picture stopped holding.** That reference
+    /// is drawn with `stand_in_art` now, so it no longer notices a game
+    /// whose screenshot has gone missing or stopped decoding. The question
+    /// is arithmetic, so it is asked as arithmetic: `art_of` is the thing
+    /// the game itself calls, and it reads the file off the disk and
+    /// decodes it.
+    ///
+    /// Native only: the browser build bakes these in at compile time
+    /// through `build.rs` and has no disk to read.
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn every_cabinet_finds_its_art() {
+        let room = room::Room::of(games());
+        let missing: Vec<&str> = room
+            .stood
+            .iter()
+            .map(|stood| stood.cabinet.name.as_str())
+            .filter(|name| art_of(name).is_none())
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "{} of {} cabinets found no picture: {:?}",
+            missing.len(),
+            room.stood.len(),
+            missing
+        );
+        assert!(
+            !room.stood.is_empty(),
+            "the hall has no cabinets at all, so this proves nothing"
         );
     }
 
@@ -12559,6 +12643,7 @@ mod tests {
             let mut text = TextRenderer::new();
             let sound = SoundSystem::new();
 
+            arcade.art_from = stand_in_art;
             arcade.load(renderer);
             arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
             arcade.before_frame(renderer);
