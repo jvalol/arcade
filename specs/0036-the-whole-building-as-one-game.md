@@ -106,6 +106,11 @@ nothing is explained at the end.
 Which room is at the end of it. Everything above holds whichever it is, and
 nothing below can be written until that is picked.
 
+The plumbing above it does not wait on that, and spec 0051 is that part
+built: the building now records which rooms have given up what they ask, in
+order, for the two rooms that already ask. Nothing reads it and nothing
+draws it.
+
 ---
 
 I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

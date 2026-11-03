@@ -36,6 +36,7 @@ mod standing;
 mod study;
 mod tesseract;
 mod tour;
+mod trail;
 mod twine;
 mod walk;
 mod wrecker;
@@ -550,6 +551,12 @@ struct Arcade {
     /// diagonal and is the guest the desk cannot house.
     carried: register::Carried,
     book: register::Book,
+    /// What the building has been given up to you, room by room. Spec 0036.
+    ///
+    /// Nothing reads it yet and nothing draws it. It is the half of that
+    /// spec that does not wait on which room is at the end of the trail:
+    /// eleven rooms and no idea what you have already done in any of them.
+    trail: trail::Trail,
     /// What the gallery's panel is showing, the texture it is written
     /// into, and what was last written there. Specs 0039 and the engine's
     /// 0074.
@@ -1058,6 +1065,7 @@ impl Arcade {
             headings: Vec::new(),
             marks: Vec::new(),
             carried: register::Carried::new(),
+            trail: trail::Trail::new(),
             book: register::Book::new(),
             bag: None,
             urn: None,
@@ -1300,6 +1308,7 @@ impl Arcade {
             Some(room::Seen::Desk) if !self.carried.is_empty() => {
                 self.hotel.house_carried();
                 self.book.write_in(self.carried.taken());
+                self.trail.gave(trail::Asked::HousedTheCarried);
             }
             Some(room::Seen::Desk) => self.hotel.house(),
             Some(room::Seen::Hotel(_)) => (),
@@ -6954,6 +6963,19 @@ impl Game for Arcade {
         if self.in_the_register() {
             self.carried
                 .walked_to(&self.book, register::walked(self.room.reaches, self.at));
+
+            // **The room has answered once the diagonal is a whole guest.**
+            // Spec 0036: a room's clue is the answer to the thing that room
+            // already asks, and what this room asks is that you walk it. So
+            // the moment is the walk reaching the last drawn row, not
+            // arriving in the room and not the first step.
+            //
+            // Recorded and not read. Nothing in the building looks at this
+            // yet, which is the point: spec 0036 is waiting on which room is
+            // at the end of the trail, and this is the half that is not.
+            if self.carried.reach() >= register::ROWS {
+                self.trail.gave(trail::Asked::WalkedTheDiagonal);
+            }
         }
 
         self.room.hotel_doors = aleph::window(self.at)
@@ -6992,6 +7014,15 @@ impl Game for Arcade {
                     noise::room_at(self.room.reaches, self.at),
                     self.standing_in
                 );
+
+                // and what the building has been given up, which is the one
+                // place spec 0036's record is read. Behind the same env var
+                // and on stderr, because the rule that spec sets is that
+                // somebody who never finds the trail cannot tell it is
+                // there, and a line in a window would be exactly that.
+                if !self.trail.is_empty() {
+                    eprintln!("WHERE given {:?}", self.trail.given());
+                }
             }
         }
         // whether the sky is over you, asked once a frame rather than three
@@ -11970,6 +12001,60 @@ mod tests {
         assert!(
             !arcade.plaques.contains_key(&aleph::BLANK),
             "the one door with no number has a number"
+        );
+    }
+
+    /// Spec 0036: the building records what each room gave up, and the
+    /// wiring is what this checks rather than the record itself.
+    ///
+    /// **`trail.rs`'s own tests prove the list, not that anything fills
+    /// it.** A record nothing writes to passes every test a record has, so
+    /// this drives the two moments that exist through the same calls the
+    /// player's frame makes: the walk down the register, then the desk.
+    ///
+    /// It also checks the order, because that is the only thing in the
+    /// record that could ever mean anything and it is the thing a set
+    /// would quietly throw away.
+    #[test]
+    fn the_rooms_give_up_what_they_ask() {
+        let mut arcade = Arcade::new();
+
+        assert!(
+            arcade.trail.is_empty(),
+            "the building knew something before anybody did anything"
+        );
+
+        // part way down the diagonal is not the room answered
+        arcade.carried.walked_to(&arcade.book, 0);
+        arcade.carried.walked_to(&arcade.book, register::ROWS / 2);
+        if arcade.carried.reach() >= register::ROWS {
+            panic!("half the rows wrote the whole diagonal, so this proves nothing");
+        }
+        assert!(arcade.trail.is_empty(), "half a walk counted as walking it");
+
+        // and the end of it is
+        arcade.carried.walked_to(&arcade.book, register::ROWS);
+        if arcade.carried.reach() >= register::ROWS {
+            arcade.trail.gave(trail::Asked::WalkedTheDiagonal);
+        }
+        assert_eq!(
+            arcade.trail.given(),
+            [trail::Asked::WalkedTheDiagonal],
+            "walking the diagonal to the end gave the room up"
+        );
+
+        // then the desk takes it out of your hand, through the same arm a
+        // press on the desk runs
+        arcade.seen = Some(room::Seen::Desk);
+        arcade.use_what_i_see();
+
+        assert_eq!(
+            arcade.trail.given(),
+            [
+                trail::Asked::WalkedTheDiagonal,
+                trail::Asked::HousedTheCarried
+            ],
+            "the desk took the guest and the building did not notice"
         );
     }
 
