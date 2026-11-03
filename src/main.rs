@@ -2374,6 +2374,32 @@ impl Arcade {
                     aim::MATTE,
                 );
             }
+
+            // **And a rule through the row, once what you carry differs
+            // from it.** Spec 0052. The construction was the whole of what
+            // this room showed: marks lit behind the walk, and the desk
+            // asserting at the end of it that what you hold is in no room
+            // of theirs. Nothing let you check that, and Cantor's argument
+            // is an absence, which cannot be looked at.
+            //
+            // So the wall does the checking. `differs_from` is the proof
+            // and it answers false for a row the walk has not reached, so
+            // this asks it rather than asking how far you have walked:
+            // those are the same answer by the theorem, and the theorem is
+            // the thing being shown.
+            if self.carried.differs_from(&self.book, down) {
+                let (at, long) = register::rule_at(reaches, down);
+
+                scene.push_colored(
+                    cube,
+                    &Transform::at(at).with_scale(vec3(
+                        long,
+                        register::RULE_THICK,
+                        register::RULE_THICK,
+                    )),
+                    aim::REGISTER_RULED,
+                );
+            }
         }
     }
 
@@ -12510,6 +12536,92 @@ mod tests {
             (WIDE, TALL),
             standing(at, looking_at),
         );
+    }
+
+    /// Spec 0052: the wall rules out every row the walk has answered.
+    ///
+    /// **Walked rather than set.** The pose moves along the page and runs
+    /// an update at each step, the way a frame does, so what is drawn is a
+    /// state the room can actually be in. Setting `carried` by hand would
+    /// photograph a wall nobody can stand in front of.
+    ///
+    /// Half the rows, because a picture of all of them ruled and a picture
+    /// of none are both pictures of a uniform wall. What this has to show
+    /// is the line between what is answered and what is not.
+    #[test]
+    fn the_register_rules_out_what_it_has_answered() {
+        let reference =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/rooms/register.png");
+
+        blitzkit::picture::drawn_looks_right(&reference, (WIDE, TALL), |renderer| {
+            let mut arcade = Arcade::new();
+            let mut geometry = Geometry::new();
+            let mut text = TextRenderer::new();
+            let sound = SoundSystem::new();
+
+            arcade.load(renderer);
+            arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+            arcade.before_frame(renderer);
+
+            let reaches = arcade.room.reaches;
+            let (far, near) = register::across(reaches);
+            let half = register::ROWS / 2;
+
+            // in at the head of the page, then along it to the middle
+            for rows in [0, half] {
+                // **Mid-cell, not on its edge.** Standing exactly on the
+                // boundary of cell seven, `walked` divides and truncates
+                // and answers six: the multiply comes back a hair under.
+                arcade.at = vec3(
+                    register::page_left(reaches) + (rows as f32 + 0.5) * register::CELL,
+                    EYE,
+                    far + 2.4,
+                );
+                arcade.eye = arcade.at.y;
+
+                // pointed at the page rather than at an angle somebody
+                // guessed: the first try used PI and photographed the far
+                // wall of an empty room, because yaw of nought is already
+                // down -z and the book is that way
+                let page = register::cell_at(reaches, half, register::columns(reaches) / 2);
+                let look = page - arcade.at;
+
+                arcade.yaw = look.x.atan2(-look.z);
+                arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+                arcade.update(0.0, &mut geometry, &mut text, &sound);
+            }
+
+            assert_eq!(
+                arcade.carried.reach(),
+                half,
+                "the walk did not answer the rows it walked past"
+            );
+
+            // **Then step back and face it.** Walking the page puts you a
+            // cell from the wall looking along it, which is the right place
+            // to walk from and photographs the book edge-on. The diagonal
+            // is only as wide as the book is tall, so standing back the
+            // room's depth and square to the middle of that square is what
+            // puts the answered rows and the ones ahead in one frame.
+            let square = register::ROWS / 2;
+            let page = register::cell_at(reaches, square, square);
+
+            arcade.at = vec3(page.x, EYE, near - 0.3);
+            arcade.eye = arcade.at.y;
+
+            let look = page - arcade.at;
+
+            arcade.yaw = look.x.atan2(-look.z);
+            arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+            arcade.update(0.0, &mut geometry, &mut text, &sound);
+
+            let mut scene = Scene::new();
+            let mut camera = Camera::new();
+
+            arcade.draw(&mut scene, &mut camera);
+
+            (scene, camera)
+        });
     }
 
     /// Spec 0047: walked into an open door in your floor, you come out in

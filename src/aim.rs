@@ -1070,6 +1070,23 @@ pub const REGISTER_DIAGONAL: Vec4 = vec4(1.9, 1.42, 0.72, 1.0);
 /// cell is `REGISTER_DIAGONAL` and plainly taken.
 pub const REGISTER_AHEAD: Vec4 = vec4(0.62, 0.55, 0.40, 1.0);
 
+/// The rule drawn through a row the walk has ruled out. Spec 0052.
+///
+/// **The colour the diagonal is, and not the colour the marks are.** The
+/// rule is what the mark you took says about the row you took it from, so
+/// it reads as coming from the diagonal rather than as a change to the
+/// entry.
+///
+/// **And past one, which the first version was not.** It was 0.95 and
+/// unlit, on the reasoning that ink on a page is not a thing switched on.
+/// That reasoning was wrong about this room: it is dark, the marks around
+/// it carry their own brightness, and an unlit box standing proud of them
+/// came out as a shadow band across the rows rather than a line through
+/// them. Photographed and looked at, which is the only way that shows.
+/// Well under `REGISTER_DIAGONAL` at 1.9, because that is a lit figure a
+/// cell wide and this is a line a metre long.
+pub const REGISTER_RULED: Vec4 = vec4(1.25, 0.94, 0.48, 1.0);
+
 /// What the hotel's guests are: a coat, trousers and a head, four ways.
 ///
 /// **Three colours each, which is what says dressed.** They were one colour

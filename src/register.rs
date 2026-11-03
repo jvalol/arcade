@@ -189,7 +189,6 @@ impl Carried {
     }
 
     /// What is at place `n`, counted from nought, if it has been written yet.
-    #[cfg(test)]
     pub fn at(&self, n: usize) -> Option<u8> {
         self.marks.get(n).copied()
     }
@@ -251,7 +250,14 @@ impl Carried {
     ///
     /// It differs at place `row`, by construction, because that is the place
     /// the diagonal was changed at.
-    #[cfg(test)]
+    ///
+    /// **It was `#[cfg(test)]`, which is to say the proof was compiled out
+    /// of the building.** The room showed you the construction and the desk
+    /// told you the conclusion, and nothing between the two let you check
+    /// anything: Cantor's argument is an absence, and an absence cannot be
+    /// looked at. Next door Hilbert lands because it is a presence, a
+    /// corridor with no end and everybody visibly moving up. This is what
+    /// the wall rules a row out with. Spec 0052.
     pub fn differs_from(&self, book: &Book, row: u64) -> bool {
         match self.at(row as usize) {
             Some(mine) => mine != book.at(row, row),
@@ -505,6 +511,36 @@ pub fn cell_at(reaches: f32, down: u64, along_by: u64) -> Vec3 {
         // in one plane, which is this building's oldest fault and is worth
         // 15mm to avoid.
         far + MARK_DEEP * 0.5 - 0.015,
+    )
+}
+
+/// How thick the rule through a ruled-out row is, and how far it stands
+/// proud of the marks.
+///
+/// **Proud of them rather than on them.** A rule sat at the marks' own
+/// depth is two faces in one plane with every mark it crosses, which is
+/// this building's oldest fault. It stands in front instead, so what you
+/// see is a line laid over the row.
+pub const RULE_THICK: f32 = CELL * 0.1;
+
+/// Where a rule through row `down` goes, and how long it is.
+///
+/// **Out to the end wall, like the row it crosses.** Spec 0032 ran the
+/// entries into that wall so that none of them finishes, and a rule that
+/// stopped short of it would put an end on a row that has none.
+pub fn rule_at(reaches: f32, down: u64) -> (Vec3, f32) {
+    let columns = columns(reaches);
+    let first = cell_at(reaches, down, 0);
+    let last = cell_at(reaches, down, columns.saturating_sub(1));
+    let long = last.x - first.x + CELL;
+
+    (
+        vec3(
+            (first.x + last.x) * 0.5,
+            first.y,
+            first.z + MARK_DEEP * 0.5 + RULE_THICK,
+        ),
+        long,
     )
 }
 
