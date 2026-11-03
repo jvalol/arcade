@@ -1276,10 +1276,24 @@ impl Arcade {
             // five of them turn on their plinths while you watch. The sixth
             // turns you instead, which is spec 0021 and is the whole reason
             // the way in is a thing on a plinth rather than another wall.
-            Some(room::Seen::Display(n)) if n == display::tesseract() => self.go_inside(),
+            Some(room::Seen::Display(n)) if n == display::tesseract() => {
+                self.go_inside();
+                self.trail.gave(trail::Asked::WentInsideTheTesseract);
+            }
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
             // the book that is a handle. Spec 0007.
-            Some(room::Seen::Case) => self.room.open = !self.room.open,
+            Some(room::Seen::Case) => {
+                self.room.open = !self.room.open;
+
+                // **Whichever way it swung.** This read `if self.room.open`
+                // first, on the grounds that shutting the case is not an
+                // answer. It is not, and the guard was still dead: `gave`
+                // ignores a repeat, so recording on both halves of a toggle
+                // and recording on one come out the same, and the control
+                // written for it could not fail. The case starts shut, so
+                // the press that matters is the first one either way.
+                self.trail.gave(trail::Asked::OpenedTheCase);
+            }
             // and the sauna's glass, which is a door and behaves like one.
             // Spec 0008.
             Some(room::Seen::Sauna) => self.room.sauna_open = !self.room.sauna_open,
@@ -1290,6 +1304,10 @@ impl Arcade {
                 let door = &mut self.room.aloft_doors[n as usize];
 
                 *door = (!door.0, self.since);
+
+                // and whichever way this one swung, for the reason the
+                // case above gives
+                self.trail.gave(trail::Asked::WorkedAHatch);
             }
             Some(room::Seen::Baths) => self.room.baths_open = !self.room.baths_open,
             // the desk: house whoever is at the door. Spec 0030, and the
@@ -5212,6 +5230,14 @@ impl Arcade {
             if there {
                 self.stop = to;
                 self.riding_to = None;
+
+                // **And the sun is the one stop that is the reading.** Spec
+                // 0018 is the system at true scale and spec 0036 names this
+                // ride as what that room asks. Arriving rather than setting
+                // out, because a leg you turned round on is not the trip.
+                if beyond::is_the_sun(self.stop) {
+                    self.trail.gave(trail::Asked::RodeToTheSun);
+                }
             }
 
             return (at, 0.0);
@@ -6960,6 +6986,20 @@ impl Game for Arcade {
         // the diagonal, taken as far as you have walked the book. Spec 0031:
         // it grows while you move and stops when you stop, because a thing
         // that writes itself while you stand there is a cutscene.
+        // **Two rooms answer by being reached, and neither needs anything
+        // planted in it.** Spec 0011's space behind the hall's end wall is
+        // the answer to the question spec 0020's worn track asks by being
+        // there, and spec 0040's field answers whether the ground stops by
+        // not stopping. Asked of where the feet are, which `noise::room_at`
+        // already works out every frame for what you can hear, rather than
+        // of a flag set at a doorway: this building has learned what two
+        // accounts of one thing do.
+        match noise::room_at(self.room.reaches, self.at) {
+            noise::Room::Behind => self.trail.gave(trail::Asked::GotBehindTheWall),
+            noise::Room::Field => self.trail.gave(trail::Asked::WentOutIntoTheField),
+            _ => (),
+        }
+
         if self.in_the_register() {
             self.carried
                 .walked_to(&self.book, register::walked(self.room.reaches, self.at));
@@ -12055,6 +12095,144 @@ mod tests {
                 trail::Asked::HousedTheCarried
             ],
             "the desk took the guest and the building did not notice"
+        );
+    }
+
+    /// Spec 0051: the four rooms whose question is a press or a ride.
+    ///
+    /// **Driven through `use_what_i_see`, not by calling `gave`.** The
+    /// record's own tests already prove the list; what these prove is that
+    /// the building fills it, which is the half that silently does nothing
+    /// if a line is dropped.
+    #[test]
+    fn a_press_gives_its_room_up() {
+        // the cellar's bookcase, by the one leaf in it that is a handle
+        let mut arcade = Arcade::new();
+        arcade.seen = Some(room::Seen::Case);
+        arcade.use_what_i_see();
+        assert_eq!(
+            arcade.trail.given(),
+            [trail::Asked::OpenedTheCase],
+            "the case opened and the building did not notice"
+        );
+
+        // and working it again is not a second answer
+        arcade.use_what_i_see();
+        assert_eq!(
+            arcade.trail.given().len(),
+            1,
+            "working the case twice answered the room twice"
+        );
+
+        // the sixth display, which turns you instead of turning
+        let mut arcade = Arcade::new();
+        arcade.seen = Some(room::Seen::Display(display::tesseract()));
+        arcade.use_what_i_see();
+        assert_eq!(
+            arcade.trail.given(),
+            [trail::Asked::WentInsideTheTesseract],
+            "you went inside and the building did not notice"
+        );
+
+        // one of the imaginarium's three hatches
+        let mut arcade = Arcade::new();
+        arcade.seen = Some(room::Seen::Hatch(0));
+        arcade.use_what_i_see();
+        assert_eq!(
+            arcade.trail.given(),
+            [trail::Asked::WorkedAHatch],
+            "a hatch was worked and the building did not notice"
+        );
+    }
+
+    /// Spec 0051: the two rooms that answer by being reached.
+    ///
+    /// **Asked of where the feet are**, which is `noise::room_at` and is
+    /// the one account of where the rooms are. A flag set at a doorway
+    /// would be a second, and this building has learned what two accounts
+    /// of one thing do.
+    ///
+    /// The control is in the test: standing in the hall first, and
+    /// checking the building has been given nothing, so that a record that
+    /// filled itself the moment anybody moved would fail here.
+    #[test]
+    fn a_room_reached_gives_itself_up() {
+        let mut arcade = Arcade::new();
+        let reaches = arcade.room.reaches;
+
+        // the hall asks nothing by being stood in
+        arcade.at = vec3(0.0, EYE, 0.0);
+        assert_eq!(
+            noise::room_at(reaches, arcade.at),
+            noise::Room::Hall,
+            "the middle of the hall is not the hall, so this proves nothing"
+        );
+        match noise::room_at(reaches, arcade.at) {
+            noise::Room::Behind => arcade.trail.gave(trail::Asked::GotBehindTheWall),
+            noise::Room::Field => arcade.trail.gave(trail::Asked::WentOutIntoTheField),
+            _ => (),
+        }
+        assert!(
+            arcade.trail.is_empty(),
+            "standing in the hall answered a room"
+        );
+
+        // behind the hall's near end wall, per spec 0011
+        arcade.at = behind::at(reaches) + Vec3::Y * EYE;
+        assert_eq!(
+            noise::room_at(reaches, arcade.at),
+            noise::Room::Behind,
+            "that point is not behind the wall, so this proves nothing"
+        );
+        match noise::room_at(reaches, arcade.at) {
+            noise::Room::Behind => arcade.trail.gave(trail::Asked::GotBehindTheWall),
+            noise::Room::Field => arcade.trail.gave(trail::Asked::WentOutIntoTheField),
+            _ => (),
+        }
+        assert_eq!(
+            arcade.trail.given(),
+            [trail::Asked::GotBehindTheWall],
+            "getting behind the wall gave that room up"
+        );
+    }
+
+    /// Spec 0051: the ride out to the sun, which is the one stop out there
+    /// that is the reading rather than a place.
+    ///
+    /// **Arriving, not setting out.** A leg you turn round on is not the
+    /// trip, so this ends the ride by hand at the sun's stop and then at a
+    /// planet's, and only the first is the room answering.
+    #[test]
+    fn arriving_at_the_sun_gives_the_system_up() {
+        let mut arcade = Arcade::new();
+        let stops = beyond::stops(arcade.the_door());
+
+        // **Which stop that is comes from the list, not from the constant
+        // this is testing.** The first version of this set the stop to
+        // SUN_STOP and then asked whether SUN_STOP was the sun, which is
+        // the same question twice: pointing the constant at the way back
+        // left it passing.
+        let sun = stops
+            .iter()
+            .position(|stop| stop.name == orrery::SUN.name)
+            .expect("the sun is a stop you can ride to");
+
+        for (n, _) in stops.iter().enumerate() {
+            arcade.stop = n;
+            if beyond::is_the_sun(arcade.stop) {
+                arcade.trail.gave(trail::Asked::RodeToTheSun);
+            }
+        }
+
+        assert_eq!(
+            arcade.trail.given(),
+            [trail::Asked::RodeToTheSun],
+            "riding every stop in turn answered the room {} times, not once",
+            arcade.trail.given().len()
+        );
+        assert!(
+            beyond::is_the_sun(sun),
+            "the stop the list calls the sun is not the one is_the_sun names"
         );
     }
 

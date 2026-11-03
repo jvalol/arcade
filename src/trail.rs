@@ -42,6 +42,27 @@ pub enum Asked {
     /// Handing that guest to the desk, which houses them and writes them
     /// into the book. Spec 0032.
     HousedTheCarried,
+    /// Riding out to the sun, which is what the space behind the wall is
+    /// for: the system at true scale, where the reading is the distance.
+    /// Specs 0015 and 0018, and one of the four spec 0036 names itself.
+    RodeToTheSun,
+    /// Working one of the imaginarium's second doors. Spec 0038, where
+    /// `room::Seen::Hatch` already says in as many words that this is the
+    /// only thing in that room that asks you anything.
+    WorkedAHatch,
+    /// Turning the sixth display, which turns you instead. Spec 0021: five
+    /// of them spin on their plinths while you watch, and the way into the
+    /// hidden wing is a thing on a plinth rather than another wall.
+    WentInsideTheTesseract,
+    /// Opening the bookcase in the cellar, by the one leaf in it that is a
+    /// handle. Spec 0007.
+    OpenedTheCase,
+    /// Getting behind the hall's near end wall. Spec 0011, and the answer
+    /// to the question spec 0020's worn track asks by existing.
+    GotBehindTheWall,
+    /// Walking out past the garden's west wall, where the ground does not
+    /// stop. Spec 0040.
+    WentOutIntoTheField,
 }
 
 /// What the building has given up, in the order it gave.

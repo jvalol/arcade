@@ -189,6 +189,19 @@ pub fn sun(door: Vec3) -> Vec3 {
 ///
 /// The one account of where anything in this space is. The drawing reads it,
 /// the jump reads it, and the tests read it.
+/// Which stop is the sun.
+///
+/// **Named here because this is where the list is built.** `stops` puts the
+/// way back first and the sun straight after it, and a 1 written anywhere
+/// else is a second account of an order only this function decides.
+pub const SUN_STOP: usize = 1;
+
+/// Whether that stop is the sun, which is the one out here that is the
+/// reading rather than a place. Specs 0018 and 0036.
+pub fn is_the_sun(stop: usize) -> bool {
+    stop == SUN_STOP
+}
+
 pub fn stops(door: Vec3) -> Vec<Stop> {
     let sun_at = sun(door);
     let mut out = vec![
