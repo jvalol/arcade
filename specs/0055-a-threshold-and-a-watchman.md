@@ -126,6 +126,60 @@ decision: Kinkade-like, a village, warm light with its source out of frame,
 with more flourish than that and a touch of neon. Van Gogh is spent on the
 hall's `starry`. Maxfield Parrish was offered and refused as dated.
 
+**And the mythology stays**, which is the other half of what Jake wants and
+looked at first like the opposite of the first half. It is not, and the
+hinge is that what makes Valhalla worth arriving at in the myth is not the
+fighting. It is the hall: fire, light, company, after the cold. A Norse
+hall at dusk with the light coming out of its door is the warm-window
+picture already, with none of the cottages.
+
+Four things follow, and none of them is a compromise between the two.
+
+**A hall with a steading round it.** The myth gives one great hall and Jake
+wants somewhere village-like. A Norse settlement is a longhouse with
+outbuildings round it, so that is both at once rather than a blend of them.
+
+**Gold, and a roof of shields.** Grímnismál gives Valhalla spear rafters
+and a roof of shields, and the sources call it gold-bright. Shields taking
+a low light is the warm-window image arrived at from the myth's own detail
+instead of from a painting.
+
+**The neon is the aurora.** `aim::NEON` is 3.2 in cyan and magenta, which
+is the aurora's palette. Northern lights over a steading is at home in the
+myth, gives the register Jake is after, and rhymes with the bridge, which
+plenty of people read as the aurora in the first place. With the sky doing
+that, the made signs can be one or two.
+
+**A few people, and no einherjar.** Keep the figures and drop the fighting
+all day: spec 0033 draws people already and spec 0038's whole room is other
+people using it. Somewhere peaceful is not empty.
+
+This also settles a wobble raised while talking it through, and settles it
+better than the answer offered then. With a Norse place behind him the
+watchman does not have to stop being Heimdall; he was only awkward while
+what he guarded was an English village.
+
+**The martial detail is architecture and not mood.** Shields on a roof and
+spears for rafters, and then stop. No weapons left about, nobody waiting
+for Ragnarök. The myth supplies the building. It does not get to supply how
+the room feels, which is settled above and is rest.
+
+**What the aurora will actually cost, which is more than was claimed.** It
+was offered in conversation as cheap, on the grounds that the sky is a
+picture on a dome and this would be paint. Two things in `garden::dome_mesh`
+say otherwise and both were found by reading it rather than by guessing.
+
+The weather moves by sliding the picture's own `uv` across the dome, at
+`WEATHER` and `DRIFT`. Anything painted into that picture drifts with the
+clouds, and an aurora that slides west all evening is a cloud that happens
+to be green.
+
+And there is one sky for the whole building. There were two, the garden's
+and the field's, each plainly visible from under the other, and they were
+made one deliberately. So an aurora over Valhalla is an aurora over the zen
+garden as well. That may be worth having and it is a decision rather than a
+detail, and whoever builds it should make it on purpose.
+
 **The neon is why that is the building's answer and not an import.** This
 arcade already has a light language of its own: `aim::NEON` is 3.2, cyan
 and magenta, and it is over the hall's door and down in the cellar. A
