@@ -1255,6 +1255,91 @@ impl Follower {
 mod tests {
     use super::*;
 
+    /// Spec 0049. The clip stands where it stands and the orrery's bodies
+    /// stand where they stand, and nothing checked the two against each
+    /// other.
+    ///
+    /// **A guard, and not the fix for anything.** It was written chasing
+    /// frame 851 of the published film, which draws nothing: the thought was
+    /// that the camera steps through a planet, since inside a sphere you see
+    /// backfaces and those are culled. Neptune is at thirty astronomical
+    /// units, which sounded like the threshold. It is not. The nearest the
+    /// clip ever comes to any body is 30.7 metres, off a planet drawn 0.27
+    /// across, because at rest the outer ones sit outside the room
+    /// altogether. That is the third idea about frame 851 to come apart, and
+    /// it is still open.
+    ///
+    /// Kept anyway, because the orrery is at true scale and a waypoint moved
+    /// a few metres is a waypoint that could land inside a world. It passes
+    /// by a long way today and is worth nothing until the day it does not.
+    ///
+    /// **At rest only.** `stands` is asked for the unswung arrangement, so
+    /// every planet lies on one ray out of the sun. That is the line the
+    /// walk out through the door crosses, which is the case worth asking
+    /// about; swung, they are somewhere else and this says nothing.
+    #[test]
+    fn the_clip_never_stands_inside_a_body() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+        // the line the bodies rest on, taken the way the drawing takes it
+        // rather than guessed: `Game::the_sun`. Guessing it put every
+        // planet somewhere it is not and this passed while the clip walked
+        // through Neptune.
+        let middle = crate::behind::at(reaches);
+        let sun = vec3(middle.x, crate::orrery::PLANE, middle.z);
+        let (from_, to_) = crate::behind::way();
+        let door = vec3((from_ + to_) * 0.5, crate::orrery::PLANE, reaches);
+        let toward = (door - sun).normalize_or_zero();
+
+        // **The legs and not only the ends of them.** The first version of
+        // this asked about each `Step::At` and passed: the waypoint inside
+        // the orrery's door is two metres clear of Neptune. What is not
+        // clear is the walk out through it, which crosses Neptune's own
+        // plane, and that is where the black frame is.
+        let stops: Vec<Vec3> = clip(&room)
+            .into_iter()
+            .filter_map(|step| match step {
+                Step::At(at, _) => Some(at),
+                _ => None,
+            })
+            .collect();
+
+        for leg in stops.windows(2) {
+            let (from, to) = (leg[0], leg[1]);
+
+            for planet in crate::orrery::PLANETS.iter() {
+                let stood = sun + crate::orrery::stands(planet, toward, 0.0, 0.0, 0.0);
+                let near = nearest_on(from, to, stood);
+                let clear = near.distance(stood) - planet.body.drawn() * 0.5;
+
+                assert!(
+                    clear > crate::RADIUS,
+                    "walking from {:.1} {:.1} to {:.1} {:.1} passes {:.2} from the \
+                     middle of {}, which is drawn {:.2} across",
+                    from.x,
+                    from.z,
+                    to.x,
+                    to.z,
+                    near.distance(stood),
+                    planet.body.name,
+                    planet.body.drawn()
+                );
+            }
+        }
+    }
+
+    /// The point on the segment `from`..`to` nearest `at`.
+    fn nearest_on(from: Vec3, to: Vec3, at: Vec3) -> Vec3 {
+        let way = to - from;
+        let length = way.length_squared();
+
+        if length <= f32::EPSILON {
+            return from;
+        }
+
+        from + way * ((at - from).dot(way) / length).clamp(0.0, 1.0)
+    }
+
     /// A box round two places with room to get between them, which is
     /// `region` and is the film's own.
     fn between(one: Vec3, two: Vec3) -> Aabb {
