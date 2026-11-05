@@ -882,10 +882,38 @@ pub const THRESHOLD_RAIL: Vec4 = vec4(0.235, 0.23, 0.215, 1.0);
 /// warm light with its source out of frame, so an opening glows with
 /// nothing on it the way the neon and the rainbow do, and the walls only
 /// take what falls on them. A wall that glows is a lamp.
-pub const VALHALLA_GROUND: Vec4 = vec4(0.22, 0.225, 0.20, 1.0);
-pub const VALHALLA_WALL: Vec4 = vec4(0.40, 0.355, 0.30, 1.0);
-pub const VALHALLA_ROOF: Vec4 = vec4(0.26, 0.225, 0.185, 1.0);
-pub const VALHALLA_LIT: Vec4 = vec4(3.4, 1.55, 0.42, 1.0);
+/// Dark, and darker than it looks like it should be written.
+///
+/// **A warm pool on pale ground is not a pool.** The first value here was
+/// 0.22 and came out as pale grey under the field's dusk, so the light
+/// thrown by the doors landed on something already bright and read as
+/// nothing at all. The same lesson as the garden's bark, twice in two
+/// days: what a colour does here is decided by what is next to it.
+pub const VALHALLA_GROUND: Vec4 = vec4(0.085, 0.088, 0.078, 1.0);
+
+/// And how tight a highlight it takes.
+///
+/// **Wet, because wet ground is how the light gets to be looked at.** Spec
+/// 0055's brief is warm light with its source out of frame, and the thing
+/// that carries it across a picture is the ground giving it back. A
+/// smaller number is a broader highlight: this is wide enough to streak
+/// under a door rather than to put a dot on the floor.
+pub const VALHALLA_WET: f32 = 48.0;
+pub const VALHALLA_WALL: Vec4 = vec4(0.27, 0.235, 0.195, 1.0);
+pub const VALHALLA_ROOF: Vec4 = vec4(0.155, 0.135, 0.115, 1.0);
+/// What is burning behind an opening, and the jamb round it.
+///
+/// **Dimmer than it was, because the lamp outside already lights it.** At
+/// 3.4 the panel glowed on its own and then took the spill as well, and a
+/// surface past one that is also lit goes white: the hall's door came out
+/// a flat white-gold slab with a hot middle, which is a lightbox and not a
+/// way in. Over one still, so it carries at night with nothing on it.
+///
+/// The jamb is the other half of that. An opening with no edge is a panel
+/// painted on a wall; a dark reveal round a warm one is a hole with a room
+/// behind it.
+pub const VALHALLA_LIT: Vec4 = vec4(1.45, 0.82, 0.34, 1.0);
+pub const VALHALLA_JAMB: Vec4 = vec4(0.10, 0.085, 0.07, 1.0);
 
 /// And what that light throws on the ground outside it.
 ///
@@ -895,8 +923,8 @@ pub const VALHALLA_LIT: Vec4 = vec4(3.4, 1.55, 0.42, 1.0);
 /// ground in front of a door, the wall beside it, whoever is standing
 /// there.
 pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);
-pub const VALHALLA_SPILL_LIT: f32 = 2.4;
-pub const VALHALLA_SPILL_REACH: f32 = 11.0;
+pub const VALHALLA_SPILL_LIT: f32 = 3.1;
+pub const VALHALLA_SPILL_REACH: f32 = 14.0;
 pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
 
 /// The set stones, which are darker than anything else out here.

@@ -156,6 +156,15 @@ pub fn doorway(reaches: f32) -> (Vec3, f32, f32) {
     )
 }
 
+/// How deep an opening is set into its wall, and how far the jamb round it
+/// stands proud.
+///
+/// **So that it is a hole and not a panel.** Set flush and lit, the hall's
+/// door was a bright rectangle painted on a wall. Set back behind a dark
+/// reveal, the same rectangle is a room you are not in.
+pub const SET_BACK: f32 = 0.34;
+pub const JAMB: f32 = 0.16;
+
 /// How far a lit opening stands off the wall it is in, so the two are not
 /// one surface, and how wide and high a window is.
 pub const PROUD: f32 = 0.03;
@@ -183,7 +192,7 @@ pub fn lit(reaches: f32) -> Vec<Lit> {
     let (door, wide, high) = doorway(reaches);
 
     out.push(Lit {
-        at: door + Vec3::X * PROUD + Vec3::Y * high * 0.5,
+        at: door - Vec3::X * SET_BACK + Vec3::Y * high * 0.5,
         wide,
         high,
         looks: Vec3::X,
@@ -204,7 +213,7 @@ pub fn lit(reaches: f32) -> Vec<Lit> {
             }
 
             out.push(Lit {
-                at: vec3(face, one.at.y + WINDOW_UP, along),
+                at: vec3(face - SET_BACK, one.at.y + WINDOW_UP, along),
                 wide: WINDOW_WIDE,
                 high: WINDOW_HIGH,
                 looks: Vec3::X,
@@ -257,11 +266,14 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
     built(reaches)
         .into_iter()
         .map(|one| {
-            vec3(
-                one.at.x + one.wide * 0.5 + 0.9,
-                one.at.y + WINDOW_UP,
-                one.at.z,
-            )
+            // well out from the face and low, and further out than looks
+            // right written down. Close in it shone back into the opening
+            // it was supposed to be coming out of and burnt a white core
+            // into the panel, and it lit the wall harder than the ground,
+            // which washed a daubed wall to cream. Out here the wall is
+            // five metres from it and the lane is one, and a light falls
+            // off with the square of that.
+            vec3(one.at.x + one.wide * 0.5 + 5.0, one.at.y + 1.0, one.at.z)
         })
         .collect()
 }
@@ -430,7 +442,8 @@ mod tests {
         }
     }
 
-    /// Spec 0056: the light is in the openings, and an opening is in a wall.
+    /// Spec 0056: the light is in the openings, and an opening is a hole
+    /// in a wall rather than a panel on one.
     #[test]
     fn every_light_is_in_an_opening() {
         let all = built(REACHES);
@@ -439,8 +452,12 @@ mod tests {
             let found = all.iter().any(|built| {
                 let walls = built.walls();
 
-                one.at.x > walls.max.x - 0.2
-                    && one.at.x < walls.max.x + 0.4
+                // behind the face it is in, by the set-back and no more.
+                // On the face it is a panel painted on a wall, and this
+                // test said on the face until the day it stopped being
+                // true.
+                one.at.x < walls.max.x + 1e-3
+                    && one.at.x > walls.max.x - SET_BACK - 0.1
                     && one.at.z > walls.min.z
                     && one.at.z < walls.max.z
                     && one.at.y + one.high * 0.5 < built.at.y + built.eaves

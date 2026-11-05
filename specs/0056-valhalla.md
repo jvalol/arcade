@@ -85,12 +85,27 @@ into a corridor.
   `--done`. The hall faces you with its door lit, the outbuildings stand
   off the lane either side with their windows lit, and the light lands on
   the walls and on the people. It is a blocking model and reads as one.
-- **Three things it does not do yet**, and all three are the brief rather
-  than the geometry. The door is blown out to a flat white-gold slab
-  instead of a way in. The light reaches the walls but barely reaches the
-  ground, so there is no wet lane carrying it. And the hall shows you its
-  gable end, which is nine metres wide, so it reads as a shed rather than
-  as something long.
+- **The door and the lane are done, and both took the same lesson twice
+  over.** The door was a flat white-gold slab: the panel glowed at 3.4 on
+  its own and then took the lamp outside as well, and a surface past one
+  that is also lit goes white. It is dimmer now and set back behind a dark
+  reveal, so it reads as a hole with a room behind it rather than as a
+  panel painted on a wall.
+
+  The lane was pale because the ground was. At 0.22 it came out grey under
+  the field's dusk, so a warm pool landed on something already bright and
+  read as nothing, which is the garden's bark again. The ground is 0.085
+  now and takes a broad highlight, and what the door throws runs back along
+  it wet.
+
+  And the lamp is five metres out from the face, which looks wrong written
+  down. Close in it shone back into the opening it was meant to be coming
+  out of, and lit the wall harder than the ground, which washed a daubed
+  wall to cream. Out there the wall is five metres from it and the lane is
+  one.
+
+- **The hall still shows you its gable end**, which is nine metres wide, so
+  it reads as a shed rather than as something long. Not touched.
 - **The neon along the ridge is not visible** from the ground in front of
   the hall, being on top of the roof. It wants to be on the gable or over
   the door.

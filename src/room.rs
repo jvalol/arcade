@@ -2270,6 +2270,49 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0040: you can see the field from the hall's doorway into the
+    /// garden, which is what decides how far the camera is allowed to see.
+    ///
+    /// **Jake, 2026-11-05: the far end of the field does not render until
+    /// I enter the garden.** `camera.far` is the building's hundred metres
+    /// indoors and the sky's four hundred out, and it was chosen by
+    /// `out_of_doors`, which asks what is over your feet. Standing in that
+    /// doorway the field was drawn, because spec 0086 moved the drawing on
+    /// to a question about sight, and the camera still stopped at a
+    /// hundred: the far half of the field was clipped away. One metre west
+    /// it all appeared.
+    ///
+    /// The fourth time in two days that a test of where somebody stands
+    /// was answering a question about what they can see. The positions
+    /// here are the two Jake sent, either side of the wall, and what they
+    /// hold is that both of them count as seeing out.
+    #[test]
+    fn the_field_is_in_sight_from_the_hall_doorway() {
+        let room = super::Room::of(crate::games());
+        let reaches = room.reaches;
+
+        for (name, at) in [
+            ("in the hall doorway", glam::vec3(-1.89, 1.55, 7.77)),
+            ("a step into the garden", glam::vec3(-2.83, 1.55, 8.24)),
+        ] {
+            assert!(
+                room.can_see_outdoors(at, reaches),
+                "{} does not count as seeing outdoors, so the field would \
+                 be drawn to a hundred metres and cut off",
+                name
+            );
+        }
+
+        // and the one that makes it a fault rather than a coincidence: the
+        // doorway is not out of doors, so anything reading that question
+        // gives the two places different answers
+        assert!(
+            !room.out_of_doors(glam::vec3(-1.89, 1.55, 7.77)),
+            "the hall's doorway is out of doors, so this test proves nothing"
+        );
+        assert!(room.out_of_doors(glam::vec3(-2.83, 1.55, 8.24)));
+    }
+
     use super::*;
     use glam::vec3;
 

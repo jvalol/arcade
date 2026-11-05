@@ -477,7 +477,30 @@ like from its field at eye level: a long wall with one way through it.
 four places for twenty seconds; without the wall that walk ends seventy
 eight metres inside the building.
 
+## How far the camera is let see
+
+**A hundred metres indoors and the sky's four hundred out**, and which one
+you get was decided by `out_of_doors`: a question about what is over your
+feet. The field's own drawing stopped asking that question in spec 0086 and
+started asking whether you can see out, and this line did not go with it.
+
+So from the hall's doorway into the garden the field was drawn and then cut
+off at a hundred metres, with the far half of it clipped and plain sky
+where the ground should carry on. Jake, 2026-11-05: the far end of the
+field does not render until I enter the garden. One metre west it all
+appeared, because one metre west is the other side of the wall plane.
+
+It reads the same question the drawing does now. Anywhere the field is
+worth drawing is somewhere the whole of it has to fit.
+
+**That is the fourth time in two days.** The sky had it, the field's own
+drawing had it, the room behind the wall had it, and this. The shape is
+always the same: a test of where somebody is standing used to answer what
+they can see.
+
 ## Acceptance criteria
+
+- The field is in sight from the hall's doorway, where you are not yet out of doors. — `room::tests::the_field_is_in_sight_from_the_hall_doorway`
 - No grass indoors on a descending stair, and the field still in view out past the garden. — `field::tests::there_is_no_grass_on_the_way_down_to_the_cellar`
 
 - You can walk out of the garden into it. — `field::tests::you_can_walk_out_of_the_garden`

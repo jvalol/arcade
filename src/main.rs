@@ -3079,10 +3079,14 @@ impl Arcade {
         let reaches = self.room.reaches;
         let ground = valhalla::ground(reaches);
 
-        scene.push_colored(
+        // wet, so that what the doors throw is given back. A ground that
+        // takes light and returns none of it is a ground the light landed
+        // on and nobody saw.
+        scene.push_material(
             cube,
             &Transform::at(ground.center()).with_scale(ground.size()),
             aim::VALHALLA_GROUND,
+            aim::VALHALLA_WET,
         );
 
         for one in valhalla::built(reaches) {
@@ -3157,6 +3161,37 @@ impl Arcade {
                 &Transform::at(one.at).with_scale(across),
                 aim::VALHALLA_LIT,
             );
+
+            // and the reveal round it, which is what makes it a hole: two
+            // jambs, a head and a sill, standing out from the wall and
+            // dark, so the warm panel is seen down a short tunnel.
+            let out_to = one.at.x + valhalla::SET_BACK + valhalla::JAMB * 0.5;
+            let deep = valhalla::SET_BACK + valhalla::JAMB;
+
+            for (off_y, off_z, tall, long) in [
+                (
+                    one.high * 0.5,
+                    0.0,
+                    valhalla::JAMB,
+                    one.wide + valhalla::JAMB * 2.0,
+                ),
+                (
+                    -one.high * 0.5,
+                    0.0,
+                    valhalla::JAMB,
+                    one.wide + valhalla::JAMB * 2.0,
+                ),
+                (0.0, one.wide * 0.5, one.high, valhalla::JAMB),
+                (0.0, -one.wide * 0.5, one.high, valhalla::JAMB),
+            ] {
+                scene.push_material(
+                    cube,
+                    &Transform::at(vec3(out_to, one.at.y + off_y, one.at.z + off_z))
+                        .with_scale(vec3(deep, tall, long)),
+                    aim::VALHALLA_JAMB,
+                    aim::MATTE,
+                );
+            }
         }
     }
 
@@ -8101,11 +8136,26 @@ impl Game for Arcade {
         // sun you cannot see is the one thing that space is for.
         camera.far = if self.in_the_deep() {
             beyond::sees()
-        } else if self.outdoors {
+        } else if self.sees_outdoors {
             // and out in the field it is the far side of the sky, per spec
             // 0040. A hundred metres out there cuts the ground off at a
             // hundred and leaves black above it, which is a field in a
             // cave: the first build of this looked exactly like that.
+            //
+            // **Wherever the field is drawn and not wherever you stand.**
+            // This read `outdoors`, which is `out_of_doors` and is a
+            // question about what is over your feet, while the drawing of
+            // the field moved to a question about sight in spec 0086 and
+            // this line did not go with it. Standing in the hall's doorway
+            // into the garden the field was drawn and the camera stopped
+            // at the building's hundred metres, so the far half of it was
+            // clipped: Jake, 2026-11-05, the far end of the field does not
+            // render until I enter the garden. One metre west it did.
+            //
+            // That is the same fault for the fourth time in two days: a
+            // test of where your feet are answering a question about what
+            // you can see. The sky had it, the field's own drawing had it,
+            // the room behind the wall had it.
             field::sees(self.at)
         } else {
             Camera::new().far
