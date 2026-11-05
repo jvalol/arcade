@@ -93,10 +93,39 @@ standing in a field.
   at. The threshold is not what is wrong there, and the fix is not this
   spec's.
 
-## Out of scope
+## What Jake has since decided, and this does not build
 
-**Anything behind him.** No hall, no gate, no door. The landing's far
-parapet is the end of what this building has.
+**Heimdall is the last gate, and what is behind him is Valhalla.** Jake,
+2026-11-04, after walking this: he lets you into a room, there is something
+to answer first, and what is through there is where something stunning and
+beautiful should be. So the far parapet is not the end of what the building
+has, and the two lines this section used to open with, saying there is
+nothing behind him and nothing to enter, are wrong rather than out of scope.
+
+Nothing of it is built. What is built is the landing and the figure, and
+both hold: a threshold is still a threshold when there is a door behind it.
+
+**The gate is a riddle and not a game.** Jake's word is sphinx-like. That
+rules out the thing this file argued for an hour earlier, which was the
+arcade's own `starry` at full size, and he ruled it out on better grounds
+than the ones it was argued on: Van Gogh is already in the building, in a
+cabinet you walk past every time you cross the hall.
+
+**What the riddle has to be, if spec 0036 is to hold.** That spec's rule is
+that a room's clue is the answer to the thing that room already asks, and
+that a room needing something planted in it is a room the trail is wrong
+about. Read strictly that rule governs the eight rooms and not the gate at
+the end, so a riddle here breaks nothing. Read for what it is for, it says
+the useful thing: a riddle whose answer you could have looked up is a
+trivia gate, and a riddle whose answer you can only have from having been
+in this building is the trail asking you one last time what you saw. The
+second is worth building and the first is not.
+
+**The style of Valhalla is open.** Kinkade-like, a village, warm light with
+its source out of frame, is Jake's own and is the one to beat. Van Gogh is
+spent. Nothing is decided.
+
+## Out of scope
 
 **Talking.** See above.
 

@@ -123,14 +123,22 @@ touched.
 
 ## What is still open
 
-**What is at the top of the bridge.** It ends level and in mid-air, which
-reads as unfinished rather than as deliberate, and the myth says why: a
-rainbow arcs up and comes back down, while Bifröst goes up and arrives, at a
-threshold with somebody standing on it. A threshold and a watchman would
-answer it without being a room to furnish, and the building has drawn people
-since spec 0033. A hall up there is the fourth room this spec warns about.
+**The room behind Heimdall, and the puzzle he asks you first.** Spec 0055
+built the threshold and the watchman and said there was nothing behind him.
+Jake, 2026-11-04, having walked it: Heimdall should let you into a room, and
+there should be a final puzzle with him, and the room should be Van Gogh or
+Kinkade inspired.
 
-That is Jake's, and it is the one decision left in this spec.
+Heimdall is the last gate and what is behind him is Valhalla, which is
+where something stunning should be. The thing he asks is a riddle rather
+than a game, sphinx-like.
+
+So the fourth room this spec warns about is being built after all, and the
+warning stands as the thing to be careful of rather than as a reason to
+stop. What makes it not a room nobody wanted is the same test as everything
+else here: it has to use the whole building rather than add to it. For the
+riddle that means an answer you can only have from having walked the
+building. Spec 0055 carries the rest.
 
 ---
 
