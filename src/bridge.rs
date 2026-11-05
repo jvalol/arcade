@@ -147,22 +147,9 @@ pub fn shows(trail: &Trail) -> bool {
     Asked::every().iter().all(|one| trail.given().contains(one))
 }
 
-/// What the stone at its foot says.
-///
-/// **Because nobody can tell what any of this is.** Jake, 2026-11-05: a
-/// person seeing it for the first time would have no idea it is meant to
-/// be Norse. Spec 0006 is the precedent and says it plainly about the
-/// nook: everything else in the hall announces itself, and a room nothing
-/// names is a room you find by accident.
-///
-/// **Carved and not hung or lit.** Spec 0006 picked a painted plank over
-/// neon for the nook because a neon arrow pointing at a panelled study is
-/// a sign for the wrong room. The same test sends this one to stone.
-///
-/// Without the umlaut. The font has one and draws it as a lowercase ö
-/// among capitals, which on a carved stone reads as a mistake rather than
-/// as a spelling.
-pub const SAYS: &str = "BIFROST [COPY - Jake]";
+/// The name under the runes, which lives in [`crate::says`] with the
+/// rest of the drafted copy so that signing it off is one command.
+pub use crate::says::BIFROST as SAYS;
 
 /// How hard the carving is burning, which breathes rather than holding
 /// still.
@@ -180,7 +167,69 @@ pub fn burning(since: f32) -> f32 {
     let slow = (since * 0.41).sin();
     let under = (since * 0.17 + 1.3).sin();
 
-    0.76 + slow * 0.17 + under * 0.07
+    BURNS + slow * 0.16 + under * 0.07
+}
+
+/// What it burns at before the flicker.
+///
+/// **Raised, because the troughs were taking it out of the glow.**
+/// `RUNE_CUT` is past one in red and under one in green and blue, which
+/// is what makes it read as a hot colour rather than a white one. At
+/// 0.76 the low end of the flicker pulled the red down near one as
+/// well, so on a dark night there was nothing over one at all and the
+/// carving was lit like any other paint: Jake's picture of it is a
+/// brown mark on a grey stone.
+pub const BURNS: f32 = 0.95;
+
+/// And how much harder it burns at night.
+///
+/// Jake: the glyphs should especially glow at night. Which is also the
+/// only time it can be seen to: a thing that glows is a thing brighter
+/// than what is round it, and at noon nothing on a field is.
+pub const NIGHTLY: f32 = 1.7;
+
+pub fn glows(since: f32) -> f32 {
+    burning(since) * (1.0 + NIGHTLY * nightly(since))
+}
+
+/// How much of the night it is: nought while the sun is up, one at the
+/// bottom of it, and squared so the two twilights are the day's side of
+/// halfway rather than the night's.
+pub fn nightly(since: f32) -> f32 {
+    let dark = 1.0 - (crate::garden::sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
+
+    dark * dark
+}
+
+/// How white the heart of the glow goes at night.
+///
+/// **Because there is no bloom in this engine.** A colour past one is a
+/// thing that is lit with nothing lighting it, and that is the whole of
+/// it: nothing bleeds into the pixels round it. So a red of eight and a
+/// green of three is not a light, it is an orange mark, and Jake's
+/// first night picture of it reads exactly that way.
+///
+/// What a hot thing actually looks like is white in the middle and its
+/// own colour at the edge. With no bloom to do that across the picture,
+/// it is done in the colour: a pale amount added to every channel at
+/// night, so the glyph goes from orange towards white as the light
+/// goes. Jake: the glyphs should especially glow at night.
+pub const RUNE_HOT: f32 = 0.45;
+
+/// The colour the carved face is drawn in, glow and all.
+///
+/// **Alpha held under one on purpose**, per `aim::RUNE_GLAZE`: at one
+/// the face goes through the engine opaque and is not drawn at all.
+pub fn alight(since: f32) -> glam::Vec4 {
+    let lit = crate::aim::RUNE_CUT * glows(since);
+    let hot = RUNE_HOT * nightly(since);
+
+    glam::vec4(
+        lit.x + hot,
+        lit.y + hot,
+        lit.z + hot,
+        crate::aim::RUNE_GLAZE,
+    )
 }
 
 /// How fine the carved face is drawn.
@@ -335,12 +384,26 @@ pub fn knobble(seed: u32, u: f32, v: f32) -> f32 {
 /// except here: the shape of the stone carries on under the face and only
 /// the small stuff comes off it.
 pub fn dressed_by(u: f32, v: f32) -> f32 {
-    let across = ((u - 0.5).abs() / (FACE_WIDE * 1.4)).min(1.0);
+    // **Flat across the whole panel, and falling off outside it.** This
+    // measured out from the middle of the face, so the dressing was
+    // strongest at the centre and half gone at the edges. That was
+    // survivable while the panel was a thin strip. Widened to a proper
+    // dressed face, its sides sat where the stone is still half as
+    // bumpy as it is anywhere, the bumps came through the carving, and
+    // the ribbon vanished at every hour of the day: Jake's night
+    // picture of a blank stone is this and not the glow.
+    let across = over(1.0, (u - 0.5).abs() / face_wide(v));
     let middle = (FACE_FROM + FACE_TO) * 0.5;
-    let along = ((v - middle).abs() / ((FACE_TO - FACE_FROM) * 0.72)).min(1.0);
+    let along = over(0.5, (v - middle).abs() / (FACE_TO - FACE_FROM));
     let off = across.max(along);
 
     (1.0 - off * off).max(0.0)
+}
+
+/// Nought up to `edge`, one by half again past it: how far outside a
+/// thing you are, for something that has to be wholly flat inside it.
+fn over(edge: f32, at: f32) -> f32 {
+    ((at - edge) / (edge * 0.6)).clamp(0.0, 1.0)
 }
 
 /// Where the stone's skin is at `u` round and `v` up, in its own unit.
@@ -348,20 +411,91 @@ pub fn dressed_by(u: f32, v: f32) -> f32 {
 /// **One account of the surface, which is the whole point.** The carving
 /// is built from this too, so it lies on the rock instead of over it: it
 /// was a flat slab standing proud of a lump, and you could see the plate.
+/// How broad the stone is a given way up itself.
+///
+/// **A slab and not a column.** An egg is as narrow at the top as it is
+/// at the foot, and a tall narrow lump with two round stones either side
+/// of it looks like exactly what Jake said it looked like. A runestone is
+/// a broad flat slab that holds its width nearly to the top and is
+/// shouldered off above that.
+///
+/// Full width from the grass to better than two thirds up, then an arc
+/// over. The foot closes to a point under the ground, where nobody sees
+/// it.
+pub fn girth(v: f32) -> f32 {
+    // **Blunt at the crown, not pointed.** Smoothstepped off over the
+    // top third it came out a cone, and a cone on a field is a haystack.
+    // A stone that has stood a thousand years has a weathered top, so
+    // this holds full width to near the head and then rounds over fast.
+    let crown = ((0.995 - v) / 0.17).clamp(0.0, 1.0).powf(0.38);
+    // and loses a little going up, the way a split block does
+    let waist = 1.0 - 0.18 * (v - 0.25).max(0.0);
+    let foot = (v / 0.04).clamp(0.0, 1.0).sqrt();
+
+    crown * waist * foot
+}
+
+/// How much wider than its body the stone is at a height `v`: the
+/// swelling at its foot.
+///
+/// **Jake: it needs to be a lot thicker at the bottom.** The first go at
+/// that multiplied the whole profile by a term falling off over the
+/// stone's entire height, which is the shape of a cone and read as one
+/// from thirty metres. Weight low down is not a taper from top to
+/// bottom; it is a body of roughly one width with a plinth swelling out
+/// of the ground under it. This is the swelling, and it is gone by
+/// `SWELLS_TO`.
+pub const SWELLS: f32 = 1.05;
+pub const SWELLS_TO: f32 = 0.62;
+
+pub fn flare(v: f32) -> f32 {
+    let low = ((SWELLS_TO - v) / SWELLS_TO).clamp(0.0, 1.0);
+
+    1.0 + SWELLS * low * low
+}
+
+/// How much of the swelling the broad face gets.
+///
+/// **Less than the thin one.** The stone is a slab: 0.92 through and 1.6
+/// across, and a swelling applied evenly to both keeps that ratio, so
+/// the foot is a bigger slab rather than a heavier stone. Given mostly
+/// to the thickness, the base reads as a block and the head still reads
+/// as a face to carve.
+pub const BROADENS: f32 = 0.45;
+
+/// The stone's half-extents in metres at a height `v`, through the face
+/// and across it. The shape as the eye reads it, which is the body, the
+/// swelling and the two scales together and not any one of them.
+pub fn half_at(v: f32) -> (f32, f32) {
+    let body = girth(v) * 0.5;
+    let swell = flare(v);
+
+    (
+        RUNE_THICK * body * swell,
+        RUNE_WIDE * body * (1.0 + (swell - 1.0) * BROADENS),
+    )
+}
+
+/// And where it meets the grass, which is what the heaped footing banks
+/// against.
+pub fn foot_half() -> (f32, f32) {
+    half_at(RUNE_SUNK / RUNE_TALL)
+}
+
 pub fn stone_point(seed: u32, u: f32, v: f32) -> Vec3 {
-    use std::f32::consts::{PI, TAU};
+    use std::f32::consts::TAU;
 
     // the face looks along +x at `u` of a half, which keeps the seam round
     // the back where nothing is written
     let round = -(u - 0.5) * TAU;
-    let up = v * PI;
-    let out = (0.5 + knobble(seed, u, v)) * up.sin();
+    let out = (0.5 + knobble(seed, u, v)) * girth(v);
     let lean = crate::garden::tip(seed, v);
+    let swell = flare(v);
 
     vec3(
-        round.cos() * out + lean.x,
-        -up.cos() * 0.5,
-        round.sin() * out + lean.y,
+        round.cos() * out * swell + lean.x,
+        v - 0.5,
+        round.sin() * out * (1.0 + (swell - 1.0) * BROADENS) + lean.y,
     )
 }
 
@@ -376,11 +510,39 @@ pub fn stone_mesh(seed: u32) -> blitzkit::mesh::MeshData {
 
 /// How much of the stone the carved face takes: half its width in `u`,
 /// and the two `v` it runs between.
-pub const FACE_WIDE: f32 = 0.085;
-pub const FACE_FROM: f32 = 0.28;
-pub const FACE_TO: f32 = 0.76;
+/// **A dressed face, with the ribbon a narrow thing down the middle of
+/// it.** The band used to be drawn at the edges of this, which made the
+/// frame three times wider than the seven runes it framed: a chain hung
+/// on a hoarding. Seven runes stacked down a metre and a fifth cannot be
+/// made much bigger than a hand, so what had to change was the frame,
+/// not the lettering. The panel is wider than it was and the ribbon
+/// hugs the text, leaving plain dressed stone either side of it, which
+/// is what the carved stones actually look like.
+pub const FACE_WIDE: f32 = 0.105;
+pub const FACE_FROM: f32 = 0.52;
+pub const FACE_TO: f32 = 0.86;
 /// And how far the carving stands off the skin it is laid on.
-pub const FACE_PROUD: f32 = 0.012;
+/// **Proud enough to clear what is left of the stone's grain.** A
+/// hundredth was the number while the panel sat in the flattest part of
+/// the face. It is a dressed panel standing off a rough stone, and a
+/// real one stands off it by more than a millimetre.
+pub const FACE_PROUD: f32 = 0.03;
+
+/// How much of the way round the stone the dressed face takes, at a
+/// height `v`.
+///
+/// **Widening as the stone narrows, so the panel does not keystone.**
+/// `FACE_WIDE` is a share of the way round, and a share of the way round
+/// a tapering stone is a narrowing strip: once the foot was flared the
+/// band's bottom row was twice the width of its top, and the name read
+/// as if seen from below. Held to a constant arc instead, by giving back
+/// exactly what the taper takes, the panel is a straight-sided board
+/// with the stone falling away behind it.
+pub fn face_wide(v: f32) -> f32 {
+    let middle = (FACE_FROM + FACE_TO) * 0.5;
+
+    FACE_WIDE * girth(middle) / girth(v).max(0.05)
+}
 
 /// The carved face: the stone's own surface over the written part of it,
 /// lifted off itself by a hair.
@@ -393,12 +555,12 @@ pub fn carved_mesh(seed: u32) -> blitzkit::mesh::MeshData {
     use std::f32::consts::TAU;
 
     let mut mesh = blitzkit::mesh::MeshData::surface(56, 72, |s, t| {
-        let u = 0.5 + (s - 0.5) * FACE_WIDE * 2.0;
         // down the stone as the picture goes down, because the picture's
         // row nought is its top and `v` nought is this lump's foot.
         // Taken the other way the band stood on its head and the name
         // read along the crown.
         let v = FACE_TO - t * (FACE_TO - FACE_FROM);
+        let u = 0.5 + (s - 0.5) * face_wide(v) * 2.0;
         let round = -(u - 0.5) * TAU;
         let at = stone_point(seed, u, v);
 
@@ -420,14 +582,21 @@ pub fn carved_mesh(seed: u32) -> blitzkit::mesh::MeshData {
 /// So this is the lines, once, and both the picture and the cut bars are
 /// stood along them.
 pub fn strokes() -> Vec<((f32, f32), (f32, f32))> {
-    let (near, far) = (0.11, 0.89);
+    // **The ribbon's own numbers, not the runes'.** Its top used to be
+    // `far`, which was also its width, and the two agreed only because
+    // the band happened to be as wide as it was tall. Narrowed to the
+    // lettering, `far` fell to 0.615 and took the top down with it: the
+    // column ran out of the bottom of the picture and three of the
+    // seven runes were drawn off the stone.
+    let (near, far) = (0.385, 0.615);
+    let (foot, shoulder, apex) = (0.065, 0.885, 0.945);
     let mut out = vec![
         // the band, round the face and open at the foot the way a
         // serpent's body leaves its own tail
-        ((near, 0.08), (near, far)),
-        ((near, far), (0.5, 0.965)),
-        ((0.5, 0.965), (far, far)),
-        ((far, far), (far, 0.08)),
+        ((near, foot), (near, shoulder)),
+        ((near, shoulder), (0.5, apex)),
+        ((0.5, apex), (far, shoulder)),
+        ((far, shoulder), (far, foot)),
     ];
 
     // and the runes down the middle of it, reading from the top. Taller
@@ -443,10 +612,15 @@ pub fn strokes() -> Vec<((f32, f32), (f32, f32))> {
     // So a rune is written about twice as wide as it is high here, to
     // arrive about twice as high as it is wide out there. The strokes run
     // from 0.22 to 0.78 inside their own square, which is in the factor.
-    let tall = 0.069;
-    let wide = tall * 2.05;
-    let gap = 0.031;
-    let top = far - 0.06;
+    //
+    // **And filling the ribbon.** At 2.05 against the old wide band the
+    // column used a fifth of it. The ribbon moved rather than the
+    // runes; this is the width that fills the ribbon and still arrives
+    // about twice as high as it is wide out on the stone.
+    let tall = 0.0778;
+    let wide = tall * 1.3;
+    let gap = 0.035;
+    let top = 0.875;
 
     for (n, lines) in RUNES.iter().enumerate() {
         let foot = top - (n as f32 + 1.0) * (tall + gap);
@@ -558,7 +732,76 @@ pub fn carving() -> blitzkit::texture::TextureData {
         }
     }
 
+    halo(&mut pixels, n);
+
     blitzkit::texture::TextureData::from_pixels(n, n, pixels)
+}
+
+/// How far the halo reaches round a cut, in texels, and how strongly.
+pub const HALO_OUT: i32 = 4;
+pub const HALO: f32 = 0.5;
+
+/// Spreads a soft skirt of the same colour round everything already cut,
+/// in the picture's own alpha.
+///
+/// **Because this engine has no bloom.** A colour past one is a thing
+/// lit with nothing lighting it, and that is all it is: it does not
+/// bleed into the pixels round it. So turning the carving up for the
+/// night only made a brighter mark, and adding white to it only made a
+/// paler one. Jake's two night pictures are those two answers.
+///
+/// What a glow actually is on screen is the thing plus light around the
+/// thing, and here the cheapest place to put the light around it is in
+/// the same picture: the glyph at full alpha, and a soft skirt of the
+/// same amber at part alpha spreading off it. One texture, one draw,
+/// and it is the glyph's own shape rather than a disc behind it.
+///
+/// The skirt goes under the cut and never over it: a glyph whose own
+/// edge has been softened is a blurry glyph, and legibility is the one
+/// thing this carving has cost the most rounds.
+fn halo(pixels: &mut [u8], n: u32) {
+    let was: Vec<u8> = (0..(n * n) as usize).map(|i| pixels[i * 4 + 3]).collect();
+    let reach = (HALO_OUT * HALO_OUT) as f32;
+
+    for y in 0..n as i32 {
+        for x in 0..n as i32 {
+            let at = ((y as u32 * n + x as u32) * 4) as usize;
+
+            if was[(y as u32 * n + x as u32) as usize] > 0 {
+                continue;
+            }
+
+            let mut near = 0.0f32;
+
+            for dy in -HALO_OUT..=HALO_OUT {
+                for dx in -HALO_OUT..=HALO_OUT {
+                    let (sx, sy) = (x + dx, y + dy);
+
+                    if sx < 0 || sy < 0 || sx >= n as i32 || sy >= n as i32 {
+                        continue;
+                    }
+
+                    let off = (dx * dx + dy * dy) as f32;
+
+                    if off > reach || was[(sy as u32 * n + sx as u32) as usize] == 0 {
+                        continue;
+                    }
+
+                    near = near.max(1.0 - off / reach);
+                }
+            }
+
+            if near <= 0.0 {
+                continue;
+            }
+
+            for c in 0..3 {
+                pixels[at + c] = 255;
+            }
+
+            pixels[at + 3] = (255.0 * near * near * HALO) as u8;
+        }
+    }
 }
 
 /// How tall the lettering is cut, how big the stone is, and how far it
@@ -568,13 +811,202 @@ pub fn carving() -> blitzkit::texture::TextureData {
 /// and you walk up the middle of it; a stone in that is a stone you walk
 /// into on the way to the thing it names.
 pub const RUNE_TEXELS: f32 = 64.0;
-pub const RUNE_TALL: f32 = 2.7;
-pub const RUNE_WIDE: f32 = 1.12;
-pub const RUNE_THICK: f32 = 0.34;
-pub const RUNE_LEANS: f32 = 0.06;
-pub const RUNE_ASIDE: f32 = 1.4;
+/// The whole length of the stone, foot and all, and how much of that is
+/// under the grass.
+///
+/// **Jake: it has no reason to be standing that way.** A lump the shape
+/// of an egg with its bottom pole exactly at ground level is an egg
+/// balanced on its tip, and nothing says whether there is more of it
+/// down there. The garden's set stones are the same shape and get away
+/// with it because a third of each is under the gravel.
+///
+/// Better than a quarter of this one is, which is what a standing stone
+/// needs to stay standing and is why the ones still up are still up. The
+/// width at the grass line is what says so.
+pub const RUNE_TALL: f32 = 3.6;
+pub const RUNE_SUNK: f32 = 1.0;
+pub const RUNE_WIDE: f32 = 1.6;
+/// And how deep, which is the one that decides whether it looks like it
+/// is about to fall over.
+///
+/// **Jake: it is still a really thin slab, and rocks around the base do
+/// not make it look like it is not about to fall over.** Both true. At
+/// 0.34 against two and a half metres standing it is a blade seen edge
+/// on, and no amount of spoil round the foot buys what mass buys. The
+/// stones that are still up after a thousand years are the thick ones.
+pub const RUNE_THICK: f32 = 0.92;
+/// How far from the stone's middle the heaped footing reaches, how high
+/// it banks where it meets the stone, how many pieces it is broken into,
+/// and how much grass there is between its rim and the bridge.
+pub const RUBBLE_OUT: f32 = 2.15;
+pub const RUBBLE_UP: f32 = 0.62;
+pub const RUBBLE: usize = 160;
+pub const RUBBLE_CLEARS: f32 = 0.5;
 
-/// The stone at the foot of the bridge: where it stands and how big.
+pub const RUNE_LEANS: f32 = 0.06;
+/// How far the stone stands off the deck, measured from the deck's edge
+/// on one side and from the deck's foot on the other.
+///
+/// **Which is the footing's reach and not the stone's.** It was 1.4,
+/// back when the footing was a handful of stones that could be put
+/// wherever there was room. A heaped bank has a footprint of its own,
+/// and at 1.4 its edge came within two centimetres of the ramp's
+/// corner. None of it is solid, so touching the ramp is rubble you walk
+/// through. The clearance the stone needs is the clearance the footing
+/// needs, and it is written here once and used for both directions.
+///
+/// Conservative, because the sum is measured along one axis while the
+/// thing it has to miss is a half strip: the shortest line to the ramp
+/// is a diagonal, so this leaves about 1.7 metres of grass where
+/// `RUBBLE_CLEARS` only asks for half of one. Half a metre is the
+/// requirement and `the_bank_keeps_off_the_bridge` is what holds it;
+/// this is one way of satisfying it and not the tightest.
+pub const RUNE_ASIDE: f32 = RUBBLE_OUT + RUBBLE_CLEARS;
+
+/// How high the heaped footing stands a share `share` of the way from
+/// the stone's foot to its rim, and how ragged its edge is at `round`.
+///
+/// One function because the bank and the loose pieces lying on it have
+/// to agree: a stone floating a hand over the gravel is the fault that
+/// comes of working them out twice.
+pub fn mound_high(share: f32) -> f32 {
+    RUBBLE_UP * (1.0 - share.clamp(0.0, 1.0)).powf(1.6)
+}
+
+pub fn mound_rim(round: f32) -> f32 {
+    // **No one wave allowed to carry it.** At 0.11 the three-wave did,
+    // and three big lobes round a low bank is the outline of a spill
+    // rather than a heap. Spread over more waves, none of them large,
+    // the edge wanders without taking a shape.
+    //
+    // The shares add to one, so the whole wander is `RUBBLE_RAGGED` and
+    // the furthest the bank can reach is a number rather than a guess.
+    // It has to be: the clearance from the bridge is worked out from it.
+    let wobble = (round * 3.0).sin() * 0.26
+        + (round * 7.0 + 1.9).sin() * 0.33
+        + (round * 13.0 + 0.4).sin() * 0.24
+        + (round * 23.0 + 2.6).sin() * 0.17;
+
+    1.0 + wobble * RUBBLE_RAGGED
+}
+
+/// How far past `RUBBLE_OUT` the bank's edge can wander.
+pub const RUBBLE_RAGGED: f32 = 0.21;
+
+/// And so the furthest anything in the footing can be from the stone.
+pub fn rubble_reaches() -> f32 {
+    RUBBLE_OUT * (1.0 + RUBBLE_RAGGED)
+}
+
+/// The bank of spoil the stone is set into, as one skin.
+///
+/// **Because a scatter of pebbles on flat grass is a scatter of pebbles
+/// on flat grass.** The first go at this was ninety loose stones in a
+/// ring, and from thirty metres it read as a ring: you could see the
+/// grass between them and the ground under them was dead level. What
+/// says a stone was dug in and packed is that the ground itself is
+/// raised round it. So the ground is raised, as a surface, and the loose
+/// pieces lie on that rather than standing in for it.
+///
+/// Built in metres about the stone's middle, with its rim wandering, and
+/// faceted, because a smooth dome of earth is a smooth dome of earth.
+pub fn mound_mesh() -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    let (hug_x, hug_z) = foot_half();
+
+    crate::garden::faceted(blitzkit::mesh::MeshData::surface(
+        MOUND_ROUND,
+        MOUND_STEPS,
+        |u, v| {
+            let round = -u * TAU;
+            let (cos, sin) = (round.cos(), round.sin());
+            // from under the stone's own foot, so there is no seam of
+            // grass showing between the bank and what it banks against
+            let inner = (hug_x * cos).hypot(hug_z * sin) * 0.86;
+            let rim = RUBBLE_OUT * mound_rim(round);
+            let out = inner + v * (rim - inner).max(0.0);
+            // and it thins to nothing at the rim rather than ending in a
+            // step, with the surface itself broken up on the way down
+            let rough = ((u * TAU * 9.0).sin() * (v * 11.0).sin()) * 0.035 * (1.0 - v);
+
+            vec3(cos * out, mound_high(v) + rough, sin * out)
+        },
+    ))
+}
+
+pub const MOUND_ROUND: u32 = 112;
+pub const MOUND_STEPS: u32 = 14;
+
+/// The loose pieces lying on that bank: where each sits, how big it is,
+/// and which way round.
+///
+/// Finest in close where it was packed and trodden, coarsest at the rim
+/// where it was thrown clear, and every one of them sitting down into
+/// the bank rather than resting on top of it.
+///
+/// A hundred and sixty pieces, which is cheap: these are the garden's
+/// own eleven by seven lump, not the hundred and seventy six by two
+/// hundred and twenty four the standing stone is. Seven of *those* put
+/// more geometry in the footing than in the monument.
+pub fn rubble(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
+    if !shows(trail) {
+        return Vec::new();
+    }
+
+    let (at, _) = runestone_at(reaches);
+    let (hug_x, hug_z) = foot_half();
+
+    let mut state = 0x5EED_u32;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        state
+    };
+    let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
+    let mut out = Vec::with_capacity(RUBBLE);
+
+    for _ in 0..RUBBLE {
+        let round = roll(next()) * std::f32::consts::TAU;
+        let (cos, sin) = (round.cos(), round.sin());
+
+        let inner = (hug_x * cos).hypot(hug_z * sin) * 0.86;
+        // **At its own direction, not the opposite one.** Written
+        // `-round` the pieces read a mirrored rim, so round half the
+        // heap they lay out past the bank's edge and round the other
+        // half they stopped short of it.
+        let rim = RUBBLE_OUT * mound_rim(round);
+        let share = roll(next()).powf(1.2);
+        let off = inner + share * (rim - inner).max(0.0);
+
+        // **Coarse at the collar and fine at the rim, which is the
+        // way round it was not.** Thrown-clear spoil at the edge and
+        // gravel in close is one real thing, but the thing that ties a
+        // raised stone to the ground is the packing: the wedges driven
+        // in round the collar to hold it plumb. Those are the biggest
+        // pieces on the site and they are the ones against the stone.
+        let across = (0.30 - share * 0.20) * (0.7 + roll(next()) * 0.8);
+        // sitting into the bank at that radius, by about a third of
+        // itself, which is what stops them reading as dropped
+        let up = mound_high(share) - across * 0.34;
+
+        out.push((
+            vec3(at.x + cos * off, up, at.z + sin * off),
+            vec3(
+                across,
+                across * (0.45 + roll(next()) * 0.4),
+                across * (0.8 + roll(next()) * 0.6),
+            ),
+            roll(next()) * std::f32::consts::TAU,
+        ));
+    }
+
+    out
+}
+
+/// The stone at the foot of the bridge: where it stands and how big./// The stone at the foot of the bridge: where it stands and how big.
 ///
 /// Empty until the bridge is there, like everything else here. A stone
 /// naming a bridge that does not exist is a grave marker.
@@ -606,8 +1038,12 @@ pub fn shades(reaches: f32, at: Vec3) -> bool {
     // far branch of how far off the deck's line a spot is, the stone fell
     // on the near side of that and so was never asked about: it sits four
     // and a half metres off a line whose own clearance is five.
-    if (at.x - stone.x).abs() < size.x * 0.5 + CLEARS
-        && (at.z - stone.z).abs() < size.z * 0.5 + CLEARS
+    // measured off the heap and not the stone, which is the smaller
+    // of the two now that the stone is set in a bank
+    let footing = rubble_reaches();
+
+    if (at.x - stone.x).abs() < (size.x * 0.5).max(footing) + CLEARS
+        && (at.z - stone.z).abs() < (size.z * 0.5).max(footing) + CLEARS
     {
         return true;
     }
@@ -639,8 +1075,13 @@ fn runestone_at(reaches: f32) -> (Vec3, Vec3) {
 
     (
         vec3(
-            foot.x + RUNE_WIDE,
-            RUNE_TALL * 0.5,
+            // behind the deck's foot by the same clearance it stands
+            // aside by, because in both directions what has to miss the
+            // bridge is the rubble's rim and not the stone. This was
+            // `RUNE_WIDE`, which only ever agreed with the right answer
+            // by accident.
+            foot.x + RUNE_ASIDE,
+            RUNE_TALL * 0.5 - RUNE_SUNK,
             foot.z + WIDE * 0.5 + RUNE_ASIDE,
         ),
         vec3(RUNE_THICK, RUNE_TALL, RUNE_WIDE),
@@ -1004,6 +1445,211 @@ pub mod tests {
                 + landing(REACHES, &done()).len()
                 + runestone(REACHES, &done()).iter().count()
         );
+    }
+
+    /// Jake, twice: it reads as a slab with no reason to be standing, and
+    /// then that it is still a thin slab. The answer both times was mass
+    /// low down, so this holds the profile's shape rather than a number.
+    #[test]
+    fn the_stone_is_heaviest_where_it_leaves_the_ground() {
+        let grass = RUNE_SUNK / RUNE_TALL;
+        let (foot, _) = half_at(grass);
+        let (shoulder, _) = half_at(0.78);
+
+        assert!(
+            foot > shoulder * 1.4,
+            "{:.3} through at the grass line against {:.3} at the shoulder",
+            foot,
+            shoulder
+        );
+
+        // and it only ever loses width going up from there: a bulge
+        // anywhere above the grass is a stone balanced on a waist
+        let mut last = f32::INFINITY;
+
+        for step in 0..=60 {
+            let v = grass + (0.92 - grass) * step as f32 / 60.0;
+            let (now, _) = half_at(v);
+
+            assert!(now <= last + 1e-4, "it widens again at {:.3}", v);
+            last = now;
+        }
+
+        // and it is a slab and not a post: wider across the face than it
+        // is through, all the way up
+        for step in 0..=20 {
+            let v = grass + (0.92 - grass) * step as f32 / 20.0;
+            let (through, across) = half_at(v);
+
+            assert!(across > through * 1.15, "it is square at {:.3}", v);
+        }
+    }
+
+    /// The carved panel keeps one width down a stone that does not, which
+    /// is what stops the name reading as if seen from below.
+    #[test]
+    fn the_carved_panel_is_one_width_all_the_way_down() {
+        let (mut least, mut most) = (f32::INFINITY, 0.0f32);
+
+        for step in 0..=40 {
+            let v = FACE_FROM + (FACE_TO - FACE_FROM) * step as f32 / 40.0;
+            let arc = face_wide(v) * girth(v);
+
+            least = least.min(arc);
+            most = most.max(arc);
+        }
+
+        assert!(
+            most - least < least * 0.01,
+            "the band runs {:.4} to {:.4} across the face",
+            least,
+            most
+        );
+    }
+
+    /// Jake: the stones around it do not make visual sense unless it was a
+    /// gravel or rubble pile it sat on. A pile banks against what it was
+    /// heaped against and thins to nothing at its edge; a ring of stones
+    /// at one height is the thing he was looking at.
+    #[test]
+    fn the_rubble_banks_against_the_stone_and_thins_outward() {
+        let (at, _) = runestone_at(30.0);
+        let heap = rubble(30.0, &done());
+
+        assert_eq!(heap.len(), RUBBLE);
+
+        let reach = |where_: Vec3| {
+            ((where_.x - at.x).powi(2) + (where_.z - at.z).powi(2)).sqrt() / RUBBLE_OUT
+        };
+        let mut near = (0.0f32, 0);
+        let mut far = (0.0f32, 0);
+
+        for (where_, size, _) in &heap {
+            let top = where_.y + size.y * 0.5;
+
+            if reach(*where_) < 0.5 {
+                near = (near.0 + top, near.1 + 1);
+            } else {
+                far = (far.0 + top, far.1 + 1);
+            }
+        }
+
+        assert!(
+            near.1 > 10 && far.1 > 10,
+            "{} in close, {} out",
+            near.1,
+            far.1
+        );
+
+        let (near, far) = (near.0 / near.1 as f32, far.0 / far.1 as f32);
+
+        assert!(
+            near > far * 1.8,
+            "it stands {:.3} in close and {:.3} at the rim",
+            near,
+            far
+        );
+    }
+
+    /// The bank and the pieces lying on it have to agree about where the
+    /// edge is. They did not: the pieces read the rim at the opposite
+    /// direction, so round half the heap they lay out past it.
+    #[test]
+    fn nothing_lies_off_the_edge_of_the_bank() {
+        let (at, _) = runestone_at(30.0);
+
+        for (where_, size, _) in rubble(30.0, &done()) {
+            let off = ((where_.x - at.x).powi(2) + (where_.z - at.z).powi(2)).sqrt();
+            let round = (where_.z - at.z).atan2(where_.x - at.x);
+            let rim = RUBBLE_OUT * mound_rim(round);
+
+            assert!(
+                off <= rim + size.x * 0.5,
+                "a piece sits {:.3} out where the bank ends at {:.3}",
+                off,
+                rim
+            );
+        }
+    }
+
+    /// And the bank itself keeps off the ramp, which the pieces alone
+    /// cannot say: its edge wanders a fifth further than its nominal
+    /// reach, and the clearance was worked out without that.
+    #[test]
+    fn the_bank_keeps_off_the_bridge() {
+        let foot = foot(30.0);
+        let (at, _) = runestone_at(30.0);
+
+        for step in 0..360 {
+            let round = step as f32 * std::f32::consts::TAU / 360.0;
+            let out = RUBBLE_OUT * mound_rim(round);
+
+            assert!(out <= rubble_reaches() + 1e-4, "the rim reaches {:.3}", out);
+
+            let edge = vec3(at.x + round.cos() * out, 0.0, at.z + round.sin() * out);
+            let aside = (edge.z - foot.z) - WIDE * 0.5;
+            let behind = edge.x - foot.x;
+
+            // how far that is from the deck's own footprint, which is
+            // the half strip running out in -x within `WIDE` of the
+            // line. **Not `aside > 0 || behind > 0`**, which is only
+            // whether it is off the deck: at the offset this had, the
+            // bank came within five centimetres of the ramp and that
+            // test said nothing.
+            let clear = match (aside > 0.0, behind > 0.0) {
+                (true, true) => aside.hypot(behind),
+                (true, false) => aside,
+                (false, true) => behind,
+                (false, false) => 0.0,
+            };
+
+            assert!(
+                clear >= RUBBLE_CLEARS,
+                "the bank comes within {:.3} of the ramp at {:.2} radians",
+                clear,
+                round
+            );
+        }
+    }
+
+    /// And it stops under the runes. A footing lapping the first row is a
+    /// name that has to be read round.
+    #[test]
+    fn no_rubble_laps_the_carved_band() {
+        let (at, _) = runestone_at(30.0);
+        let band = at.y + (FACE_FROM - 0.5) * RUNE_TALL;
+
+        for (where_, size, _) in rubble(30.0, &done()) {
+            let top = where_.y + size.y * 0.5;
+
+            assert!(
+                top < band - 0.05,
+                "a piece tops out at {:.3}, band at {:.3}",
+                top,
+                band
+            );
+        }
+    }
+
+    /// None of the heap is solid, so any of it over the ramp is rubble you
+    /// walk through. It ran a metre onto the deck when the stone's offset
+    /// was its own number rather than the heap's reach.
+    #[test]
+    fn the_rubble_keeps_off_the_bridge() {
+        let foot = foot(30.0);
+
+        for (where_, size, _) in rubble(30.0, &done()) {
+            let (wide, deep) = (size.x * 0.5, size.z * 0.5);
+            let aside = (where_.z - deep - foot.z) - WIDE * 0.5;
+            let behind = (where_.x - wide) - foot.x;
+
+            assert!(
+                aside > 0.1 || behind > 0.1,
+                "a piece sits {:.3} aside and {:.3} behind the foot",
+                aside,
+                behind
+            );
+        }
     }
 
     #[test]

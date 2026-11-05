@@ -145,6 +145,116 @@ The name in letters stays, small, under the band. That is every runestone
 at every site in Scandinavia, and it is the only part of this anybody can
 read.
 
+**Deep, which is the one that decides whether it looks like it will stay
+up.** Jake: it is still a really thin slab, and rocks around the base do
+not make it look like it is not about to fall over. Both true. At a third
+of a metre against two and a half standing it is a blade seen edge on,
+and no amount of spoil round the foot buys what mass buys. It is nearly a
+metre through now.
+
+That also says what the packing is and is not for. It is the mark of a
+thing that was dug in, and it was reached for as an answer to stability,
+which it never was: the stones still up after a thousand years are the
+thick ones.
+
+**A slab, and not a column with two stones beside it.** The first setting
+read as genitalia and Jake said so. Both halves of it were mine: the lump
+is an ellipsoid, so it narrows at the top exactly as it narrows at the
+foot, and the packing was five stones with the two largest either side of
+the base, which is a matched pair flanking a column.
+
+So the stone has a profile of its own now instead of a sine: full width
+from the grass to better than two thirds up and shouldered over above
+that, which is what a runestone is, and it is half again as broad. And
+the packing is seven small ones, none of them large, none opposite
+another, most off to one side the way a thing that was dug and backfilled
+is.
+
+**It is set in the ground, not balanced on it.** Jake: it feels like a
+slab with no reason to be standing that way, no support, and no telling
+whether there is more under the ground like an iceberg. The lump is an egg
+and its bottom pole sat exactly at the grass, so it was an egg on its tip.
+The garden's set stones are the same shape and get away with it because a
+third of each is under the gravel; this was the only one standing on
+nothing.
+
+A metre is under now, which is better than a quarter and is what keeps a
+standing stone standing. What says so is the width at the grass line and
+the packing round it: five stones, none the same size, none square to each
+other, each sunk past half. A clean line where rock meets grass is a prop
+on a lawn, and what a raised stone has round it is the spoil and the
+wedges that hold it up.
+
+**A plinth, not a cone.** Jake: it needs to be a lot thicker at the
+bottom. The first answer multiplied the whole profile by a term that
+fell off over the stone's entire height, which is the shape of a cone,
+and from thirty metres it read as a haystack. Weight low down is not a
+taper from top to bottom. It is a body of roughly one width with a
+swelling coming out of the ground under it, and a crown that is blunt
+rather than pointed, because a stone that has stood a thousand years has
+a weathered top.
+
+So the shape is three things rather than one. A body that holds its
+width to near the head and then rounds over fast. A swelling at the
+foot, gone by two thirds of the way up. And that swelling given mostly
+to the thin axis, because a slab that fattens evenly stays the same slab
+and only gets bigger. A metre and a fifth through and one and four
+fifths across where it leaves the grass, eight tenths by one and a half
+through the body.
+
+**A heap, not seven boulders.** Jake: the stones around it do not make
+visual sense unless it was a gravel or rubble pile it sat on. Right, and
+the reason is that the ground under the seven was dead level. A handful
+of rocks placed near a base is a handful of rocks that happen to be near
+a stone, however they are arranged.
+
+What a raised stone sits in is everything that came out of the hole and
+everything that got wedged back in after. So the ground itself is raised:
+a bank, as one skin, banking against the stone's own foot ellipse and
+thinning to nothing at a wandering rim, with the loose pieces lying on
+that rather than standing in for it. Coarse at the collar, where the
+packing wedges that hold it plumb would be, and fine at the rim.
+
+Two things fell out of building it. The seven were drawn with the
+standing stone's own mesh, which is a hundred and seventy six by two
+hundred and twenty four: a quarter of a million quads of footing under a
+forty thousand quad monument. They are the garden's eleven by seven lump
+now. And the heap has a footprint, which the stone's offset from the bridge
+never allowed for: at the offset it had, the bank's edge came within two
+centimetres of the ramp's corner, and none of it is solid, so touching
+the ramp is rubble you walk through. The offset is the heap's reach plus
+a margin now, in both directions, rather than a number of its own that
+happened to agree.
+
+Worth writing down how that number was got wrong twice on the way. The
+first reading of it said the apron ran a metre onto the ramp, which it
+never did: the deck is a half strip and not a plane, so where the heap
+reaches furthest across the deck's line it is already well past the
+deck's end, and the shortest line between them is a diagonal. The test
+measures that distance rather than either axis, which is the only reason
+the second reading was caught.
+
+The carved face moves up the stone with it, or the writing goes
+underground.
+
+**A ribbon on a dressed face, not a frame round an empty board.** Two
+faults, both of them a width worked out in the wrong frame. The panel is
+a share of the way round the stone, and a share of the way round a stone
+that now tapers is a strip that narrows going up: the band's bottom row
+came out twice the width of its top and the name read as if seen from
+below. It is held to a constant arc now, giving back exactly what the
+taper takes.
+
+And the band was drawn at the edges of that panel, which made the frame
+three times wider than the seven runes inside it. Seven runes stacked
+down a metre and a fifth cannot be made much bigger than a hand, so what
+had to move was the frame. The dressed face is wider than it was and the
+ribbon hugs the lettering, leaving plain stone either side, which is
+what the carved stones actually look like. Narrowing it caught a third:
+the ribbon's top was the same number as its width, and they had only
+ever agreed by accident, so the column ran out of the bottom of the
+picture and three of the seven runes were drawn off the stone.
+
 **Bumpy, and the writing lies on the bumps.** Jake, looking at the first
 build: the rune is on a slab on a stone, and the stone has a picture of
 rock on it but is not shaped like one. Both were the same fault. The
@@ -277,6 +387,14 @@ be able to tell is there.
   bands run along its length, which is how a rainbow is coloured and is the
   one direction that gives the eye nothing to measure distance by from the
   one place everybody will first stand.
+
+- **The stone photographed from three places**, posed through `POSE` with
+  the trail filled in: face on from four metres, three quarters on from
+  seven, and from twenty out where the silhouette is all there is. Face
+  on the seven runes read and the ribbon frames them. At twenty metres it
+  reads as a blunt slab set into a packed bank, which is what the three
+  rounds before it did not: a cone, then a stone in a flat ring of
+  cobbles, then a frame round an empty board.
 
 ## Out of scope
 

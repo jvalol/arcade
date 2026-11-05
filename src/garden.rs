@@ -6,7 +6,7 @@
 //! room of this building is two pieces of code saying where something is.
 
 use blitzkit::collision::Aabb;
-use glam::{vec2, vec3, Vec2, Vec3};
+use glam::{vec2, vec3, vec4, Vec2, Vec3};
 
 use crate::room::{CABINET, NOOK_DEEP, NOOK_SPAN, THICK, WALL};
 
@@ -398,9 +398,10 @@ pub fn hour(since: f32) -> f32 {
 /// by hand is a trap I fell into three times in one sitting, each time asking
 /// for noon and measuring mid-afternoon.
 ///
-/// Only the tests want it. Nothing that runs ever asks what time it is; it
-/// asks what the light is doing, which is `sunlit` and its neighbours.
-#[cfg(test)]
+/// Nothing that runs used to want it: the game asks what the light is
+/// doing, which is `sunlit` and its neighbours, rather than what time it
+/// is. `AT` wants it, because the one place the hour itself is the
+/// question is in setting the clock before a picture.
 pub fn when(hour: f32) -> f32 {
     (hour - OPENS_AT).rem_euclid(1.0) * DAY
 }
@@ -469,6 +470,123 @@ pub fn skylit(since: f32) -> glam::Vec4 {
     let share = up.powf(1.6);
 
     night + (day - night) * share
+}
+
+/// Where the moon stands: the sun's own place turned half a day, with a
+/// lean of its own so the two do not run the same line across the sky.
+///
+/// Jake: throw a moon in there too.
+pub fn moon_at(since: f32) -> Vec3 {
+    let turn = hour(since) * std::f32::consts::TAU + std::f32::consts::PI;
+
+    vec3(turn.cos(), turn.sin(), -0.34).normalize()
+}
+
+/// How much of it there is to see: none while the sun is up, and it
+/// comes in as the sun goes.
+///
+/// Read off the moon's own height rather than the sun's, so a change to
+/// either one's lean carries. A full moon every night and no phases: a
+/// garden is not a planet, the same reason `sun_up` is a plain sine.
+pub fn moonlit(since: f32) -> f32 {
+    let up = (moon_at(since).y / 0.14).clamp(0.0, 1.0);
+    let dark = 1.0 - (sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
+
+    up * dark * dark
+}
+
+/// How far off it hangs and how wide it is drawn.
+///
+/// Further than anything in the field and well inside `field::SEES`, so
+/// it is never clipped and nothing out there stands in front of it.
+/// Wider than the real one by about five, which is the size a moon is
+/// remembered at rather than the size it measures.
+pub const MOON_OFF: f32 = 230.0;
+pub const MOON_WIDE: f32 = 16.0;
+
+/// The colour it is drawn in at a given moment: bright, fading out as
+/// the sun comes up, and never quite solid.
+///
+/// **The fade goes on the colour and not on the alpha.** `MOON *
+/// moonlit` took the fourth channel with it, which put a half
+/// transparent moon in the sky with the storm showing through it.
+pub fn moon_lit(since: f32) -> glam::Vec4 {
+    let lit = crate::aim::MOON * moonlit(since);
+
+    vec4(lit.x, lit.y, lit.z, crate::aim::MOON.w)
+}
+
+pub fn moon_mesh() -> blitzkit::mesh::MeshData {
+    use std::f32::consts::{PI, TAU};
+
+    let mut mesh = blitzkit::mesh::MeshData::surface(40, 24, |u, v| {
+        let round = -u * TAU;
+        let up = v * PI;
+
+        vec3(
+            round.cos() * up.sin() * 0.5,
+            -up.cos() * 0.5,
+            round.sin() * up.sin() * 0.5,
+        )
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// Its face: pale, mottled, with a few dark seas on it.
+///
+/// **Because a disc of one colour is a hole in the sky.** It is drawn
+/// past one in every channel, so nothing lights it and nothing shades
+/// it; the only thing that can say it is a body rather than a cut-out
+/// is what is written on it.
+pub fn moon_face() -> blitzkit::texture::TextureData {
+    const WIDE: usize = 192;
+    const TALL: usize = 96;
+
+    // where the seas are, in turns round it and down it, and how big
+    let seas: [(f32, f32, f32, f32); 6] = [
+        (0.30, 0.38, 0.16, 0.82),
+        (0.44, 0.30, 0.10, 0.86),
+        (0.22, 0.56, 0.12, 0.88),
+        (0.52, 0.52, 0.07, 0.84),
+        (0.72, 0.40, 0.13, 0.87),
+        (0.86, 0.62, 0.08, 0.90),
+    ];
+    let mut pixels = Vec::with_capacity(WIDE * TALL * 4);
+
+    for row in 0..TALL {
+        for column in 0..WIDE {
+            let u = column as f32 / WIDE as f32;
+            let v = row as f32 / TALL as f32;
+            // a mottle that wraps, so there is no seam down the back
+            let round = u * std::f32::consts::TAU;
+            let mottle = ((round * 5.0).sin() * (v * 9.0).cos()) * 0.035
+                + ((round * 11.0 + 1.1).sin() * (v * 17.0 + 0.4).cos()) * 0.022
+                + ((round * 23.0 + 2.3).sin() * (v * 31.0 + 1.7).cos()) * 0.014;
+            let mut shade = 1.0 + mottle;
+
+            for (at_u, at_v, across, deep) in seas.iter() {
+                // the shorter way round, so a sea may sit on the seam
+                let off_u = (u - at_u).abs().min(1.0 - (u - at_u).abs());
+                let off = (off_u * off_u + (v - at_v).powi(2)).sqrt() / across;
+
+                if off < 1.0 {
+                    let edge = 1.0 - off * off;
+
+                    shade *= 1.0 - (1.0 - deep) * edge;
+                }
+            }
+
+            for channel in [0.86, 0.88, 0.94] {
+                pixels.push((255.0 * (channel * shade).clamp(0.0, 1.0)) as u8);
+            }
+
+            pixels.push(255);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(WIDE as u32, TALL as u32, pixels)
 }
 
 /// How much of their light the lanterns are giving.
@@ -863,6 +981,12 @@ pub fn sky_scale(at: Vec3) -> f32 {
 /// inside finds sky rather than the clear colour.
 pub const SKIRT: f32 = 0.2;
 
+/// How far up the dome the rim's square has become a circle.
+///
+/// Low, because the creases are worst overhead and the only thing the
+/// square buys is the overhang at the rim.
+pub const ROUNDS_BY: f32 = 0.34;
+
 pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
     let mut mesh = blitzkit::mesh::MeshData::surface(48, 24, |u, v| {
         let round = u * std::f32::consts::TAU;
@@ -887,7 +1011,21 @@ pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
         // the room through there had a ceiling at 2.7 and was a sail hanging
         // in the middle of the solar system the day that ceiling went to
         // eight. Spec 0015 did not break this; it uncovered it.
-        let wide = vault_rim(round);
+        // **Square at the rim and round overhead.** Carried all the way
+        // to the apex, that square puts four creases up the sky, one
+        // from each corner, and the shading jumps across every one of
+        // them because the surface genuinely folds there. Jake, from out
+        // on the bridge at dusk: it has angles, it should be smooth.
+        //
+        // The square is only needed where the dome has to reach the
+        // garden's corners, which is at the rim. It is given up as the
+        // dome rises, for the circle through those same corners so that
+        // nothing it used to cover is uncovered, and by `ROUNDS_BY` the
+        // cross section is a circle and there is nothing left to crease.
+        let rounds = (v / ROUNDS_BY).clamp(0.0, 1.0);
+        let rounds = rounds * rounds * (3.0 - 2.0 * rounds);
+        let corner = (DEEP * DEEP + SPAN * SPAN).sqrt() * 0.5;
+        let wide = vault_rim(round) * (1.0 - rounds) + corner * rounds;
 
         vec3(
             round.cos() * wide * out,

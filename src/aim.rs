@@ -150,6 +150,20 @@ const BODY_UNBUILT: Vec4 = vec4(0.13, 0.13, 0.14, 1.0);
 ///
 /// Warm from above and cool in what it does not reach, which is how a room
 /// with a light in it looks and is why a shadow reads as blue.
+/// The moon, which is lit by nothing: past one in every channel, so it
+/// is a body giving light rather than a body taking it. Cool, because
+/// the one thing everybody knows about moonlight is that it is not warm.
+/// **Large, because what multiplies it at night is very small.** A
+/// colour here is a multiplier on what the light does, and the only
+/// light on a moon at midnight is the fill, which `garden::filled`
+/// holds at a twentieth. At three the moon came out a dull blue-grey
+/// disc barely above the sky behind it, which is the opposite of the
+/// one thing a moon is for. Twenty times the fill is a moon.
+///
+/// Solid, unlike the carved face: see `RUNE_GLAZE` for the one that
+/// has to stay under one and what happens when it does not.
+pub const MOON: Vec4 = vec4(28.0, 28.6, 31.0, 1.0);
+
 pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
 pub const SUN_STRENGTH: f32 = 0.62;
 pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
@@ -892,6 +906,12 @@ pub const THRESHOLD_RAIL: Vec4 = vec4(0.235, 0.23, 0.215, 1.0);
 /// this is a tint on it rather than the colour itself: a shade under one,
 /// because out there at dusk a stone at full value is a lit stone.
 pub const RUNESTONE: Vec4 = vec4(0.86, 0.855, 0.84, 1.0);
+/// The rubble heaped round its foot, which is the same granite a shade
+/// down again. Broken stone shows its fresh faces and ought to read
+/// lighter, not darker, but a mound of ninety pieces at the standing
+/// stone's own value competes with it, and the thing the eye is meant to
+/// land on is the carving.
+pub const RUBBLE: Vec4 = vec4(0.70, 0.695, 0.68, 1.0);
 /// **Alight, because Jake asked for the runes to glow.** Past one is a
 /// thing that burns with nothing on it in this engine, which is what the
 /// rainbow and the cellar's neon are, and it is the only way a carving
@@ -901,6 +921,14 @@ pub const RUNESTONE: Vec4 = vec4(0.86, 0.855, 0.84, 1.0);
 /// a groove, lit from inside, is the stone doing something; a blue-white
 /// would be a different object sitting in the same hole.
 pub const RUNE_CUT: Vec4 = vec4(4.2, 1.45, 0.42, 1.0);
+/// How solid the carved face is drawn, which is a hair under solid.
+///
+/// **Not a look, a pass.** A face drawn at one goes through the engine
+/// opaque and the carving is not drawn at all; a hair under one and it
+/// reads exactly as it should. Nothing about the carving wants to be
+/// see-through, so the number is as close to one as it can be while
+/// still being on the right side of it.
+pub const RUNE_GLAZE: f32 = 0.96;
 
 /// Valhalla, per spec 0056: its ground, its daubed walls, its thatch, and
 /// the warm light out of a door or a window.

@@ -1,0 +1,7 @@
+# What `check-voice` and `sign-copy` read in this repo.
+#
+# Naming this file turns the default off, so the readme has to be listed
+# as well: it is copy too, and leaving it out signs nothing and says
+# everything is signed.
+README.md
+src/says.rs

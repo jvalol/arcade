@@ -31,6 +31,7 @@ mod orrery;
 mod people;
 mod register;
 mod room;
+mod says;
 mod sign;
 mod spa;
 mod standing;
@@ -300,6 +301,23 @@ fn done_already() -> bool {
 /// you leave the grass is not a tool.
 fn flying() -> bool {
     std::env::var("FLY").is_ok()
+}
+
+/// What time it is when this run starts, as a share of a day: nought is
+/// dawn, a quarter noon, a half dusk, three quarters midnight.
+/// `AT=0.8`.
+///
+/// **The third of the set, after `FLY` and `POSE`.** Those two get the
+/// camera to the thing; this one gets the thing to the hour it is worth
+/// looking at. A day here is twenty minutes and a run begins at 0.4,
+/// mid-afternoon, so photographing anything the night does means sitting
+/// in front of it for eight minutes first, once per picture. The moon
+/// and the runestone's glow are both night things and neither could be
+/// looked at without this.
+fn starting_hour() -> Option<f32> {
+    let said = std::env::var("AT").ok()?;
+
+    said.trim().parse().ok().map(garden::when)
 }
 
 /// Where to stand this run, instead of at the door.
@@ -666,6 +684,8 @@ struct Arcade {
     /// The garden's sky and the dome it is painted on, per spec 0010.
     storm: Option<TextureId>,
     dome: Option<MeshId>,
+    moon: Option<MeshId>,
+    moon_face: Option<TextureId>,
     /// The gravel the garden is floored with: one picture per bed, painted in
     /// the garden's own coordinates so the raking knows where the stones are,
     /// and the one quad all of them are laid on.
@@ -718,6 +738,7 @@ struct Arcade {
     carving: Option<TextureId>,
     granite: Option<TextureId>,
     standing_stone: Option<MeshId>,
+    rubble_mound: Option<MeshId>,
     carved_face: Option<MeshId>,
     /// The three crossed planes a sprig of foliage is drawn on, and the
     /// pictures it wears: needles for the conifers and leaves for the rest.
@@ -874,6 +895,8 @@ struct Arcade {
     globe_mesh: Option<MeshId>,
     world: Option<TextureId>,
     since: f32,
+    /// Whether a frame has gone by, which is what `first` means.
+    has_run: bool,
 
     /// What the sight is on, per spec 0003. Worked out once in `update` and
     /// read everywhere else: `draw` asked the room six times a frame, once per
@@ -1190,6 +1213,8 @@ impl Arcade {
             stonework: None,
             storm: None,
             dome: None,
+            moon: None,
+            moon_face: None,
             gravel: Vec::new(),
             ground: None,
             stones: Vec::new(),
@@ -1230,6 +1255,7 @@ impl Arcade {
             carving: None,
             granite: None,
             standing_stone: None,
+            rubble_mound: None,
             carved_face: None,
             crown: None,
             needles: Vec::new(),
@@ -1293,7 +1319,8 @@ impl Arcade {
             globe: globe::Globe::new(),
             globe_mesh: None,
             world: None,
-            since: 0.0,
+            since: starting_hour().unwrap_or(0.0),
+            has_run: false,
             seen: None,
             window: (800.0, 600.0),
             // looking down the room from the end you start at: forward is
@@ -3095,12 +3122,53 @@ impl Arcade {
                 _ => scene.push_material(cube, &stood, aim::RUNESTONE, aim::MATTE),
             }
 
+            // the bank it is set into, which is the ground itself raised
+            // rather than anything standing on it
+            if let Some((mound, granite)) = self.rubble_mound.zip(self.granite) {
+                let on = Transform::at(vec3(at.x, 0.0, at.z));
+
+                scene.push_textured(mound, granite, &on, aim::RUBBLE, aim::MATTE);
+            }
+
+            // and the rubble lying on it, which is what says it was dug
+            // in rather than stood on the grass.
+            //
+            // **The garden's cheap lump, not the standing stone's mesh.**
+            // These were drawn with `bridge::stone_mesh`, which is a
+            // hundred and seventy six by two hundred and twenty four,
+            // because it was already in hand: seven of them put a quarter
+            // of a million quads in the footing of a forty thousand quad
+            // monument. `garden::rock_mesh` is eleven by seven, and at
+            // this size that is all a piece of rubble needs.
+            for (which, (where_, size, round)) in bridge::rubble(self.room.reaches, &self.trail)
+                .into_iter()
+                .enumerate()
+            {
+                let cut = match self.stones.get(which % self.stones.len().max(1)) {
+                    Some(cut) => *cut,
+                    None => cube,
+                };
+                let sat = Transform::at(where_)
+                    .with_rotation(glam::Quat::from_rotation_y(round))
+                    .with_scale(size);
+
+                match self.granite {
+                    Some(granite) => {
+                        scene.push_textured(cut, granite, &sat, aim::RUBBLE, aim::MATTE)
+                    }
+                    None => scene.push_material(cube, &sat, aim::RUBBLE, aim::MATTE),
+                }
+            }
+
             // the carved face: a band round it with the name in runes
             // down the middle. **This is what says runestone.** It was
             // the arcade's own pixel font in Latin capitals, which says
             // arcade however it is coloured, on a box, which says
             // gravestone.
-            let burning = bridge::burning(self.since);
+            // **The glow and the glaze are one decision**, in
+            // `bridge::alight`: see it for why the alpha never reaches
+            // one and what happened for an afternoon when it did.
+            let alight = bridge::alight(self.since);
 
             // **No lamp on the stone.** There was one, to say the glow
             // came out of the groove, and what it did was wash the face
@@ -3115,7 +3183,7 @@ impl Arcade {
                     face,
                     carving,
                     &Transform::at(at).with_rotation(leans).with_scale(size),
-                    aim::RUNE_CUT * burning,
+                    alight,
                     aim::VOID,
                 );
             }
@@ -6890,6 +6958,8 @@ impl Game for Arcade {
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
+        self.moon = Some(renderer.add_mesh(&garden::moon_mesh()));
+        self.moon_face = Some(renderer.add_texture(&garden::moon_face()));
         // the field: one quad for the ground, counted so a tile of grass is a
         // tile wherever the slab has slid to, and a trunk for each kind of
         // tree it stands. Spec 0040.
@@ -7055,6 +7125,7 @@ impl Game for Arcade {
         // out of round, like the garden's set stones, and squashed thin by
         // the transform so the carved face is near enough flat to cut
         self.standing_stone = Some(renderer.add_mesh(&bridge::stone_mesh(0x51A7)));
+        self.rubble_mound = Some(renderer.add_mesh(&bridge::mound_mesh()));
         self.carved_face = Some(renderer.add_mesh(&bridge::carved_mesh(0x51A7)));
         self.runes = Some(renderer.add_texture(&blitzkit::text::stencilled(
             bridge::SAYS,
@@ -7436,7 +7507,16 @@ impl Game for Arcade {
         text: &mut TextRenderer,
         sound: &SoundSystem,
     ) {
-        let first = self.since <= 0.0;
+        // **Its own flag and not the clock.** This read `since <= 0.0`,
+        // which is the same number the day runs on, and the two agreed
+        // only while a run always started at nought. `AT` sets the clock
+        // before the first frame, so on that frame `since` was already
+        // several minutes in and the pose this run was given was never
+        // applied: the camera stood at the door and the picture was of
+        // the hall.
+        let first = !self.has_run;
+
+        self.has_run = true;
 
         self.since += dt;
 
@@ -9049,6 +9129,33 @@ impl Game for Arcade {
                         storm,
                         garden::skylit(self.since) + self.flashed(),
                         900.0,
+                    );
+                }
+            }
+
+            // **And a moon in it, hung off the eye like the sky is.** Jake
+            // asked for one. It is drawn rather than painted into the
+            // storm because the storm's picture drifts across the dome,
+            // per spec 0019, and a moon that drifts with the weather is
+            // a cloud.
+            //
+            // Out of doors only. At two hundred and thirty metres it is
+            // well inside `field::sees` and so never clipped, and well
+            // outside anything in the field, so nothing out there stands
+            // in front of it; indoors it would be hanging inside the
+            // building.
+            if let (Some(moon), Some(face)) = (self.moon, self.moon_face) {
+                let showing = garden::moonlit(self.since);
+
+                if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
+                    let hung = self.looking_from() + garden::moon_at(self.since) * garden::MOON_OFF;
+
+                    scene.push_textured(
+                        moon,
+                        face,
+                        &Transform::at(hung).with_scale(Vec3::splat(garden::MOON_WIDE)),
+                        garden::moon_lit(self.since),
+                        aim::VOID,
                     );
                 }
             }
