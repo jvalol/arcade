@@ -86,6 +86,58 @@ pub const COLOURS: [Vec3; BANDS] = [
     vec3(1.20, 0.52, 1.90),
 ];
 
+/// What every piece of the deck is multiplied by, and so what the colours
+/// in [`rainbow`] are divided by to get there.
+///
+/// **Because a picture cannot hold a colour past one and this needs to.**
+/// Colour is an unclamped multiplier in this engine and anything over one
+/// glows with no light on it, which is what a rainbow is. A texture is
+/// eight bits a channel and stops at one. So the picture carries the hue
+/// and this carries the glow, and `COLOURS` is still the one place the
+/// seven are written.
+pub const GLOW: f32 = 2.0;
+
+/// How many texels across the rainbow's picture is drawn.
+///
+/// **Enough that the blend is a blend.** Seven flat bands is what this was
+/// and Jake said the colours should run together the way a real one's do.
+/// At 192 across six metres a texel is three centimetres, which is finer
+/// than the eye resolves at the distance you stand from it, and the step
+/// between two neighbouring texels is about a fortieth of the step between
+/// two of the seven.
+pub const RAINBOW_WIDE: u32 = 192;
+
+/// The rainbow across the deck, as a picture that blends.
+///
+/// **The seven are stops and no longer bands.** Each sits at the middle of
+/// the width it used to fill and the picture runs between them, so the
+/// colours at those seven places are exactly what they always were and
+/// everything between them is new. Outside the first and last stop it holds
+/// the end colour rather than fading, because a rainbow's edges are where
+/// it stops being a rainbow and not where it stops being bright.
+pub fn rainbow() -> blitzkit::texture::TextureData {
+    let mut pixels = vec![0u8; (RAINBOW_WIDE * 4) as usize];
+
+    for at in 0..RAINBOW_WIDE {
+        // where this texel falls among the stops, which sit at the middles
+        // of the seven bands
+        let across = (at as f32 + 0.5) / RAINBOW_WIDE as f32 * BANDS as f32 - 0.5;
+        let below = across.floor().clamp(0.0, (BANDS - 1) as f32) as usize;
+        let above = (below + 1).min(BANDS - 1);
+        let share = (across - below as f32).clamp(0.0, 1.0);
+
+        let colour = COLOURS[below] + (COLOURS[above] - COLOURS[below]) * share;
+        let at = (at * 4) as usize;
+
+        for (n, one) in [colour.x, colour.y, colour.z].iter().enumerate() {
+            pixels[at + n] = ((one / GLOW).clamp(0.0, 1.0) * 255.0).round() as u8;
+        }
+        pixels[at + 3] = 255;
+    }
+
+    blitzkit::texture::TextureData::from_pixels(RAINBOW_WIDE, 1, pixels)
+}
+
 /// Whether the building has given up everything it asks.
 ///
 /// **Every variant rather than a count.** A number here would go stale the
@@ -159,54 +211,211 @@ pub fn treads(reaches: f32) -> Vec<Aabb> {
     out
 }
 
-/// One piece of the deck: where it is, how big, and which colour band.
-#[derive(Clone, Copy, Debug)]
-pub struct Piece {
-    pub at: Vec3,
-    pub size: Vec3,
-    pub band: usize,
-}
-
-impl Piece {
-    pub fn colour(&self) -> Vec4 {
-        let said = COLOURS[self.band];
-
-        Vec4::new(said.x, said.y, said.z, 1.0)
-    }
-}
-
-/// The deck, from the foot to the top.
+/// The middle of the deck's top surface, every piece of the way along.
 ///
-/// Each piece spans one band across the width and one step along the run,
-/// so the seven colours lie the length of it the way a rainbow's do.
-pub fn deck(reaches: f32) -> Vec<Piece> {
+/// **The one account of where the deck is**, which the mesh is built from
+/// and the tests read. It is the same curve [`treads`] steps, so what you
+/// see and what holds you up are two readings of [`high`] and not two
+/// shapes.
+pub fn stations(reaches: f32) -> Vec<Vec3> {
     let foot = foot(reaches);
-    let step = RUN / PIECES as f32;
-    let band = WIDE / BANDS as f32;
-    let mut out = Vec::with_capacity(PIECES * BANDS);
 
-    for piece in 0..PIECES {
-        let from = piece as f32 / PIECES as f32;
-        let to = (piece + 1) as f32 / PIECES as f32;
-        let middle = (high(from) + high(to)) * 0.5;
+    (0..=PIECES)
+        .map(|at| {
+            let along = at as f32 / PIECES as f32;
 
-        for band_at in 0..BANDS {
-            out.push(Piece {
-                at: vec3(
-                    foot.x - (from + to) * 0.5 * RUN,
-                    middle + DEEP * 0.5,
-                    foot.z - WIDE * 0.5 + band * (band_at as f32 + 0.5),
-                ),
-                // a hair longer than the step, so two pieces lap rather
-                // than meet: two faces at the walking surface stop a walk
-                // dead and `walk` reports nothing at all
-                size: vec3(step * 1.08, DEEP, band),
-                band: band_at,
-            });
+            vec3(foot.x - along * RUN, high(along), foot.z)
+        })
+        .collect()
+}
+
+/// What every bit of the deck is multiplied by.
+///
+/// The rainbow's own colours live in [`rainbow`], which is a picture and so
+/// cannot hold anything past one. This carries the glow that the picture
+/// cannot.
+pub fn glow() -> Vec4 {
+    Vec4::new(GLOW, GLOW, GLOW, 1.0)
+}
+
+/// The whole deck as one ribbon, swept along the arc.
+///
+/// **One mesh and not forty-eight boxes.** It was boxes, each tilted to the
+/// pitch where it lay and lapping the next, and that worked for exactly as
+/// long as every face of one was a single flat colour: a join you cannot
+/// see is a join nobody minds. The moment the rainbow became a picture laid
+/// across the width, every one of those joins turned into a bright chevron
+/// and every end cap into a stripe, because an end cap wears the picture
+/// too. Shrinking the lap only swapped chevrons for seams.
+///
+/// A ribbon has no joins to show. It is also one instance rather than
+/// forty-eight, and its top surface passes through [`high`] at every
+/// station rather than near it.
+///
+/// **Built for a given building rather than scaled to one.** The pitch
+/// changes along the arc, so a unit mesh stretched to length is a straight
+/// plank. `garden::trunk_mesh` is built per tree for the same reason.
+///
+/// **Its own faces, each with its own normal.** Four strips run the length
+/// of it and the corners between them are sharp, so the vertices are not
+/// shared across a corner: averaged round one, the top of a rainbow catches
+/// the same light as its edge and the whole thing reads as a hose.
+pub fn deck_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
+    use blitzkit::mesh::Vertex;
+
+    let along = stations(reaches);
+    let half = WIDE * 0.5;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+
+    // the four strips, as which corner of the cross-section each runs
+    // between and which way it looks. The corners are numbered round it:
+    // 0 top south, 1 top north, 2 under north, 3 under south.
+    let strips: [(usize, usize, i32); 4] = [(0, 1, 0), (1, 2, 1), (2, 3, 2), (3, 0, 3)];
+
+    for (near, far, looks) in strips {
+        let first = vertices.len() as u32;
+
+        for (at, middle) in along.iter().enumerate() {
+            // how the deck lies here, which is the slope of the curve: the
+            // cross-section stands square to it rather than square to the
+            // world, or the deck is thicker where it is steeper
+            let slope = pitch(at as f32 / PIECES as f32);
+            let over = vec3(slope, 1.0, 0.0).normalize();
+            let under = *middle - over * DEEP;
+
+            let corner = |which: usize| match which {
+                0 => *middle - Vec3::Z * half,
+                1 => *middle + Vec3::Z * half,
+                2 => under + Vec3::Z * half,
+                _ => under - Vec3::Z * half,
+            };
+            // across the width, so the picture lies the same way on the
+            // top, the underside and both edges
+            let across = |which: usize| if which == 1 || which == 2 { 1.0 } else { 0.0 };
+            let normal = match looks {
+                0 => over,
+                1 => Vec3::Z,
+                2 => -over,
+                _ => -Vec3::Z,
+            };
+            let down = at as f32 / PIECES as f32;
+
+            for which in [near, far] {
+                let put = corner(which);
+
+                vertices.push(Vertex::new(
+                    [put.x, put.y, put.z],
+                    [normal.x, normal.y, normal.z],
+                    [across(which), down],
+                ));
+            }
+        }
+
+        for at in 0..PIECES as u32 {
+            let one = first + at * 2;
+
+            indices.extend([one, one + 1, one + 3, one, one + 3, one + 2]);
         }
     }
 
-    out
+    blitzkit::mesh::MeshData::new(vertices, indices)
+}
+
+/// The landing at the top: how far it runs on past the deck, how wide it is
+/// across, and how thick its slab is.
+///
+/// **Ten across against the deck's six.** Arriving wants to be stepping out
+/// onto something rather than reaching the last plank, and two metres either
+/// side is the difference you feel underfoot without it reading as a
+/// courtyard. Seven deep is three strides, which is room to turn round and
+/// look back and nothing more.
+pub const LANDING_OUT: f32 = 7.0;
+pub const LANDING_WIDE: f32 = 10.0;
+pub const LANDING_DEEP: f32 = 0.5;
+
+/// The parapet round it: how high it stands over the landing and how thick.
+///
+/// **Low, because it is a kerb and not a wall.** What it is for is that a
+/// slab twenty-six metres up with nothing round it is a diving board, and
+/// that a platform with an edge reads as somewhere to stand. Head height
+/// would take away the view, which is the prize.
+pub const RAIL_UP: f32 = 0.62;
+pub const RAIL_THICK: f32 = 0.34;
+
+/// Where the top of the deck is: the far end of the run, at full height.
+pub fn top(reaches: f32) -> Vec3 {
+    let foot = foot(reaches);
+
+    vec3(foot.x - RUN, high(1.0), foot.z)
+}
+
+/// The landing, as its slab and the three sides of parapet round it.
+///
+/// Empty until the building has been done, like everything else here.
+///
+/// **It laps the deck rather than meeting it.** Two faces at the walking
+/// surface stop a walk dead and `walk` reports nothing whatever, which this
+/// building has been caught by three times in one day before now. The slab
+/// runs back under the last stretch of deck by a tread's length.
+pub fn landing(reaches: f32, trail: &Trail) -> Vec<Aabb> {
+    if !shows(trail) {
+        return Vec::new();
+    }
+
+    let top = top(reaches);
+    // east is where you arrive from, so the slab starts back under the deck
+    let east = top.x + TREAD;
+    let west = top.x - LANDING_OUT;
+    let (south, north) = (top.z - LANDING_WIDE * 0.5, top.z + LANDING_WIDE * 0.5);
+
+    vec![
+        // the slab, its top flush with the deck's
+        Aabb::new(
+            vec3(west, top.y - LANDING_DEEP, south),
+            vec3(east, top.y, north),
+        ),
+        // and the parapet on the three sides you do not arrive over. Each
+        // one runs the full corner so that two of them meet rather than
+        // leaving a notch you could step through.
+        Aabb::new(
+            vec3(west, top.y, south),
+            vec3(west + RAIL_THICK, top.y + RAIL_UP, north),
+        ),
+        Aabb::new(
+            vec3(west, top.y, south),
+            vec3(east, top.y + RAIL_UP, south + RAIL_THICK),
+        ),
+        Aabb::new(
+            vec3(west, top.y, north - RAIL_THICK),
+            vec3(east, top.y + RAIL_UP, north),
+        ),
+    ]
+}
+
+/// Where the watchman stands, and which way he faces.
+///
+/// **Off the line you walk in on, and not off the end of it.** Dead centre
+/// he is a man standing in a doorway and you would walk into him: a body is
+/// 0.9 across. Out at a third of the landing's width he is exactly on the
+/// edge of the deck's own six, which is past the lane you come up and so is
+/// somebody you never pass. A fifth of it leaves a metre of daylight either
+/// side of two bodies and still puts him in front of you.
+///
+/// **Facing the climb**, which is back east down the deck. The yaw is the
+/// one `draw_the_people` reads, where ahead is `(sin, 0, -cos)`, so east is
+/// a quarter turn.
+pub fn watchman(reaches: f32) -> (Vec3, f32) {
+    let top = top(reaches);
+
+    (
+        vec3(
+            top.x - LANDING_OUT * 0.48,
+            top.y,
+            top.z + LANDING_WIDE * 0.20,
+        ),
+        std::f32::consts::FRAC_PI_2,
+    )
 }
 
 /// What you can stand on, which is the treads and nothing else.
@@ -215,7 +424,10 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
         return Vec::new();
     }
 
-    treads(reaches)
+    let mut out = treads(reaches);
+    out.extend(landing(reaches, trail));
+
+    out
 }
 
 #[cfg(test)]
@@ -234,6 +446,18 @@ mod tests {
         trail
     }
 
+    /// One question short of done, which is what the bridge must not show
+    /// for.
+    fn nearly() -> Trail {
+        let mut trail = Trail::new();
+
+        for one in Asked::every().iter().skip(1) {
+            trail.gave(*one);
+        }
+
+        trail
+    }
+
     #[test]
     fn nothing_until_the_building_is_done() {
         let empty = Trail::new();
@@ -244,11 +468,7 @@ mod tests {
 
     #[test]
     fn one_short_is_not_done() {
-        let mut nearly = Trail::new();
-
-        for one in Asked::every().iter().skip(1) {
-            nearly.gave(*one);
-        }
+        let nearly = nearly();
 
         assert!(!shows(&nearly), "one answer short and it is still there");
         assert!(solid(REACHES, &nearly).is_empty());
@@ -257,7 +477,10 @@ mod tests {
     #[test]
     fn it_is_there_once_every_room_has_answered() {
         assert!(shows(&done()));
-        assert_eq!(solid(REACHES, &done()).len(), (RUN / TREAD).ceil() as usize);
+        assert_eq!(
+            solid(REACHES, &done()).len(),
+            (RUN / TREAD).ceil() as usize + landing(REACHES, &done()).len()
+        );
     }
 
     #[test]
@@ -359,47 +582,391 @@ mod tests {
     }
 
     #[test]
-    fn the_pieces_lap_rather_than_meet() {
-        let deck = deck(REACHES);
-        let step = RUN / PIECES as f32;
+    fn every_band_is_the_same_width_and_they_fill_it() {
+        let made = deck_mesh(REACHES);
+        let foot = foot(REACHES);
+        let (mut south, mut north) = (f32::MAX, f32::MIN);
 
-        // two faces at the walking surface stop a walk dead, and `walk`
-        // reports that as nothing at all. Found three times in one day in
-        // the baths. See the walk-the-building skill.
+        for one in made.vertices.iter() {
+            south = south.min(one.position[2]);
+            north = north.max(one.position[2]);
+        }
+
         assert!(
-            deck[0].size.x > step,
-            "each piece has to be longer than its step for the two to lap"
+            (north - south - WIDE).abs() < 0.001,
+            "the deck is {:.3} across and should be {:.3}",
+            north - south,
+            WIDE
+        );
+        assert!(
+            ((north + south) * 0.5 - foot.z).abs() < 0.001,
+            "and it is centred on {:.3} rather than {:.3}",
+            (north + south) * 0.5,
+            foot.z
         );
     }
 
+    /// Spec 0054: what you see is what you stand on.
+    ///
+    /// **Jake, 2026-11-04: the base of the bridge should be flush with the
+    /// grass, not a step.** It was worse than the base. The drawn deck was
+    /// hung `DEEP * 0.5` above its own middle rather than below it, so the
+    /// whole of it floated a third of a metre over its own treads: a step
+    /// up out of the field at the foot, a step down onto spec 0055's
+    /// landing at the top, and shin deep the length of it.
     #[test]
-    fn every_band_is_the_same_width_and_they_fill_it() {
-        let deck = deck(REACHES);
+    fn the_deck_you_see_is_the_deck_you_stand_on() {
         let foot = foot(REACHES);
-        let first: Vec<_> = deck.iter().take(BANDS).collect();
 
-        let near = first
+        for middle in stations(REACHES) {
+            let along = (foot.x - middle.x) / RUN;
+
+            assert!(
+                (middle.y - high(along)).abs() < 1e-4,
+                "at {:.3} along, what you see tops out at {:.3} and what \
+                 holds you up is at {:.3}",
+                along,
+                middle.y,
+                high(along)
+            );
+        }
+    }
+
+    /// Spec 0054: and it comes out of the grass rather than off a kerb.
+    #[test]
+    fn it_springs_flush_from_the_grass() {
+        // the top of what is drawn, which is what you would step up onto
+        let lowest = deck_mesh(REACHES)
+            .vertices
             .iter()
-            .map(|one| one.at.z - one.size.z * 0.5)
-            .fold(f32::MAX, f32::min);
-        let far = first
-            .iter()
-            .map(|one| one.at.z + one.size.z * 0.5)
-            .fold(f32::MIN, f32::max);
+            .map(|one| one.position[1])
+            .fold(f32::MIN, f32::max)
+            .min(
+                stations(REACHES)
+                    .into_iter()
+                    .map(|middle| middle.y)
+                    .fold(f32::MAX, f32::min),
+            );
 
         assert!(
-            (far - near - WIDE).abs() < 0.001,
-            "the bands fill the width"
+            lowest < 0.05,
+            "the near end of it stands {:.3} proud of the field",
+            lowest
+        );
+    }
+
+    /// Spec 0054: the seven run into each other rather than meeting at an
+    /// edge.
+    ///
+    /// **Jake's other half of the same note**, on 2026-11-04: the colours
+    /// between the bands should blend together, like a real rainbow.
+    ///
+    /// Two halves, and the first alone passes on a picture of one colour.
+    /// Neighbouring texels have to be close, which is the blend, *and* the
+    /// picture has to go somewhere over its width, which is what says
+    /// there is still a rainbow in it.
+    #[test]
+    fn the_rainbow_blends_rather_than_steps() {
+        let made = rainbow();
+        let pixels = &made.levels[0].pixels;
+        let mut biggest = 0i32;
+        let mut over_all = 0i32;
+
+        for at in 1..RAINBOW_WIDE as usize {
+            for channel in 0..3 {
+                let one = pixels[at * 4 + channel] as i32;
+                let last = pixels[(at - 1) * 4 + channel] as i32;
+
+                biggest = biggest.max((one - last).abs());
+            }
+        }
+
+        for channel in 0..3 {
+            let (mut low, mut high) = (255i32, 0i32);
+
+            for at in 0..RAINBOW_WIDE as usize {
+                let one = pixels[at * 4 + channel] as i32;
+                low = low.min(one);
+                high = high.max(one);
+            }
+
+            over_all = over_all.max(high - low);
+        }
+
+        assert!(
+            biggest < 12,
+            "two texels next to each other differ by {}, which is a band \
+             edge and not a blend",
+            biggest
         );
         assert!(
-            ((near + far) * 0.5 - foot.z).abs() < 0.001,
-            "and are centred"
+            over_all > 120,
+            "the whole picture only moves by {}, so it is one colour and \
+             not a rainbow",
+            over_all
         );
+    }
+
+    /// Spec 0054: and every one of the seven is still in it, where it was.
+    ///
+    /// The stops sit at the middles of the bands they used to fill, so the
+    /// colour at those seven places is what it always was and only what is
+    /// between them is new.
+    #[test]
+    fn every_colour_of_the_rainbow_is_still_in_the_picture() {
+        let made = rainbow();
+        let pixels = &made.levels[0].pixels;
+
+        for (n, want) in COLOURS.iter().enumerate() {
+            let at = ((n as f32 + 0.5) / BANDS as f32 * RAINBOW_WIDE as f32) as usize;
+            let at = at.min(RAINBOW_WIDE as usize - 1) * 4;
+
+            for (channel, one) in [want.x, want.y, want.z].iter().enumerate() {
+                let got = pixels[at + channel] as f32 / 255.0 * GLOW;
+
+                assert!(
+                    (got - one).abs() < 0.03,
+                    "band {} channel {} came out {:.3} and is {:.3}",
+                    n,
+                    channel,
+                    got,
+                    one
+                );
+            }
+        }
     }
 
     /// Walked rather than measured, which is the lesson of the pool's
     /// steps: four legal risers in a row were one solid block you could
     /// not get out of, and every rise passed.
+    /// Spec 0055: nothing of the threshold exists until the building has
+    /// been done, on the same condition and from the same list as the deck.
+    ///
+    /// A watchman on a bridge that is not there is a man standing in a
+    /// field.
+    #[test]
+    fn no_threshold_until_the_building_is_done() {
+        assert!(
+            landing(REACHES, &Trail::new()).is_empty(),
+            "the landing is up before anything has been given"
+        );
+        assert!(
+            landing(REACHES, &nearly()).is_empty(),
+            "the landing is up one question short"
+        );
+        assert!(
+            !landing(REACHES, &done()).is_empty(),
+            "the building is done and there is nothing at the top"
+        );
+    }
+
+    /// Spec 0055: you step out onto it rather than up onto it.
+    #[test]
+    fn the_landing_is_flush_with_the_deck() {
+        let slab = landing(REACHES, &done())[0];
+
+        assert!(
+            (slab.max.y - top(REACHES).y).abs() < 1e-4,
+            "the landing's top is {:.3} and the deck's is {:.3}",
+            slab.max.y,
+            top(REACHES).y
+        );
+    }
+
+    /// Spec 0055, and the fault this building keeps making: two faces at
+    /// the walking surface stop a walk dead and `walk` reports nothing.
+    #[test]
+    fn the_landing_laps_the_deck() {
+        let slab = landing(REACHES, &done())[0];
+        let top = top(REACHES);
+
+        assert!(
+            slab.max.x > top.x + 1e-3,
+            "the landing stops at {:.3} and the deck ends at {:.3}, which \
+             is two faces in one plane",
+            slab.max.x,
+            top.x
+        );
+    }
+
+    /// Spec 0055: wider than the deck, on both sides.
+    #[test]
+    fn the_landing_is_wider_than_the_deck() {
+        let slab = landing(REACHES, &done())[0];
+        let top = top(REACHES);
+
+        for (side, got) in [
+            ("north", slab.max.z - (top.z + WIDE * 0.5)),
+            ("south", (top.z - WIDE * 0.5) - slab.min.z),
+        ] {
+            assert!(
+                got > 1.0,
+                "the landing stands {:.2} proud of the deck on the {}",
+                got,
+                side
+            );
+        }
+    }
+
+    /// Spec 0055: the parapet closes three sides and leaves the way you
+    /// arrive open.
+    #[test]
+    fn the_parapet_leaves_the_arriving_side_open() {
+        let built = landing(REACHES, &done());
+        let top = top(REACHES);
+        let rails = &built[1..];
+
+        assert_eq!(rails.len(), 3, "a parapet of {} sides", rails.len());
+
+        // nothing of it stands across the lane you walk in on, which is the
+        // deck's own width at the landing's east edge
+        for rail in rails {
+            let across = rail.min.z < top.z + WIDE * 0.5 && rail.max.z > top.z - WIDE * 0.5;
+            let at_the_east = rail.max.x > built[0].max.x - 1e-3;
+
+            assert!(
+                !(across && at_the_east),
+                "a rail closes the way you arrive over: {:?} to {:?}",
+                rail.min,
+                rail.max
+            );
+        }
+    }
+
+    /// Spec 0055: you can walk off the end of the deck onto it.
+    #[test]
+    fn walked_from_the_top_of_the_deck_onto_the_landing() {
+        let solid = solid(REACHES, &done());
+        let top = top(REACHES);
+        // standing on the last of the level stretch, walking on west
+        let start = vec3(top.x + 6.0, top.y + 0.6, top.z);
+        let ended = walked(
+            start,
+            vec3(top.x - LANDING_OUT * 0.5, top.y, top.z),
+            12.0,
+            &solid,
+        );
+
+        assert!(
+            ended.x < top.x - 1.0,
+            "it got to {:.2} and the deck ends at {:.2}, so it never \
+             stepped off onto the landing",
+            ended.x,
+            top.x
+        );
+        assert!(
+            (ended.y - top.y).abs() < 0.4,
+            "it ended {:.2} up and the landing is at {:.2}",
+            ended.y,
+            top.y
+        );
+    }
+
+    /// Spec 0055: and the parapet stops you walking off the far edge.
+    ///
+    /// Twenty-six metres up, which is the whole reason for a kerb.
+    #[test]
+    fn the_parapet_stops_you_at_the_far_edge() {
+        let solid = solid(REACHES, &done());
+        let top = top(REACHES);
+        let slab = landing(REACHES, &done())[0];
+        let start = vec3(top.x - 1.0, top.y + 0.4, top.z);
+        // aimed well past the far parapet
+        let ended = walked(start, vec3(slab.min.x - 20.0, top.y, top.z), 10.0, &solid);
+
+        assert!(
+            ended.x > slab.min.x,
+            "it walked out to {:.2} and the landing stops at {:.2}",
+            ended.x,
+            slab.min.x
+        );
+        assert!(
+            ended.y > top.y - 1.0,
+            "it ended {:.2} up, off a landing at {:.2}",
+            ended.y,
+            top.y
+        );
+    }
+
+    /// Spec 0055: he is on the landing, not in the air and not in the
+    /// parapet.
+    #[test]
+    fn the_watchman_stands_on_the_landing() {
+        let built = landing(REACHES, &done());
+        let slab = built[0];
+        let (at, _) = watchman(REACHES);
+
+        assert!(
+            (at.y - slab.max.y).abs() < 1e-4,
+            "he stands at {:.3} and the landing's top is {:.3}",
+            at.y,
+            slab.max.y
+        );
+        assert!(
+            at.x > slab.min.x && at.x < slab.max.x && at.z > slab.min.z && at.z < slab.max.z,
+            "he stands at {:?}, off a landing from {:?} to {:?}",
+            at,
+            slab.min,
+            slab.max
+        );
+
+        // and his own width is clear of every rail, since a body is 0.9
+        for rail in &built[1..] {
+            let near = (at.x - at.x.clamp(rail.min.x, rail.max.x)).abs()
+                + (at.z - at.z.clamp(rail.min.z, rail.max.z)).abs();
+
+            assert!(
+                near > crate::RADIUS,
+                "he stands {:.2} from a rail, and he is {:.2} across",
+                near,
+                crate::RADIUS * 2.0
+            );
+        }
+    }
+
+    /// Spec 0055: facing back down the climb.
+    ///
+    /// Taken the way `draw_the_people` takes it, where ahead of a figure is
+    /// `(sin, 0, -cos)` of its yaw. Written as a number here it would say
+    /// nothing: a quarter turn is only east because of that line.
+    #[test]
+    fn the_watchman_faces_the_climb() {
+        let (at, facing) = watchman(REACHES);
+        let ahead = vec3(facing.sin(), 0.0, -facing.cos());
+        let climb = (foot(REACHES) - at).normalize_or_zero();
+
+        assert!(
+            ahead.dot(climb) > 0.9,
+            "he faces {:?} and the climb comes up from {:?}",
+            ahead,
+            climb
+        );
+    }
+
+    /// Spec 0055: and clear of the way you arrive, so that you are met
+    /// rather than blocked.
+    #[test]
+    fn the_watchman_is_not_in_the_way() {
+        let (at, _) = watchman(REACHES);
+        let top = top(REACHES);
+        let off = (at.z - top.z).abs();
+
+        assert!(
+            off > crate::RADIUS * 2.0,
+            "he stands {:.2} off the middle of a lane {:.2} wide, and a \
+             body is {:.2} across",
+            off,
+            WIDE,
+            crate::RADIUS * 2.0
+        );
+        assert!(
+            off < WIDE * 0.5,
+            "he stands {:.2} off the middle, which is outside the lane \
+             you walk up: you would never pass him",
+            off
+        );
+    }
+
     fn walked(from: Vec3, to: Vec3, seconds: f32, solid: &[Aabb]) -> Vec3 {
         let step = 1.0 / 60.0;
         let mut at = from;
@@ -469,11 +1036,11 @@ mod tests {
         // it never lands on the garden or on the building behind it
         let stops = crate::field::starts(REACHES);
 
-        for piece in deck(REACHES) {
+        for one in deck_mesh(REACHES).vertices.iter() {
             assert!(
-                piece.at.x + piece.size.x * 0.5 < stops,
-                "a piece at {} is east of the field's start at {}",
-                piece.at.x,
+                one.position[0] < stops,
+                "a corner of it at {} is east of the field's start at {}",
+                one.position[0],
                 stops
             );
         }

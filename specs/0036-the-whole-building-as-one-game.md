@@ -101,15 +101,36 @@ should not be able to tell it is there.
 **A story.** The player is a guest, not a protagonist. Nobody is rescued and
 nothing is explained at the end.
 
-## What it is waiting on
+## What was waiting on it, and is not now
 
-Which room is at the end of it. Everything above holds whichever it is, and
-nothing below can be written until that is picked.
+**What is at the end.** Not one of the three rooms, which is the answer this
+spec expected and argued itself out of in the same breath. Jake, 2026-11-04:
+the end should be a reward, a prize, something like a rainbow bridge to
+Elysium or Valhalla. That is Bifröst and spec 0054 builds it: finish what
+every room asks and a bridge comes up out of the field, west of the garden,
+and you can walk it.
 
-The plumbing above it does not wait on that, and spec 0051 is that part
-built: the building now records which rooms have given up what they ask, in
-order, for the two rooms that already ask. Nothing reads it and nothing
-draws it.
+It answers this spec's own test for whether a thing is worth adding, which
+is that it use the whole building rather than add to it. The prize is height
+and the only sight of the arcade from outside itself. Eleven rooms and you
+have been in all of them; nobody has ever seen the building whole.
+
+**The plumbing.** Spec 0051 built it for the two rooms that asked anything at
+the time. All eight of `trail::Asked` are wired now, in the rooms that
+already ask them, and the bridge reads the list rather than a count: a room
+that starts asking something joins the condition without either spec being
+touched.
+
+## What is still open
+
+**What is at the top of the bridge.** It ends level and in mid-air, which
+reads as unfinished rather than as deliberate, and the myth says why: a
+rainbow arcs up and comes back down, while Bifröst goes up and arrives, at a
+threshold with somebody standing on it. A threshold and a watchman would
+answer it without being a room to furnish, and the building has drawn people
+since spec 0033. A hall up there is the fourth room this spec warns about.
+
+That is Jake's, and it is the one decision left in this spec.
 
 ---
 

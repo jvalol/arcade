@@ -247,6 +247,31 @@ fn staged() -> bool {
     std::env::args().any(|arg| arg.starts_with("--screenshot"))
 }
 
+/// Whether this run starts with the building already done. `--done`.
+///
+/// **Because the bridge is at the end of eleven rooms.** Spec 0054 puts
+/// Bifröst up only once every question in `trail::Asked` has been given,
+/// which is the right rule and makes looking at the thing a day's work.
+/// This fills the trail at the door so you can walk out of the garden and
+/// see it.
+///
+/// A flag and not an `FLY`-style variable because Jake asked for one, and
+/// because this is the one of these tools you reach for to look at
+/// something finished rather than to hunt a fault.
+///
+/// **It does not say the trail exists to anybody who has not been told.**
+/// Spec 0036 is plain that somebody who never finds the trail must not be
+/// able to tell it is there, and that rule is about the game and not about
+/// the command line: this game prints no usage, so an argument nobody
+/// passes is as quiet as a variable nobody sets.
+///
+/// It gives the trail rather than forcing the bridge, so that anything else
+/// which comes to read the trail sees one consistent account of a building
+/// that has been done.
+fn done_already() -> bool {
+    std::env::args().any(|arg| arg == "--done")
+}
+
 /// Whether this run flies rather than walks. `FLY=1`.
 ///
 /// **Because the slow part of finding a fault in this building is getting to
@@ -563,9 +588,14 @@ struct Arcade {
     book: register::Book,
     /// What the building has been given up to you, room by room. Spec 0036.
     ///
-    /// Nothing reads it yet and nothing draws it. It is the half of that
-    /// spec that does not wait on which room is at the end of the trail:
-    /// eleven rooms and no idea what you have already done in any of them.
+    /// **The bridge reads it**, and nothing else does. Spec 0054 puts
+    /// Bifröst up out in the field once every question in `trail::Asked`
+    /// has been given, and spec 0055 stands somebody at the top of it.
+    /// Nothing counts at you on the way: there is no panel of ticks and no
+    /// "3 of 8 found", which spec 0036 rules out in as many words.
+    ///
+    /// `--done` fills it at the door, for looking at the end of it without
+    /// walking the building first.
     trail: trail::Trail,
     /// What the gallery's panel is showing, the texture it is written
     /// into, and what was last written there. Specs 0039 and the engine's
@@ -645,6 +675,10 @@ struct Arcade {
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
+    /// The box one piece of the bridge's deck is drawn on, and the rainbow
+    /// laid across its width. Specs 0054 and 0055.
+    deck: Option<MeshId>,
+    rainbow: Option<TextureId>,
     /// The three crossed planes a sprig of foliage is drawn on, and the
     /// pictures it wears: needles for the conifers and leaves for the rest.
     /// Spec 0010.
@@ -1087,7 +1121,17 @@ impl Arcade {
             headings: Vec::new(),
             marks: Vec::new(),
             carried: register::Carried::new(),
-            trail: trail::Trail::new(),
+            trail: {
+                let mut trail = trail::Trail::new();
+
+                if done_already() {
+                    for one in trail::Asked::every() {
+                        trail.gave(*one);
+                    }
+                }
+
+                trail
+            },
             book: register::Book::new(),
             bag: None,
             urn: None,
@@ -1140,6 +1184,8 @@ impl Arcade {
             tuft: None,
             blades: Vec::new(),
             heads: Vec::new(),
+            deck: None,
+            rainbow: None,
             crown: None,
             needles: Vec::new(),
             broadleaf: Vec::new(),
@@ -2954,18 +3000,40 @@ impl Arcade {
             return;
         };
 
-        for piece in bridge::deck(self.room.reaches) {
-            let along = (bridge::foot(self.room.reaches).x - piece.at.x) / bridge::RUN;
-            let turned = glam::Quat::from_rotation_z(-bridge::pitch(along).atan());
-
+        // the landing first, which is stone and not light: it is what the
+        // bridge arrives at. Spec 0055.
+        for (n, box_) in bridge::landing(self.room.reaches, &self.trail)
+            .into_iter()
+            .enumerate()
+        {
             scene.push_colored(
                 cube,
-                &Transform::at(piece.at)
-                    .with_rotation(turned)
-                    .with_scale(piece.size),
-                piece.colour(),
+                &Transform::at(box_.center()).with_scale(box_.size()),
+                if n == 0 {
+                    aim::THRESHOLD
+                } else {
+                    aim::THRESHOLD_RAIL
+                },
             );
         }
+
+        // and the deck, which is one mesh built along the arc rather than a
+        // row of boxes: see `bridge::deck_mesh`. It is already in the
+        // building's own terms, so it is pushed where it stands.
+        let (Some(deck), Some(rainbow)) = (self.deck, self.rainbow) else {
+            return;
+        };
+
+        scene.push_textured(
+            deck,
+            rainbow,
+            &Transform::at(Vec3::ZERO),
+            bridge::glow(),
+            // no highlight. A rainbow is light and has no surface for one to
+            // sit on, and a hot spot sliding along an arc is a wet plastic
+            // tube.
+            aim::VOID,
+        );
     }
 
     /// What you can walk into from where you are.
@@ -3237,6 +3305,15 @@ impl Arcade {
         // the whole content of the room is other people using it
         for who in aloft::walking(self.since, self.room.aloft_doors) {
             stand(who.at, who.up, who.facing, Some(who.walked), who.shade);
+        }
+
+        // and the watchman at the top of the bridge, who is there exactly
+        // when the bridge is. Spec 0055: he stands, he faces the climb, and
+        // nothing is said.
+        if bridge::shows(&self.trail) {
+            let (at, facing) = bridge::watchman(reaches);
+
+            stand(at, glam::Quat::IDENTITY, facing, None, 2);
         }
     }
 
@@ -6724,6 +6801,8 @@ impl Game for Arcade {
             .iter()
             .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
             .collect();
+        self.deck = Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches)));
+        self.rainbow = Some(renderer.add_texture(&bridge::rainbow()));
         self.crown = Some(renderer.add_mesh(&garden::sprig_mesh()));
         // three pictures of each, so a crown is not one sprig repeated
         self.needles = [0x5A2Fu32, 0x11C7, 0xE340]

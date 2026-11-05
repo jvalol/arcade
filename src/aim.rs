@@ -861,6 +861,19 @@ pub const POND_BED: Vec4 = vec4(0.11, 0.12, 0.09, 1.0);
 pub const POND_BANK: Vec4 = vec4(0.16, 0.16, 0.15, 1.0);
 pub const EDGE_STONE: Vec4 = vec4(0.25, 0.245, 0.23, 1.0);
 pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
+
+/// The landing at the top of the bridge, and the parapet round it. Spec 0055.
+///
+/// **The one thing out there that is not light.** The bridge's own colours
+/// are past one and glow with nothing on them, because a rainbow is light
+/// rather than paint. This is what the light arrives at, so it is stone, and
+/// a glowing platform at the end of a glowing bridge is more bridge.
+///
+/// Darker than the garden's stonework, which sits in a walled garden at
+/// dusk. This stands in open sky twenty-six metres up with nothing shading
+/// it, and the garden's value up there is snow.
+pub const THRESHOLD: Vec4 = vec4(0.30, 0.295, 0.275, 1.0);
+pub const THRESHOLD_RAIL: Vec4 = vec4(0.235, 0.23, 0.215, 1.0);
 pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
 
 /// The set stones, which are darker than anything else out here.

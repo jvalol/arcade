@@ -72,10 +72,17 @@ a riser over `walk::STEP` is a wall. At 26 over 100 the steepest riser is
 was a quarter circle, which rises fastest where it leaves the ground: 1.29
 metres up in its first 1.46 along, which is a wall to walk at.
 
-**What it looks like.** Six metres across, in seven bands along its length,
-each about 0.86 wide. The colours are past one, which in this engine is a
-thing that glows with no light on it: a rainbow is light rather than paint.
-Nothing holds it up.
+**What it looks like.** Six metres across, with seven colours running into
+each other across that width the way a real one's do. The colours are past
+one, which in this engine is a thing that glows with no light on it: a
+rainbow is light rather than paint. Nothing holds it up.
+
+**Seven stops and not seven bands.** They were bands, each 0.86 wide and
+flat, and Jake said the colours should blend. They are a picture now, with
+the seven at the middles of the widths they used to fill and the picture
+running between them, so those seven places are exactly the colours they
+always were. A picture cannot hold anything past one, so it carries the hue
+and the instance colour carries the glow.
 
 **Six metres across** because a body is 0.9 and every walkway in this
 building has been built too narrow first. A bridge you edge along is not a
@@ -84,11 +91,23 @@ prize.
 **You can walk it.** Walking up it is the whole of the reward, so a bridge
 you can only look at would be a picture hung in a field.
 
-**What holds you up is not what you see.** The deck is drawn as 48 lengths of
-7 bands, each turned to the pitch of the arc where it lies, so it reads as a
-curve. What you stand on is one box the full width every 0.6 metres, which is
-a staircase fine enough to walk and far too fine to draw. Both come out of
-`bridge::high`, which is the one place the shape is written.
+**What holds you up is not what you see.** What you stand on is one box the
+full width every 0.6 metres, which is a staircase fine enough to walk and
+far too fine to draw. What you see is one ribbon swept along the arc. Both
+come out of `bridge::high`, which is the one place the shape is written.
+
+**One ribbon and not a row of boxes.** It was 48 lengths of 7 bands, each
+turned to the pitch where it lay and lapping the next, and that held up for
+exactly as long as every face of one was a single flat colour: a join you
+cannot see is a join nobody minds. The moment the rainbow became a picture
+laid across the width, every join turned into a bright chevron and every end
+cap into a stripe, because an end cap wears the picture too. Shrinking the
+lap swapped chevrons for seams. A ribbon has no joins to show.
+
+**And the top of what you see is the surface you walk on.** The drawn deck
+used to hang its own thickness above its treads, which is a step up out of
+the grass at the foot, a step down onto spec 0055's landing at the top, and
+shin deep for the hundred metres in between. Jake saw the step at the foot.
 
 **The top is an end and not a drop.** It stops climbing and the last stretch
 runs level, so that arriving is standing somewhere rather than walking off
@@ -106,8 +125,11 @@ the end of something.
 - The treads lie under the deck that is drawn. — `bridge::tests::the_treads_lie_under_the_drawn_deck`
 - You can walk from the foot to the top. — `bridge::tests::walked_from_the_foot_to_the_top`
 - And walking beside it does not climb, so that walk is of the deck. — `bridge::tests::a_walk_off_the_side_does_not_climb`
-- The seven bands fill the width and are centred on it. — `bridge::tests::every_band_is_the_same_width_and_they_fill_it`
-- The pieces lap rather than meet. — `bridge::tests::the_pieces_lap_rather_than_meet`
+- The deck fills the width and is centred on it. — `bridge::tests::every_band_is_the_same_width_and_they_fill_it`
+- The top of what you see is the surface you walk on. — `bridge::tests::the_deck_you_see_is_the_deck_you_stand_on`
+- And it springs flush from the grass rather than off a kerb. — `bridge::tests::it_springs_flush_from_the_grass`
+- The colours run into each other rather than meeting at an edge. — `bridge::tests::the_rainbow_blends_rather_than_steps`
+- And all seven are still in it, where they were. — `bridge::tests::every_colour_of_the_rainbow_is_still_in_the_picture`
 - It is clear of the garden. — `bridge::tests::it_crosses_nothing`
 - And inside the ground it stands on. — `bridge::tests::it_stays_inside_the_ground_it_stands_on`
 
@@ -120,8 +142,13 @@ the end of something.
 - **Not yet walked by hand.** `walked_from_the_foot_to_the_top` drives the
   game's own walk up it, which is the check that matters, but nobody has
   stood on it.
-- **Not yet seen from the garden's west gap**, which is where you come out
-  and so is the view that decides whether you notice it at all.
+- **Seen from the garden's west gap**, which is where you come out and so is
+  the view that decides whether you notice it at all. You cannot miss it: it
+  glows against a dusk sky with the field's trees either side of it. Read
+  end on, though, it is a wedge of colour rather than a way up. The seven
+  bands run along its length, which is how a rainbow is coloured and is the
+  one direction that gives the eye nothing to measure distance by from the
+  one place everybody will first stand.
 
 ## Out of scope
 
