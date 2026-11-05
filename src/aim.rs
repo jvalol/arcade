@@ -874,6 +874,29 @@ pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
 /// it, and the garden's value up there is snow.
 pub const THRESHOLD: Vec4 = vec4(0.30, 0.295, 0.275, 1.0);
 pub const THRESHOLD_RAIL: Vec4 = vec4(0.235, 0.23, 0.215, 1.0);
+
+/// Valhalla, per spec 0056: its ground, its daubed walls, its thatch, and
+/// the warm light out of a door or a window.
+///
+/// **The light is past one and the walls are not.** Spec 0055's brief is
+/// warm light with its source out of frame, so an opening glows with
+/// nothing on it the way the neon and the rainbow do, and the walls only
+/// take what falls on them. A wall that glows is a lamp.
+pub const VALHALLA_GROUND: Vec4 = vec4(0.22, 0.225, 0.20, 1.0);
+pub const VALHALLA_WALL: Vec4 = vec4(0.40, 0.355, 0.30, 1.0);
+pub const VALHALLA_ROOF: Vec4 = vec4(0.26, 0.225, 0.185, 1.0);
+pub const VALHALLA_LIT: Vec4 = vec4(3.4, 1.55, 0.42, 1.0);
+
+/// And what that light throws on the ground outside it.
+///
+/// **An opening that glows and lights nothing is a picture of a window.**
+/// Spec 0055's brief is warm light with its source out of frame, and the
+/// whole of what makes that read is the light landing on something: the
+/// ground in front of a door, the wall beside it, whoever is standing
+/// there.
+pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);
+pub const VALHALLA_SPILL_LIT: f32 = 2.4;
+pub const VALHALLA_SPILL_REACH: f32 = 11.0;
 pub const BARK: Vec4 = vec4(0.27, 0.21, 0.17, 1.0);
 
 /// The set stones, which are darker than anything else out here.

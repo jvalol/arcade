@@ -39,6 +39,7 @@ mod tesseract;
 mod tour;
 mod trail;
 mod twine;
+mod valhalla;
 mod walk;
 mod wrecker;
 
@@ -3066,6 +3067,97 @@ impl Arcade {
             // tube.
             aim::VOID,
         );
+
+        self.draw_valhalla(scene, cube);
+    }
+
+    /// What is through the door at the top of it. Spec 0056.
+    ///
+    /// **Drawn with the bridge and on the same condition**, because a hall
+    /// in the sky above a field with no way up to it is worse than nothing.
+    fn draw_valhalla(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+        let ground = valhalla::ground(reaches);
+
+        scene.push_colored(
+            cube,
+            &Transform::at(ground.center()).with_scale(ground.size()),
+            aim::VALHALLA_GROUND,
+        );
+
+        for one in valhalla::built(reaches) {
+            let walls = one.walls();
+
+            scene.push_material(
+                cube,
+                &Transform::at(walls.center()).with_scale(walls.size()),
+                aim::VALHALLA_WALL,
+                aim::MATTE,
+            );
+
+            // the roof, as two pitches leaning on each other. A box with a
+            // lid is a shed and this is a longhouse.
+            let rise = one.ridge - one.eaves;
+            let slope = (rise / (one.wide * 0.5)).atan();
+            let along = (one.wide * 0.5).hypot(rise);
+
+            for side in [-1.0f32, 1.0] {
+                scene.push_material(
+                    cube,
+                    &Transform::at(vec3(
+                        one.at.x + side * one.wide * 0.25,
+                        one.at.y + one.eaves + rise * 0.5,
+                        one.at.z,
+                    ))
+                    // down as it goes out, not up. The sign was the other
+                    // way and the two pitches flared away from each other
+                    // like wings with the sky between them.
+                    .with_rotation(glam::Quat::from_rotation_z(-side * slope))
+                    .with_scale(vec3(along * 1.06, 0.22, one.long * 1.04)),
+                    aim::VALHALLA_ROOF,
+                    aim::MATTE,
+                );
+            }
+
+            // and one line of neon along the ridge of the hall, which is
+            // the building's own light turning up in its own heaven. Spec
+            // 0055, and wordless: anything with words on it is copy.
+            if one.hall {
+                scene.push_colored(
+                    cube,
+                    &Transform::at(vec3(one.at.x, one.at.y + one.ridge + 0.06, one.at.z))
+                        .with_scale(vec3(0.1, 0.1, one.long * 0.92)),
+                    aim::arcade_tube(),
+                );
+            }
+        }
+
+        // and what those openings throw, which is the whole of why they
+        // are openings. One light a building rather than one a window:
+        // the lamp is inside and the windows are holes in the same room.
+        for one in valhalla::lamps(reaches) {
+            scene.push_light(blitzkit::lighting::PointLight::new(
+                one,
+                aim::VALHALLA_SPILL,
+                aim::VALHALLA_SPILL_LIT,
+                aim::VALHALLA_SPILL_REACH,
+            ));
+        }
+
+        // the openings, which are where the light is
+        for one in valhalla::lit(reaches) {
+            let across = if one.looks.x.abs() > 0.5 {
+                vec3(0.06, one.high, one.wide)
+            } else {
+                vec3(one.wide, one.high, 0.06)
+            };
+
+            scene.push_colored(
+                cube,
+                &Transform::at(one.at).with_scale(across),
+                aim::VALHALLA_LIT,
+            );
+        }
     }
 
     /// What you can walk into from where you are.
@@ -3088,8 +3180,10 @@ impl Arcade {
         }
 
         // and the bridge, which is out in the field and is not there at
-        // all until every room has given up what it asks. Spec 0054.
+        // all until every room has given up what it asks. Spec 0054, and
+        // spec 0056's Valhalla at the top of it on the same condition.
         out.extend(bridge::solid(self.room.reaches, &self.trail));
+        out.extend(valhalla::solid(self.room.reaches, &self.trail));
 
         out
     }
@@ -3346,6 +3440,12 @@ impl Arcade {
             let (at, facing) = bridge::watchman(reaches);
 
             stand(at, glam::Quat::IDENTITY, facing, None, 2);
+
+            // and whoever is already up there. Spec 0056: a few, and none
+            // of them fighting.
+            for (n, (at, facing)) in valhalla::people(reaches).into_iter().enumerate() {
+                stand(at, glam::Quat::IDENTITY, facing, None, n);
+            }
         }
     }
 

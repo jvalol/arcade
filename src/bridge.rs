@@ -343,6 +343,18 @@ pub const LANDING_DEEP: f32 = 0.5;
 pub const RAIL_UP: f32 = 0.62;
 pub const RAIL_THICK: f32 = 0.34;
 
+/// How wide the way through the far parapet is.
+///
+/// **Because spec 0056 is through there.** The parapet was built on three
+/// sides to stop somebody walking off a twenty-six metre drop, which it
+/// does, and that included the side Valhalla is on: the walk test for
+/// getting across fetched up eight tenths of a metre short of the edge,
+/// against the rail. A gate with no gap in it is a wall.
+///
+/// On the line you walk in on, so the deck, the gap and the hall's door
+/// are one straight way through.
+pub const WAY_WIDE: f32 = 3.0;
+
 /// Where the top of the deck is: the far end of the run, at full height.
 pub fn top(reaches: f32) -> Vec3 {
     let foot = foot(reaches);
@@ -378,8 +390,16 @@ pub fn landing(reaches: f32, trail: &Trail) -> Vec<Aabb> {
         // and the parapet on the three sides you do not arrive over. Each
         // one runs the full corner so that two of them meet rather than
         // leaving a notch you could step through.
+        //
+        // The far one is in two pieces with the way through between them,
+        // the way the garden's west wall is split round the way out to the
+        // field.
         Aabb::new(
             vec3(west, top.y, south),
+            vec3(west + RAIL_THICK, top.y + RAIL_UP, top.z - WAY_WIDE * 0.5),
+        ),
+        Aabb::new(
+            vec3(west, top.y, top.z + WAY_WIDE * 0.5),
             vec3(west + RAIL_THICK, top.y + RAIL_UP, north),
         ),
         Aabb::new(
@@ -431,7 +451,7 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     const REACHES: f32 = 20.0;
@@ -809,14 +829,16 @@ mod tests {
     }
 
     /// Spec 0055: the parapet closes three sides and leaves the way you
-    /// arrive open.
+    /// arrive open, and spec 0056's way through is cut in the far one.
     #[test]
     fn the_parapet_leaves_the_arriving_side_open() {
         let built = landing(REACHES, &done());
         let top = top(REACHES);
         let rails = &built[1..];
 
-        assert_eq!(rails.len(), 3, "a parapet of {} sides", rails.len());
+        // four pieces over three sides, because the far one is split
+        // round the way through to spec 0056
+        assert_eq!(rails.len(), 4, "a parapet of {} pieces", rails.len());
 
         // nothing of it stands across the lane you walk in on, which is the
         // deck's own width at the landing's east edge
@@ -831,6 +853,51 @@ mod tests {
                 rail.max
             );
         }
+    }
+
+    /// Spec 0056: and there is a way through the far side.
+    ///
+    /// A gate with no gap in it is a wall. This was found by the walk that
+    /// crosses into Valhalla fetching up eight tenths of a metre short of
+    /// the edge, against a rail built to stop somebody falling.
+    #[test]
+    fn the_far_parapet_has_a_way_through_it() {
+        let built = landing(REACHES, &done());
+        let top = top(REACHES);
+        // the far ones are the thin-in-x pieces. Taken by where they
+        // start instead, the north and south rails come too: they run the
+        // full corner, so they begin at the same west face.
+        let far: Vec<_> = built[1..]
+            .iter()
+            .filter(|rail| rail.max.x - rail.min.x < RAIL_THICK * 1.5)
+            .collect();
+
+        assert_eq!(far.len(), 2, "the far side is in {} pieces", far.len());
+
+        let gap = far
+            .iter()
+            .map(|rail| {
+                if rail.max.z < top.z {
+                    rail.max.z
+                } else {
+                    rail.min.z
+                }
+            })
+            .collect::<Vec<_>>();
+        let wide = (gap[0] - gap[1]).abs();
+
+        assert!(
+            wide > crate::RADIUS * 3.0,
+            "the way through is {:.2} and a body is {:.2}",
+            wide,
+            crate::RADIUS * 2.0
+        );
+        // and it is on the line you walk in on
+        assert!(
+            ((gap[0] + gap[1]) * 0.5 - top.z).abs() < 1e-3,
+            "the way through is off the middle by {:.2}",
+            ((gap[0] + gap[1]) * 0.5 - top.z).abs()
+        );
     }
 
     /// Spec 0055: you can walk off the end of the deck onto it.
@@ -870,9 +937,12 @@ mod tests {
         let solid = solid(REACHES, &done());
         let top = top(REACHES);
         let slab = landing(REACHES, &done())[0];
-        let start = vec3(top.x - 1.0, top.y + 0.4, top.z);
+        // off the middle line, because the middle of the far side is the
+        // way through to spec 0056 and is meant to be open
+        let aside = top.z + WAY_WIDE * 0.5 + crate::RADIUS * 2.0;
+        let start = vec3(top.x - 1.0, top.y + 0.4, aside);
         // aimed well past the far parapet
-        let ended = walked(start, vec3(slab.min.x - 20.0, top.y, top.z), 10.0, &solid);
+        let ended = walked(start, vec3(slab.min.x - 20.0, top.y, aside), 10.0, &solid);
 
         assert!(
             ended.x > slab.min.x,
@@ -967,7 +1037,7 @@ mod tests {
         );
     }
 
-    fn walked(from: Vec3, to: Vec3, seconds: f32, solid: &[Aabb]) -> Vec3 {
+    pub fn walked(from: Vec3, to: Vec3, seconds: f32, solid: &[Aabb]) -> Vec3 {
         let step = 1.0 / 60.0;
         let mut at = from;
         let mut falling = 0.0;
