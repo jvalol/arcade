@@ -875,6 +875,33 @@ pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
 pub const THRESHOLD: Vec4 = vec4(0.30, 0.295, 0.275, 1.0);
 pub const THRESHOLD_RAIL: Vec4 = vec4(0.235, 0.23, 0.215, 1.0);
 
+/// The stone at the foot of the bridge, and what is cut into it.
+///
+/// **Cut and then painted, which is what was actually done to them.**
+/// Darker letters were tried first, on the reasoning that what you read in
+/// a carved groove is its shadow. There is no shadow in a groove here, and
+/// at 0.14 against a 0.33 stone under a night field the lettering could
+/// not be seen at all: it took turning it scarlet to prove it was being
+/// drawn.
+///
+/// Runestones were painted, commonly in red earth, so the thing that
+/// fixes the legibility is also the historical answer rather than a
+/// workaround. Muted, because this is weathered pigment in a groove and
+/// not a sign.
+/// The stone wears `garden::granite`, which carries its own colour, so
+/// this is a tint on it rather than the colour itself: a shade under one,
+/// because out there at dusk a stone at full value is a lit stone.
+pub const RUNESTONE: Vec4 = vec4(0.86, 0.855, 0.84, 1.0);
+/// **Alight, because Jake asked for the runes to glow.** Past one is a
+/// thing that burns with nothing on it in this engine, which is what the
+/// rainbow and the cellar's neon are, and it is the only way a carving
+/// reads at all on a night field.
+///
+/// The pigment's own colour taken up rather than a new one. Red earth in
+/// a groove, lit from inside, is the stone doing something; a blue-white
+/// would be a different object sitting in the same hole.
+pub const RUNE_CUT: Vec4 = vec4(4.2, 1.45, 0.42, 1.0);
+
 /// Valhalla, per spec 0056: its ground, its daubed walls, its thatch, and
 /// the warm light out of a door or a window.
 ///

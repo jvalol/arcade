@@ -712,6 +712,13 @@ struct Arcade {
     /// laid across its width. Specs 0054 and 0055.
     deck: Option<MeshId>,
     rainbow: Option<TextureId>,
+    /// And what is cut into the stone at its foot: the carved face, the
+    /// stone it is cut in, and the name in letters under it.
+    runes: Option<TextureId>,
+    carving: Option<TextureId>,
+    granite: Option<TextureId>,
+    standing_stone: Option<MeshId>,
+    carved_face: Option<MeshId>,
     /// The three crossed planes a sprig of foliage is drawn on, and the
     /// pictures it wears: needles for the conifers and leaves for the rest.
     /// Spec 0010.
@@ -1219,6 +1226,11 @@ impl Arcade {
             heads: Vec::new(),
             deck: None,
             rainbow: None,
+            runes: None,
+            carving: None,
+            granite: None,
+            standing_stone: None,
+            carved_face: None,
             crown: None,
             needles: Vec::new(),
             broadleaf: Vec::new(),
@@ -3067,6 +3079,47 @@ impl Arcade {
             // tube.
             aim::VOID,
         );
+
+        // and the stone at the foot of it, which is the only thing out
+        // here that says what any of this is. Spec 0006's rule applied to
+        // spec 0054: everything else in this building announces itself.
+        if let Some((at, size)) = bridge::runestone(self.room.reaches, &self.trail) {
+            let leans = glam::Quat::from_rotation_z(bridge::RUNE_LEANS);
+
+            let stood = Transform::at(at).with_rotation(leans).with_scale(size);
+
+            match (self.standing_stone, self.granite) {
+                (Some(stone), Some(granite)) => {
+                    scene.push_textured(stone, granite, &stood, aim::RUNESTONE, aim::MATTE)
+                }
+                _ => scene.push_material(cube, &stood, aim::RUNESTONE, aim::MATTE),
+            }
+
+            // the carved face: a band round it with the name in runes
+            // down the middle. **This is what says runestone.** It was
+            // the arcade's own pixel font in Latin capitals, which says
+            // arcade however it is coloured, on a box, which says
+            // gravestone.
+            let burning = bridge::burning(self.since);
+
+            // **No lamp on the stone.** There was one, to say the glow
+            // came out of the groove, and what it did was wash the face
+            // pale and take with it the contrast the glyphs were relying
+            // on. Jake: it is almost unintelligible, and glowing from
+            // within was the wrong instruction. What has to read as lit
+            // from inside is the glyph; the source of it does not have to
+            // be seen at all.
+
+            if let (Some(face), Some(carving)) = (self.carved_face, self.carving) {
+                scene.push_textured(
+                    face,
+                    carving,
+                    &Transform::at(at).with_rotation(leans).with_scale(size),
+                    aim::RUNE_CUT * burning,
+                    aim::VOID,
+                );
+            }
+        }
 
         self.draw_valhalla(scene, cube);
     }
@@ -6991,6 +7044,22 @@ impl Game for Arcade {
             .collect();
         self.deck = Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches)));
         self.rainbow = Some(renderer.add_texture(&bridge::rainbow()));
+        // **Stencilled and not drawn.** `drawn` keeps the ground opaque,
+        // which is right for the nook's sign because a dark plate behind
+        // the letters is free. On a pale stone it is a black patch wider
+        // than the stone's own face. The engine has the other one for
+        // exactly this: the letters, and what is behind them showing
+        // through.
+        self.carving = Some(renderer.add_texture(&bridge::carving()));
+        self.granite = Some(renderer.add_texture(&garden::granite(0x51A7)));
+        // out of round, like the garden's set stones, and squashed thin by
+        // the transform so the carved face is near enough flat to cut
+        self.standing_stone = Some(renderer.add_mesh(&bridge::stone_mesh(0x51A7)));
+        self.carved_face = Some(renderer.add_mesh(&bridge::carved_mesh(0x51A7)));
+        self.runes = Some(renderer.add_texture(&blitzkit::text::stencilled(
+            bridge::SAYS,
+            bridge::RUNE_TEXELS,
+        )));
         self.crown = Some(renderer.add_mesh(&garden::sprig_mesh()));
         // three pictures of each, so a crown is not one sprig repeated
         self.needles = [0x5A2Fu32, 0x11C7, 0xE340]

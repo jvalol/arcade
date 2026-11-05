@@ -461,6 +461,14 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
             continue;
         }
 
+        // and not where spec 0054's bridge comes down or spec 0006's
+        // stone stands. This list has only ever kept trees out of the
+        // building, so one grew through the runestone and the low stretch
+        // of the deck ran through whatever was sown under it.
+        if crate::bridge::shades(reaches, at) {
+            continue;
+        }
+
         out.push(Stood {
             at,
             turn: rolls.next() * std::f32::consts::TAU,

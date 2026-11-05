@@ -147,6 +147,506 @@ pub fn shows(trail: &Trail) -> bool {
     Asked::every().iter().all(|one| trail.given().contains(one))
 }
 
+/// What the stone at its foot says.
+///
+/// **Because nobody can tell what any of this is.** Jake, 2026-11-05: a
+/// person seeing it for the first time would have no idea it is meant to
+/// be Norse. Spec 0006 is the precedent and says it plainly about the
+/// nook: everything else in the hall announces itself, and a room nothing
+/// names is a room you find by accident.
+///
+/// **Carved and not hung or lit.** Spec 0006 picked a painted plank over
+/// neon for the nook because a neon arrow pointing at a panelled study is
+/// a sign for the wrong room. The same test sends this one to stone.
+///
+/// Without the umlaut. The font has one and draws it as a lowercase ö
+/// among capitals, which on a carved stone reads as a mistake rather than
+/// as a spelling.
+pub const SAYS: &str = "BIFROST [COPY - Jake]";
+
+/// How hard the carving is burning, which breathes rather than holding
+/// still.
+///
+/// **A steady glow is a lamp and a slow one is a thing that is alive.**
+/// Jake asked for mystical, and what reads as that is not the brightness
+/// but that it will not sit still: the garden's lanterns already come up
+/// and go out over a long minute rather than switching, for the same
+/// reason.
+///
+/// Two breaths crossed at lengths that do not divide, so it never repeats
+/// on a count anybody could feel. Never down to nothing, because a rune
+/// that goes out is a rune that was turned off.
+pub fn burning(since: f32) -> f32 {
+    let slow = (since * 0.41).sin();
+    let under = (since * 0.17 + 1.3).sin();
+
+    0.76 + slow * 0.17 + under * 0.07
+}
+
+/// How fine the carved face is drawn.
+pub const CARVED: u32 = 256;
+
+/// The runes of the name, in younger futhark, as the strokes each is made
+/// of in its own square.
+///
+/// **Because Latin capitals on a grey slab are a gravestone.** Jake,
+/// 2026-11-05: it looks like a random grey slab, it does not land as a
+/// nordic runestone. The lettering was the arcade's own pixel font, which
+/// says arcade and not Norse however it is coloured.
+///
+/// Runes are strokes and nothing else, which is why they were cut into
+/// stone and why they can be drawn here without a font: a stave down the
+/// middle and branches off it. These are b, i, f, r, o, s, t, the name
+/// spelled the way the sound goes rather than the way the Latin does.
+///
+/// Each is a list of lines in its own square, nought to one, y up.
+const RUNES: [&[(f32, f32, f32, f32)]; 7] = [
+    // bjarkan, b
+    &[
+        (0.3, 0.0, 0.3, 1.0),
+        (0.3, 1.0, 0.72, 0.78),
+        (0.72, 0.78, 0.3, 0.55),
+        (0.3, 0.55, 0.72, 0.33),
+        (0.72, 0.33, 0.3, 0.1),
+    ],
+    // iss, i
+    &[(0.5, 0.0, 0.5, 1.0)],
+    // fe, f
+    &[
+        (0.3, 0.0, 0.3, 1.0),
+        (0.3, 0.86, 0.74, 0.62),
+        (0.3, 0.58, 0.74, 0.34),
+    ],
+    // reid, r
+    &[
+        (0.3, 0.0, 0.3, 1.0),
+        (0.3, 1.0, 0.72, 0.8),
+        (0.72, 0.8, 0.3, 0.56),
+        (0.34, 0.52, 0.74, 0.05),
+    ],
+    // oss, o
+    &[
+        (0.3, 0.0, 0.3, 1.0),
+        (0.3, 0.9, 0.72, 0.68),
+        (0.3, 0.66, 0.72, 0.44),
+    ],
+    // sol, s
+    &[
+        (0.68, 1.0, 0.32, 0.72),
+        (0.32, 0.72, 0.68, 0.44),
+        (0.68, 0.44, 0.32, 0.14),
+    ],
+    // tyr, t
+    &[
+        (0.5, 0.0, 0.5, 1.0),
+        (0.5, 1.0, 0.22, 0.68),
+        (0.5, 1.0, 0.78, 0.68),
+    ],
+];
+
+/// How wide a cut stroke is, as a share of the carved face.
+/// How wide a cut stroke is, as a share of the carved face.
+///
+/// **Thin, and fattening it was the wrong fix.** At 0.026 a stroke was
+/// half the width of the rune it belonged to, so every branch ran into
+/// its own stave and consecutive runes touched: the chisel was wider than
+/// the gaps. What the writing needed was to be bigger, not bolder.
+pub const STROKE: f32 = 0.0115;
+
+/// How finely the stone itself is cut, and how far its skin wanders at
+/// each scale.
+///
+/// **Jake, 2026-11-05: it needs to be impressive, and the kind of
+/// texturing that would take would be worth the vertices.** This is the
+/// start of the last part of the trail. The lump the garden's set stones
+/// are cut from is eleven round by seven up, which is right for something
+/// the size of a loaf lying in gravel and is a smooth egg at two metres
+/// tall: the granite picture gave it the look of rock and none of the
+/// shape of one.
+///
+/// Twelve thousand quads for one object, which this building would not
+/// spend anywhere else and spends here.
+pub const STONE_ROUND: u32 = 176;
+pub const STONE_STEPS: u32 = 224;
+pub const KNOBBLE: f32 = 0.235;
+
+/// How far the stone wanders from a ball at `u`, `v`.
+///
+/// **Five scales, each a whole number of waves.** Whole, because a wave
+/// that does not come back to itself leaves a crack up the seam and a
+/// tear at the poles, which is the rule `garden::wandered` already works
+/// to; this one just goes finer, and the fine scales are what rock is.
+pub fn knobble(seed: u32, u: f32, v: f32) -> f32 {
+    use std::f32::consts::{PI, TAU};
+
+    let mut state = seed | 1;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+
+        state
+    };
+
+    let mut out = 0.0;
+    let mut weight = 0.0;
+
+    // **Wave counts that are not multiples of each other.** Doubling
+    // them, 1 2 4 8 16, lines every scale's crests up on the same
+    // meridians and the stone comes out fluted. These share no factors,
+    // so the scales never agree twice round.
+    //
+    // And not past about a quarter of the steps there are, or the finest
+    // scale has two samples a wave and draws a shimmer rather than a
+    // bump.
+    for (waves, share) in [
+        (1.0, 1.0),
+        (3.0, 0.62),
+        (7.0, 0.40),
+        (13.0, 0.30),
+        (23.0, 0.24),
+        (41.0, 0.19),
+        (67.0, 0.14),
+    ] {
+        let round = waves + (next() % 2) as f32;
+        let up = waves + (next() % 3) as f32;
+        let phase = (next() % 360) as f32 / 360.0 * TAU;
+
+        out += (u * TAU * round + phase).sin() * (v * PI * up).sin() * share;
+        weight += share;
+    }
+
+    // **The fine scales keep most of their weight.** Halving each one
+    // against the last is how a landscape is made, and it draws a boulder
+    // with gentle angles, which is what Jake called this. Real stone is
+    // mostly small bumps with a shape somewhere under them.
+    //
+    // And the written part is taken back down to smooth, because a thin
+    // line over that surface breaks up and stops being readable, which it
+    // did. A runestone's face is dressed before it is cut.
+    out / weight * KNOBBLE * (1.0 - 0.74 * dressed_by(u, v))
+}
+
+/// How far the face has been dressed flat at `u`, `v`: one in the middle
+/// of the written part and nothing outside it.
+///
+/// **A rough stone and legible writing are one question.** Jake asked for
+/// both in the same breath, and they pull against each other everywhere
+/// except here: the shape of the stone carries on under the face and only
+/// the small stuff comes off it.
+pub fn dressed_by(u: f32, v: f32) -> f32 {
+    let across = ((u - 0.5).abs() / (FACE_WIDE * 1.4)).min(1.0);
+    let middle = (FACE_FROM + FACE_TO) * 0.5;
+    let along = ((v - middle).abs() / ((FACE_TO - FACE_FROM) * 0.72)).min(1.0);
+    let off = across.max(along);
+
+    (1.0 - off * off).max(0.0)
+}
+
+/// Where the stone's skin is at `u` round and `v` up, in its own unit.
+///
+/// **One account of the surface, which is the whole point.** The carving
+/// is built from this too, so it lies on the rock instead of over it: it
+/// was a flat slab standing proud of a lump, and you could see the plate.
+pub fn stone_point(seed: u32, u: f32, v: f32) -> Vec3 {
+    use std::f32::consts::{PI, TAU};
+
+    // the face looks along +x at `u` of a half, which keeps the seam round
+    // the back where nothing is written
+    let round = -(u - 0.5) * TAU;
+    let up = v * PI;
+    let out = (0.5 + knobble(seed, u, v)) * up.sin();
+    let lean = crate::garden::tip(seed, v);
+
+    vec3(
+        round.cos() * out + lean.x,
+        -up.cos() * 0.5,
+        round.sin() * out + lean.y,
+    )
+}
+
+/// The stone.
+pub fn stone_mesh(seed: u32) -> blitzkit::mesh::MeshData {
+    crate::garden::faceted(blitzkit::mesh::MeshData::surface(
+        STONE_ROUND,
+        STONE_STEPS,
+        |u, v| stone_point(seed, u, v),
+    ))
+}
+
+/// How much of the stone the carved face takes: half its width in `u`,
+/// and the two `v` it runs between.
+pub const FACE_WIDE: f32 = 0.085;
+pub const FACE_FROM: f32 = 0.28;
+pub const FACE_TO: f32 = 0.76;
+/// And how far the carving stands off the skin it is laid on.
+pub const FACE_PROUD: f32 = 0.012;
+
+/// The carved face: the stone's own surface over the written part of it,
+/// lifted off itself by a hair.
+///
+/// **Built from `stone_point`, so every bump under it is the bump the
+/// stone has.** A quad laid across a rock is a plate stuck on a rock, and
+/// that is what Jake saw: the panel's own edge was visible against the
+/// lump. This one is the rock.
+pub fn carved_mesh(seed: u32) -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    let mut mesh = blitzkit::mesh::MeshData::surface(56, 72, |s, t| {
+        let u = 0.5 + (s - 0.5) * FACE_WIDE * 2.0;
+        // down the stone as the picture goes down, because the picture's
+        // row nought is its top and `v` nought is this lump's foot.
+        // Taken the other way the band stood on its head and the name
+        // read along the crown.
+        let v = FACE_TO - t * (FACE_TO - FACE_FROM);
+        let round = -(u - 0.5) * TAU;
+        let at = stone_point(seed, u, v);
+
+        at + vec3(round.cos(), 0.0, round.sin()) * FACE_PROUD
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// Every stroke of the carving, in the face's own square, nought to one.
+///
+/// **One account, because the stone is cut and not printed.** Jake,
+/// 2026-11-05: there could be geometrical texture on which the glyphs are
+/// laid, so they do not look so flat. A picture on a rock is a decal
+/// however it is lit: what makes a carving read is that its edges take the
+/// light differently from the face round them, and that wants geometry.
+///
+/// So this is the lines, once, and both the picture and the cut bars are
+/// stood along them.
+pub fn strokes() -> Vec<((f32, f32), (f32, f32))> {
+    let (near, far) = (0.11, 0.89);
+    let mut out = vec![
+        // the band, round the face and open at the foot the way a
+        // serpent's body leaves its own tail
+        ((near, 0.08), (near, far)),
+        ((near, far), (0.5, 0.965)),
+        ((0.5, 0.965), (far, far)),
+        ((far, far), (far, 0.08)),
+    ];
+
+    // and the runes down the middle of it, reading from the top. Taller
+    // than wide, and the strokes run from 0.22 to 0.78 inside their own
+    // square, so the width factor is near one to get a rune half as wide
+    // as it is high.
+    // **Drawn squat, because the face they land on is not square.** The
+    // picture is a square and the patch it is laid on is about twice as
+    // tall as it is wide, so anything drawn square comes out stretched
+    // into a smear: the column of runes merged into one wiggling line and
+    // Jake could not read a letter of it.
+    //
+    // So a rune is written about twice as wide as it is high here, to
+    // arrive about twice as high as it is wide out there. The strokes run
+    // from 0.22 to 0.78 inside their own square, which is in the factor.
+    let tall = 0.069;
+    let wide = tall * 2.05;
+    let gap = 0.031;
+    let top = far - 0.06;
+
+    for (n, lines) in RUNES.iter().enumerate() {
+        let foot = top - (n as f32 + 1.0) * (tall + gap);
+
+        for (x0, y0, x1, y1) in lines.iter() {
+            out.push((
+                (0.5 + (x0 - 0.5) * wide, foot + y0 * tall),
+                (0.5 + (x1 - 0.5) * wide, foot + y1 * tall),
+            ));
+        }
+    }
+
+    out
+}
+
+/// The carved face of the stone: a band round the edge with the runes of
+/// the name standing in it.
+///
+/// **The band is what says runestone more than the runes do.** An Uppland
+/// stone is an inscription inside a looping ribbon that runs round the
+/// face, and the eye reads that outline before it reads a single
+/// character. Without it this is strokes on a rock.
+///
+/// Cut away rather than painted on: the alpha is nought everywhere the
+/// chisel did not go, so the stone shows between the strokes and the
+/// engine's cutout throws the rest away.
+pub fn carving() -> blitzkit::texture::TextureData {
+    let n = CARVED;
+    let mut pixels = vec![0u8; (n * n * 4) as usize];
+
+    let mut ink = |x: f32, y: f32| {
+        let (at_x, at_y) = ((x * n as f32) as i32, ((1.0 - y) * n as f32) as i32);
+
+        if at_x < 0 || at_x >= n as i32 || at_y < 0 || at_y >= n as i32 {
+            return;
+        }
+
+        let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
+
+        for c in 0..3 {
+            pixels[at + c] = 255;
+        }
+        pixels[at + 3] = 255;
+    };
+
+    let mut line = |from: (f32, f32), to: (f32, f32), thick: f32| {
+        let steps = ((to.0 - from.0).hypot(to.1 - from.1) * n as f32 * 2.0).ceil() as i32;
+        let wide = (thick * n as f32 * 0.5).ceil() as i32;
+
+        for step in 0..=steps.max(1) {
+            let on = step as f32 / steps.max(1) as f32;
+            let (x, y) = (from.0 + (to.0 - from.0) * on, from.1 + (to.1 - from.1) * on);
+
+            for dy in -wide..=wide {
+                for dx in -wide..=wide {
+                    if dx * dx + dy * dy > wide * wide {
+                        continue;
+                    }
+
+                    ink(x + dx as f32 / n as f32, y + dy as f32 / n as f32);
+                }
+            }
+        }
+    };
+
+    // the band, round the face and open at the foot the way a serpent's
+    // body leaves its own tail
+    for (from, to) in strokes() {
+        line(from, to, STROKE);
+    }
+
+    // and the name in letters along the foot, composited into the same
+    // picture rather than hung on a second quad. **One carved face.** A
+    // separate plate for the Latin is the plate this whole change is
+    // getting rid of.
+    let said = blitzkit::text::stencilled(SAYS, RUNE_TEXELS);
+    let (was_wide, was_tall) = (said.width() as f32, said.height() as f32);
+    let want = (n as f32 * 0.62, n as f32 * 0.62 * was_tall / was_wide);
+    let (at_x, at_y) = ((n as f32 - want.0) * 0.5, n as f32 * 0.045);
+
+    for down in 0..want.1 as u32 {
+        for across in 0..want.0 as u32 {
+            let from = (
+                (across as f32 / want.0 * was_wide) as u32,
+                (down as f32 / want.1 * was_tall) as u32,
+            );
+            let took = ((from.1.min(said.height() - 1) * said.width()
+                + from.0.min(said.width() - 1))
+                * 4) as usize;
+
+            if said.levels[0].pixels[took + 3] < 128 {
+                continue;
+            }
+
+            // the picture's row nought is its top and so is the text's,
+            // so the block is placed by its top row and read forwards.
+            // Walking the destination upwards instead turned every
+            // letter over.
+            let (to_x, to_y) = (
+                at_x as u32 + across,
+                n.saturating_sub(at_y as u32 + want.1 as u32) + down,
+            );
+            let at = ((to_y.min(n - 1) * n + to_x.min(n - 1)) * 4) as usize;
+
+            for c in 0..3 {
+                pixels[at + c] = 255;
+            }
+            pixels[at + 3] = 255;
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(n, n, pixels)
+}
+
+/// How tall the lettering is cut, how big the stone is, and how far it
+/// leans.
+///
+/// **Off the side of the way on, not across it.** The deck is six metres
+/// and you walk up the middle of it; a stone in that is a stone you walk
+/// into on the way to the thing it names.
+pub const RUNE_TEXELS: f32 = 64.0;
+pub const RUNE_TALL: f32 = 2.7;
+pub const RUNE_WIDE: f32 = 1.12;
+pub const RUNE_THICK: f32 = 0.34;
+pub const RUNE_LEANS: f32 = 0.06;
+pub const RUNE_ASIDE: f32 = 1.4;
+
+/// The stone at the foot of the bridge: where it stands and how big.
+///
+/// Empty until the bridge is there, like everything else here. A stone
+/// naming a bridge that does not exist is a grave marker.
+pub fn runestone(reaches: f32, trail: &Trail) -> Option<(Vec3, Vec3)> {
+    shows(trail).then(|| runestone_at(reaches))
+}
+
+/// Whether a spot in the field is one the bridge keeps clear of trees.
+///
+/// **Because the field's scatter has never known the bridge is there.**
+/// `field::open` keeps trees out of the building and out of nothing else,
+/// so one grew through the runestone, and the low stretch of the deck runs
+/// through the canopy of anything sown under it.
+///
+/// **Always, and not only once the bridge is up.** A clearing that appears
+/// the moment somebody finishes the building is trees vanishing, which is
+/// worse to watch than trees in a rainbow.
+///
+/// **And only the low stretch.** Past the point where the deck clears a
+/// tree's head there is nothing to grow through, and a six metre avenue
+/// running the whole hundred is a lane pointing at the one thing spec 0036
+/// says nobody should be able to tell is there. This reaches as far as the
+/// deck is lower than a tree and no further, which is about a fifth of it.
+pub fn shades(reaches: f32, at: Vec3) -> bool {
+    let foot = foot(reaches);
+    let (stone, size) = runestone_at(reaches);
+
+    // round the stone. **Its own test and not an else.** Written as the
+    // far branch of how far off the deck's line a spot is, the stone fell
+    // on the near side of that and so was never asked about: it sits four
+    // and a half metres off a line whose own clearance is five.
+    if (at.x - stone.x).abs() < size.x * 0.5 + CLEARS
+        && (at.z - stone.z).abs() < size.z * 0.5 + CLEARS
+    {
+        return true;
+    }
+
+    // or under the low stretch of the deck
+    if (at.z - foot.z).abs() > WIDE * 0.5 + CLEARS {
+        return false;
+    }
+
+    let along = (foot.x - at.x) / RUN;
+
+    (0.0..=1.0).contains(&along) && high(along) < crate::field::TREE_TALL
+}
+
+/// How far from either a tree has to be sown.
+///
+/// **A canopy and not a trunk.** The field's trees are `TREE_TALL` high
+/// and their crowns are about half that across, so a metre and a half of
+/// clearance is a tree whose trunk misses the stone and whose branches sit
+/// over it, which is what the first go at this drew.
+pub const CLEARS: f32 = 3.0;
+
+/// Where the stone stands, whether or not the bridge is up.
+///
+/// The clearing round it has to hold either way, so the place it stands is
+/// its own question and [`runestone`] is that place plus the bridge.
+fn runestone_at(reaches: f32) -> (Vec3, Vec3) {
+    let foot = foot(reaches);
+
+    (
+        vec3(
+            foot.x + RUNE_WIDE,
+            RUNE_TALL * 0.5,
+            foot.z + WIDE * 0.5 + RUNE_ASIDE,
+        ),
+        vec3(RUNE_THICK, RUNE_TALL, RUNE_WIDE),
+    )
+}
+
 /// Where the foot of it stands, in the field.
 pub fn foot(reaches: f32) -> Vec3 {
     let out = crate::field::starts(reaches) - OUT;
@@ -446,6 +946,7 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
 
     let mut out = treads(reaches);
     out.extend(landing(reaches, trail));
+    out.extend(runestone(reaches, trail).map(|(at, size)| Aabb::from_center_size(at, size)));
 
     out
 }
@@ -499,7 +1000,9 @@ pub mod tests {
         assert!(shows(&done()));
         assert_eq!(
             solid(REACHES, &done()).len(),
-            (RUN / TREAD).ceil() as usize + landing(REACHES, &done()).len()
+            (RUN / TREAD).ceil() as usize
+                + landing(REACHES, &done()).len()
+                + runestone(REACHES, &done()).iter().count()
         );
     }
 
@@ -900,6 +1403,63 @@ pub mod tests {
         );
     }
 
+    /// Spec 0054: nothing is sown where the bridge comes down, or where
+    /// the stone stands.
+    ///
+    /// **The field's scatter has only ever known about the building.**
+    /// `field::open` keeps trees west of the garden's face and asks
+    /// nothing else, so one grew through the runestone and the low
+    /// stretch of the deck ran through whatever was under it.
+    ///
+    /// Swept over the cells round the foot rather than checked at a
+    /// point, because a scatter is the one thing you cannot reason about
+    /// from one sample.
+    #[test]
+    fn nothing_is_sown_where_the_bridge_comes_down() {
+        let foot = foot(REACHES);
+        let (stone, size) = runestone_at(REACHES);
+        let mut looked = 0;
+
+        for cell in crate::field::cells_round(foot, 46.0) {
+            for stood in crate::field::trees(REACHES, cell) {
+                looked += 1;
+
+                let off_stone = (stood.at.x - stone.x)
+                    .abs()
+                    .max((stood.at.z - stone.z).abs() - size.z * 0.5);
+
+                assert!(
+                    off_stone > 1.0,
+                    "a tree is sown {:.2} from the runestone, at {:?}",
+                    off_stone,
+                    stood.at
+                );
+
+                let along = (foot.x - stood.at.x) / RUN;
+
+                if (0.0..=1.0).contains(&along)
+                    && (stood.at.z - foot.z).abs() < WIDE * 0.5
+                    && high(along) < crate::field::TREE_TALL
+                {
+                    panic!(
+                        "a tree is sown under the deck at {:?}, where it is \
+                         {:.2} up and a tree is {:.2}",
+                        stood.at,
+                        high(along),
+                        crate::field::TREE_TALL
+                    );
+                }
+            }
+        }
+
+        assert!(
+            looked > 20,
+            "only {} trees anywhere near the bridge, so this test is not \
+             looking at a field",
+            looked
+        );
+    }
+
     /// Spec 0055: you can walk off the end of the deck onto it.
     #[test]
     fn walked_from_the_top_of_the_deck_onto_the_landing() {
@@ -1130,5 +1690,28 @@ pub mod tests {
             out,
             crate::field::GROUND_REACH
         );
+    }
+}
+
+#[cfg(test)]
+mod look {
+    #[test]
+    #[ignore]
+    fn write_the_carving() {
+        let made = super::carving();
+        let (wide, tall) = (made.width(), made.height());
+        let mut out = format!("P6\n{} {}\n255\n", wide, tall).into_bytes();
+
+        for texel in made.levels[0].pixels.chunks(4) {
+            let a = texel[3] as f32 / 255.0;
+
+            for under in [120u8, 60, 44] {
+                out.push((255.0 * a + under as f32 * (1.0 - a)) as u8);
+            }
+        }
+
+        let to = std::env::temp_dir().join("carving.ppm");
+        std::fs::write(&to, out).unwrap();
+        eprintln!("WROTE {}", to.display());
     }
 }

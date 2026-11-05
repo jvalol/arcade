@@ -113,6 +113,133 @@ shin deep for the hundred metres in between. Jake saw the step at the foot.
 runs level, so that arriving is standing somewhere rather than walking off
 the end of something.
 
+## The stone at its foot
+
+**Because nobody can tell what any of this is.** Jake, 2026-11-05: a person
+seeing it for the first time would have no idea it is meant to be Norse.
+
+Spec 0006 is the precedent and settles it. That spec exists because the
+nook is off the end of a wall and nothing in the hall says so, and its own
+words are that everything else in the room announces itself: a cabinet has
+the game's name lit across the top of it, and that is most of what makes
+anybody walk up to one. A place nothing names is found by accident.
+
+**Carved, not hung and not lit.** Spec 0006 chose a painted plank over
+neon for the nook, on the grounds that a neon arrow pointing at a panelled
+study is a sign for the wrong room. The same test sends this one to stone.
+
+**Runes, a band, and a stone that is out of round.** The first build was
+the arcade's own pixel font, in Latin capitals, on a box. Jake: it looks
+like a random grey slab, it does not land as a nordic runestone. All three
+parts of that were the fault.
+
+The font says arcade however it is coloured, so the name is cut in younger
+futhark instead, which needs no font at all: a rune is a stave and some
+branches, and that is why they were cut into stone. The band round the
+face is doing more work than the runes are, because an Uppland stone is an
+inscription inside a ribbon and the eye reads that outline first. And the
+stone is `garden::rock_mesh`, the same out-of-round lump the garden's set
+stones are cut from, squashed thin so its face is flat enough to carve.
+
+The name in letters stays, small, under the band. That is every runestone
+at every site in Scandinavia, and it is the only part of this anybody can
+read.
+
+**Bumpy, and the writing lies on the bumps.** Jake, looking at the first
+build: the rune is on a slab on a stone, and the stone has a picture of
+rock on it but is not shaped like one. Both were the same fault. The
+carving was a flat quad standing off a smooth lump, and you could see the
+plate's own edge.
+
+So the stone is forty thousand quads of its own surface, seven scales of
+wander over a ball, flat shaded. Wave counts that share no factors:
+doubling them, one two four eight, lines every scale's crests up on the
+same meridians and the stone comes out fluted. None finer than a quarter
+of the steps there are, or the last scale has two samples to a wave and
+shimmers instead of bulging.
+
+And `stone_point` is the one account of where that surface is, so the
+carved face is built from it too: the same patch of the same rock, lifted
+off itself by a hair. The band bends over every lump because it is on
+every lump. This building would not spend twelve thousand quads on one
+object anywhere else, and Jake asked for it here, because this is the
+start of the last part of the trail.
+
+**And the small scales keep most of their weight.** Halving each against
+the last is how a landscape is made, and it draws a boulder with gentle
+angles, which is what Jake called the first rough cut. Real stone is
+mostly small bumps with a shape somewhere under them.
+
+**The face is dressed, because a rough stone and legible writing are one
+question.** A thin bright line over that surface breaks up and stops being
+readable, which it did: almost unintelligible, in Jake's words. So the
+small stuff comes off the written part and the shape of the stone carries
+on under it, which is what was done to them before they were cut.
+
+**The writing is drawn squat, because the face it lands on is not
+square.** The picture is a square and the patch it is laid on is about
+twice as tall as it is wide, so anything drawn square arrives stretched:
+the column of runes merged into one wiggling line and not a letter of it
+could be read. A rune is written about twice as wide as it is high in the
+picture, to arrive about twice as high as it is wide on the stone.
+
+Fattening the chisel was the wrong answer and was tried first. At 0.026 a
+stroke was half the width of the rune it belonged to, so every branch ran
+into its own stave and consecutive runes touched. What the writing needed
+was to be bigger, not bolder.
+
+**And nothing lights the stone.** There was a lamp off the face, put there
+to say the glow came out of the groove. What it did was wash the face pale
+and take with it the contrast the glyphs were relying on. Jake: glowing
+from within was the wrong instruction, the glyph has to read as lit from
+inside and the source does not have to be seen at all.
+
+**Granite, which is what they are.** Uppland's stones are granite and
+gneiss almost without exception. Drawn as countable crystals rather than
+as noise, because noise at this size is television static and what says
+granite is grains you could pick out: feldspar, quartz and mica over a
+ground that is none of them, with a little lichen because a stone that has
+stood in a field for nine hundred years has some.
+
+Closer together in value than a mineral chart would have them. At the true
+spread, mica against feldspar, a stone two metres off reads as camouflage
+and the carving is lost in it.
+
+**And alight.** Jake asked for the runes to glow, somewhat mystically.
+Colour past one burns with nothing on it in this engine, which is what
+the rainbow and the cellar's neon already are, and the groove throws a
+little of it on the stone round it.
+
+What reads as mystical is not the brightness but that it will not sit
+still: two slow breaths crossed at lengths that do not divide, so it
+never repeats on a count anybody could feel, and never down to nothing,
+because a rune that goes out is a rune somebody switched off.
+
+The pigment's own colour taken up rather than a new one. Red earth in a
+groove, lit from inside, is the stone doing something. A blue-white would
+be a different object sitting in the same hole.
+
+**Painted, which is what was done to them.** Darker letters were tried
+first, since what you read in a carved groove is its shadow, and there is
+no shadow in a groove here: at 0.14 against a 0.33 stone under a night
+field the lettering could not be seen at all, and it took turning it
+scarlet to prove it was being drawn. Runestones were painted, commonly in
+red earth, so the thing that fixes it is the historical answer rather than
+a workaround.
+
+**Stencilled and not drawn.** The engine's `text::drawn` keeps the ground
+opaque, which is free and right for the nook's dark board and is a black
+patch on a pale stone. `text::stencilled` is there for exactly this.
+
+**And the field keeps clear of it.** `field::open` has only ever kept trees
+out of the building, so one grew through the stone, and the low stretch of
+the deck runs through the canopy of anything sown under it. The clearing
+holds whether or not the bridge is up, because a clearing that appears when
+somebody finishes the building is trees vanishing. It reaches as far as the
+deck is lower than a tree and no further: a six metre avenue running the
+whole hundred is a lane pointing at the thing spec 0036 says nobody should
+be able to tell is there.
+
 ## Acceptance criteria
 
 - Nothing is drawn and nothing is solid until every `Asked` has been given. — `bridge::tests::nothing_until_the_building_is_done`
@@ -130,6 +257,7 @@ the end of something.
 - And it springs flush from the grass rather than off a kerb. — `bridge::tests::it_springs_flush_from_the_grass`
 - The colours run into each other rather than meeting at an edge. — `bridge::tests::the_rainbow_blends_rather_than_steps`
 - And all seven are still in it, where they were. — `bridge::tests::every_colour_of_the_rainbow_is_still_in_the_picture`
+- Nothing is sown where it comes down, or where the stone stands. — `bridge::tests::nothing_is_sown_where_the_bridge_comes_down`
 - It is clear of the garden. — `bridge::tests::it_crosses_nothing`
 - And inside the ground it stands on. — `bridge::tests::it_stays_inside_the_ground_it_stands_on`
 

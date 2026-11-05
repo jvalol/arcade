@@ -1119,6 +1119,125 @@ pub fn tip(seed: u32, v: f32) -> Vec2 {
     way * ((v - 0.5) * ROCK_LEANS + (v * PI).sin() * ROCK_LEANS * belly * 0.5)
 }
 
+/// How fine a picture of granite is drawn.
+pub const GRAIN: u32 = 256;
+
+/// Granite, which is what a runestone is actually cut from.
+///
+/// **Jake, 2026-11-05: the stone could have a stony texture, whatever kind
+/// of rock they were actually made of.** Uppland's are granite and gneiss
+/// almost without exception, and granite is the one that reads at arm's
+/// length: coarse salt and pepper, pale feldspar and glassy quartz with
+/// black mica through it.
+///
+/// **Grains and not noise.** A per-texel jitter is sand, and sand at this
+/// size is television static. What says granite is countable crystals, so
+/// these are drawn as a few thousand blobs of one to three texels in four
+/// minerals, over a ground that is none of them.
+///
+/// And the lichen, because a stone that has stood in a field since the
+/// eleventh century has some. Two or three soft patches, pale and barely
+/// green, which is also what stops the speckle reading as a uniform
+/// fabric.
+pub fn granite(seed: u32) -> blitzkit::texture::TextureData {
+    let n = GRAIN;
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+    let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
+
+    // the ground the crystals sit in
+    let mut pixels = vec![0u8; (n * n * 4) as usize];
+
+    for at in 0..(n * n) as usize {
+        let shade = 0.47 + roll(next()) * 0.04;
+
+        for (c, of) in [0.98f32, 0.97, 0.94].iter().enumerate() {
+            pixels[at * 4 + c] = (shade * of * 255.0) as u8;
+        }
+        pixels[at * 4 + 3] = 255;
+    }
+
+    let mut blob = |x: i32, y: i32, across: i32, colour: [f32; 3]| {
+        for dy in -across..=across {
+            for dx in -across..=across {
+                if dx * dx + dy * dy > across * across {
+                    continue;
+                }
+
+                let (at_x, at_y) = ((x + dx).rem_euclid(n as i32), (y + dy).rem_euclid(n as i32));
+                let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
+
+                for (c, of) in colour.iter().enumerate() {
+                    pixels[at + c] = (of * 255.0).min(255.0) as u8;
+                }
+            }
+        }
+    };
+
+    // feldspar, quartz and mica, in that order of how much there is
+    // **Closer together than a mineral chart would have them.** At the
+    // true spread, mica at 0.17 against feldspar at 0.70, a stone two
+    // metres off reads as camouflage and whatever is carved into it is
+    // lost in the noise. What granite looks like at the distance you
+    // stand from a runestone is mid grey with a fine mottle through it.
+    for (how_many, across, colour) in [
+        (2600, 2, [0.60, 0.575, 0.535]),
+        (1500, 1, [0.52, 0.525, 0.535]),
+        (1700, 1, [0.33, 0.32, 0.30]),
+        (500, 2, [0.40, 0.385, 0.36]),
+    ] {
+        for _ in 0..how_many {
+            let x = (roll(next()) * n as f32) as i32;
+            let y = (roll(next()) * n as f32) as i32;
+            let size = if roll(next()) > 0.72 {
+                across + 1
+            } else {
+                across
+            };
+            let lit = 0.82 + roll(next()) * 0.4;
+
+            blob(
+                x,
+                y,
+                size,
+                [colour[0] * lit, colour[1] * lit, colour[2] * lit],
+            );
+        }
+    }
+
+    // and the lichen over it, soft enough that it is weather and not paint
+    for _ in 0..3 {
+        let (at_x, at_y) = (roll(next()) * n as f32, roll(next()) * n as f32);
+        let across = n as f32 * (0.10 + roll(next()) * 0.09);
+
+        for y in 0..n as i32 {
+            for x in 0..n as i32 {
+                let off = ((x as f32 - at_x).powi(2) + (y as f32 - at_y).powi(2)).sqrt();
+
+                if off > across {
+                    continue;
+                }
+
+                let share = (1.0 - off / across).powi(2) * 0.5;
+                let at = ((y as u32 * n + x as u32) * 4) as usize;
+
+                for (c, of) in [0.62f32, 0.66, 0.52].iter().enumerate() {
+                    let was = pixels[at + c] as f32 / 255.0;
+
+                    pixels[at + c] = ((was * (1.0 - share) + of * share) * 255.0) as u8;
+                }
+            }
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(n, n, pixels)
+}
+
 /// One stone, carved: a lump the size of a unit, a third of it meant to be
 /// under the gravel.
 pub fn rock_mesh(seed: u32) -> blitzkit::mesh::MeshData {
@@ -5958,7 +6077,7 @@ mod tests {
 
 #[cfg(test)]
 mod look {
-    /// Writes the foliage pictures out so somebody can look at them.
+    /// Writes the made pictures out so somebody can look at them.
     ///
     /// Ignored, so it runs only when asked. A cutout texture is the one kind
     /// of thing in this repo whose fault you cannot see in the room: a spray
@@ -5966,8 +6085,9 @@ mod look {
     /// thin, and you go looking at the crown.
     #[test]
     #[ignore]
-    fn write_the_foliage_pictures() {
+    fn write_the_made_pictures() {
         for (name, made) in [
+            ("granite", super::granite(0x51A7)),
             ("needles", super::needles(0x5A2F)),
             ("needles-2", super::needles(0x11C7)),
             ("broadleaf", super::broadleaf(0x7B12)),
