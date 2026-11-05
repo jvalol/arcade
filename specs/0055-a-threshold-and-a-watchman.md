@@ -150,9 +150,12 @@ myth, gives the register Jake is after, and rhymes with the bridge, which
 plenty of people read as the aurora in the first place. With the sky doing
 that, the made signs can be one or two.
 
-**A few people, and no einherjar.** Keep the figures and drop the fighting
-all day: spec 0033 draws people already and spec 0038's whole room is other
-people using it. Somewhere peaceful is not empty.
+**A few people about, and none of them fighting.** The myth fills the hall
+with the dead Odin picked off battlefields, who fight each other all day,
+are healed every evening and feast all night, waiting for the last war.
+Keep the figures and drop all of that: spec 0033 draws people already and
+spec 0038's whole room is other people using it. Somewhere peaceful is not
+empty, and it is not a barracks either.
 
 This also settles a wobble raised while talking it through, and settles it
 better than the answer offered then. With a Norse place behind him the
