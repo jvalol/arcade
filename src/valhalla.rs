@@ -28,6 +28,24 @@ pub const SPAN: f32 = 46.0;
 /// How thick its ground is, which is only what you see of the edge.
 pub const GROUND_DEEP: f32 = 1.4;
 
+/// How far its ground lies under the landing's.
+///
+/// **Because the two lap, and two tops at one height that lap is the fault
+/// this building has fought six times.** The ground runs a metre back
+/// under spec 0055's landing so that a walk across does not meet two faces
+/// at the walking surface, and with both tops at 26.0 exactly that metre
+/// was a 1 by 46 band of z-fighting: Jake stood at the top of the bridge
+/// and saw it stippling.
+///
+/// Lapping is the right move when one face ends up buried. Flush and
+/// lapped, neither is: they are both on show in one plane.
+///
+/// Two centimetres, which is `field::DROP` and is there for exactly this
+/// reason, the field's ground under the garden's. What it costs is a two
+/// centimetre step on the way through, which `walk` takes without
+/// noticing.
+pub const UNDER: f32 = 0.02;
+
 /// The hall: how long, how wide, how high to the eaves and how high to the
 /// ridge.
 ///
@@ -50,16 +68,17 @@ pub fn at(reaches: f32) -> Vec3 {
 
     vec3(
         top.x - crate::bridge::LANDING_OUT - DEEP * 0.5,
-        top.y,
+        top.y - UNDER,
         top.z,
     )
 }
 
 /// Its ground, as the one slab.
 ///
-/// Flush with the landing, so stepping through is stepping across. Lapped
-/// back under the landing by a stride, because two faces at the walking
-/// surface stop a walk dead and `walk` reports nothing at all.
+/// Lapped back under the landing by a stride, because two faces at the
+/// walking surface stop a walk dead and `walk` reports nothing at all, and
+/// [`UNDER`] below it over that lap, because two tops in one plane
+/// stipple.
 pub fn ground(reaches: f32) -> Aabb {
     let middle = at(reaches);
     let east = crate::bridge::top(reaches).x - crate::bridge::LANDING_OUT + 1.0;
@@ -303,17 +322,30 @@ mod tests {
         assert!(!solid(REACHES, &done()).is_empty());
     }
 
-    /// Spec 0056: stepping through is stepping across and not up.
+    /// Spec 0056: stepping through is stepping across and not up, and the
+    /// two do not share a plane while they are at it.
+    ///
+    /// **This test asked for the fault.** It said the tops were equal and
+    /// that the slabs lapped, which together is a metre by forty-six of
+    /// two exposed faces in one plane: Jake saw it stippling from the top
+    /// of the bridge. Lapping only works where one face ends up buried.
     #[test]
     fn the_ground_is_flush_with_the_landing() {
         let ours = ground(REACHES);
         let landing = crate::bridge::landing(REACHES, &done())[0];
+        let under = landing.max.y - ours.max.y;
 
         assert!(
-            (ours.max.y - landing.max.y).abs() < 1e-4,
-            "its ground is at {:.3} and the landing is at {:.3}",
-            ours.max.y,
-            landing.max.y
+            under > 1e-4,
+            "its ground and the landing are both at {:.3}, so the metre \
+             they lap over is two faces in one plane",
+            ours.max.y
+        );
+        assert!(
+            under < crate::walk::STEP,
+            "its ground is {:.3} under the landing, which is a step and \
+             not a lap",
+            under
         );
         assert!(
             ours.max.x > landing.min.x + 1e-3,
