@@ -87,11 +87,31 @@ standing in a field.
 - **Stood beside him on the landing.** He faces the climb, which from up
   there means his back is to you once you have passed, which is right.
 - **And looked back east, which is what spec 0054 says the prize is.** It
-  does not land. At a hundred and thirty-six metres and twenty-six up the
-  arcade is a black slab with one tower off it, at noon as well as at dusk,
-  because the roof is an unlit plane nobody has ever had a reason to look
-  at. The threshold is not what is wrong there, and the fix is not this
-  spec's.
+  did not land, and the reason given here first was wrong. The arcade was a
+  black slab with one tower off it, at noon as well as at dusk, and the
+  guess was that its roof was an unlit plane. The roofs are drawn and lit.
+  What stood behind them was spec 0011's room, a hundred and fifty nine
+  metres square and as near black as this building draws, because from
+  inside it that is space. It is not drawn from out of doors now and the
+  slab is gone.
+
+- **The building is still small from up there, and the reason is
+  foreshortening rather than anything hiding it.** Said twice in
+  conversation to be the garden's 4.2 metre wall standing in the way, and
+  that is wrong: the ray grazing the top of that wall is at 1.24 metres by
+  the time it reaches the hall, whose roof is at 3.2, so the roof clears it
+  by two. What is actually true is that the hall is 134 metres off and 9.7
+  degrees below the eye, and thirty metres of flat roof seen from 9.7
+  degrees presents about five metres of apparent depth: two degrees of the
+  view, call it forty-five pixels of that window.
+
+  So a better roof would draw a better forty-five pixels. What reads at
+  that angle is vertical extent and nothing else, which the imaginarium's
+  tower proves by being the one part of the building you can make out. If
+  the look back is ever to land, it wants things standing up on the roof
+  rather than paint on it. Left alone for now, because spec 0055's own
+  Valhalla goes at the top of this bridge and you will be facing the other
+  way.
 
 ## What Jake has since decided, and this does not build
 

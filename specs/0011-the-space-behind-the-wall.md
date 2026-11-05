@@ -170,6 +170,30 @@ to do, so they come off one function with the lap as its argument. They are
 answering different questions: one is what you can see and one is what you can
 stand on.
 
+## It is not drawn from out of doors
+
+**A hundred and fifty nine metres square, and it was the biggest thing in
+the landscape.** Its floor, its lid, its walls and its columns are
+`aim::BEHIND_FLOOR` and its neighbours, which are as near black as this
+building draws, because from inside this room they are space. From outside
+they are a hole in the world.
+
+Nobody could see that until spec 0054 put a bridge in the field and spec
+0055 put a landing at the top of it. From up there the arcade is a small
+lit cluster beside a black rectangle ten times its size, and the rectangle
+is the one room this spec is about. Jake had already pinned the view as
+wrong and the diagnosis offered then, that the building's roof was an
+unlit plane, was wrong: the roofs are drawn and lit and the secret was
+standing behind them.
+
+So it is skipped while you are out of doors, the way spec 0035's corridor
+is skipped unless `twine::inside`. The test is out of doors and not
+`behind::in_the_room`, which is the tempting one and is wrong by the same
+margin spec 0086 was wrong by: that would stop drawing the room while you
+stood in the hall at its opening looking straight in. There is no way to
+see into this room from under the open sky, so anything of it visible from
+there is a fault.
+
 ## Acceptance criteria
 
 - You can walk through the wall where the gap is. — `behind::tests::you_can_walk_through_where_the_gap_is`
@@ -181,6 +205,8 @@ stand on.
 - And the lap is walked and not drawn. — `behind::tests::nothing_drawn_lies_in_the_halls_floor`
 - No column stands in the way in. — `behind::tests::nothing_stands_in_the_way_in`
 - You can get back out. — `behind::tests::you_can_walk_back_out`
+- Every part of it has a lid over it, so it is drawn wherever you stand in it. — `behind::tests::none_of_it_is_under_the_open_sky`
+- And nowhere anybody stands out of doors is inside it. — `behind::tests::nowhere_out_of_doors_is_inside_it`
 - It is its own room, as far out as Saturn. — `noise::tests::the_space_behind_the_wall_is_its_own_room`
 - And nothing sounds in it. — `noise::tests::nothing_sounds_in_the_space_behind_the_wall`
 - Its footsteps are the hall's. — `noise::tests::each_room_sounds_like_its_own_floor`

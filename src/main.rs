@@ -301,6 +301,38 @@ fn flying() -> bool {
     std::env::var("FLY").is_ok()
 }
 
+/// Where to stand this run, instead of at the door.
+/// `POSE=x,y,z,yaw,pitch`.
+///
+/// **The other half of `WHERE`.** That one answers where the camera was
+/// when you saw something; this one puts the camera back there. Together
+/// they are one round trip instead of six, which is the whole of what the
+/// walking skill is for.
+///
+/// It was a temporary block, written into `update` and taken out again,
+/// six times in one day: for the garden's trees, for the lantern, twice
+/// for the top of the bridge, for the foot of it, and for the roof. Every
+/// one of those needed it rebuilt, and the rule about proving the
+/// scaffolding did not survive needed running every time. A tool you write
+/// by hand that often is a tool.
+///
+/// `FLY` is the neighbour of this and the two are usually wanted together:
+/// that one takes gravity and the floor away, and this one saves the
+/// flight.
+///
+/// **It does not survive a reset.** `back_to_the_door` puts you at the
+/// door, which is what it is for, and this is read once on the first frame
+/// rather than fought with.
+fn posed_at() -> Option<(Vec3, f32, f32)> {
+    let said = std::env::var("POSE").ok()?;
+    let n: Vec<f32> = said
+        .split(',')
+        .filter_map(|one| one.trim().parse().ok())
+        .collect();
+
+    (n.len() >= 5).then(|| (vec3(n[0], n[1], n[2]), n[3], n[4]))
+}
+
 /// Where flight takes you: along `wish`, at `FLIES` times the pace, through
 /// whatever is in the way.
 ///
@@ -4406,6 +4438,27 @@ impl Arcade {
             {
                 continue;
             }
+            // and spec 0015's room is not drawn from out of doors at all.
+            //
+            // **It is a hundred and fifty nine metres square and it is a
+            // secret, and it was the biggest thing in the landscape.** Its
+            // floor, its lid and its walls are `aim::BEHIND_FLOOR` and its
+            // neighbours, which are as near black as this building draws
+            // because from inside that room they are space. From outside
+            // they are a hole in the world: from the top of spec 0054's
+            // bridge, looking back at the building, the arcade is a small
+            // lit cluster beside a black rectangle ten times its size, and
+            // that rectangle is the one room nobody is supposed to find.
+            //
+            // Out of doors and not `behind::in_the_room`, which is the
+            // tempting test and is wrong by the same margin spec 0086 was
+            // wrong by: it would stop drawing the room while you stood in
+            // the hall at its opening looking straight into it. There is
+            // no way to see into this room from under the open sky, so
+            // anything of it visible from there is a fault.
+            if run.at == standing::Where::Behind && self.room.out_of_doors(self.looking_from()) {
+                continue;
+            }
             // which room as well as what it is made of: a wall in the hall
             // is boards under a light and a wall of the space behind it is
             // as near black as this building draws, and they were the same
@@ -7179,7 +7232,19 @@ impl Game for Arcade {
         text: &mut TextRenderer,
         sound: &SoundSystem,
     ) {
+        let first = self.since <= 0.0;
+
         self.since += dt;
+
+        // where to stand, if this run was told. Spec 0013's diagnostics.
+        if first {
+            if let Some((at, yaw, pitch)) = posed_at() {
+                self.at = at;
+                self.eye = at.y;
+                self.yaw = yaw;
+                self.pitch = pitch;
+            }
+        }
         // and the readout of where you are standing, which runs out on its
         // own rather than being turned off. Spec 0045.
         self.showing_place = (self.showing_place - dt).max(0.0);

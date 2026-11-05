@@ -2320,4 +2320,94 @@ mod tests {
             "the way out is see-through, and what is behind it is a wall"
         );
     }
+
+    /// Spec 0011: none of this room is visible from out of doors.
+    ///
+    /// **It is a hundred and fifty nine metres square and it is a secret,
+    /// and it was the biggest thing in the landscape.** Its floor, its lid,
+    /// its walls and its columns are drawn in `aim::BEHIND_FLOOR` and its
+    /// neighbours, which are as near black as this building draws because
+    /// from inside this room they are space. From outside they are a hole
+    /// in the world: from the top of spec 0054's bridge the arcade was a
+    /// small lit cluster beside a black rectangle ten times its size, and
+    /// the rectangle was the one room nobody is meant to find.
+    ///
+    /// This is the arithmetic half of the fix. What it holds is that every
+    /// part of this room has a lid or a solid over it, so that
+    /// `out_of_doors` is false everywhere inside it and the drawing gate
+    /// that reads it can never hide the room from somebody standing in it.
+    #[test]
+    fn none_of_it_is_under_the_open_sky() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+        let middle = at(reaches);
+        let half = half();
+
+        // swept rather than checked at the middle, because a hole in the
+        // lid is a patch of this room that stops being drawn when you walk
+        // into it
+        let steps = 12;
+
+        for down in 0..=steps {
+            for across in 0..=steps {
+                let where_ = vec3(
+                    middle.x + (down as f32 / steps as f32 - 0.5) * 2.0 * half.x * 0.98,
+                    1.6,
+                    middle.z + (across as f32 / steps as f32 - 0.5) * 2.0 * half.y * 0.98,
+                );
+
+                if !in_the_room(reaches, where_) {
+                    continue;
+                }
+
+                assert!(
+                    !room.out_of_doors(where_),
+                    "the space behind the wall is open to the sky at {:?}, \
+                     so it would stop being drawn while somebody is in it",
+                    where_
+                );
+            }
+        }
+    }
+
+    /// And the other half: from out of doors there is nothing of it to see.
+    ///
+    /// Taken at the places somebody actually stands out there, which is the
+    /// top of the bridge, the field at its foot, and the garden's way out.
+    #[test]
+    fn nowhere_out_of_doors_is_inside_it() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+
+        for (name, where_) in [
+            (
+                "the top of the bridge",
+                crate::bridge::top(reaches) + Vec3::Y * 1.6,
+            ),
+            (
+                "the foot of it",
+                crate::bridge::foot(reaches) + Vec3::Y * 1.6,
+            ),
+            (
+                "the garden's way out",
+                vec3(
+                    crate::field::starts(reaches) - 1.0,
+                    1.6,
+                    crate::garden::at(reaches).z,
+                ),
+            ),
+        ] {
+            assert!(
+                room.out_of_doors(where_),
+                "{} is not out of doors, so the gate that hides this room \
+                 from outside would not fire there",
+                name
+            );
+            assert!(
+                !in_the_room(reaches, where_),
+                "{} is inside the space behind the wall",
+                name
+            );
+        }
+    }
 }
