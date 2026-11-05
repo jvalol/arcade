@@ -509,6 +509,27 @@ pub fn inside(reaches: f32, at: Vec3) -> bool {
     at.y > -0.1 && at.y < HIGH + THICK && at.z >= reaches
 }
 
+/// Whether you are in this room's own footprint, and not merely under its
+/// lid. Spec 0086.
+///
+/// **The other question, and `inside` cannot answer it.** That one is a
+/// half space on purpose, bounded above and not along, because what it is
+/// for is whether the sky can see you. The garden sits past the hall's
+/// reaches too, so it satisfies `inside` exactly as this room does, and
+/// anything asking "which room am I in" with it gets the same yes in both.
+///
+/// That is what put a sky behind the solar system: the backdrop asked
+/// `inside`, the garden and this room both said yes, and gating on it
+/// instead took the garden's sky away.
+pub fn in_the_room(reaches: f32, stood: Vec3) -> bool {
+    let middle = at(reaches);
+    let half = half();
+
+    inside(reaches, stood)
+        && (stood.x - middle.x).abs() <= half.x
+        && (stood.z - middle.z).abs() <= half.y
+}
+
 /// The middle of the floor, and how far it reaches from there.
 ///
 /// Its near edge is the hall's far edge, meeting it rather than lapping over
@@ -950,6 +971,34 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Spec 0086. `inside` is a half space and says yes to the garden as
+    /// readily as to this room, which is what put a sky behind the solar
+    /// system and then took the garden's away.
+    #[test]
+    fn the_garden_is_under_the_lid_and_not_in_the_room() {
+        const REACHES: f32 = 9.5;
+        // the camera `the_garden_is_drawn` poses, which is past the hall's
+        // reaches and well west of this room
+        let in_the_garden = vec3(-10.85, 1.55, 15.15);
+
+        assert!(
+            inside(REACHES, in_the_garden),
+            "the half space takes in the garden, which is the whole point"
+        );
+        assert!(
+            !in_the_room(REACHES, in_the_garden),
+            "and the footprint does not"
+        );
+    }
+
+    #[test]
+    fn the_middle_of_this_room_is_in_it() {
+        const REACHES: f32 = 9.5;
+        let middle = at(REACHES);
+
+        assert!(in_the_room(REACHES, vec3(middle.x, 1.55, middle.z)));
+    }
     use blitzkit::camera::Camera;
     use blitzkit::renderer::coplanar::Fights;
 

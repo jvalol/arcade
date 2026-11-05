@@ -6,6 +6,7 @@ mod aloft;
 mod back;
 mod behind;
 mod beyond;
+mod bridge;
 mod cabinet;
 mod carpet;
 mod cascada;
@@ -635,15 +636,26 @@ struct Arcade {
     roof_skin: Option<TextureId>,
     storey_skin: Vec<TextureId>,
     outdoors: bool,
+    /// Whether the outdoors can be seen from here, which is not the same
+    /// question and is the one the field is drawn on. Spec 0086.
+    sees_outdoors: bool,
     storey_faces: Vec<(blitzkit::collision::Aabb, Vec3)>,
     storey_wall_skin: Vec<TextureId>,
     jutting_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
+    /// The three crossed planes a sprig of foliage is drawn on, and the
+    /// pictures it wears: needles for the conifers and leaves for the rest.
+    /// Spec 0010.
     crown: Option<MeshId>,
+    needles: Vec<TextureId>,
+    broadleaf: Vec<TextureId>,
     limb: Option<MeshId>,
     lantern: Option<MeshId>,
+    /// The lit window of one, which is the only part of it that is not
+    /// stone and the only part its own lamp can show. Spec 0010.
+    lantern_light: Option<MeshId>,
     /// The koi: a body, a tail, and a skin each. Spec 0010.
     koi: Option<MeshId>,
     fin: Option<MeshId>,
@@ -1121,6 +1133,7 @@ impl Arcade {
             roof_skin: None,
             storey_skin: Vec::new(),
             outdoors: false,
+            sees_outdoors: false,
             storey_faces: Vec::new(),
             storey_wall_skin: Vec::new(),
             jutting_skin: Vec::new(),
@@ -1128,8 +1141,11 @@ impl Arcade {
             blades: Vec::new(),
             heads: Vec::new(),
             crown: None,
+            needles: Vec::new(),
+            broadleaf: Vec::new(),
             limb: None,
             lantern: None,
+            lantern_light: None,
             koi: None,
             fin: None,
             skins: Vec::new(),
@@ -2491,7 +2507,7 @@ impl Arcade {
     fn draw_the_outside(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
 
-        if !self.outdoors {
+        if !self.sees_outdoors {
             return;
         }
 
@@ -2510,7 +2526,7 @@ impl Arcade {
             // tiles oversailing both ways and the roll set in from them.
             // One course and no roll, the join with the garden's wall was
             // a step along the top of one wall.
-            let wide = room::THICK + garden::COPE_OUT * 2.0;
+            let wide = garden::COPE_WIDE;
 
             scene.push_colored(
                 cube,
@@ -2742,7 +2758,7 @@ impl Arcade {
         // metres wide and what is through it is a hundred and sixty metres
         // of ground. Drawn only from out in the field, the gap was a black
         // rectangle in a garden wall.
-        if !self.outdoors {
+        if !self.sees_outdoors {
             return;
         }
 
@@ -2782,12 +2798,15 @@ impl Arcade {
                 };
                 let turned = glam::Quat::from_rotation_y(stood.turn);
 
-                scene.push_colored(
+                let bark = Self::bark_of(tree);
+
+                scene.push_material(
                     *trunk,
                     &Transform::at(stood.at)
                         .with_rotation(turned)
                         .with_scale(Vec3::splat(stood.size)),
-                    aim::BARK,
+                    bark,
+                    aim::DULL,
                 );
 
                 if let Some(limb) = self.limb {
@@ -2797,7 +2816,7 @@ impl Arcade {
                         let long = along.length();
 
                         if long > 1e-3 {
-                            scene.push_colored(
+                            scene.push_material(
                                 limb,
                                 &Transform::at(from)
                                     .with_rotation(glam::Quat::from_rotation_arc(
@@ -2809,23 +2828,26 @@ impl Arcade {
                                         long,
                                         garden::LIMB_THICK * stood.size,
                                     )),
-                                aim::BARK,
+                                bark,
+                                aim::DULL,
                             );
                         }
                     }
                 }
 
-                if let Some(crown) = self.crown {
-                    for pad in garden::pads(tree) {
-                        let wide = pad.wide * stood.size;
+                if let (Some(crown), Some((skin, leaf))) = (self.crown, self.foliage(tree)) {
+                    for sprig in garden::sprigs(tree) {
+                        let wide = sprig.wide * stood.size;
+                        let tall = sprig.tall * stood.size;
 
-                        scene.push_material(
+                        scene.push_textured(
                             crown,
-                            &Transform::at(field::stands(&stood, pad.at))
-                                .with_rotation(glam::Quat::from_rotation_y(pad.turn + stood.turn))
-                                .with_scale(vec3(wide, wide * garden::PAD_FLAT, wide * 0.86)),
-                            aim::LEAF,
-                            aim::DULL,
+                            skin,
+                            &Transform::at(field::stands(&stood, sprig.at))
+                                .with_rotation(glam::Quat::from_rotation_y(sprig.turn + stood.turn))
+                                .with_scale(vec3(wide, tall, wide)),
+                            leaf * sprig.shade,
+                            aim::VOID,
                         );
                     }
                 }
@@ -2888,6 +2910,62 @@ impl Arcade {
                 }
             }
         }
+
+        self.draw_bridge(scene);
+    }
+
+    /// The picture a tree's foliage wears, and the colour to draw it in.
+    ///
+    /// One place, because the garden and the field both stand trees and the
+    /// field's are `garden::Tree` too. Three pictures of each kind of leaf,
+    /// picked off the tree's own seed so one tree is one tree and two of a
+    /// species are not the same tree twice.
+    fn bark_of(tree: &garden::Tree) -> glam::Vec4 {
+        let of = tree.kind.bark();
+
+        aim::BARK * vec4(of.x, of.y, of.z, 1.0)
+    }
+
+    fn foliage(&self, tree: &garden::Tree) -> Option<(TextureId, glam::Vec4)> {
+        let of = match tree.kind.leaf() {
+            garden::Leaf::Needle => &self.needles,
+            garden::Leaf::Broad => &self.broadleaf,
+        };
+        let skin = of.get(tree.seed as usize % of.len().max(1)).copied()?;
+        let tint = tree.kind.tint();
+
+        Some((skin, aim::LEAF * vec4(tint.x, tint.y, tint.z, 1.0)))
+    }
+
+    /// The bridge at the end of the trail, out in the field. Spec 0054.
+    ///
+    /// **Drawn as a different list from the one that holds you up.** The
+    /// colliders are a fine staircase, because a collider is a box that
+    /// cannot tilt and a slope has to be stepped to walk on. These are
+    /// forty-eight lengths of seven bands, each turned to the pitch of the
+    /// arc where it lies, so what you see is a curve. Both come out of
+    /// `bridge::high`, which is the one place the shape is written.
+    fn draw_bridge(&self, scene: &mut Scene) {
+        if !bridge::shows(&self.trail) {
+            return;
+        }
+
+        let Some(cube) = self.cube else {
+            return;
+        };
+
+        for piece in bridge::deck(self.room.reaches) {
+            let along = (bridge::foot(self.room.reaches).x - piece.at.x) / bridge::RUN;
+            let turned = glam::Quat::from_rotation_z(-bridge::pitch(along).atan());
+
+            scene.push_colored(
+                cube,
+                &Transform::at(piece.at)
+                    .with_rotation(turned)
+                    .with_scale(piece.size),
+                piece.colour(),
+            );
+        }
     }
 
     /// What you can walk into from where you are.
@@ -2908,6 +2986,10 @@ impl Arcade {
         if field::afoot(&out, self.at) {
             out.extend(field::solid(self.room.reaches, self.at));
         }
+
+        // and the bridge, which is out in the field and is not there at
+        // all until every room has given up what it asks. Spec 0054.
+        out.extend(bridge::solid(self.room.reaches, &self.trail));
 
         out
     }
@@ -6642,9 +6724,19 @@ impl Game for Arcade {
             .iter()
             .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
             .collect();
-        self.crown = Some(renderer.add_mesh(&garden::pad_mesh(0x5A2F)));
+        self.crown = Some(renderer.add_mesh(&garden::sprig_mesh()));
+        // three pictures of each, so a crown is not one sprig repeated
+        self.needles = [0x5A2Fu32, 0x11C7, 0xE340]
+            .iter()
+            .map(|seed| renderer.add_texture(&garden::needles(*seed)))
+            .collect();
+        self.broadleaf = [0x7B12u32, 0x2E95, 0xC608]
+            .iter()
+            .map(|seed| renderer.add_texture(&garden::broadleaf(*seed)))
+            .collect();
         self.limb = Some(renderer.add_mesh(&garden::limb_mesh()));
         self.lantern = Some(renderer.add_mesh(&garden::lantern_mesh()));
+        self.lantern_light = Some(renderer.add_mesh(&garden::lantern_light_mesh()));
         self.koi = Some(renderer.add_mesh(&garden::koi_mesh()));
         self.fin = Some(renderer.add_mesh(&garden::fin_mesh()));
         // a skin each, painted rather than tinted: three fish of one colour
@@ -7114,6 +7206,12 @@ impl Game for Arcade {
         // false out there, which is the half of the old question that was
         // doing this work and the half I replaced.
         self.outdoors = !self.in_the_deep() && self.room.out_of_doors(self.looking_from());
+        // and whether it is worth drawing, which is a question about sight.
+        // Spec 0086.
+        self.sees_outdoors = !self.in_the_deep()
+            && self
+                .room
+                .can_see_outdoors(self.looking_from(), self.room.reaches);
 
         self.mind_the_threshold();
 
@@ -8556,13 +8654,36 @@ impl Game for Arcade {
             // whole of it, per spec 0016: what you see of lightning from
             // under a storm is the deck going white, and the cloud's own
             // shape is a better picture of it than any patch.
+            //
+            // **Handed over as a backdrop rather than placed.** It was
+            // pushed like any other mesh, at a scale this file chose, and
+            // only while you stood out under it. Both of those were wrong
+            // and the second hid the first.
+            //
+            // Standing anywhere with a roof over you, the sky over the
+            // garden was black: you see a sky from the doorway you are
+            // looking through, not from the square metre your feet are on,
+            // and walking in and out of cover made it flash. Underneath
+            // that, the scale: 22 here against the mesh's own 19 across is
+            // a 209 metre dome, and indoors the far plane is 100, so every
+            // vertex of it was clipped. Opening the gate alone showed
+            // nothing, which is what made this take all morning.
+            //
+            // The renderer sizes it now, because the far plane is the
+            // renderer's and this file could not see it. Spec 0086.
+            //
+            // **Asked with the same question the space is drawn by.** It was
+            // `in_the_deep`, which is `z` past the door, while the space
+            // itself is drawn on `behind::inside`, which also wants you
+            // under its lid. For the camera in `what_is_behind_the_wall_is_drawn`
+            // those two disagreed, so that room got the solar system and a
+            // sky behind it at once. Two tests for one question, which is
+            // the fault this project keeps finding.
             if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
-                if self.outdoors {
-                    scene.push_textured(
+                if !behind::in_the_room(self.room.reaches, self.looking_from()) {
+                    scene.backdrop(
                         dome,
                         storm,
-                        &Transform::at(vec3(self.at.x, 0.0, self.at.z))
-                            .with_scale(Vec3::splat(field::sky_by(self.at))),
                         garden::skylit(self.since) + self.flashed(),
                         900.0,
                     );
@@ -8792,7 +8913,9 @@ impl Game for Arcade {
             // the trees: a bent trunk, a limb out to each pad of foliage, and
             // the pads. Spec 0010.
             for (tree, trunk) in garden::trees(self.room.reaches).iter().zip(&self.trunks) {
-                scene.push_colored(*trunk, &Transform::at(tree.at), aim::BARK);
+                let bark = Self::bark_of(tree);
+
+                scene.push_material(*trunk, &Transform::at(tree.at), bark, aim::DULL);
 
                 if let Some(limb) = self.limb {
                     for (from, to) in garden::limbs(tree) {
@@ -8803,7 +8926,13 @@ impl Game for Arcade {
                             // the mesh is built standing on its end, so it is
                             // turned to point along the limb rather than placed
                             // at an angle worked out by hand
-                            scene.push_colored(
+                            // dull, like the trunk. The default highlight is
+                            // a broad one, and a branch the thickness of a
+                            // wrist carries the whole of it as a white
+                            // streak down its length: a crown of them reads
+                            // as bare bleached sticks, which is what Jake
+                            // would have called them.
+                            scene.push_material(
                                 limb,
                                 &Transform::at(from)
                                     .with_rotation(glam::Quat::from_rotation_arc(
@@ -8811,40 +8940,46 @@ impl Game for Arcade {
                                         along / long,
                                     ))
                                     .with_scale(vec3(garden::LIMB_THICK, long, garden::LIMB_THICK)),
-                                aim::BARK,
+                                bark,
+                                aim::DULL,
                             );
                         }
                     }
                 }
 
-                if let Some(crown) = self.crown {
-                    for pad in garden::pads(tree) {
-                        scene.push_material(
+                if let (Some(crown), Some((skin, leaf))) = (self.crown, self.foliage(tree)) {
+                    for sprig in garden::sprigs(tree) {
+                        scene.push_textured(
                             crown,
-                            &Transform::at(pad.at)
-                                .with_rotation(glam::Quat::from_rotation_y(pad.turn))
-                                .with_scale(vec3(
-                                    pad.wide,
-                                    pad.wide * garden::PAD_FLAT,
-                                    pad.wide * 0.86,
-                                )),
-                            aim::LEAF,
-                            // no highlight. The default is a broad one and on
-                            // a pad this size it is a wet green streak across
-                            // the whole of it, which is a balloon.
-                            aim::DULL,
+                            skin,
+                            &Transform::at(sprig.at)
+                                .with_rotation(glam::Quat::from_rotation_y(sprig.turn))
+                                .with_scale(vec3(sprig.wide, sprig.tall, sprig.wide)),
+                            leaf * sprig.shade,
+                            // no highlight. The default is a broad one, and a
+                            // highlight on a silhouette of needles is a wet
+                            // green streak across a thing that has no surface.
+                            aim::VOID,
                         );
                     }
                 }
             }
 
             if let Some(lantern) = self.lantern {
+                // and how hard its window is burning, which is the same
+                // number the lamp inside it uses rather than a second one
+                let lit = garden::lanterns_lit(self.since);
+                let glow = aim::LANTERN_LIT * (0.35 + lit * 2.2);
+
                 for (stands, tall) in garden::lanterns(self.room.reaches) {
-                    scene.push_colored(
-                        lantern,
-                        &Transform::at(stands).with_scale(vec3(tall * 0.8, tall, tall * 0.8)),
-                        aim::GARDEN_STONE,
-                    );
+                    let stood =
+                        Transform::at(stands).with_scale(vec3(tall * 0.8, tall, tall * 0.8));
+
+                    scene.push_colored(lantern, &stood, aim::GARDEN_STONE);
+
+                    if let Some(window) = self.lantern_light {
+                        scene.push_colored(window, &stood, glam::vec4(glow.x, glow.y, glow.z, 1.0));
+                    }
                 }
             }
         }

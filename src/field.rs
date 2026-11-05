@@ -44,7 +44,8 @@ pub const COVER_REACH: f32 = 22.0;
 /// And it follows you, so the nine pixels never become ten.
 ///
 /// What stops it being larger is the sky, which has to clear it: see
-/// [`SKY_BY`].
+/// `garden::sky_scale`, which asks the engine how big a backdrop it will
+/// draw. This file chose that number itself until spec 0086.
 pub const GROUND_REACH: f32 = 160.0;
 
 /// How big one tile of the ground's own texture is.
@@ -257,21 +258,6 @@ pub fn in_view(reaches: f32, solid: &[Aabb], at: Vec3) -> bool {
     afoot(solid, at) || crate::garden::under_the_sky(reaches, at)
 }
 
-/// How much bigger the field's sky is than the garden's.
-///
-/// **The rim is the garden's own sixteen metres and not its nineteen.**
-/// `garden::DOME` is how big the sky's picture is; what the vault actually
-/// springs from is `garden::vault_rim`, which traces the sixteen metre
-/// garden. Scaled for the picture's number the sky stopped eight metres
-/// inside the ground, with the clear colour under the horizon in a ring all
-/// the way round.
-///
-/// Twenty two puts the rim at 176 along the axes and 249 at the corners,
-/// against a ground that reaches 160 and 226. The corners are what have to
-/// clear: a dome sized on the sides is one the ground runs out from under at
-/// forty five degrees.
-pub const SKY_BY: f32 = 22.0;
-
 /// How far the camera sees out here.
 ///
 /// Past the sky's own corner, which is the furthest thing there is: short of
@@ -283,11 +269,6 @@ pub const SEES: f32 = 420.0;
 /// And how far it sees from where you are, which grows with the rest of it.
 pub fn sees(at: Vec3) -> f32 {
     SEES * grown(at)
-}
-
-/// How big the sky is from where you are.
-pub fn sky_by(at: Vec3) -> f32 {
-    SKY_BY * grown(at)
 }
 
 /// Whether a cell this far off is sown at all.
@@ -422,18 +403,28 @@ pub const TUFTS: u32 = 5;
 ///
 /// `garden::Tree` says what a tree is in this building and the field does not
 /// get a second answer. What it gets is three of them.
+///
+/// **Three species and not three sizes.** They were one shape at three
+/// heights, which over three hundred metres of ground is one tree stood
+/// thousands of times, and from the garden wall you could see that it was.
+/// A fir, an oak and an aspen have three outlines, and the outline is the
+/// whole of what reads at that distance. The garden keeps the pines, which
+/// are the ones that belong in it.
 pub fn kinds() -> Vec<crate::garden::Tree> {
+    use crate::garden::Kind;
+
     [
-        (TREE_TALL, 3.7f32, 0x5A17u32),
-        (TREE_TALL * 0.78, 2.6, 0x2C9F),
-        (TREE_TALL * 1.15, 4.3, 0xB3E4),
+        (TREE_TALL, 3.7f32, Kind::Fir, 0x5A17u32),
+        (TREE_TALL * 0.78, 4.4, Kind::Oak, 0x2C9F),
+        (TREE_TALL * 1.15, 2.6, Kind::Aspen, 0xB3E4),
     ]
     .iter()
-    .map(|(tall, wide, seed)| crate::garden::Tree {
+    .map(|(tall, wide, kind, seed)| crate::garden::Tree {
         at: Vec3::ZERO,
         tall: *tall,
         wide: *wide,
         leans: glam::vec2(1.0, 0.0),
+        kind: *kind,
         seed: *seed,
     })
     .collect()
@@ -536,7 +527,7 @@ pub fn wall(reaches: f32, at: Vec3) -> Vec<Aabb> {
     let piece = |near: f32, far: f32| {
         (far > near + 1e-3).then(|| {
             Aabb::new(
-                vec3(face - crate::room::THICK, -DROP, near),
+                vec3(face - crate::garden::WALL_THICK, -DROP, near),
                 vec3(face, tall, far),
             )
         })
@@ -1017,7 +1008,7 @@ mod tests {
 
             for round in 0..64 {
                 let round = round as f32 / 64.0 * std::f32::consts::TAU;
-                let sky = crate::garden::vault_rim(round) * sky_by(at);
+                let sky = crate::garden::vault_rim(round) * crate::garden::sky_scale(at);
                 // how far the square slab reaches on that bearing
                 let (c, s) = (round.cos().abs(), round.sin().abs());
                 let ground = super::reaches(at) / c.max(s);
@@ -1120,10 +1111,11 @@ mod tests {
     }
 
     fn you_can_see_as_far_as_the_sky_from(at: Vec3) {
+        let by = crate::garden::sky_scale(at);
         let corner = (0..64)
-            .map(|n| crate::garden::vault_rim(n as f32 / 64.0 * std::f32::consts::TAU) * sky_by(at))
+            .map(|n| crate::garden::vault_rim(n as f32 / 64.0 * std::f32::consts::TAU) * by)
             .fold(0.0f32, f32::max);
-        let top = crate::garden::DOME_UP * sky_by(at);
+        let top = crate::garden::DOME_UP * by;
         let far = sees(at);
 
         assert!(

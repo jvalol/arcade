@@ -27,6 +27,25 @@ pub const SPAN: f32 = 16.0;
 /// low lid is a cupboard with a tree in it.
 pub const HIGH: f32 = 4.2;
 
+/// How thick the garden's own walls are.
+///
+/// **Its own number and not the building's.** `room::THICK` is 0.3, which is
+/// a partition between two rooms with floors either side of it holding it up.
+/// These three stand four metres and a bit on their own with a field on one
+/// side, and at 0.3 Jake said they were unrealistically thin and they were:
+/// that is a garden wall you could push over.
+///
+/// **Grown outward, so nothing inside the garden moves.** The faces the
+/// garden looks at are where the linings are, the trees stand back from them
+/// and the gravel runs up to them. Thickened about their middles, every one
+/// of those numbers would have shifted by a hand's breadth for a change that
+/// is about the other side of the wall.
+///
+/// The two borrowed sides stay the building's. The hall's wall is a wall of
+/// the hall first and the garden's second, and [`COPE_WIDE`] is what makes
+/// the four read as one wall head.
+pub const WALL_THICK: f32 = 0.55;
+
 /// The way in: how wide the opening is, and how far short of the near wall it
 /// stops.
 ///
@@ -169,7 +188,17 @@ pub fn west_ends(reaches: f32) -> (f32, f32) {
     let middle = at(reaches);
     let half = half();
 
-    (middle.z - half.y - THICK, middle.z + half.y + THICK)
+    // the outer faces of the two walls it returns into, and not the garden's
+    // own span plus a wall's thickness, which is the same number only while
+    // both of those walls sit squarely behind the plane they close. The south
+    // one does not: it straddles, so its outside is a hand's breadth nearer
+    // than a wall's thickness out. Taken as the straight sum, the west wall
+    // ran that much past the corner and buried the plaster on the south
+    // wall's outer face inside itself.
+    (
+        middle.z - half.y + THICK * 0.5 - WALL_THICK,
+        middle.z + half.y + WALL_THICK,
+    )
 }
 
 pub fn solid(reaches: f32) -> Vec<Aabb> {
@@ -187,23 +216,37 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         // in it makes a field look like a painting hung in a doorway, so the
         // slot is wide.
         Aabb::from_center_size(
-            vec3(west - THICK * 0.5, HIGH * 0.5, (south_end + from) * 0.5),
-            vec3(THICK, HIGH, from - south_end),
+            vec3(
+                west - WALL_THICK * 0.5,
+                HIGH * 0.5,
+                (south_end + from) * 0.5,
+            ),
+            vec3(WALL_THICK, HIGH, from - south_end),
         ),
         Aabb::from_center_size(
-            vec3(west - THICK * 0.5, HIGH * 0.5, (to + north_end) * 0.5),
-            vec3(THICK, HIGH, north_end - to),
+            vec3(west - WALL_THICK * 0.5, HIGH * 0.5, (to + north_end) * 0.5),
+            vec3(WALL_THICK, HIGH, north_end - to),
         ),
         // the north wall, across the top
         Aabb::from_center_size(
-            vec3(middle.x, HIGH * 0.5, north + THICK * 0.5),
-            vec3(DEEP, HIGH, THICK),
+            vec3(middle.x, HIGH * 0.5, north + WALL_THICK * 0.5),
+            vec3(DEEP, HIGH, WALL_THICK),
         ),
         // the south wall, only the part the nook's end wall does not already
-        // close, which is the garden's own depth less the nook's
+        // close, which is the garden's own depth less the nook's.
+        //
+        // Out from the face it already presented and not about its middle.
+        // This one straddled the garden's south plane rather than sitting
+        // behind it, so its inside is `THICK * 0.5` in from that plane; grown
+        // about the middle it would have taken another eighth of a metre of
+        // the garden with it.
         Aabb::from_center_size(
-            vec3(west + (DEEP - NOOK_DEEP) * 0.5, HIGH * 0.5, south),
-            vec3(DEEP - NOOK_DEEP, HIGH, THICK),
+            vec3(
+                west + (DEEP - NOOK_DEEP) * 0.5,
+                HIGH * 0.5,
+                south + THICK * 0.5 - WALL_THICK * 0.5,
+            ),
+            vec3(DEEP - NOOK_DEEP, HIGH, WALL_THICK),
         ),
         // a parapet over the hall's wall, which is shorter than the garden's,
         // in two pieces with the way in between them.
@@ -782,6 +825,23 @@ pub fn vault_rim(round: f32) -> f32 {
     (DEEP * 0.5 / round.cos().abs().max(1e-3)).min(SPAN * 0.5 / round.sin().abs().max(1e-3))
 }
 
+/// How much the sky is scaled by from where you stand.
+///
+/// **Asked of the engine, because the engine decides it.** The sky is
+/// handed over as a backdrop now and the renderer sizes it to sit inside
+/// the far plane, per spec 0086. This file used to choose 22 and the two
+/// tests that matter, that the sky never ends inside the ground and that
+/// it clears every wall round the garden, measured that 22. Once the
+/// renderer took the decision those tests went on passing and neither was
+/// about the sky any more.
+///
+/// Only the tests want it, the same as `when` above: nothing that runs
+/// asks how big the sky is, because nothing that runs decides.
+#[cfg(test)]
+pub fn sky_scale(at: Vec3) -> f32 {
+    blitzkit::renderer::backdrop_scale(&dome_mesh(0.0).bounds(), crate::field::sees(at))
+}
+
 /// The sky, turned `by` radians.
 ///
 /// The turn is in the picture and not in the transform, which it was until
@@ -794,12 +854,30 @@ pub fn vault_rim(round: f32) -> f32 {
 /// So the mesh stands still and the clouds go round it. Spec 0042 is what
 /// makes that cheap: the water next door is written over every frame and this
 /// is a thousand vertices against its six thousand.
+/// How far below the rim the sky carries on, as a share of the quarter
+/// turn from rim to apex.
+///
+/// A fifth, which at the scale the engine draws it puts the skirt's lip
+/// well under anything you can see over. Nothing stands on it and nothing
+/// is lit by it; it is there so that looking down at the horizon from
+/// inside finds sky rather than the clear colour.
+pub const SKIRT: f32 = 0.2;
+
 pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
     let mut mesh = blitzkit::mesh::MeshData::surface(48, 24, |u, v| {
         let round = u * std::f32::consts::TAU;
-        // v nought is the rim and v one is the top. Taken the other way round
-        // the apex came out at the bottom and the whole sky was a bowl hanging
-        // over the garden with black between it and the walls.
+        // **It carries on under the horizon.** v nought used to be the rim,
+        // which is a sky that stops at your eye level: from a doorway with
+        // the garden beyond it there was a black strip along the horizon,
+        // under the rim and over nothing, because the field's ground is
+        // only drawn while you stand out in it. A backdrop that covers
+        // half the view is not a backdrop. Spec 0086.
+        //
+        // v nought is `SKIRT` below the rim now and v one is still the top.
+        // Taken the other way round the apex came out at the bottom and the
+        // whole sky was a bowl hanging over the garden with black between it
+        // and the walls.
+        let v = v * (1.0 + SKIRT) - SKIRT;
         let up = (v * std::f32::consts::FRAC_PI_2).sin();
         let out = (v * std::f32::consts::FRAC_PI_2).cos();
         // and the rim traces the garden's own square rather than a circle
@@ -1706,11 +1784,11 @@ pub fn facing(reaches: f32) -> Vec<Face> {
         // floorboards at its foot. Jake walked in and found moss on a wall
         // of a reading room.
         {
-            let west = middle.x - half.x - THICK;
+            let west = middle.x - half.x - WALL_THICK;
             let east = crate::cellar::back() - THICK;
 
             Face {
-                at: vec3((west + east) * 0.5, up, middle.z - half.y - THICK - proud),
+                at: vec3((west + east) * 0.5, up, west_ends(reaches).0 - proud),
                 size: vec3(east - west, HIGH, proud * 2.0),
                 looks: -Vec3::Z,
                 solid: false,
@@ -1718,8 +1796,8 @@ pub fn facing(reaches: f32) -> Vec<Face> {
             }
         },
         Face {
-            at: vec3(middle.x, up, middle.z + half.y + THICK + proud),
-            size: vec3(DEEP + THICK * 2.0, HIGH, proud * 2.0),
+            at: vec3(middle.x, up, west_ends(reaches).1 + proud),
+            size: vec3(DEEP + WALL_THICK * 2.0, HIGH, proud * 2.0),
             looks: Vec3::Z,
             solid: false,
             caps: false,
@@ -1734,9 +1812,24 @@ pub fn facing(reaches: f32) -> Vec<Face> {
 /// box with a flat top, and at the angle you see these from, which is from
 /// below and at a distance, the silhouette does more than the surface does.
 /// The oversail is what throws the shadow line under it.
-pub const COPE_DEEP: f32 = 0.13;
-pub const COPE_OUT: f32 = 0.11;
-pub const COPE_ROLL: f32 = 0.07;
+pub const COPE_DEEP: f32 = 0.17;
+pub const COPE_OUT: f32 = 0.17;
+pub const COPE_ROLL: f32 = 0.09;
+
+/// How wide every cope round the garden is, whatever thickness of wall is
+/// under it.
+///
+/// **One number, because what you see is the cope and not the wall.** The
+/// garden's own walls are [`WALL_THICK`] and two of its four sides are
+/// borrowed from the building at `room::THICK`, which is a hand's breadth
+/// thinner. Sized off whatever each one happens to be, the tops stepped at
+/// the corner where the two meet. Sized once, the garden has one wall head
+/// all the way round and the masonry under it can differ, which it does
+/// because one of those walls is holding up a hotel.
+///
+/// Laid so it oversails the garden's face by [`COPE_OUT`] whatever is behind
+/// it, which is the oversail you can actually look at.
+pub const COPE_WIDE: f32 = 0.88;
 
 /// The tiled cap along the top of every wall round the garden, as boxes.
 ///
@@ -1756,13 +1849,18 @@ pub fn coping(reaches: f32) -> Vec<(Vec3, Vec3)> {
 
         let along = face.looks.x.abs() > 0.5;
         let run = if along { face.size.z } else { face.size.x };
-        let wide = THICK + COPE_OUT * 2.0;
-        // centred on the wall it caps and not on the lining, which is a
-        // hand's breadth off it: taken from the lining the cope sat proud on
-        // one side and short on the other
+        let wide = COPE_WIDE;
+        // Hung off the face the garden sees rather than centred on the wall
+        // behind it. Centred, it needed to know how thick that wall was, and
+        // two of these four sides are the building's and a hand's breadth
+        // thinner than the garden's own: the cope stepped at the corner where
+        // they meet. Hung off the face, the oversail you stand under is
+        // `COPE_OUT` the whole way round and what varies is the overhang on
+        // the far side, which is over the field or over the hall's roof.
         let (surface, _, _) = face.plane();
-        let middle =
-            surface - face.looks * THICK * 0.5 + Vec3::Y * (HIGH + COPE_DEEP * 0.5 - surface.y);
+        let middle = surface
+            + face.looks * (COPE_OUT - wide * 0.5)
+            + Vec3::Y * (HIGH + COPE_DEEP * 0.5 - surface.y);
         let size = if along {
             vec3(wide, COPE_DEEP, run)
         } else {
@@ -1922,11 +2020,19 @@ pub fn mossed(seed: u32, size: Vec2) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(across, up, pixels)
 }
 
-/// The bamboo screen along one wall:/// The bamboo screen along one wall: how thick a pole is, how far apart they
+/// The bamboo screen: how thick a pole is, how far apart they
 /// stand, how tall the screen is, and how far it stands off the plaster.
 ///
-/// One wall and not four. A garden walled in bamboo on every side is a
-/// stockade; a screen on one wall is a thing somebody put there.
+/// **Every wall but the way out**, which it was not until 2026-11-04. The
+/// argument for one wall was that a garden walled in bamboo on every side
+/// is a stockade and a screen on one wall is a thing somebody put there.
+/// Jake overruled it with the picture in front of him: lit at night the
+/// screen is the best surface in this garden and the bare plaster beside
+/// it is the dullest.
+///
+/// The west wall stays clear, which is the half of the old argument that
+/// still holds. The field is through there and a screen across the way
+/// out is a fence across a view.
 ///
 /// **The north wall, from spec 0040.** It was the west one, which is
 /// opposite the way in and so was the first surface you looked at. The field
@@ -1959,20 +2065,19 @@ pub fn pole_mesh() -> blitzkit::mesh::MeshData {
 
 /// Where every pole of the screen stands, along the wall it is fixed to.
 pub fn screen(reaches: f32) -> Vec<Vec3> {
-    let Some(face) = screened(reaches) else {
-        return Vec::new();
-    };
-    let (middle, size, looks) = face.plane();
-    let step = POLE + POLE_GAP;
-    let many = ((size.x - POLE) / step).floor().max(0.0) as usize;
-    // centred on the wall, so the half pole left over is split between the two
-    // ends rather than all at one
-    let run = many as f32 * step;
-    let start = -run * 0.5 + step * 0.5;
-    let out = looks * SCREEN_OFF;
+    let mut out_ = Vec::new();
 
-    (0..many)
-        .map(|n| {
+    for face in screens(reaches) {
+        let (middle, size, looks) = face.plane();
+        let step = POLE + POLE_GAP;
+        let many = ((size.x - POLE) / step).floor().max(0.0) as usize;
+        // centred on the wall, so the half pole left over is split between
+        // the two ends rather than all at one
+        let run = many as f32 * step;
+        let start = -run * 0.5 + step * 0.5;
+        let out = looks * SCREEN_OFF;
+
+        out_.extend((0..many).map(|n| {
             let along = start + n as f32 * step;
 
             vec3(
@@ -1980,23 +2085,22 @@ pub fn screen(reaches: f32) -> Vec<Vec3> {
                 0.0,
                 middle.z + out.z + if looks.x.abs() > 0.5 { along } else { 0.0 },
             )
-        })
-        .collect()
+        }));
+    }
+
+    out_
 }
 
 /// The two rails that hold the screen together, as boxes.
 pub fn rails(reaches: f32) -> Vec<(Vec3, Vec3)> {
-    let Some(face) = screened(reaches) else {
-        return Vec::new();
-    };
-    let (middle, size, looks) = face.plane();
-    let along = looks.x.abs() > 0.5;
-    let out = looks * (SCREEN_OFF + POLE * 0.5);
+    let mut out_ = Vec::new();
 
-    RAILS
-        .iter()
-        .copied()
-        .map(|up| {
+    for face in screens(reaches) {
+        let (middle, size, looks) = face.plane();
+        let along = looks.x.abs() > 0.5;
+        let out = looks * (SCREEN_OFF + POLE * 0.5);
+
+        out_.extend(RAILS.iter().copied().map(|up| {
             let at_ = vec3(middle.x + out.x, up * SCREEN_UP, middle.z + out.z);
             let size = if along {
                 vec3(RAIL, RAIL, size.x)
@@ -2005,15 +2109,18 @@ pub fn rails(reaches: f32) -> Vec<(Vec3, Vec3)> {
             };
 
             (at_, size)
-        })
-        .collect()
+        }));
+    }
+
+    out_
 }
 
-/// The wall the screen is fixed to, which is the north one.
-fn screened(reaches: f32) -> Option<Face> {
+/// The walls the screen is fixed to, which is all of them but the way out.
+fn screens(reaches: f32) -> Vec<Face> {
     facing(reaches)
         .into_iter()
-        .find(|face| face.looks.z < -0.5 && !face.solid)
+        .filter(|face| !face.solid && face.looks.x < 0.5)
+        .collect()
 }
 
 /// How many texels to a metre the plaster gets, and the seed its pictures are
@@ -2608,6 +2715,7 @@ pub struct Tree {
     pub wide: f32,
     /// Which way it leans, as a direction on the floor.
     pub leans: Vec2,
+    pub kind: Kind,
     pub seed: u32,
 }
 
@@ -2624,12 +2732,12 @@ pub fn trees(reaches: f32) -> Vec<Tree> {
     let (water, _, _) = pond(reaches);
 
     [
-        (vec2(-6.8, -6.2), 4.1f32, 3.6f32, 0x3D71u32),
-        (vec2(5.4, 4.8), 3.2, 2.8, 0x8C44),
-        (vec2(-6.6, 6.9), 3.6, 3.1, 0x16BE),
+        (vec2(-5.3, -3.6), 4.1f32, 3.6f32, Kind::Pine, 0x3D71u32),
+        (vec2(5.0, 4.2), 3.2, 2.8, Kind::Pine, 0x8C44),
+        (vec2(-2.7, -4.4), 1.9, 2.2, Kind::Bonsai, 0x16BE),
     ]
     .iter()
-    .map(|(off, tall, wide, seed)| {
+    .map(|(off, tall, wide, kind, seed)| {
         let stands = vec3(middle.x + off.x, 0.0, middle.z + off.y);
 
         Tree {
@@ -2637,6 +2745,7 @@ pub fn trees(reaches: f32) -> Vec<Tree> {
             tall: *tall,
             wide: *wide,
             leans: vec2(water.x - stands.x, water.z - stands.z).normalize_or_zero(),
+            kind: *kind,
             seed: *seed,
         }
     })
@@ -2657,7 +2766,7 @@ pub fn bend(on: f32) -> f32 {
 /// placed on the straight line the trunk used to be on, so every pad floated
 /// off the side of the tree it belonged to.
 pub fn trunk_at(tree: &Tree, on: f32) -> Vec3 {
-    let out = tree.leans * tree.tall * LEANS * bend(on);
+    let out = tree.leans * tree.tall * LEANS * tree.kind.leans() * bend(on);
 
     tree.at + vec3(out.x, tree.tall * on.clamp(0.0, 1.0), out.y)
 }
@@ -2670,8 +2779,8 @@ pub fn trunk_at(tree: &Tree, on: f32) -> Vec3 {
 /// than the tree you could see. Taking the collider off the trunk's own
 /// thickness made the difference show up as three trees too close to the
 /// walls, and the trunk was the thing that was wrong.
-pub fn trunk_wide(on: f32) -> f32 {
-    0.26 - on * 0.14 + (1.0 - on).powi(4) * 0.08
+pub fn trunk_wide(tree: &Tree, on: f32) -> f32 {
+    tree.kind.trunk_wide(on)
 }
 
 /// The trunk, bent along its own lean.
@@ -2684,7 +2793,7 @@ pub fn trunk_mesh(tree: &Tree) -> blitzkit::mesh::MeshData {
 
     let mut mesh = blitzkit::mesh::MeshData::surface(10, 14, |u, v| {
         let round = -u * TAU;
-        let wide = trunk_wide(v) * 0.5;
+        let wide = trunk_wide(tree, v) * 0.5;
         let on = trunk_at(tree, v) - tree.at;
 
         vec3(round.cos() * wide + on.x, on.y, round.sin() * wide + on.z)
@@ -2703,7 +2812,7 @@ pub fn trunk_mesh(tree: &Tree) -> blitzkit::mesh::MeshData {
 pub fn trunk_box(tree: &Tree) -> Aabb {
     let head = (1.8f32 / tree.tall).min(1.0);
     let top = trunk_at(tree, head);
-    let foot = trunk_wide(0.0);
+    let foot = trunk_wide(tree, 0.0);
 
     Aabb::from_center_size(
         vec3(
@@ -2719,102 +2828,505 @@ pub fn trunk_box(tree: &Tree) -> Aabb {
     )
 }
 
-/// Where a tree's pads of foliage sit: how far up the trunk, how far out from
-/// it, how far round, and how wide.
+/// What kind of tree one is.
 ///
-/// Pads and not plates. Three flat discs threaded on the trunk is a fir and a
-/// tree in a garden like this is pruned the other way about: the foliage is
-/// cleared off the limbs except at their ends, so what is left is a handful of
-/// clouds at different heights with sky between them. The gaps are the point.
+/// **Five kinds, because one kind was a blob.** Jake, three times on
+/// 2026-11-04: the trees look like bulbs, and they should look like bonsais,
+/// firs, pines, oaks, aspens. One shape of crown is one tree however many of
+/// them you stand, and the thing that tells a fir from an oak at thirty
+/// metres is the outline and nothing else.
 ///
-/// Five, going round as they go up, each a different size, and the last one on
-/// the trunk's own line because the top of a pruned pine is its apex.
-const PADS: [(f32, f32, f32, f32); 5] = [
-    (0.45, 0.44, 0.00, 0.62),
-    (0.58, 0.38, 0.42, 0.50),
-    (0.70, 0.33, 0.80, 0.47),
-    (0.83, 0.28, 0.24, 0.37),
-    (0.98, 0.05, 0.62, 0.29),
-];
-
-/// One pad: where it sits, how far across and how far round.
-pub struct Pad {
-    pub at: Vec3,
-    pub wide: f32,
-    pub turn: f32,
+/// The garden takes the two that belong in a garden like this and the field
+/// takes the rest, because `garden::Tree` is what the field stands its own
+/// trees from as well.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// A pruned garden pine: clouds of needles at the ends of cleared limbs,
+    /// going round as they go up, with sky between them. What all three of
+    /// these used to be.
+    Pine,
+    /// The same tree kept small and worked harder: low, leaning, and wide
+    /// for its height.
+    Bonsai,
+    /// A fir: branches the whole way down and no clearing at all, so the
+    /// outline is one cone.
+    Fir,
+    /// An oak: a short heavy trunk under one round mass.
+    Oak,
+    /// An aspen: a pale pole with a narrow crown at the top of it.
+    Aspen,
 }
 
-/// The pads of one tree.
-pub fn pads(tree: &Tree) -> Vec<Pad> {
+/// Which picture a kind wears.
+///
+/// Two and not five. The crown's shape is what reads at a distance and the
+/// leaf is what reads when you are under it, so five outlines are worth
+/// drawing and five leaf pictures are not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Leaf {
+    Needle,
+    Broad,
+}
+
+/// Where one mass of foliage sits on a tree: how far up the trunk, how far
+/// out from it, how far round, and how wide.
+pub type Mass = (f32, f32, f32, f32);
+
+impl Kind {
+    pub fn leaf(self) -> Leaf {
+        match self {
+            Kind::Pine | Kind::Bonsai | Kind::Fir => Leaf::Needle,
+            Kind::Oak | Kind::Aspen => Leaf::Broad,
+        }
+    }
+
+    /// The masses of foliage this kind carries.
+    ///
+    /// A pine's go round the trunk with gaps between them, which is what
+    /// pruning one leaves. A fir's step in as they go up and touch, which is
+    /// a cone. An oak's are one mass four ways. An aspen's are a narrow
+    /// column at the top of a bare pole.
+    pub fn crown(self) -> &'static [Mass] {
+        match self {
+            Kind::Pine => &[
+                (0.45, 0.44, 0.00, 0.62),
+                (0.58, 0.38, 0.42, 0.50),
+                (0.70, 0.33, 0.80, 0.47),
+                (0.83, 0.28, 0.24, 0.37),
+                (0.98, 0.05, 0.62, 0.29),
+            ],
+            Kind::Bonsai => &[
+                (0.50, 0.54, 0.00, 0.60),
+                (0.71, 0.45, 0.46, 0.46),
+                (0.94, 0.14, 0.81, 0.36),
+            ],
+            Kind::Fir => &[
+                (0.26, 0.07, 0.00, 0.98),
+                (0.39, 0.06, 0.31, 0.87),
+                (0.52, 0.06, 0.62, 0.74),
+                (0.64, 0.05, 0.93, 0.61),
+                (0.76, 0.04, 0.24, 0.46),
+                (0.87, 0.03, 0.55, 0.32),
+                (0.97, 0.00, 0.86, 0.17),
+            ],
+            Kind::Oak => &[
+                (0.60, 0.31, 0.00, 0.84),
+                (0.71, 0.34, 0.34, 0.79),
+                (0.80, 0.25, 0.67, 0.70),
+                (0.89, 0.12, 0.17, 0.54),
+            ],
+            Kind::Aspen => &[
+                (0.58, 0.13, 0.00, 0.36),
+                (0.71, 0.16, 0.37, 0.42),
+                (0.83, 0.13, 0.71, 0.37),
+                (0.94, 0.07, 0.14, 0.26),
+            ],
+        }
+    }
+
+    /// How many sprigs one of those masses is built from.
+    ///
+    /// A mass is not a solid and never was. What it is, is a handful of
+    /// sprigs clumped at the end of a limb with sky between them, and the
+    /// count is how close that clump is to closing up: an oak's does, a
+    /// pine's must not.
+    pub fn sprigs(self) -> usize {
+        match self {
+            Kind::Pine => 7,
+            Kind::Bonsai => 8,
+            Kind::Fir => 6,
+            Kind::Oak => 9,
+            Kind::Aspen => 7,
+        }
+    }
+
+    /// How thick its trunk is a given way up itself.
+    ///
+    /// An oak's is a leg, an aspen's is a pole that hardly tapers, and a
+    /// bonsai's is thick for its height because that is what makes one read
+    /// as old rather than young.
+    pub fn trunk_wide(self, on: f32) -> f32 {
+        let (foot, lost, flare) = match self {
+            Kind::Pine => (0.26, 0.14, 0.08),
+            Kind::Bonsai => (0.34, 0.17, 0.14),
+            Kind::Fir => (0.30, 0.22, 0.09),
+            Kind::Oak => (0.46, 0.26, 0.18),
+            Kind::Aspen => (0.21, 0.07, 0.04),
+        };
+
+        foot - on * lost + (1.0 - on).powi(4) * flare
+    }
+
+    /// How far it leans, against [`LEANS`], which is the pine's own.
+    pub fn leans(self) -> f32 {
+        match self {
+            Kind::Pine => 1.0,
+            Kind::Bonsai => 1.35,
+            Kind::Fir => 0.15,
+            Kind::Oak => 0.55,
+            Kind::Aspen => 0.3,
+        }
+    }
+
+    /// What its foliage colour is multiplied by.
+    ///
+    /// A fir is nearly black against an aspen, and that difference is most of
+    /// what tells a conifer from a broadleaf in the half light this garden is
+    /// usually seen in.
+    pub fn tint(self) -> Vec3 {
+        match self {
+            Kind::Pine => vec3(1.0, 1.0, 1.0),
+            Kind::Bonsai => vec3(0.94, 1.02, 0.92),
+            Kind::Fir => vec3(0.66, 0.80, 0.74),
+            Kind::Oak => vec3(1.06, 1.08, 0.80),
+            Kind::Aspen => vec3(1.24, 1.26, 0.78),
+        }
+    }
+
+    /// And its bark.
+    ///
+    /// **All of them darker than `aim::BARK` on its own.** That colour was
+    /// picked when a crown was a handful of closed blobs and the trunk under
+    /// it was a sliver you saw between them. A crown of cutouts has sky
+    /// through it, so the whole trunk is on show now, and at this one it came
+    /// out paler than the plaster behind it, which no bark does.
+    ///
+    /// The aspen goes the other way, because a pale trunk is the whole of
+    /// what an aspen looks like.
+    pub fn bark(self) -> Vec3 {
+        match self {
+            Kind::Pine => vec3(0.62, 0.56, 0.52),
+            Kind::Bonsai => vec3(0.56, 0.50, 0.46),
+            Kind::Fir => vec3(0.50, 0.47, 0.45),
+            Kind::Oak => vec3(0.58, 0.55, 0.52),
+            Kind::Aspen => vec3(1.55, 1.52, 1.34),
+        }
+    }
+}
+
+/// One sprig of foliage: where it hangs, how far across and how tall its
+/// picture is drawn, how far round it is turned, and how dark it is.
+pub struct Sprig {
+    pub at: Vec3,
+    pub wide: f32,
+    pub tall: f32,
+    pub turn: f32,
+    /// What its colour is multiplied by, so a crown has depth rather than
+    /// reading as one cut-out shape. Around one, never past it.
+    pub shade: f32,
+}
+
+/// How tall a sprig's picture is against how wide, and how far a sprig sits
+/// from the middle of its mass as a share of that mass's width.
+pub const SPRIG_TALL: f32 = 0.78;
+pub const SPRIG_OUT: f32 = 0.34;
+/// And how big one sprig is against the mass it is part of.
+///
+/// Over a half, so [`Kind::sprigs`] of them round a ring of [`SPRIG_OUT`]
+/// close up into one outline with gaps rather than reading as a ring of
+/// separate blobs.
+pub const SPRIG_BY: f32 = 0.66;
+
+/// The middle of each mass of foliage, and how far across it is.
+///
+/// **One account of them, because the sprigs and the limbs both ask.** The
+/// limb goes to the mass and the sprigs clump round it, and worked out twice
+/// those are two clumps a hand's breadth apart with a branch ending in the
+/// gap between them.
+pub fn masses(tree: &Tree) -> Vec<(Vec3, f32)> {
     let about = (tree.seed % 360) as f32 / 360.0;
 
-    PADS.iter()
-        .enumerate()
-        .map(|(n, (up, out, round, wide))| {
-            // turned round by the tree's own amount, so three trees built from
-            // one list are not three of the same tree
+    tree.kind
+        .crown()
+        .iter()
+        .map(|(up, out, round, wide)| {
+            // turned round by the tree's own amount, so two trees of one kind
+            // are not the same tree twice
             let round = (round + about) * std::f32::consts::TAU;
             let along = vec2(round.cos(), round.sin()) * out * tree.wide;
             let on = trunk_at(tree, *up);
 
-            Pad {
-                at: vec3(on.x + along.x, on.y, on.z + along.y),
-                wide: wide * tree.wide,
-                turn: round + n as f32 * 0.9,
-            }
+            (vec3(on.x + along.x, on.y, on.z + along.y), wide * tree.wide)
         })
         .collect()
 }
 
-/// The limb under each pad: where it leaves the trunk and where it ends.
-///
-/// A pad with no limb is a cloud. The limb leaves the trunk a little below the
-/// pad, because a branch goes out and up rather than straight out.
-pub fn limbs(tree: &Tree) -> Vec<(Vec3, Vec3)> {
-    pads(tree)
+/// The sprigs of one tree.
+pub fn sprigs(tree: &Tree) -> Vec<Sprig> {
+    let about = (tree.seed % 360) as f32 / 360.0;
+    let each = tree.kind.sprigs();
+
+    masses(tree)
         .into_iter()
-        .map(|pad| {
-            let on = ((pad.at.y / tree.tall) - LIMB_UNDER).max(0.0);
+        .enumerate()
+        .flat_map(move |(n, (middle, across))| {
+            let round = (tree.kind.crown()[n].2 + about) * std::f32::consts::TAU;
 
-            (trunk_at(tree, on), pad.at)
+            // the sprigs of this one mass, round its middle and a little up
+            // and down, so the clump has a top and an underside rather than
+            // lying in one plane
+            (0..each).map(move |t| {
+                let turn = round + n as f32 * 0.9;
+                let about = turn + t as f32 * std::f32::consts::TAU / each as f32;
+                let lean = ((n * each + t) as f32 * 2.399).sin();
+                let out = across * SPRIG_OUT * (0.78 + lean.abs() * 0.3);
+                let wide = across * SPRIG_BY * (0.86 + lean.abs() * 0.24);
+
+                Sprig {
+                    at: vec3(
+                        middle.x + about.cos() * out,
+                        middle.y + lean * across * 0.11,
+                        middle.z + about.sin() * out,
+                    ),
+                    wide,
+                    tall: wide * SPRIG_TALL,
+                    turn: about * 1.7,
+                    // the ones that sit lower in the clump are the ones the
+                    // sky reaches last
+                    shade: 0.80 + (lean * 0.5 + 0.5) * 0.28,
+                }
+            })
         })
         .collect()
 }
 
-/// How far below its pad a limb leaves the trunk, as a share of the height,
-/// and how thick a limb is against the pad it carries.
+/// The limb under each mass: where it leaves the trunk and where it ends.
+///
+/// A mass with no limb is a cloud. The limb leaves the trunk a little below
+/// it, because a branch goes out and up rather than straight out.
+///
+/// **One a mass and not one a sprig.** Per sprig it was thirty-five branches
+/// out of one trunk, and what that draws is a bramble: the sprigs are a
+/// clump at the end of one limb, so the limb goes to the clump and stops
+/// inside it.
+pub fn limbs(tree: &Tree) -> Vec<(Vec3, Vec3)> {
+    masses(tree)
+        .into_iter()
+        .map(|(middle, _)| {
+            let on = ((middle.y / tree.tall) - LIMB_UNDER).max(0.0);
+
+            (trunk_at(tree, on), middle)
+        })
+        .collect()
+}
+
+/// How far below its sprig a limb leaves the trunk, as a share of the height,
+/// and how thick a limb is.
 pub const LIMB_UNDER: f32 = 0.12;
 pub const LIMB_THICK: f32 = 0.055;
 
-/// How flat a pad is against how wide, and how far its edge wanders.
+/// How many texels across a sprig's picture is drawn.
+pub const SPRIG_PIXELS: u32 = 64;
+
+/// The mesh a sprig is drawn on: three planes through its upright at sixty
+/// degrees to each other, each drawn both ways round, centred on itself.
 ///
-/// Flat, because a pruned pad is a plate of needles held out level, and round
-/// it is a bush. Wandering, and wandering a good deal: a smooth one is a
-/// pebble, and worse than that, a squashed sphere carries the one highlight it
-/// is given all the way round its rim as a wet green streak. What breaks that
-/// up is the same thing that says foliage, which is a surface that is not
-/// going anywhere smoothly.
-pub const PAD_FLAT: f32 = 0.33;
-pub const PAD_WANDER: f32 = 0.31;
-
-/// One pad of foliage, lumpy and smooth.
+/// **The same trick as `field::tuft_mesh` and for the same reason.** A pad
+/// was a squashed sphere, and a closed blob has a smooth outline whatever you
+/// do to its skin: at ten metres what the eye reads is the outline, so the
+/// tufting it was given on the morning of 2026-11-04 bought nothing and Jake
+/// said so, twice. Foliage is not a solid of any shape. It is a silhouette
+/// with sky through it, so it is drawn as one.
 ///
-/// Smooth and not faceted, which is the opposite of the stones. A faceted pad
-/// is cut glass; what reads as a mass of needles is a surface with no edges in
-/// it at all.
-pub fn pad_mesh(seed: u32) -> blitzkit::mesh::MeshData {
-    use std::f32::consts::{PI, TAU};
+/// Centred rather than standing on its foot, which is the one difference from
+/// the field's: a tuft of grass grows out of a point on the ground and a
+/// sprig hangs in the air off the end of a limb.
+///
+/// **Every normal points straight up**, like the grass. A leaf's own normal
+/// is whichever way that leaf happens to face, and a flat quad standing in a
+/// crown has one normal for a hundred leaves: lit by it, a sprig turned away
+/// from the sun goes black while the one beside it burns. Taking it from
+/// above lights the crown as the one mass it is meant to read as.
+pub fn sprig_mesh() -> blitzkit::mesh::MeshData {
+    use blitzkit::mesh::Vertex;
 
-    let mut mesh = blitzkit::mesh::MeshData::surface(16, 9, |u, v| {
-        let round = -u * TAU;
-        let up = v * PI;
-        let out = (0.5 + wandered(seed, u, v, PAD_WANDER)) * up.sin();
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
 
-        vec3(round.cos() * out, -up.cos() * 0.5, round.sin() * out)
-    });
-    mesh.compute_normals();
+    for face in 0..3 {
+        let round = face as f32 / 3.0 * std::f32::consts::PI;
+        let (out_x, out_z) = (round.cos() * 0.5, round.sin() * 0.5);
+        let at = vertices.len() as u32;
 
-    mesh
+        for (x, y, z, u, v) in [
+            (-out_x, -0.5, -out_z, 0.0, 1.0),
+            (out_x, -0.5, out_z, 1.0, 1.0),
+            (out_x, 0.5, out_z, 1.0, 0.0),
+            (-out_x, 0.5, -out_z, 0.0, 0.0),
+        ] {
+            vertices.push(Vertex::new([x, y, z], [0.0, 1.0, 0.0], [u, v]));
+        }
+
+        // and both ways round, because a face wound away from you is drawn
+        // nowhere and half a sprig is half the time
+        indices.extend([at, at + 1, at + 2, at, at + 2, at + 3]);
+        indices.extend([at, at + 2, at + 1, at, at + 3, at + 2]);
+    }
+
+    blitzkit::mesh::MeshData::new(vertices, indices)
+}
+
+/// A spray of needles, as a picture with nothing between them.
+///
+/// Drawn from a stem up the middle with needles off it either side, which is
+/// what a pine's shoot is. The needles shorten toward the tip so the spray
+/// comes to a point rather than ending square.
+pub fn needles(seed: u32) -> blitzkit::texture::TextureData {
+    let n = SPRIG_PIXELS;
+    let mut pixels = vec![0u8; (n * n * 4) as usize];
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+    let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
+
+    let mut ink = |x: f32, y: f32, lit: f32| {
+        let (at_x, at_y) = ((x * n as f32) as i32, ((1.0 - y) * n as f32) as i32);
+
+        if at_x < 0 || at_x >= n as i32 || at_y < 0 || at_y >= n as i32 {
+            return;
+        }
+
+        let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
+
+        for (c, under) in [58.0f32, 104.0, 62.0].iter().enumerate() {
+            pixels[at + c] = (under * lit).min(255.0) as u8;
+        }
+        pixels[at + 3] = 255;
+    };
+
+    // three shoots, fanned, each a stem with needles off it
+    //
+    // **Every ninth texel and not every third.** At every third the needles
+    // of one shoot overlapped each other end to end, which draws a leaf: the
+    // first of these came out as a dense green bush with no sky anywhere in
+    // it, which is the fault the squashed spheres had. What says conifer is
+    // the gaps.
+    for shoot in 0..3 {
+        let lean = (shoot as f32 - 1.0) * 0.30 + (roll(next()) - 0.5) * 0.12;
+        let long = 0.66 + roll(next()) * 0.26;
+        let lit = 0.78 + roll(next()) * 0.5;
+
+        for step in 0..(n * 2) {
+            let along = step as f32 / (n * 2) as f32;
+
+            if along > long {
+                break;
+            }
+
+            let up = 0.06 + along;
+            let x = 0.5 + lean * along;
+
+            // the stem, one texel of it
+            ink(x, up, lit * 0.7);
+
+            if step % 9 != 0 {
+                continue;
+            }
+
+            // and a needle each side, shorter toward the tip, each a single
+            // texel wide so that what lies between two of them is nothing
+            let reach = (0.20 - along * 0.15).max(0.03) * (0.75 + roll(next()) * 0.5);
+
+            for side in [-1.0f32, 1.0] {
+                let rise = 0.55 + roll(next()) * 0.35;
+                let fine = (reach * n as f32 * 2.2).ceil() as u32;
+                let bright = lit * (0.8 + roll(next()) * 0.45);
+
+                for one in 0..=fine {
+                    let on = one as f32 / fine.max(1) as f32;
+
+                    ink(
+                        x + side * reach * on,
+                        up + reach * on * rise,
+                        bright * (1.0 - on * 0.28),
+                    );
+                }
+            }
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(n, n, pixels)
+}
+
+/// A clump of broad leaves, as a picture with nothing between them.
+///
+/// Leaves and not one leaf. What hangs off the end of an oak's limb is a
+/// handful of them at every angle, and a single leaf drawn large is a plant
+/// in a pot.
+pub fn broadleaf(seed: u32) -> blitzkit::texture::TextureData {
+    let n = SPRIG_PIXELS;
+    let mut pixels = vec![0u8; (n * n * 4) as usize];
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+    let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
+
+    let mut ink = |x: f32, y: f32, lit: f32| {
+        let (at_x, at_y) = ((x * n as f32) as i32, ((1.0 - y) * n as f32) as i32);
+
+        if at_x < 0 || at_x >= n as i32 || at_y < 0 || at_y >= n as i32 {
+            return;
+        }
+
+        let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
+
+        for (c, under) in [74.0f32, 126.0, 58.0].iter().enumerate() {
+            pixels[at + c] = (under * lit).min(255.0) as u8;
+        }
+        pixels[at + 3] = 255;
+    };
+
+    // a twig up the middle for them to hang off
+    for step in 0..n {
+        let up = step as f32 / n as f32;
+
+        if up > 0.72 {
+            break;
+        }
+
+        for off in -1i32..=1 {
+            ink(0.5 + off as f32 / n as f32, 0.06 + up, 0.58);
+        }
+    }
+
+    // and eleven leaves round it, each an ellipse on its own stalk
+    for _ in 0..11 {
+        let round = roll(next()) * std::f32::consts::TAU;
+        let out = 0.1 + roll(next()) * 0.3;
+        let (mid_x, mid_y) = (0.5 + round.cos() * out, 0.45 + round.sin() * out * 1.05);
+        let long = 0.09 + roll(next()) * 0.07;
+        let fat = long * (0.5 + roll(next()) * 0.25);
+        let turn = roll(next()) * std::f32::consts::TAU;
+        let lit = 0.72 + roll(next()) * 0.55;
+        let (c, s) = (turn.cos(), turn.sin());
+
+        let across = (long.max(fat) * n as f32).ceil() as i32 + 1;
+
+        for dy in -across..=across {
+            for dx in -across..=across {
+                let (x, y) = (dx as f32 / n as f32, dy as f32 / n as f32);
+                // in the leaf's own frame, so it can lie at any angle
+                let (u, v) = (x * c + y * s, -x * s + y * c);
+
+                if (u / long).powi(2) + (v / fat).powi(2) > 1.0 {
+                    continue;
+                }
+
+                // darker down its middle, where a leaf folds along its vein
+                ink(mid_x + x, mid_y + y, lit * (0.74 + (v / fat).abs() * 0.3));
+            }
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(n, n, pixels)
 }
 
 /// A limb: a taper from the trunk to the pad, built along y.
@@ -2864,6 +3376,35 @@ pub fn lantern_mesh() -> blitzkit::mesh::MeshData {
         };
 
         (v, waist.max(0.02))
+    })
+}
+
+/// The lit panel of a lantern: the light box and nothing else.
+///
+/// **A second mesh because it is the one part that is not stone.** The
+/// lamp sits at `LANTERN_LIT` of the lantern's height, which is inside
+/// the turned body, so every outward face of that body points away from
+/// it: the lantern is the one thing in this garden its own lamp cannot
+/// light. At night the sun is gone and the whole of it falls back to
+/// ambient, which is why it read as a flat cutout with the form right and
+/// no shading on it at all. Jake, 2026-11-04.
+///
+/// What a stone lantern looks like lit is dark stone with a bright
+/// window, so the window is drawn separately and past one, which in this
+/// engine is a thing that glows with no light on it.
+///
+/// Slightly proud of the body, per the rule this building has learned
+/// four times: two faces in one plane fight, and a panel laid exactly on
+/// the box would speckle as you walked.
+pub const BOX_FROM: f32 = 0.62;
+pub const BOX_TO: f32 = 0.78;
+pub const BOX_PROUD: f32 = 1.03;
+
+pub fn lantern_light_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(12, 6, |v| {
+        let along = BOX_FROM + v * (BOX_TO - BOX_FROM);
+
+        (along, 0.46 * BOX_PROUD)
     })
 }
 
@@ -4072,77 +4613,131 @@ mod tests {
         }
     }
 
-    /// Spec 0010: the pads go round the trunk and are not three of a size.
+    /// Spec 0010: the sprigs go round the trunk and are not all of a size.
     ///
     /// A tree whose foliage is all on one side is a hedge that lost an
-    /// argument, and one whose pads are a stack of the same disc is the fir
+    /// argument, and one whose masses are a stack of the same disc is the fir
     /// this was.
     #[test]
-    fn a_tree_is_pads_and_not_a_stack_of_plates() {
+    fn a_tree_is_sprigs_and_not_a_stack_of_plates() {
         let reaches = room().reaches;
 
         for tree in trees(reaches) {
-            let laid = pads(&tree);
+            let laid = sprigs(&tree);
 
-            assert!(laid.len() > 3, "a tree of {} pads", laid.len());
+            assert!(laid.len() > 3, "a tree of {} sprigs", laid.len());
 
             let (mut small, mut big) = (f32::MAX, 0.0f32);
             let (mut low, mut high) = (f32::MAX, 0.0f32);
             let mut round = Vec2::ZERO;
 
-            for pad in laid.iter() {
-                small = small.min(pad.wide);
-                big = big.max(pad.wide);
-                low = low.min(pad.at.y);
-                high = high.max(pad.at.y);
-                round += vec2(pad.at.x - tree.at.x, pad.at.z - tree.at.z);
+            for sprig in laid.iter() {
+                small = small.min(sprig.wide);
+                big = big.max(sprig.wide);
+                low = low.min(sprig.at.y);
+                high = high.max(sprig.at.y);
+                round += vec2(sprig.at.x - tree.at.x, sprig.at.z - tree.at.z);
             }
 
             assert!(
                 big > small * 1.6,
-                "every pad is the same size: {:.2} to {:.2}",
+                "every sprig is the same size: {:.2} to {:.2}",
                 small,
                 big
             );
             assert!(
                 high - low > tree.tall * 0.4,
-                "the pads are all at one height, over {:.2} of a tree {:.2} tall",
+                "the sprigs are all at one height, over {:.2} of a tree {:.2} tall",
                 high - low,
                 tree.tall
             );
-            // they go round, so what is left of the trunk's own lean when you
-            // add them all up is the lean and not a side
+            // they go round, so what is left of the trunk's own lean when
+            // you average them is the lean and not a side.
+            //
+            // **Averaged and not added.** It was a sum against a fixed
+            // tolerance, which says the same thing only while the number
+            // of sprigs never changes. A pad became a clump of four on
+            // 2026-11-04 and the sum went up fourfold against a bar that
+            // did not move, so a tree no more lopsided than before failed.
+            // The count moved twice more the same day.
+            let round = round / laid.len().max(1) as f32;
             let leaning = round.dot(tree.leans);
             assert!(
-                (round - tree.leans * leaning).length() < tree.wide * 0.6,
-                "the pads are all on one side of the trunk: {:?}",
+                (round - tree.leans * leaning).length() < tree.wide * 0.2,
+                "the sprigs are all on one side of the trunk: {:?}",
                 round
             );
         }
     }
 
-    /// Spec 0010: every pad hangs off a limb that starts on the trunk.
+    /// Spec 0010: no tree's foliage crosses a wall of the garden.
     ///
-    /// A pad with no limb under it is a cloud, and a limb that starts in thin
-    /// air is worse than none. Both ends are taken from `trunk_at`, so this is
-    /// the test that they are taken from the same `trunk_at`: the first build
-    /// of this had the lean inside the trunk's mesh and the pads placed on the
-    /// straight line the trunk used to be on.
+    /// **Jake, 2026-11-04, looking at the north wall: the trees poke through
+    /// them.** Two of the three did, and by a long way. One stood 1.2 metres
+    /// off the west wall carrying a crown that reached 3.1 metres from its
+    /// trunk, and another was 1.1 off the north wall reaching 2.6. The third
+    /// cleared by twenty centimetres, which is how it had gone unnoticed:
+    /// nothing anywhere compared where a tree stands with how far it spreads.
+    ///
+    /// **Measured on the sprigs and not on `tree.wide`.** That number is what
+    /// the crown is laid out from, not how far it reaches: a mass sits `out`
+    /// from the trunk and is itself `wide` across, and the sprigs of it go
+    /// further again. Taken as `tree.wide * 0.5`, every one of these trees
+    /// passes and two of them are still growing through masonry.
+    ///
+    /// Horizontal only. A crown over the top of a wall is a tree you can see
+    /// from the field, which is what a tree in a walled garden looks like.
     #[test]
-    fn every_pad_hangs_off_the_trunk() {
+    fn no_tree_grows_through_a_wall() {
+        let reaches = room().reaches;
+        let middle = at(reaches);
+        let half = half();
+
+        for tree in trees(reaches) {
+            for sprig in sprigs(&tree) {
+                let out = sprig.wide * 0.5;
+
+                for (what, got, from, room_) in [
+                    ("east", sprig.at.x + out, middle.x, half.x),
+                    ("west", sprig.at.x - out, middle.x, half.x),
+                    ("north", sprig.at.z + out, middle.z, half.y),
+                    ("south", sprig.at.z - out, middle.z, half.y),
+                ] {
+                    assert!(
+                        (got - from).abs() <= room_,
+                        "a tree at {:.1} {:.1} reaches {:.2} past the {} wall",
+                        tree.at.x - middle.x,
+                        tree.at.z - middle.z,
+                        (got - from).abs() - room_,
+                        what
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0010: every sprig hangs off a limb that starts on the trunk.
+    ///
+    /// A sprig with no limb under it is a cloud, and a limb that starts in
+    /// thin air is worse than none. Both ends are taken from `trunk_at`, so
+    /// this is the test that they are taken from the same `trunk_at`: the
+    /// first build of this had the lean inside the trunk's mesh and the
+    /// foliage placed on the straight line the trunk used to be on.
+    #[test]
+    fn every_sprig_hangs_off_the_trunk() {
         let reaches = room().reaches;
 
         for tree in trees(reaches) {
-            let laid = pads(&tree);
+            let masses = masses(&tree);
             let out = limbs(&tree);
 
-            assert_eq!(laid.len(), out.len(), "a limb short");
+            assert_eq!(masses.len(), out.len(), "a limb short");
 
-            for (pad, (from, to)) in laid.iter().zip(out.iter()) {
+            for ((middle, _), (from, to)) in masses.iter().zip(out.iter()) {
                 assert!(
-                    to.distance(pad.at) < 1e-4,
-                    "a limb ends {:.3} from its pad",
-                    to.distance(pad.at)
+                    to.distance(*middle) < 1e-4,
+                    "a limb ends {:.3} from its mass",
+                    to.distance(*middle)
                 );
 
                 // the foot of the limb is on the trunk's line at that height,
@@ -4151,13 +4746,29 @@ mod tests {
                 let line = trunk_at(&tree, on);
 
                 assert!(
-                    vec2(from.x - line.x, from.z - line.z).length() < trunk_wide(on),
+                    vec2(from.x - line.x, from.z - line.z).length() < trunk_wide(&tree, on),
                     "a limb starts off the trunk at {:?}",
                     from
                 );
                 assert!(
-                    from.y < pad.at.y - 1e-3,
-                    "a limb goes down to its pad rather than up to it",
+                    from.y < middle.y - 1e-3,
+                    "a limb goes down to its mass rather than up to it",
+                );
+            }
+
+            // and every sprig is in one of those clumps, so that the limb
+            // which ends in the middle of a mass ends inside its foliage
+            // rather than in the gap between two of them
+            for sprig in sprigs(&tree) {
+                let near = masses
+                    .iter()
+                    .map(|(middle, across)| sprig.at.distance(*middle) - across * 0.5)
+                    .fold(f32::MAX, f32::min);
+
+                assert!(
+                    near < 0.0,
+                    "a sprig hangs {:.2} outside every mass of its tree",
+                    near
                 );
             }
         }
@@ -4313,31 +4924,35 @@ mod tests {
             let along = face.looks.x.abs() > 0.5;
             let (surface, size, looks) = face.plane();
             let run = size.x;
-            // the middle of the wall this face lines
-            let core = surface - looks * THICK * 0.5;
 
             let caps = cope.iter().any(|(at_, box_)| {
                 let wide = if along { box_.x } else { box_.z };
                 let long = if along { box_.z } else { box_.x };
-                let over = if along {
-                    at_.x - core.x
+                // how far its near edge stands out over the face you look up
+                // at, which is the shadow line and the whole reason for a cope
+                let proud = if along {
+                    (at_.x - surface.x) * looks.x
                 } else {
-                    at_.z - core.z
-                };
+                    (at_.z - surface.z) * looks.z
+                } + wide * 0.5;
 
-                // the oversail is measured against the wall and not against
-                // COPE_OUT, which is the number the cope was built from: the
-                // first version of this compared that constant with itself
-                // and passed with the oversail set to nothing at all
                 (at_.y - HIGH - COPE_DEEP * 0.5).abs() < 1e-3
                     && long >= run - 1e-3
-                    && wide >= THICK + 0.1
-                    && over.abs() < 1e-3
+                    // it oversails the face by something you can see, rather
+                    // than by COPE_OUT, which is the number it was built from:
+                    // the first version of this compared that constant with
+                    // itself and passed with the oversail set to nothing
+                    && proud > 0.1
+                    // and it reaches over the whole head of the thickest wall
+                    // the garden has, so nothing of one is left open to the
+                    // weather on the far side
+                    && wide >= WALL_THICK + proud - 1e-3
             });
 
             assert!(
                 caps,
-                "the wall {:?} runs {:.2} and nothing caps it end to end, centred on it",
+                "the wall {:?} runs {:.2} and nothing caps it end to end and \
+                 stands proud of it",
                 looks, run
             );
         }
@@ -4358,43 +4973,64 @@ mod tests {
             poles.len()
         );
 
-        let face = screened(reaches).expect("the screened wall");
-        let (surface, size, looks) = face.plane();
-        let half = size.x * 0.5;
-        // which way the wall runs and which way it faces, off the face
-        // itself. Written for the west wall it measured along z and off
-        // along x, which is right for one wall out of four and silently
-        // wrong for the rest: spec 0040 moved the screen to the north wall
-        // and this said a pole stood nothing off the plaster.
-        let faces_x = looks.x.abs() > 0.5;
-
+        // **Each pole against the wall it belongs to.** It was one wall
+        // and one face; it is every wall but the way out since
+        // 2026-11-04, so a pole is checked against whichever face it
+        // stands off and every pole has to find one.
         for at_ in poles {
-            let along = if faces_x {
-                at_.z - surface.z
-            } else {
-                at_.x - surface.x
-            };
+            let mut found = false;
+
+            for face in screens(reaches) {
+                let (surface, size, looks) = face.plane();
+                let half = size.x * 0.5;
+                // which way the wall runs and which way it faces, off the
+                // face itself. Written for the west wall it measured along
+                // z and off along x, which is right for one wall out of
+                // four and silently wrong for the rest: spec 0040 moved
+                // the screen to the north wall and this said a pole stood
+                // nothing off the plaster.
+                let faces_x = looks.x.abs() > 0.5;
+                let along = if faces_x {
+                    at_.z - surface.z
+                } else {
+                    at_.x - surface.x
+                };
+                let off = if faces_x {
+                    (at_.x - surface.x) * looks.x
+                } else {
+                    (at_.z - surface.z) * looks.z
+                };
+
+                if along.abs() <= half - POLE * 0.5 + 1e-3 && (off - SCREEN_OFF).abs() < 1e-3 {
+                    found = true;
+                    break;
+                }
+            }
 
             assert!(
-                along.abs() <= half - POLE * 0.5 + 1e-3,
-                "a pole stands {:.2} along a wall {:.2} across",
-                along,
-                size.x
-            );
-            // and clear of the plaster rather than in it
-            let off = if faces_x {
-                (at_.x - surface.x) * looks.x
-            } else {
-                (at_.z - surface.z) * looks.z
-            };
-
-            assert!(
-                off >= POLE * 0.5,
-                "a pole stands {:.3} off the plaster and is {:.3} thick",
-                off,
-                POLE
+                found,
+                "a pole at {:.2} {:.2} stands off no screened wall",
+                at_.x, at_.z
             );
         }
+    }
+
+    /// Spec 0040 still: the way out to the field is not screened.
+    #[test]
+    fn the_way_out_is_left_clear() {
+        let reaches = room().reaches;
+
+        for face in screens(reaches) {
+            assert!(
+                face.looks.x < 0.5,
+                "a screen went on the wall the field is through"
+            );
+        }
+
+        assert!(
+            screens(reaches).len() > 1,
+            "and the rest of them are screened"
+        );
     }
 
     /// Spec 0010: the weather goes round and the sky does not move.
@@ -4458,7 +5094,7 @@ mod tests {
         let reaches = room().reaches;
         let middle = at(reaches);
         let half = half();
-        let by = crate::field::SKY_BY;
+        let by = sky_scale(vec3(middle.x, 1.55, middle.z));
         // the vault's height at a distance out along a bearing, as it is
         // actually drawn: sprung from the ground at the eye and scaled.
         // `vault_at` is the old one, which stood on `springs` over the
@@ -4740,7 +5376,8 @@ mod tests {
     /// against the ceiling of every room the dome reaches over.
     #[test]
     fn no_part_of_the_sky_is_inside_the_building() {
-        let by = crate::field::SKY_BY;
+        let middle = at(room().reaches);
+        let by = sky_scale(vec3(middle.x, 1.55, middle.z));
         let tallest = crate::aloft::BASE * 2.0;
         // as far as anything of this building gets from anywhere you can
         // stand under the sky, which is the far corner of the far room
@@ -5316,5 +5953,41 @@ mod tests {
             !block.contains("ambient"),
             "the flash writes the ambient, which is added everywhere"
         );
+    }
+}
+
+#[cfg(test)]
+mod look {
+    /// Writes the foliage pictures out so somebody can look at them.
+    ///
+    /// Ignored, so it runs only when asked. A cutout texture is the one kind
+    /// of thing in this repo whose fault you cannot see in the room: a spray
+    /// that came out as nine pixels in a corner draws a tree that is simply
+    /// thin, and you go looking at the crown.
+    #[test]
+    #[ignore]
+    fn write_the_foliage_pictures() {
+        for (name, made) in [
+            ("needles", super::needles(0x5A2F)),
+            ("needles-2", super::needles(0x11C7)),
+            ("broadleaf", super::broadleaf(0x7B12)),
+            ("broadleaf-2", super::broadleaf(0x2E95)),
+        ] {
+            let (wide, tall) = (made.width(), made.height());
+            let mut out = format!("P6\n{} {}\n255\n", wide, tall).into_bytes();
+
+            for texel in made.levels[0].pixels.chunks(4) {
+                // on a grey ground, so nothing is where the picture is clear
+                let (r, g, b, a) = (texel[0], texel[1], texel[2], texel[3] as f32 / 255.0);
+
+                for (c, under) in [r, g, b].iter().zip([90u8, 90, 110]) {
+                    out.push((*c as f32 * a + under as f32 * (1.0 - a)) as u8);
+                }
+            }
+
+            let to = std::env::temp_dir().join(format!("{}.ppm", name));
+            std::fs::write(&to, out).unwrap();
+            eprintln!("WROTE {}", to.display());
+        }
     }
 }

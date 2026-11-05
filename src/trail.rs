@@ -65,6 +65,33 @@ pub enum Asked {
     WentOutIntoTheField,
 }
 
+impl Asked {
+    /// Every question the building asks, in the order they are written.
+    ///
+    /// **One list, so that a room which starts asking joins what reads
+    /// this without the reader being touched.** Spec 0054's bridge is
+    /// there once all of these have been given, and the alternative was a
+    /// number written down in that file, which goes stale the first time
+    /// this enum grows.
+    ///
+    /// Nothing in Rust counts an enum's variants, so what keeps this
+    /// honest is `tests::every_one_of_them_is_in_every`, whose match is
+    /// exhaustive: a new variant stops that test compiling, and the test
+    /// then says this list is short.
+    pub fn every() -> &'static [Asked] {
+        &[
+            Asked::WalkedTheDiagonal,
+            Asked::HousedTheCarried,
+            Asked::RodeToTheSun,
+            Asked::WorkedAHatch,
+            Asked::WentInsideTheTesseract,
+            Asked::OpenedTheCase,
+            Asked::GotBehindTheWall,
+            Asked::WentOutIntoTheField,
+        ]
+    }
+}
+
 /// What the building has given up, in the order it gave.
 ///
 /// A list rather than a set of flags, because the order is the only thing
@@ -116,6 +143,58 @@ impl Trail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Where each one sits in `Asked::every`, by a match the compiler
+    /// makes you finish.
+    ///
+    /// **Two halves, and neither is enough alone.** Adding a variant to
+    /// the enum stops this compiling, which is what sends you here. Adding
+    /// it here and not to `every` gives it an index past the end of that
+    /// list, which is what `every_one_of_them_is_in_every` catches. The
+    /// first version of this was a match that returned its own argument,
+    /// which clippy is right to call needless: it forced an edit and
+    /// checked nothing.
+    fn sits_at(what: Asked) -> usize {
+        match what {
+            Asked::WalkedTheDiagonal => 0,
+            Asked::HousedTheCarried => 1,
+            Asked::RodeToTheSun => 2,
+            Asked::WorkedAHatch => 3,
+            Asked::WentInsideTheTesseract => 4,
+            Asked::OpenedTheCase => 5,
+            Asked::GotBehindTheWall => 6,
+            Asked::WentOutIntoTheField => 7,
+        }
+    }
+
+    /// Spec 0054. What it is guarding is a bridge that would quietly open
+    /// one room early.
+    #[test]
+    fn every_one_of_them_is_in_every() {
+        let listed = Asked::every();
+
+        for (at, one) in listed.iter().enumerate() {
+            assert_eq!(
+                sits_at(*one),
+                at,
+                "{:?} is listed at {} and belongs at {}",
+                one,
+                at,
+                sits_at(*one)
+            );
+        }
+
+        // and a variant that was given an index and never listed sits off
+        // the end of it
+        for one in listed {
+            assert!(sits_at(*one) < listed.len(), "{:?} is not in every", one);
+        }
+
+        let mut sorted = listed.to_vec();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), listed.len(), "something is in it twice");
+    }
 
     #[test]
     fn it_starts_with_nothing() {

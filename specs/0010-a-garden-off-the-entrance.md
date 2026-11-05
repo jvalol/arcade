@@ -382,6 +382,51 @@ That finish stops either side of the way in. Run across it, it stood a hair
 behind the opening and closed it: from the hall you looked through the gap at a
 flat panel and the passage read as an alcove rather than a way anywhere.
 
+### The trees, after three goes at them
+
+**A tree is a silhouette and not a solid.** The first foliage was five
+squashed spheres threaded up the trunk. Told they read as lily pads, I made
+each one a clump of four smaller squashed spheres, which changed nothing a
+person could see: a closed blob has a smooth outline whatever you do to its
+skin, and at ten metres the outline is the whole of what you read. Jake said
+bulbs the third time.
+
+So it is drawn the way `field::blades` draws grass, which this repo had
+already worked out and I did not look at: three planes crossed through the
+upright, a picture of needles or of leaves with nothing between them, and the
+engine's cutout throwing the rest away. It is cheaper as well as better. A
+crown was twenty closed surfaces of nearly three hundred triangles each and
+is now about forty quads.
+
+**And five kinds of tree, because one kind is one tree however many you
+stand.** Jake named them: bonsais, firs, pines, oaks, aspens. The crown's
+outline is what tells them apart at any distance worth the name, so there are
+five of those and two leaf pictures. The garden keeps the two that belong in
+it, a pair of pruned pines and a bonsai, and the field takes the fir, the oak
+and the aspen, because `garden::Tree` is what the field stands its own trees
+from and three sizes of one shape over three hundred metres of ground is a
+thing you can see from the wall.
+
+**The trunk's colour was picked for a tree you could not see the trunk of.**
+With a crown of closed blobs in front of it only slivers showed. With sky
+through the crown the whole of it is on show, and at `aim::BARK` it came out
+paler than the plaster behind it, which no bark does. Each kind darkens it,
+and the aspen lightens it, which is the whole of what an aspen looks like.
+
+### The walls
+
+**`room::THICK` is a partition and these are not.** 0.3 of a metre is right
+between two rooms with floors either side holding it up. Three of the
+garden's four sides stand four metres and a bit on their own with a field
+behind them, and Jake said they were unrealistically thin. They are 0.55 now,
+grown outward so that nothing inside the garden moved: the linings, the
+gravel and the trees are all measured off the faces you look at.
+
+The two borrowed sides stay the building's, because the hall's wall is the
+hall's first. What makes the four read as one wall is the cope, which is one
+width the whole way round and hangs off the face you stand under rather than
+being centred on whatever is behind it.
+
 ## What it is not
 
 **Not a path through to anywhere.** It is a room you go into and come back out
@@ -423,8 +468,10 @@ A fish that avoids another fish is a spec of its own and this is not it.
 - The sky's picture is not wedged into a point anywhere. — `garden::tests::the_sky_has_no_point_where_its_picture_is_wedged`
 - And it faces inward everywhere, its apex included. — `garden::tests::the_sky_faces_inward_everywhere_including_its_apex`
 - Every tree leans over the water, and bends rather than slopes. — `garden::tests::every_tree_leans_over_the_water`
-- Its foliage is pads going round it, not a stack of plates. — `garden::tests::a_tree_is_pads_and_not_a_stack_of_plates`
-- Every pad hangs off a limb that starts on the trunk. — `garden::tests::every_pad_hangs_off_the_trunk`
+- Its foliage goes round it rather than stacking, and is not all of a size. — `garden::tests::a_tree_is_sprigs_and_not_a_stack_of_plates`
+- Every mass of it hangs off a limb that starts on the trunk. — `garden::tests::every_sprig_hangs_off_the_trunk`
+- And no tree's foliage crosses a wall of the garden. — `garden::tests::no_tree_grows_through_a_wall`
+- Every wall is capped end to end by a cope that stands proud of it. — `garden::tests::every_wall_is_capped_end_to_end_and_oversails_it`
 
 ## Verified by hand
 

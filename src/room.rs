@@ -508,7 +508,7 @@ pub fn hung_mesh() -> MeshData {
 
 /// How far along a ray a box is first met, if it is. The slab test, which the
 /// engine has for an `Aabb` only through `Ray`, and this wants no `Ray`.
-fn slab(from: Vec3, way: Vec3, box_: &Aabb) -> Option<f32> {
+pub fn slab(from: Vec3, way: Vec3, box_: &Aabb) -> Option<f32> {
     let (lo, hi) = (
         box_.center() - box_.size() * 0.5,
         box_.center() + box_.size() * 0.5,
@@ -1627,6 +1627,70 @@ impl Room {
     /// The lids as well as the colliders, because a suspended ceiling is
     /// drawn and never collided and the hall's roof is in no list `solid`
     /// keeps.
+    /// Whether the outdoors can be seen from `eye`, looking anywhere.
+    ///
+    /// **A question about sight and not about your feet.** `out_of_doors`
+    /// below asks what is over the spot you are standing on, which is the
+    /// right question for whether the sun reaches you and the wrong one
+    /// for whether the field is worth drawing. Stand in the garden's
+    /// doorway and that says no, so the ground past the wall was not
+    /// drawn and the sky sat over nothing. Spec 0086 fixed the sky the
+    /// same way and left this.
+    ///
+    /// **Rays to the garden, because the garden is the way out.** Every
+    /// outdoor thing this building has is in the garden or past its west
+    /// wall, so seeing any part of the garden is seeing outdoors. The
+    /// targets are its middle and its four corners at eye height and
+    /// again at the top of its walls: ten rays against the building's own
+    /// boxes, which is what the sight already costs every frame for one.
+    ///
+    /// Conservative in the direction that costs a frame rather than the
+    /// one that leaves a hole: a corner visible through a gap nobody
+    /// would look through still counts.
+    pub fn can_see_outdoors(&self, eye: Vec3, reaches: f32) -> bool {
+        if self.out_of_doors(eye) {
+            return true;
+        }
+
+        let middle = crate::garden::at(reaches);
+        let half = crate::garden::half();
+        let solid = self.solid();
+
+        // **A grid and not five points.** Five was the middle and the four
+        // corners, and from the doorway Jake stood in on 2026-11-04 every
+        // one of them was behind a wall while most of the garden was in
+        // plain sight. What a doorway frames is a patch, and which patch
+        // depends on where you stand, so the only honest sampling is one
+        // fine enough that a doorway cannot miss all of it.
+        const ACROSS: i32 = 4;
+
+        for up in [0.3, eye.y, crate::garden::HIGH] {
+            for step in 0..(ACROSS + 1) * (ACROSS + 1) {
+                let (a, b) = (step % (ACROSS + 1), step / (ACROSS + 1));
+                let x = (a as f32 / ACROSS as f32 * 2.0 - 1.0) * half.x * 0.9;
+                let z = (b as f32 / ACROSS as f32 * 2.0 - 1.0) * half.y * 0.9;
+                let target = vec3(middle.x + x, up, middle.z + z);
+                let way = target - eye;
+                let reach = way.length();
+
+                if reach < 1e-3 {
+                    return true;
+                }
+
+                let way = way / reach;
+                let blocked = solid.iter().any(|box_| {
+                    slab(eye, way, box_).is_some_and(|hit| hit > 1e-3 && hit < reach - 1e-3)
+                });
+
+                if !blocked {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     pub fn out_of_doors(&self, at: Vec3) -> bool {
         let solid = self.solid();
 
@@ -2206,6 +2270,63 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use glam::vec3;
+
+    /// Spec 0086. The three places that decide this, measured rather than
+    /// reasoned about: `out_of_doors` separates the garden from its own
+    /// doorway, which is the wrong cut, and `sees_the_sky` is true in all
+    /// three including the register, so neither could gate the field.
+    #[test]
+    fn the_field_is_drawn_from_anywhere_it_can_be_seen() {
+        let room = Room::of(crate::games());
+        let reaches = room.reaches;
+        let (far, _) = crate::register::across(reaches);
+
+        let doorway = vec3(-2.00, crate::EYE, 7.53);
+        let garden = vec3(-10.85, crate::EYE, 15.15);
+        let register = vec3(
+            crate::register::page_left(reaches) + 1.0,
+            crate::EYE,
+            far + 2.4,
+        );
+
+        assert!(
+            room.can_see_outdoors(garden, reaches),
+            "standing in the garden"
+        );
+        assert!(
+            room.can_see_outdoors(doorway, reaches),
+            "the doorway Jake stood in on 2026-11-04, where the sky was over \
+             bare nothing"
+        );
+        assert!(
+            !room.can_see_outdoors(register, reaches),
+            "the register is buried in the building, and drawing the field \
+             there put its outside wall through the ceiling"
+        );
+    }
+
+    /// The control: to the old test the doorway and the register read the
+    /// same, which is why it could not be the gate.
+    #[test]
+    fn the_doorway_and_the_register_are_alike_to_the_old_test() {
+        let room = Room::of(crate::games());
+        let reaches = room.reaches;
+        let (far, _) = crate::register::across(reaches);
+
+        for at in [
+            vec3(-2.00, crate::EYE, 7.53),
+            vec3(
+                crate::register::page_left(reaches) + 1.0,
+                crate::EYE,
+                far + 2.4,
+            ),
+        ] {
+            assert!(!room.out_of_doors(at), "both read indoors to the old one");
+        }
+    }
+
     /// Spec 0029: the gallery has a doorway either side, and they are a pair.
     ///
     /// The back room's is spec 0024's and the hotel's is spec 0029's, and
@@ -2281,7 +2402,6 @@ mod tests {
         }
     }
 
-    use super::*;
     use std::path::Path;
 
     /// Whether two boxes share any room at all.
