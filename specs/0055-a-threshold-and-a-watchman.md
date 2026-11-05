@@ -121,9 +121,53 @@ trivia gate, and a riddle whose answer you can only have from having been
 in this building is the trail asking you one last time what you saw. The
 second is worth building and the first is not.
 
-**The style of Valhalla is open.** Kinkade-like, a village, warm light with
-its source out of frame, is Jake's own and is the one to beat. Van Gogh is
-spent. Nothing is decided.
+**The style of Valhalla.** Jake's own, and the nearest thing here to a
+decision: Kinkade-like, a village, warm light with its source out of frame,
+with more flourish than that and a touch of neon. Van Gogh is spent on the
+hall's `starry`. Maxfield Parrish was offered and refused as dated.
+
+**The neon is why that is the building's answer and not an import.** This
+arcade already has a light language of its own: `aim::NEON` is 3.2, cyan
+and magenta, and it is over the hall's door and down in the cellar. A
+village at the top of the bridge lit with warm windows and one or two of
+those signs is the building turning up in its own heaven. Every other style
+offered so far, this file's included, has been something borrowed from
+outside and carried in.
+
+**And it is a metaphor rather than a myth, which is the whole of why the
+neon belongs.** Jake, answering the objection that neon says city and
+commerce while Valhalla says hall of the slain: this one is an afterlife
+the way a last room is an afterlife, and what it has to say is that you
+made it somewhere peaceful after a journey. Read that way a little neon is
+not a clash, it is what keeps the place happy rather than mournful for the
+dead, in an engine built this decade.
+
+That brief is also sharper than the name. Somewhere peaceful at the end of
+a journey is a place to stand and be, which rules out the things Valhalla
+would otherwise invite: no throne, no ceremony at the door, nothing further
+to go on to.
+
+**Rest is the reward**, which is Jake's correction to the first wording
+here, and the two are not opposed. They answer different questions. What
+is in the room: nothing handed to you, no throne and no ceremony. What the
+climb buys: the rest itself. Both hold, and the first is why the second
+has to carry the weight.
+
+So the test is whether somebody stands up there a while before walking
+back down.
+
+**And it is the end.** Jake: nobody is ever going to leave, and unless it
+is expanded on that is the end of the path and of the trail. So whatever
+goes in there is the last thing anybody sees of this building, which is an
+argument for spending on it and an argument against ever putting anything
+past it. A thing beyond Valhalla turns Valhalla into a corridor, which is
+the fault the bridge had when it stopped level in mid-air, one floor up.
+That is cheap to decide now and expensive once it is built.
+
+**The end of the trail and not the end of playing.** There is no win
+screen in this building and nothing to quit to. The player stays as long as
+they want and then goes back to the rooms. Spec 0036 asks for exactly that,
+nobody rescued and nothing explained.
 
 ## Out of scope
 
