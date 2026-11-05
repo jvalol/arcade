@@ -28,6 +28,157 @@ use glam::{vec3, Vec3};
 /// on them.
 pub const TALL: f32 = 1.73;
 
+/// How one person differs from the next in the body rather than the
+/// coat.
+///
+/// **Because a crowd of one mesh is a crowd of one person.** Spec 0033
+/// gave everybody a coat, trousers and a head of their own and left the
+/// body identical: same height, same build, same outline. Colour does
+/// the work at a glance and then the eye notices the outline repeating,
+/// which is the second thing that reads as mannequins after the missing
+/// face.
+///
+/// Nothing dramatic. Height within a hand either way of `TALL` and
+/// build within an eighth, which is the spread a room full of people
+/// actually has. A figure half again as tall as its neighbour is a
+/// different problem.
+pub struct Build {
+    /// A share of `TALL`.
+    pub tall: f32,
+    /// A share of how wide the parts are drawn.
+    pub wide: f32,
+}
+
+/// How tall and how heavy the person with this seed is.
+///
+/// **Hashed rather than indexed.** The wardrobe is four coats picked by
+/// `seed % 4`, and taking the build off the same four would tie a
+/// height to a coat: every person in the green coat the same height as
+/// every other, which is worse than no variety at all because it is a
+/// pattern. This is a different mix of the same number.
+pub fn built(seed: usize) -> Build {
+    let mut n = (seed as u32).wrapping_mul(0x9E37_79B9) ^ 0x5BF0_3635;
+    let mut roll = move || {
+        n ^= n << 13;
+        n ^= n >> 17;
+        n ^= n << 5;
+
+        (n % 10_000) as f32 / 10_000.0
+    };
+
+    Build {
+        tall: 1.0 + (roll() - 0.5) * 2.0 * TALLER,
+        wide: 1.0 + (roll() - 0.5) * 2.0 * HEAVIER,
+    }
+}
+
+/// How far either way of the standard a person may be.
+pub const TALLER: f32 = 0.075;
+pub const HEAVIER: f32 = 0.11;
+
+/// The bar of shadow over the eyes, which is how you can tell which way
+/// somebody is facing.
+///
+/// **Not a face.** A face at corridor distance is a promise the geometry
+/// cannot keep, and spec 0033 settled that. But a head with no front at
+/// all is a thing that might be looking at you, and that is most of what
+/// is left of the uncanny once the proportions are right. One bar across
+/// the brow says which way somebody is turned and says nothing else.
+pub const BROW_UP: f32 = 0.46;
+pub const BROW_WIDE: f32 = 0.82;
+pub const BROW_TALL: f32 = 0.042;
+pub const BROW_OUT: f32 = 0.055;
+
+/// What a figure is made to look like.
+///
+/// **Two populations, on purpose.** The arcade's guests are people in a
+/// corridor and want to be plain: spec 0033 settled what they are and
+/// why they have no faces. The ones at the top of the bridge are not
+/// guests who wandered outside. Jake wants a little style on them, and
+/// the style that costs this renderer nothing is carving: a thing that
+/// in life also has no face, so the absence stops being a gap.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Look {
+    Guest,
+    Carved,
+}
+
+/// How many sides a carved part has.
+///
+/// **Few, and that is the whole point.** Eighteen is a lathe turning so
+/// fine that the facets are gone, which is right for somebody at the
+/// far end of a corridor. A carving shows the cuts. Seven was tried on
+/// the guests on 2026-10-21 and made them hooded, but the fault there
+/// was a crown closing to a point, not the count: [`carved_head`] ends
+/// flat, the way a billet does when the carver stops.
+pub const CUT_SIDES: u32 = 9;
+
+/// A carved head: the same egg, flattened off at the crown and squarer
+/// at the jaw, so it reads as cut from a block rather than grown.
+pub fn carved_head(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    // flat on top: the last of it does not close, it stops
+    let crown = ((1.0 - v) / 0.14).clamp(0.0, 1.0).powf(0.35);
+    let round = (1.0 - (2.0 * v - 1.0).powi(2)).max(0.0).sqrt();
+    let jaw = 0.86 + 0.14 * v;
+
+    (
+        v * HEAD_TALL,
+        HEAD_WIDE * 1.1 * round.max(0.55) * crown * jaw,
+    )
+}
+
+/// How far the cloak hangs down the figure and how wide it ends.
+///
+/// **The one change that buys the most at a distance.** A coloured
+/// cylinder thirty metres off is nothing. A cloak is immediately
+/// somebody, because the outline stops being a person's and becomes a
+/// shape nobody mistakes for furniture.
+/// **Wider at the neck than the shoulders are.** `torso_profile` tops
+/// out at 0.435 and the first cloak started at 0.29, so it hung inside
+/// the shoulders and read as a bib on a string rather than as cloth
+/// over the top of somebody.
+/// **A mantle over the shoulders, not a cloak to the calf.** A full
+/// cloak is open down the front and this is a lathe, which cannot be:
+/// closed all the way round and hanging to mid calf it swallowed the
+/// arms and the legs and came out a barrel with a head on it. Cut to
+/// the waist, the same closed cone reads as cloth over the shoulders
+/// and leaves the figure underneath it a figure.
+pub const CLOAK_FROM: f32 = 1.50;
+pub const CLOAK_TALL: f32 = 0.46;
+pub const CLOAK_WIDE: f32 = 0.68;
+pub const CLOAK_NECK: f32 = 0.47;
+
+/// The cloak, hanging from the shoulders: a cone with the fall of the
+/// cloth broken into a few folds so it is not a traffic cone.
+pub fn cloak_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    let flare = CLOAK_NECK + (CLOAK_WIDE - CLOAK_NECK) * v.powf(1.35);
+    // folds, which are what says cloth: a few shallow ones down the
+    // hang, deepest at the hem where the cloth has the most slack
+    let folds = 1.0 + (v * 2.1).sin() * 0.055;
+
+    ((v - 1.0) * CLOAK_TALL, flare * folds)
+}
+
+/// A helm: a cap over the crown with a straight bar down the nose.
+pub const HELM_FROM: f32 = 0.52;
+pub const HELM_WIDE: f32 = 1.12;
+pub const NOSE_LONG: f32 = 0.30;
+pub const NOSE_WIDE: f32 = 0.055;
+pub const NOSE_THICK: f32 = 0.035;
+
+pub fn helm_profile(v: f32) -> (f32, f32) {
+    let v = v.clamp(0.0, 1.0);
+    let tall = HEAD_TALL * (1.0 - HELM_FROM);
+    // a dome that stops short of a point, with a brow band round its
+    // foot standing a little proud of it
+    let dome = (1.0 - v * v).max(0.0).powf(0.42);
+    let band = if v < 0.16 { 1.06 } else { 1.0 };
+
+    (v * tall, HEAD_WIDE * HELM_WIDE * dome * band)
+}
+
 /// How many sides a turned part has.
 ///
 /// ~~Seven, so the silhouette has corners in it and nothing promises a face

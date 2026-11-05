@@ -92,6 +92,24 @@ const EYE: f32 = 1.55;
 /// nothing to catch up with anyway, and long enough to turn fourteen quarter
 /// unit drops a second into going down a slope.
 const EYE_LAGS: f32 = 0.09;
+
+/// The furthest the eye may be from the feet, however fast they move.
+///
+/// **Because a lag with no ceiling is a camera inside the floor.** The
+/// easing above is a time constant, so what it settles at is the rate the
+/// feet are climbing times `EYE_LAGS`, and nothing in this building climbed
+/// fast enough for that to matter until Bifröst did. Running up it the feet
+/// gain better than twenty a second, which parks the eye two metres under
+/// them: further than `EYE` itself, so the camera sat below the deck and
+/// looked up at the underside of the rainbow for most of the climb. Jake,
+/// from a recording: there is some clipping where the player ends up beneath
+/// the bridge for a bit.
+///
+/// `walk::STEP` because that is the discontinuity the easing exists for. A
+/// step is climbed whole and in one frame, so the eye is exactly this far
+/// behind the instant one is taken, and a ceiling at one step changes
+/// nothing about a stair while refusing to let a climb stack them up.
+const EYE_TRAILS: f32 = walk::STEP;
 pub const SPEED: f32 = 4.2;
 
 /// How much faster you go with a shift key down.
@@ -683,6 +701,14 @@ struct Arcade {
     stonework: Option<TextureId>,
     /// The garden's sky and the dome it is painted on, per spec 0010.
     storm: Option<TextureId>,
+    /// Heimdall's own parts, per spec 0055: a carved head, a cloak, a
+    /// helm with a nose bar, and the horn.
+    carved_head: Option<MeshId>,
+    cloak: Option<MeshId>,
+    helm: Option<MeshId>,
+    horn: Option<MeshId>,
+    /// The verge down either side of the ramp, per `bridge::KERB_UP`.
+    kerbs: [Option<MeshId>; 2],
     dome: Option<MeshId>,
     moon: Option<MeshId>,
     moon_face: Option<TextureId>,
@@ -1212,6 +1238,11 @@ impl Arcade {
             boarding: Vec::new(),
             stonework: None,
             storm: None,
+            carved_head: None,
+            cloak: None,
+            helm: None,
+            horn: None,
+            kerbs: [None; 2],
             dome: None,
             moon: None,
             moon_face: None,
@@ -1750,8 +1781,13 @@ impl Arcade {
             // may never take, and frame one's flight stopped you dead
             // four risers up. Found by driving it.
             let over = self.over();
+            let went = at - self.at;
+            let rose = went.dot(over);
+            // and what of that a slope accounts for costs nothing, per
+            // `walk::RAMPS`: the stair is paced, the ramp is walked.
+            let along = (went - over * rose).length();
 
-            (self.climbs - walk::CLIMBS * dt).max(0.0) + (at - self.at).dot(over).max(0.0)
+            (self.climbs - walk::CLIMBS * dt).max(0.0) + walk::climbed(rose.max(0.0), along)
         };
         self.at = at;
         self.falling = falling;
@@ -1775,10 +1811,13 @@ impl Arcade {
         // eye belongs with the feet.
         // **Measured along your own up, per spec 0047**, which is `y` with
         // your frame at nought and is every other room unchanged.
-        let behind = self.at.dot(self.over()) - self.eye;
+        let feet = self.at.dot(self.over());
+        let behind = feet - self.eye;
         self.eye += behind * (dt / EYE_LAGS).min(1.0);
+        // and never further off than one step, per `EYE_TRAILS`
+        self.eye = self.eye.clamp(feet - EYE_TRAILS, feet + EYE_TRAILS);
         if behind.abs() < 1e-4 {
-            self.eye = self.at.dot(self.over());
+            self.eye = feet;
         }
 
         went
@@ -2089,11 +2128,11 @@ impl Arcade {
     ///
     /// A method rather than three lines in `update`, so a test can ask it.
     fn pace(&self) -> f32 {
-        spa::pace(
-            self.room.reaches,
-            self.at,
-            if self.running() { SPEED * RUNS } else { SPEED },
-        )
+        let own = if self.running() { SPEED * RUNS } else { SPEED };
+
+        // and the bridge carries you up itself, per `bridge::CARRIES`
+        spa::pace(self.room.reaches, self.at, own)
+            * bridge::carries(self.room.reaches, self.at, self.forward(), &self.trail)
     }
 
     /// What the line under the sight says about a toy.
@@ -3096,6 +3135,13 @@ impl Arcade {
             return;
         };
 
+        // and a kerb down either side of it, which is what stops you
+        // walking off a six metre road at eleven metres a second. See
+        // `bridge::KERB_UP`.
+        for kerb in self.kerbs.iter().flatten() {
+            scene.push_material(*kerb, &Transform::at(Vec3::ZERO), aim::KERB, aim::DULL);
+        }
+
         scene.push_textured(
             deck,
             rainbow,
@@ -3394,160 +3440,301 @@ impl Arcade {
         // a figure that can only ever stand on a floor. The imaginarium has
         // three floors at right angles to each other and people on all of
         // them, so the body is built in its own terms and then turned.
-        let mut stand =
-            |at: Vec3, up: glam::Quat, facing: f32, walked: Option<f32>, shade: usize| {
-                let turn = up * glam::Quat::from_rotation_y(facing);
-                // **A coat, trousers and a head.** One colour from crown to
-                // toe is a mannequin by definition: the only thing that says a
-                // figure in a dark corridor is dressed is where the colour
-                // stops.
-                let which = shade % aim::COATS.len();
-                let coat = aim::COATS[which];
-                let trousers = aim::TROUSERS[which];
-                let skin = aim::HEADS[which];
-                // which way is their right, for hanging the limbs off
-                let side = up * vec3(facing.cos(), 0.0, facing.sin());
-                // and which way they are walking, for putting a foot that way
-                let ahead = up * vec3(facing.sin(), 0.0, -facing.cos());
-                // and which way is over their head
-                let over = up * Vec3::Y;
+        let (carved_head, cloak, helm, horn) = (self.carved_head, self.cloak, self.helm, self.horn);
+        let mut stand = |at: Vec3,
+                         up: glam::Quat,
+                         facing: f32,
+                         walked: Option<f32>,
+                         shade: usize,
+                         look: people::Look| {
+            let turn = up * glam::Quat::from_rotation_y(facing);
+            // **A coat, trousers and a head.** One colour from crown to
+            // toe is a mannequin by definition: the only thing that says a
+            // figure in a dark corridor is dressed is where the colour
+            // stops.
+            // **And a body of their own, not only a coat.** One mesh
+            // at one height in four colours is four people seen from
+            // the front and one person seen in outline, which is the
+            // second thing that reads as mannequins. `people::built`
+            // gives each of them a height and a build.
+            let built = people::built(shade);
+            let thick = vec3(built.wide, built.tall, built.wide);
+            let round = vec3(built.wide, built.wide, built.wide);
+            let which = shade % aim::COATS.len();
+            let coat = aim::COATS[which];
+            let trousers = aim::TROUSERS[which];
+            let skin = aim::HEADS[which];
+            // which way is their right, for hanging the limbs off
+            let side = up * vec3(facing.cos(), 0.0, facing.sin());
+            // and which way they are walking, for putting a foot that way
+            let ahead = up * vec3(facing.sin(), 0.0, -facing.cos());
+            // and which way is over their head
+            let over = up * Vec3::Y;
 
-                // **Spec 0046: the hips are not at a fixed height.** The leg
-                // carrying somebody is the long side of its own swing, so
-                // everything from the hip up rides on it. A body held at one
-                // height while the feet move is a glide, and that is most of
-                // what reads as a machine.
-                let rise = match walked {
-                    Some(walked) => people::hips(walked) - people::LEG_TALL,
-                    None => 0.0,
+            // **Spec 0046: the hips are not at a fixed height.** The leg
+            // carrying somebody is the long side of its own swing, so
+            // everything from the hip up rides on it. A body held at one
+            // height while the feet move is a glide, and that is most of
+            // what reads as a machine.
+            let rise = match walked {
+                Some(walked) => people::hips(walked) - people::LEG_TALL,
+                None => 0.0,
+            };
+            let up_to = |how_high: f32| at + over * (how_high * built.tall + rise);
+            // **A limb turns about the walker's own right, not about a
+            // local x.** `turn` is `rot_y(facing)` and this building's
+            // yaw convention is `(sin yaw, 0, -cos yaw)`, which is that
+            // rotation mirrored in x: `turn * rot_x` swung every limb
+            // the wrong way across the body while the feet, placed off
+            // `ahead`, went the right way, and the feet came off the
+            // legs. `side` is the axis the rest of this closure already
+            // agrees with.
+            let swung = |angle: f32| glam::Quat::from_axis_angle(side, angle) * turn;
+            let hangs = |by: glam::Quat, far: f32| by * vec3(0.0, -far * built.tall, 0.0);
+
+            scene.push_material(
+                body,
+                &Transform::at(up_to(people::TORSO_FROM))
+                    .with_rotation(turn)
+                    .with_scale(thick),
+                coat,
+                aim::DULL,
+            );
+            // **A head scaled round and not tall.** Given the height
+            // along with everything else, the tall people got long
+            // faces and the short ones got wide ones, which is the
+            // one place a body's proportions do not actually follow
+            // its height.
+            let carved = look == people::Look::Carved;
+
+            scene.push_material(
+                match (carved, carved_head) {
+                    (true, Some(cut)) => cut,
+                    _ => head,
+                },
+                &Transform::at(up_to(people::HEAD_FROM))
+                    .with_rotation(turn)
+                    .with_scale(round),
+                skin,
+                aim::DULL,
+            );
+
+            if carved {
+                // **A cloak, a helm and a nose bar**, which is the whole
+                // of what makes the ones at the top of the climb read as
+                // somebody rather than as guests who came outside. Spec
+                // 0055.
+                if let Some(cloak) = cloak {
+                    scene.push_material(
+                        cloak,
+                        &Transform::at(up_to(people::CLOAK_FROM))
+                            .with_rotation(turn)
+                            .with_scale(thick),
+                        aim::CLOAKS[which],
+                        aim::DULL,
+                    );
+                }
+
+                if let Some(helm) = helm {
+                    scene.push_material(
+                        helm,
+                        &Transform::at(up_to(
+                            people::HEAD_FROM + people::HEAD_TALL * people::HELM_FROM,
+                        ))
+                        .with_rotation(turn)
+                        .with_scale(round),
+                        aim::HELM,
+                        aim::DULL,
+                    );
+                    scene.push_material(
+                        cube,
+                        &Transform::at(
+                            up_to(
+                                people::HEAD_FROM
+                                    + people::HEAD_TALL
+                                        * (people::HELM_FROM - people::NOSE_LONG * 0.5),
+                            ) + ahead
+                                * (people::head_profile(people::BROW_UP).1 * 0.5 * built.wide
+                                    + people::NOSE_THICK * 0.3),
+                        )
+                        .with_rotation(turn)
+                        .with_scale(vec3(
+                            people::NOSE_WIDE * built.wide,
+                            people::HEAD_TALL * people::NOSE_LONG,
+                            people::NOSE_THICK * built.wide,
+                        )),
+                        aim::HELM,
+                        aim::DULL,
+                    );
+                }
+            } else {
+                // and the bar over their eyes, which is the whole of the
+                // face: see `people::BROW_UP`. Not under a helm, where
+                // the nose bar already says which way somebody is turned
+                // and two bars on one face is a mask.
+                scene.push_material(
+                    cube,
+                    &Transform::at(
+                        up_to(people::HEAD_FROM + people::HEAD_TALL * people::BROW_UP)
+                            + ahead
+                                * (people::head_profile(people::BROW_UP).1 * 0.5 * built.wide
+                                    + people::BROW_OUT * 0.22),
+                    )
+                    .with_rotation(turn)
+                    .with_scale(vec3(
+                        people::head_profile(people::BROW_UP).1 * people::BROW_WIDE * built.wide,
+                        people::BROW_TALL * built.wide,
+                        people::BROW_OUT * built.wide,
+                    )),
+                    aim::BROWS[which],
+                    aim::DULL,
+                );
+            }
+
+            for leg in 0..2 {
+                let out = if leg == 0 { 1.0 } else { -1.0 };
+                let (hip, knee, shoulder, elbow) = match walked {
+                    Some(walked) => (
+                        people::hip(walked, leg),
+                        people::knee(walked, leg),
+                        people::shoulder(walked, leg),
+                        people::elbow(walked, leg),
+                    ),
+                    None => (0.0, 0.0, 0.0, 0.0),
                 };
-                let up_to = |how_high: f32| at + over * (how_high + rise);
-                // **A limb turns about the walker's own right, not about a
-                // local x.** `turn` is `rot_y(facing)` and this building's
-                // yaw convention is `(sin yaw, 0, -cos yaw)`, which is that
-                // rotation mirrored in x: `turn * rot_x` swung every limb
-                // the wrong way across the body while the feet, placed off
-                // `ahead`, went the right way, and the feet came off the
-                // legs. `side` is the axis the rest of this closure already
-                // agrees with.
-                let swung = |angle: f32| glam::Quat::from_axis_angle(side, angle) * turn;
-                let hangs = |by: glam::Quat, far: f32| by * vec3(0.0, -far, 0.0);
+
+                // **The leg, turned about the hip rather than slid away
+                // from it.** The knee takes the shin back off the thigh's
+                // line, which is the one direction a knee goes.
+                let hip_at =
+                    up_to(people::LEG_TALL) + side * (people::LEGS_APART * out * built.wide);
+                let upper = swung(hip);
+                let knee_at = hip_at + hangs(upper, people::THIGH_TALL);
+                let lower = swung(hip - knee);
 
                 scene.push_material(
-                    body,
-                    &Transform::at(up_to(people::TORSO_FROM)).with_rotation(turn),
+                    thigh,
+                    &Transform::at(hip_at).with_rotation(upper).with_scale(thick),
+                    trousers,
+                    aim::DULL,
+                );
+                scene.push_material(
+                    shin,
+                    &Transform::at(knee_at)
+                        .with_rotation(lower)
+                        .with_scale(thick),
+                    trousers,
+                    aim::DULL,
+                );
+
+                // **The foot stays level, which is what an ankle is
+                // for.** Hung off the shin it tilts with it, and a figure
+                // on skis is further from a person than one with no feet
+                // at all.
+                //
+                // Where it goes is `people::ankle` rather than the end
+                // of the two bones worked out a second time here, which
+                // would be two answers to where somebody's foot is.
+                let (fore, off_floor) = match walked {
+                    Some(walked) => people::ankle(walked, leg),
+                    None => (0.0, 0.0),
+                };
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(
+                        at + side * (people::LEGS_APART * out * built.wide)
+                            + ahead * (fore + people::FOOT_AHEAD)
+                            + over * (off_floor + people::FOOT_TALL * 0.5),
+                    )
+                    .with_rotation(turn)
+                    .with_scale(vec3(
+                        people::FOOT_WIDE * built.wide,
+                        people::FOOT_TALL,
+                        people::FOOT_LONG * built.tall,
+                    )),
+                    trousers,
+                    aim::DULL,
+                );
+
+                // an arm is the same two bones, thinner and shorter. One
+                // pair of meshes for both is the point of a wheel.
+                let thin = vec3(
+                    people::ARM_THIN * built.wide,
+                    people::ARM_SHORT * built.tall,
+                    people::ARM_THIN * built.wide,
+                );
+                let arm_upper = swung(shoulder);
+                let shoulder_at =
+                    up_to(people::ARM_FROM) + side * (people::ARMS_APART * out * built.wide);
+                let elbow_at =
+                    shoulder_at + hangs(arm_upper, people::THIGH_TALL * people::ARM_SHORT);
+                // and an elbow goes the other way
+                let arm_lower = swung(shoulder + elbow);
+                let wrist = elbow_at + hangs(arm_lower, people::SHIN_TALL * people::ARM_SHORT);
+
+                scene.push_material(
+                    thigh,
+                    &Transform::at(shoulder_at)
+                        .with_rotation(arm_upper)
+                        .with_scale(thin),
                     coat,
                     aim::DULL,
                 );
                 scene.push_material(
+                    shin,
+                    &Transform::at(elbow_at)
+                        .with_rotation(arm_lower)
+                        .with_scale(thin),
+                    coat,
+                    aim::DULL,
+                );
+                // a hand, which is the head's own egg at a fifth of the
+                // size and the same colour as the face
+                scene.push_material(
                     head,
-                    &Transform::at(up_to(people::HEAD_FROM)).with_rotation(turn),
+                    &Transform::at(wrist + hangs(arm_lower, people::HAND_WIDE))
+                        .with_rotation(arm_lower)
+                        .with_scale(Vec3::splat(people::HAND_WIDE / people::HEAD_WIDE)),
                     skin,
                     aim::DULL,
                 );
 
-                for leg in 0..2 {
-                    let out = if leg == 0 { 1.0 } else { -1.0 };
-                    let (hip, knee, shoulder, elbow) = match walked {
-                        Some(walked) => (
-                            people::hip(walked, leg),
-                            people::knee(walked, leg),
-                            people::shoulder(walked, leg),
-                            people::elbow(walked, leg),
-                        ),
-                        None => (0.0, 0.0, 0.0, 0.0),
-                    };
+                // **And Gjallarhorn in the left hand.** Spec 0055: the
+                // horn that has not been blown. It hangs from the fist
+                // rather than being raised, because Heimdall holds it
+                // for the whole of the world's history and sounds it
+                // once. Hung off the wrist like the hand is, so it
+                // swings with the arm instead of floating beside it.
+                if carved && leg == 1 {
+                    if let Some(horn) = horn {
+                        let fist = wrist + hangs(arm_lower, people::HAND_WIDE);
 
-                    // **The leg, turned about the hip rather than slid away
-                    // from it.** The knee takes the shin back off the thigh's
-                    // line, which is the one direction a knee goes.
-                    let hip_at = up_to(people::LEG_TALL) + side * (people::LEGS_APART * out);
-                    let upper = swung(hip);
-                    let knee_at = hip_at + hangs(upper, people::THIGH_TALL);
-                    let lower = swung(hip - knee);
-
-                    scene.push_material(
-                        thigh,
-                        &Transform::at(hip_at).with_rotation(upper),
-                        trousers,
-                        aim::DULL,
-                    );
-                    scene.push_material(
-                        shin,
-                        &Transform::at(knee_at).with_rotation(lower),
-                        trousers,
-                        aim::DULL,
-                    );
-
-                    // **The foot stays level, which is what an ankle is
-                    // for.** Hung off the shin it tilts with it, and a figure
-                    // on skis is further from a person than one with no feet
-                    // at all.
-                    //
-                    // Where it goes is `people::ankle` rather than the end
-                    // of the two bones worked out a second time here, which
-                    // would be two answers to where somebody's foot is.
-                    let (fore, off_floor) = match walked {
-                        Some(walked) => people::ankle(walked, leg),
-                        None => (0.0, 0.0),
-                    };
-
-                    scene.push_material(
-                        cube,
-                        &Transform::at(
-                            at + side * (people::LEGS_APART * out)
-                                + ahead * (fore + people::FOOT_AHEAD)
-                                + over * (off_floor + people::FOOT_TALL * 0.5),
-                        )
-                        .with_rotation(turn)
-                        .with_scale(vec3(
-                            people::FOOT_WIDE,
-                            people::FOOT_TALL,
-                            people::FOOT_LONG,
-                        )),
-                        trousers,
-                        aim::DULL,
-                    );
-
-                    // an arm is the same two bones, thinner and shorter. One
-                    // pair of meshes for both is the point of a wheel.
-                    let thin = vec3(people::ARM_THIN, people::ARM_SHORT, people::ARM_THIN);
-                    let arm_upper = swung(shoulder);
-                    let shoulder_at = up_to(people::ARM_FROM) + side * (people::ARMS_APART * out);
-                    let elbow_at =
-                        shoulder_at + hangs(arm_upper, people::THIGH_TALL * people::ARM_SHORT);
-                    // and an elbow goes the other way
-                    let arm_lower = swung(shoulder + elbow);
-                    let wrist = elbow_at + hangs(arm_lower, people::SHIN_TALL * people::ARM_SHORT);
-
-                    scene.push_material(
-                        thigh,
-                        &Transform::at(shoulder_at)
-                            .with_rotation(arm_upper)
-                            .with_scale(thin),
-                        coat,
-                        aim::DULL,
-                    );
-                    scene.push_material(
-                        shin,
-                        &Transform::at(elbow_at)
-                            .with_rotation(arm_lower)
-                            .with_scale(thin),
-                        coat,
-                        aim::DULL,
-                    );
-                    // a hand, which is the head's own egg at a fifth of the
-                    // size and the same colour as the face
-                    scene.push_material(
-                        head,
-                        &Transform::at(wrist + hangs(arm_lower, people::HAND_WIDE))
-                            .with_rotation(arm_lower)
-                            .with_scale(Vec3::splat(people::HAND_WIDE / people::HEAD_WIDE)),
-                        skin,
-                        aim::DULL,
-                    );
+                        scene.push_material(
+                            horn,
+                            &Transform::at(fist)
+                                .with_rotation(
+                                    // the mesh runs along its own +x and
+                                    // curves down from there. A quarter
+                                    // turn about the body's up swings
+                                    // that from the hand's own right
+                                    // round to in front of him, and the
+                                    // tilt drops the bell the rest of
+                                    // the way. Turned about z instead it
+                                    // pointed straight at the floor and
+                                    // read as a stick.
+                                    arm_lower
+                                        * glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
+                                        * glam::Quat::from_rotation_z(0.32),
+                                )
+                                .with_scale(Vec3::splat(built.tall * bridge::HORN_HELD)),
+                            aim::HORN,
+                            aim::DULL,
+                        );
+                    }
                 }
-            };
+            }
+        };
 
         // the ones the wave is passing, crossing to the next number
         let window = aleph::window(self.at);
@@ -3569,6 +3756,7 @@ impl Arcade {
                 who.facing,
                 Some(who.walked),
                 who.from as usize,
+                people::Look::Guest,
             );
         }
 
@@ -3580,13 +3768,27 @@ impl Arcade {
             // it, looking at whoever came through the door. Jake walked in
             // and said the shadowy figure is creepy, and it was: a guest
             // waiting for a room does not watch the entrance.
-            stand(aleph::waiting(reaches), glam::Quat::IDENTITY, 0.0, None, 0);
+            stand(
+                aleph::waiting(reaches),
+                glam::Quat::IDENTITY,
+                0.0,
+                None,
+                0,
+                people::Look::Guest,
+            );
         }
 
         // and the three flights of the imaginarium, per spec 0038, where
         // the whole content of the room is other people using it
         for who in aloft::walking(self.since, self.room.aloft_doors) {
-            stand(who.at, who.up, who.facing, Some(who.walked), who.shade);
+            stand(
+                who.at,
+                who.up,
+                who.facing,
+                Some(who.walked),
+                who.shade,
+                people::Look::Guest,
+            );
         }
 
         // and the watchman at the top of the bridge, who is there exactly
@@ -3595,12 +3797,26 @@ impl Arcade {
         if bridge::shows(&self.trail) {
             let (at, facing) = bridge::watchman(reaches);
 
-            stand(at, glam::Quat::IDENTITY, facing, None, 2);
+            stand(
+                at,
+                glam::Quat::IDENTITY,
+                facing,
+                None,
+                2,
+                people::Look::Carved,
+            );
 
             // and whoever is already up there. Spec 0056: a few, and none
             // of them fighting.
             for (n, (at, facing)) in valhalla::people(reaches).into_iter().enumerate() {
-                stand(at, glam::Quat::IDENTITY, facing, None, n);
+                stand(
+                    at,
+                    glam::Quat::IDENTITY,
+                    facing,
+                    None,
+                    n,
+                    people::Look::Carved,
+                );
             }
         }
     }
@@ -6957,6 +7173,18 @@ impl Game for Arcade {
             .collect();
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
         self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
+        self.carved_head =
+            Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 14, people::carved_head)));
+        self.cloak = Some(renderer.add_mesh(&cellar::turned(
+            people::CUT_SIDES,
+            18,
+            people::cloak_profile,
+        )));
+        self.helm =
+            Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 10, people::helm_profile)));
+        self.horn = Some(renderer.add_mesh(&bridge::horn_mesh()));
+        self.kerbs = [-1.0f32, 1.0]
+            .map(|side| Some(renderer.add_mesh(&bridge::kerb_mesh(self.room.reaches, side))));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
         self.moon = Some(renderer.add_mesh(&garden::moon_mesh()));
         self.moon_face = Some(renderer.add_texture(&garden::moon_face()));
@@ -13454,6 +13682,341 @@ mod tests {
         );
     }
 
+    /// Jake, twice: the walk up the bridge is slow and jittery.
+    ///
+    /// **The test that would have caught it, and did not exist.**
+    /// `bridge::tests::walked_from_the_foot_to_the_top` drives
+    /// `walk::walk` with climbing always allowed, so it never saw the
+    /// climb budget and reported four seconds for something that took
+    /// eleven in the hand. This one walks the real loop, budget and
+    /// all, which is the only place the two agree or do not.
+    #[test]
+    fn the_bridge_is_walked_up_rather_than_climbed() {
+        climbed_the_bridge(false);
+    }
+
+    /// And running it, which is the pace Jake plays at and twice the
+    /// distance covered per frame against treads 0.12 long.
+    #[test]
+    fn the_bridge_is_run_up_without_falling_through_it() {
+        climbed_the_bridge(true);
+    }
+
+    /// And on a machine having a bad moment.
+    ///
+    /// **Jake: there is some clipping where the player ends up beneath
+    /// the bridge for a bit.** Walked and run at a steady sixtieth
+    /// nothing goes wrong, which is why this needed a third case: at
+    /// eleven metres a second a frame that takes an eighteenth of a
+    /// second covers most of a metre, and the treads holding you up are
+    /// twelve centimetres long. One long frame steps clean over several
+    /// of them.
+    #[test]
+    fn a_long_frame_does_not_drop_you_through_the_deck() {
+        climbed_the_bridge_at(true, 1.0 / 18.0, 110);
+    }
+
+    /// And on a screen that draws faster than sixty a second, which is
+    /// the one Jake plays on.
+    ///
+    /// **Jake, with a recording: there is some clipping where the
+    /// player ends up beneath the bridge for a bit.** It was the
+    /// camera and not the body: `EYE_LAGS` is a time constant, so the
+    /// eye settles however far behind the feet their climbing rate
+    /// times that comes to, and running up here they gain better than
+    /// twenty a second. Two metres behind is further than `EYE`, so
+    /// the view sat under the deck.
+    ///
+    /// Swept over frame rates because the clearance depends on one,
+    /// and a sixtieth is the only rate anything else here is run at.
+    /// Measured with the ceiling taken off, the least the camera ever
+    /// cleared the deck by:
+    ///
+    /// ```text
+    /// rate   cleared
+    ///  60      0.18
+    ///  90     -0.13
+    /// 120     -0.63
+    /// 144     -1.14
+    /// ```
+    ///
+    /// So every test in this file passed and the one machine it was
+    /// never run on is the one Jake plays on. The climb is quicker the
+    /// more frames it gets, since a step is taken at most once a frame
+    /// and carries you along by a share of your own width: the foot to
+    /// the top is 2.38 seconds at sixty and 1.87 at a hundred and
+    /// forty four.
+    #[test]
+    fn the_camera_stays_above_the_deck_however_fast_the_screen_is() {
+        for rate in [60.0f32, 90.0, 120.0, 144.0] {
+            climbed_the_bridge_at(true, 1.0 / rate, (6.0 * rate) as u32);
+        }
+    }
+
+    /// And it is climbed at the pace it was given, on any screen.
+    ///
+    /// **The fault under the one Jake saw.** `walk::over_a_step` lifts
+    /// you onto a riser and carries you most of a radius forward, which
+    /// is what being over a tread costs and is invisible on a stair.
+    /// Bifröst is a slope cut into treads 0.12 long, so every frame was
+    /// a step and every frame took the reach as well as its own
+    /// movement. The climb ran at roughly twice its pace, and at a rate
+    /// per frame rather than per second, so the better the screen the
+    /// faster the bridge: 39.9 metres a second at sixty and 50.9 at a
+    /// hundred and forty four, against a run of 23.5.
+    ///
+    /// `walk::RIDES` takes the risers out of the way instead, so the
+    /// deck is walked rather than stepped. It is now 4.5 seconds foot
+    /// to top at every one of these rates, within a hundredth.
+    ///
+    /// **Steering is still quicker than going straight, and this does
+    /// not catch it.** Pressed against the kerb the body is stopped by
+    /// something it cannot climb, the probe reads the deck through the
+    /// verge and calls it a step, and the reach is paid out again:
+    /// measured mid deck, 23.5 a second going straight and up to 39.7
+    /// against the kerb. Three guards against it were tried and each
+    /// took a real stair with it, so it is written down rather than
+    /// fixed.
+    #[test]
+    fn the_bridge_is_climbed_at_the_pace_it_was_given() {
+        for rate in [60.0f32, 90.0, 120.0, 144.0] {
+            let dt = 1.0 / rate;
+            let mut one = Arcade::new();
+
+            one.shifted = true;
+
+            for asked in trail::Asked::every() {
+                one.trail.gave(*asked);
+            }
+
+            let foot = bridge::foot(one.room.reaches);
+
+            one.at = vec3(foot.x - 1.0, 0.1, foot.z);
+            one.eye = one.at.y;
+            one.yaw = -std::f32::consts::FRAC_PI_2;
+            one.walking = [true, false, false, false];
+
+            let (mut on, mut took) = (None, None);
+
+            for frame in 0..(10.0 * rate) as u32 {
+                one.aimed_and_moved(dt);
+
+                let along = (foot.x - one.at.x) / bridge::RUN;
+
+                if on.is_none() && along >= 0.02 {
+                    on = Some(frame);
+                }
+
+                if along >= 1.0 {
+                    took = on.map(|on| (frame - on) as f32 * dt);
+
+                    break;
+                }
+            }
+
+            let took = took.expect("it gets to the top");
+            // what the pace says it should be, which is the whole point
+            let pace = SPEED * RUNS * bridge::CARRIES;
+            let ought = bridge::RUN * 0.98 / pace;
+
+            assert!(
+                took > ought * 0.95,
+                "at {rate:.0} frames a second the climb took {took:.2}s, \
+                 and {:.1} a second over {:.0} metres is {ought:.2}s",
+                pace,
+                bridge::RUN * 0.98
+            );
+            assert!(
+                took < ought * 1.25,
+                "at {:.0} frames a second the climb took {:.2}s against \
+                 {:.2}s at the pace it was given",
+                rate,
+                took,
+                ought
+            );
+        }
+    }
+
+    /// And steered rather than driven straight up the middle, which is
+    /// how anybody actually climbs it.
+    #[test]
+    fn the_bridge_is_climbed_off_the_straight_without_falling_through() {
+        for tenth in -6..=6 {
+            climbed_the_bridge_from(true, 1.0 / 60.0, 360, tenth as f32 * 0.05);
+        }
+    }
+
+    /// And the kerb keeps you on it.
+    ///
+    /// **Carrying you up it made falling off it easy.** Six metres of
+    /// road with nothing either side was survivable at four metres a
+    /// second; at eleven, three degrees off the straight is half a
+    /// metre a second sideways and the climb is five seconds long.
+    /// Jake went over the side near the top, and the frame his
+    /// recording caught is from down in the field looking back up.
+    #[test]
+    fn the_kerb_keeps_you_on_the_bridge() {
+        for tenth in -6..=6 {
+            let askew = tenth as f32 * 0.05;
+            let mut one = Arcade::new();
+
+            for asked in trail::Asked::every() {
+                one.trail.gave(*asked);
+            }
+
+            let foot = bridge::foot(one.room.reaches);
+
+            one.at = vec3(foot.x - 1.0, 0.1, foot.z);
+            one.eye = one.at.y;
+            one.yaw = -std::f32::consts::FRAC_PI_2 + askew;
+            one.pitch = 0.0;
+            one.shifted = true;
+            one.walking = [true, false, false, false];
+
+            for _ in 0..360 {
+                one.aimed_and_moved(1.0 / 60.0);
+
+                let along = (foot.x - one.at.x) / bridge::RUN;
+
+                // on the ramp, and not yet onto the landing, which is
+                // wider and has a parapet of its own
+                if !(0.05..=0.95).contains(&along) {
+                    continue;
+                }
+
+                assert!(
+                    one.at.y > bridge::high(along) - 0.5,
+                    "askew {askew:.2}, off the bridge at {along:.2} of the way along, \
+                     {:.1} up where the deck is {:.1}",
+                    one.at.y,
+                    bridge::high(along)
+                );
+            }
+        }
+    }
+
+    /// Ten seconds walking, six running.
+    ///
+    /// **Not one number for both, since they are not one climb.** A
+    /// run is 23.5 a second and gets up in 4.5; a walk is 11.8 and
+    /// takes 8.5, because `bridge::CARRIES` multiplies whichever you
+    /// are doing. Six held for both only while every tread was handing
+    /// out a reach of free travel, which `walk::RIDES` took back.
+    fn climbed_the_bridge(running: bool) {
+        let seconds = if running { 6.0 } else { 10.0 };
+
+        climbed_the_bridge_at(running, 1.0 / 60.0, (seconds * 60.0) as u32);
+    }
+
+    fn climbed_the_bridge_at(running: bool, dt: f32, frames: u32) {
+        climbed_the_bridge_from(running, dt, frames, 0.0);
+    }
+
+    fn climbed_the_bridge_from(running: bool, dt: f32, frames: u32, askew: f32) {
+        let mut one = Arcade::new();
+
+        one.shifted = running;
+
+        for asked in trail::Asked::every() {
+            one.trail.gave(*asked);
+        }
+
+        let foot = bridge::foot(one.room.reaches);
+
+        one.at = vec3(foot.x - 1.0, 0.1, foot.z);
+        one.eye = one.at.y;
+        // yaw nought faces -z, and the climb runs toward -x
+        one.yaw = -std::f32::consts::FRAC_PI_2 + askew;
+        one.pitch = 0.0;
+        one.walking = [true, false, false, false];
+
+        // six seconds. Unassisted and paced by the budget it is eleven,
+        // so this is a bound neither the carry nor the ramp rule can be
+        // taken out of.
+        //
+        // **And it watches the whole climb rather than the end of it.**
+        // Jake: there is some clipping where the player ends up beneath
+        // the bridge for a bit. A test that only reads the height it
+        // finished at cannot see a hole in the middle.
+        let mut worst = 0.0f32;
+        let mut worst_at = 0.0f32;
+        // **And where the camera is, which is not where the feet are.**
+        // The whole of why the first round of this missed Jake's
+        // picture: his feet never left the deck. See `EYE_TRAILS`.
+        let mut lowest = f32::INFINITY;
+        let mut lowest_at = 0.0f32;
+
+        for _ in 0..frames {
+            one.aimed_and_moved(dt);
+
+            let along = (foot.x - one.at.x) / bridge::RUN;
+
+            // **Past the end of the deck too, which is where Jake's
+            // picture was taken.** The window used to stop at the
+            // deck's last tread, and the frame he caught is under the
+            // landing: the one junction in the whole climb where the
+            // thing holding you up changes from one list of boxes to
+            // another.
+            if !(0.02..=1.6).contains(&along) {
+                continue;
+            }
+
+            // **And only while you are over it.** Walking off the side
+            // of an unrailed deck is falling off a bridge, which is
+            // what happens when you do that, and counting it as a drop
+            // through the deck hides the thing being looked for.
+            if (one.at.z - foot.z).abs() > bridge::WIDE * 0.5 {
+                continue;
+            }
+
+            let deck = bridge::high(along.min(1.0));
+            let under = deck - one.at.y;
+
+            if under > worst {
+                worst = under;
+                worst_at = along;
+            }
+
+            let over = one.looking_from().y - deck;
+
+            if over < lowest {
+                lowest = over;
+                lowest_at = along;
+            }
+        }
+
+        assert!(
+            lowest > 0.9,
+            "{} askew {askew:.2} at a {:.0}th of a second, the camera was \
+             {:.2} over the deck at {:.2} of the way along",
+            if running { "running," } else { "walking," },
+            1.0 / dt,
+            lowest,
+            lowest_at
+        );
+
+        assert!(
+            worst < 0.5,
+            "{} askew {askew:.2}, fell {:.2} under the deck at {:.2} of the way along",
+            if running { "running," } else { "walking," },
+            worst,
+            worst_at
+        );
+
+        // how far you got is only asked of the straight climb: going up
+        // at an angle you cover less of the run, which is arithmetic
+        // and not a fault.
+        if askew == 0.0 {
+            assert!(
+                one.at.y > bridge::RISE * 0.95,
+                "{:.0} seconds of walking got {:.1} up a climb of {}",
+                frames as f32 * dt,
+                one.at.y,
+                bridge::RISE
+            );
+        }
+    }
+
     /// Spec 0048: up its own flight and out of the top puts you one frame
     /// back round the three.
     #[test]
@@ -13467,8 +14030,20 @@ mod tests {
         one.pitch = 0.0;
         one.walking = [true, false, false, false];
 
+        // **Walking stops the moment the frame changes.** It used to
+        // walk for a flat five seconds, which was long enough to go up,
+        // cross, and then walk into the *next* hatch: once the climb
+        // got quicker the crossing still running at the end was the
+        // second one, and this failed for a reason it says nothing
+        // about. What it is here to check is where the top of a flight
+        // puts you, so it climbs until that happens and then stands
+        // still long enough for the crossing to finish.
         for _ in 0..300 {
             one.aimed_and_moved(1.0 / 60.0);
+
+            if one.standing_in == aloft::round_the_other_way(0) {
+                one.walking = [false, false, false, false];
+            }
         }
 
         assert_eq!(

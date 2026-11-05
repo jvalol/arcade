@@ -62,7 +62,20 @@ pub const PIECES: usize = 48;
 /// cannot tilt, so a slope is a staircase to the thing walking up it, and a
 /// riser taller than `walk::STEP` is a wall. At the steepest part of the
 /// arc, a tread of 0.6 rises 0.28, and the walk steps 0.42.
-pub const TREAD: f32 = 0.6;
+///
+/// **Walkable is not the same as smooth, which is what 0.6 missed.**
+/// Jake: the walk up is jittery. Every riser at the steep part was most
+/// of a foot, taken at seven metres a second, which is a dozen
+/// twenty-eight centimetre hops a second and reads exactly as a jitter.
+/// Clearing `walk::STEP` only says the stairs are climbable.
+///
+/// At 0.12 the riser at the steepest point is under six centimetres,
+/// which is a kerb rather than a stair, and the staircase is close
+/// enough to the ramp it is standing in for. It costs eight hundred
+/// boxes where there were a hundred and sixty seven, which is nothing:
+/// they are axis aligned and the walk tests them with six comparisons
+/// each.
+pub const TREAD: f32 = 0.12;
 
 /// Where the last of the climb is done, as a share of the run.
 ///
@@ -698,8 +711,18 @@ pub fn carving() -> blitzkit::texture::TextureData {
     // getting rid of.
     let said = blitzkit::text::stencilled(SAYS, RUNE_TEXELS);
     let (was_wide, was_tall) = (said.width() as f32, said.height() as f32);
-    let want = (n as f32 * 0.62, n as f32 * 0.62 * was_tall / was_wide);
-    let (at_x, at_y) = ((n as f32 - want.0) * 0.5, n as f32 * 0.045);
+    // **Sized by its height, not its width.** It was laid out to a
+    // fixed share of the picture across, with the height following from
+    // the aspect, which means the fewer letters there are the taller
+    // they get. The marker came off when Jake signed the copy, the
+    // string went from twenty one characters to seven, and the block
+    // trebled in height and ran up into the rune ribbon. A cap height
+    // is the thing that should not move when the words change.
+    let want = (
+        n as f32 * LATIN_TALL * was_wide / was_tall,
+        n as f32 * LATIN_TALL,
+    );
+    let (at_x, at_y) = ((n as f32 - want.0) * 0.5, n as f32 * LATIN_FOOT);
 
     for down in 0..want.1 as u32 {
         for across in 0..want.0 as u32 {
@@ -811,6 +834,12 @@ fn halo(pixels: &mut [u8], n: u32) {
 /// and you walk up the middle of it; a stone in that is a stone you walk
 /// into on the way to the thing it names.
 pub const RUNE_TEXELS: f32 = 64.0;
+
+/// How tall the Latin name at the foot is, as a share of the carved
+/// picture, and how far it sits off the bottom of it. Held rather than
+/// derived, so signing the copy cannot move it.
+pub const LATIN_TALL: f32 = 0.046;
+pub const LATIN_FOOT: f32 = 0.012;
 /// The whole length of the stone, foot and all, and how much of that is
 /// under the grass.
 ///
@@ -1006,7 +1035,74 @@ pub fn rubble(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3, f32)> {
     out
 }
 
-/// The stone at the foot of the bridge: where it stands and how big./// The stone at the foot of the bridge: where it stands and how big.
+/// Gjallarhorn, in the watchman's hand. Spec 0055.
+///
+/// **The horn that has not been blown.** It is the one thing in the
+/// myth that is only ever about to be used: Heimdall holds it through
+/// the whole of the world's history and sounds it once, at the end. So
+/// it hangs at his side with the bell forward and down rather than
+/// being raised to his lips. A horn at the mouth is a warning already
+/// given, and nothing about the walk up here should say the end has
+/// come.
+///
+/// Built as a circle swept along an arc, widening from the mouthpiece
+/// to the bell. Flat shaded with the rest of him, so it reads as a
+/// carved horn rather than a brass instrument.
+/// **Short and heavy, not long and thin.** At three quarters of a
+/// metre of spine with an eighth of that at the bell it came out a
+/// blade: from the side it read as a scythe hanging off his hand. A
+/// horn is a stubby thing. Shorter, fatter at the mouth and curled
+/// harder, it is a horn from any angle.
+pub const HORN_LONG: f32 = 0.52;
+pub const HORN_CURLS: f32 = 1.5;
+pub const HORN_TIP: f32 = 0.028;
+pub const HORN_BELL: f32 = 0.125;
+/// How big it is in his hand. **Bigger than life**, because an ox horn
+/// at true size on a figure at the top of a hundred metre bridge is a
+/// stick, and this is the object the last of the trail is named for.
+pub const HORN_HELD: f32 = 1.35;
+pub const HORN_ROUND: u32 = 11;
+pub const HORN_STEPS: u32 = 20;
+
+/// Where the horn's spine is a share `along` of the way to the bell,
+/// which way it is pointing there, and how thick it is.
+pub fn horn_at(along: f32) -> (Vec3, Vec3, f32) {
+    let turn = along * HORN_CURLS;
+    let spine = vec3(
+        HORN_LONG * turn.sin() / HORN_CURLS,
+        HORN_LONG * (turn.cos() - 1.0) / HORN_CURLS,
+        0.0,
+    );
+    let ahead = vec3(turn.cos(), -turn.sin(), 0.0);
+    // **Cubed rather than tapered straight.** An ox horn is nearly a
+    // point for its first third and nearly all bell in its last
+    // quarter, and a straight cone between the two ends is a traffic
+    // cone whichever way round you put it.
+    let thick = HORN_TIP + (HORN_BELL - HORN_TIP) * along.powf(2.3);
+
+    (spine, ahead, thick)
+}
+
+pub fn horn_mesh() -> blitzkit::mesh::MeshData {
+    use std::f32::consts::TAU;
+
+    crate::garden::faceted(blitzkit::mesh::MeshData::surface(
+        HORN_ROUND,
+        HORN_STEPS,
+        |u, v| {
+            let (spine, ahead, thick) = horn_at(v);
+            let round = -u * TAU;
+            // the circle standing across the spine. `ahead` turns in
+            // the x y plane, so across it is that turned a quarter,
+            // and z is the one axis the arc never leaves.
+            let side = vec3(-ahead.y, ahead.x, 0.0);
+
+            spine + (side * round.cos() + Vec3::Z * round.sin()) * thick
+        },
+    ))
+}
+
+/// The stone at the foot of the bridge: where it stands and how big.
 ///
 /// Empty until the bridge is there, like everything else here. A stone
 /// naming a bridge that does not exist is a grave marker.
@@ -1056,6 +1152,69 @@ pub fn shades(reaches: f32, at: Vec3) -> bool {
     let along = (foot.x - at.x) / RUN;
 
     (0.0..=1.0).contains(&along) && high(along) < crate::field::TREE_TALL
+}
+
+/// How much faster you get about while you are on the deck.
+///
+/// **Because the bridge is a road and not a hill.** Jake: it takes way
+/// too long to run up the rainbow bridge. A hundred metres of span and
+/// twenty six of climb is eleven or twelve seconds of holding one key
+/// with nothing to do, every time, and the span is the thing that makes
+/// it read from the far side of the field. Shortening it fixes the
+/// climb by spoiling what the climb is for.
+///
+/// So the deck carries you. Bifröst is the road the gods ride to the
+/// well every day, and a road that carries its traffic is the most
+/// ordinary thing a mythic road could do.
+///
+/// **And the budget was the bigger half of it.** `walk::CLIMBS`
+/// rations height, so twenty six metres of rise was floored at eleven
+/// seconds whatever the pace, and the carry alone only made you walk
+/// into risers faster. `walk::RAMPS` is the other half and the one
+/// that mattered: the climb is three seconds at a walk now, measured
+/// through the game's own loop by
+/// `tests::the_bridge_is_walked_up_rather_than_climbed`.
+///
+/// **Only going up.** Coming down you have gravity and a view, and a
+/// bridge that flings you back towards the building is a bridge
+/// fighting you.
+/// **Jake, twice: still laborious.** 1.8 was about five seconds at a
+/// walk, which was my judgement of what a ride should feel like
+/// against his of what it actually felt like. His wins.
+pub const CARRIES: f32 = 2.8;
+
+/// Whether a spot is on the deck, for the purpose of being carried.
+///
+/// Measured off the same `treads` the walking is done on, rather than
+/// off the deck's drawn shape: two answers to where the bridge is would
+/// come apart the first time either moved.
+pub fn carries(reaches: f32, at: Vec3, going: Vec3, trail: &Trail) -> f32 {
+    if !shows(trail) {
+        return 1.0;
+    }
+
+    let foot = foot(reaches);
+
+    if (at.z - foot.z).abs() > WIDE * 0.5 || at.y < 0.4 {
+        return 1.0;
+    }
+
+    let along = (foot.x - at.x) / RUN;
+
+    if !(0.0..=1.0).contains(&along) {
+        return 1.0;
+    }
+
+    // and only while you are going up it, faded rather than switched.
+    //
+    // **A hard test here was its own jitter.** `going` is where the
+    // camera looks, not where the feet go, so walking up the deck while
+    // glancing to one side crossed `going.x == 0` and the carry
+    // snapped on and off with the mouse. Faded, the worst a glance does
+    // is slow you.
+    let up = (-going.x).clamp(0.0, 1.0);
+
+    1.0 + (CARRIES - 1.0) * up
 }
 
 /// How far from either a tree has to be sown.
@@ -1124,6 +1283,103 @@ pub fn pitch(along: f32) -> f32 {
     let climbing = along / LEVELS_AT;
 
     RISE * std::f32::consts::PI * (climbing * std::f32::consts::PI).sin() / (2.0 * RUN * LEVELS_AT)
+}
+
+/// The kerb down either side of the ramp: how high it stands, how
+/// thick it is, and how long each piece is.
+///
+/// **Because the deck had no edge at all.** Six metres across, a
+/// hundred long, and nothing to either side of it. At four metres a
+/// second that was survivable; carried at eleven it is not, because
+/// three degrees off the straight is half a metre a second sideways
+/// and the whole climb is five seconds of it. Jake went over the side
+/// near the top and his recording catches him down in the field
+/// looking back up at the bridge.
+///
+/// So the road gets a verge, which is the other thing that makes a
+/// road a road. Higher than `walk::STEP`, so it stops you rather than
+/// being walked up, and the two of them leave the deck's middle five
+/// metres clear, which is wider than anything else you walk along in
+/// this building.
+///
+/// Its pieces are ten treads long. Nothing stands on a kerb, so it
+/// does not need the fine tread the deck needs to be smooth, and at
+/// `TREAD` it would have been seventeen hundred boxes for a thing
+/// whose whole job is to be in the way sideways.
+pub const KERB_UP: f32 = 0.52;
+pub const KERB_THICK: f32 = 0.5;
+pub const KERB_LONG: f32 = TREAD * 10.0;
+/// How far the drawn kerb stands outside the deck's edge, which is
+/// only so that no face of it lies in a plane the deck already has.
+pub const KERB_PROUD: f32 = 0.04;
+
+/// The kerb as one swept ribbon per side, for looking at.
+///
+/// **Drawn as a sweep and collided as boxes.** `kerbs` is a row of
+/// axis aligned blocks because that is the only thing the walk
+/// understands, and drawing those blocks is a flight of stairs running
+/// up either side of a rainbow: each piece a foot and a half longer
+/// than the last is level on top, so the kerb went up in steps of half
+/// a metre. Swept along the same curve the deck is swept along, it is
+/// a line.
+pub fn kerb_mesh(reaches: f32, side: f32) -> blitzkit::mesh::MeshData {
+    let foot = foot(reaches);
+    let middle = foot.z + side * (WIDE * 0.5 - KERB_THICK * 0.5);
+    let half = KERB_THICK * 0.5;
+
+    let mut mesh = blitzkit::mesh::MeshData::surface(PIECES as u32, 3, |u, v| {
+        let along = u;
+        let on = high(along);
+        let x = foot.x - along * RUN;
+        // round the kerb's cross section: down the outer face, over the
+        // top, down the inner face
+        // **Clear of the deck's own faces.** Standing exactly on the
+        // deck's edge, the kerb's outer face shared a plane with it and
+        // its underside shared one with the deck's underside, and both
+        // came out speckled: the fault this building has found eight
+        // times. Nudged out and cut short, neither touches.
+        let out = middle + half + KERB_PROUD;
+        let under = on - DEEP * 0.55;
+        let (z, y) = match v {
+            v if v < 0.34 => (out, under),
+            v if v < 0.67 => (out, on + KERB_UP),
+            v if v < 0.99 => (middle - half, on + KERB_UP),
+            _ => (middle - half, under),
+        };
+        vec3(x, y, z)
+    });
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// Where each piece of kerb sits: its box, in the same terms as
+/// [`treads`].
+pub fn kerbs(reaches: f32) -> Vec<Aabb> {
+    let foot = foot(reaches);
+    let pieces = (RUN / KERB_LONG).ceil() as usize;
+    let mut out = Vec::with_capacity(pieces * 2);
+
+    for piece in 0..pieces {
+        let from = piece as f32 * KERB_LONG / RUN;
+        let to = ((piece + 1) as f32 * KERB_LONG / RUN).min(1.0);
+        let top = high(to).max(high(from)) + KERB_UP;
+
+        for side in [-1.0f32, 1.0] {
+            let middle = foot.z + side * (WIDE * 0.5 - KERB_THICK * 0.5);
+
+            out.push(Aabb::new(
+                vec3(
+                    foot.x - to * RUN,
+                    top - KERB_UP - DEEP,
+                    middle - KERB_THICK * 0.5,
+                ),
+                vec3(foot.x - from * RUN, top, middle + KERB_THICK * 0.5),
+            ));
+        }
+    }
+
+    out
 }
 
 /// What holds you up: one box the full width, every [`TREAD`] along.
@@ -1386,6 +1642,7 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
     }
 
     let mut out = treads(reaches);
+    out.extend(kerbs(reaches));
     out.extend(landing(reaches, trail));
     out.extend(runestone(reaches, trail).map(|(at, size)| Aabb::from_center_size(at, size)));
 
@@ -1442,6 +1699,7 @@ pub mod tests {
         assert_eq!(
             solid(REACHES, &done()).len(),
             (RUN / TREAD).ceil() as usize
+                + kerbs(REACHES).len()
                 + landing(REACHES, &done()).len()
                 + runestone(REACHES, &done()).iter().count()
         );
@@ -1711,7 +1969,14 @@ pub mod tests {
     #[test]
     fn a_coarse_tread_would_not_be_walkable() {
         let foot = foot(REACHES);
-        let coarse = TREAD * 4.0;
+        // **A length of its own, not a multiple of `TREAD`.** Written
+        // as four times the real one, this control tracked whatever
+        // `TREAD` became: when the tread went to 0.12 to take the
+        // jitter out, the control went to 0.48, which is still
+        // walkable, and the test that was meant to prove the fine
+        // tread matters stopped proving anything. A metre is a coarse
+        // tread whatever the real one is doing.
+        let coarse = 1.0;
         let steps = (RUN / coarse).ceil() as usize;
         let mut worst: f32 = 0.0;
         let mut was = 0.0;
@@ -2251,7 +2516,12 @@ pub mod tests {
         for _ in 0..(seconds / step) as u32 {
             let way = vec3(to.x - at.x, 0.0, to.z - at.z);
             let wish = if way.length_squared() > 1e-4 {
-                way.normalize() * crate::SPEED
+                let going = way.normalize();
+
+                // **Carried where the game carries you**, or this walks
+                // the bridge at a pace nobody playing ever walks it at
+                // and the time it reports is a time nobody waits.
+                going * crate::SPEED * super::carries(REACHES, at, going, &done())
             } else {
                 Vec3::ZERO
             };
@@ -2265,6 +2535,43 @@ pub mod tests {
         at
     }
 
+    /// The deck carries you up itself, and only up, and only on itself.
+    #[test]
+    fn the_deck_carries_you_up_and_nothing_else_does() {
+        let foot = foot(REACHES);
+        let up = vec3(-1.0, 0.0, 0.0);
+        let down = vec3(1.0, 0.0, 0.0);
+        let on = vec3(foot.x - RUN * 0.5, high(0.5), foot.z);
+
+        assert_eq!(carries(REACHES, on, up, &done()), CARRIES);
+        assert_eq!(
+            carries(REACHES, on, down, &done()),
+            1.0,
+            "it pushes you back"
+        );
+        assert_eq!(
+            carries(REACHES, on, up, &nearly()),
+            1.0,
+            "it carries you before it is there"
+        );
+
+        let aside = vec3(on.x, on.y, foot.z + WIDE);
+        assert_eq!(carries(REACHES, aside, up, &done()), 1.0, "off the side");
+
+        let under = vec3(on.x, 0.0, foot.z);
+        assert_eq!(carries(REACHES, under, up, &done()), 1.0, "underneath it");
+
+        let past = vec3(foot.x - RUN * 1.4, on.y, foot.z);
+        assert_eq!(carries(REACHES, past, up, &done()), 1.0, "past the top");
+
+        let behind = vec3(foot.x + 6.0, 1.4, foot.z);
+        assert_eq!(
+            carries(REACHES, behind, up, &done()),
+            1.0,
+            "short of the foot"
+        );
+    }
+
     #[test]
     fn walked_from_the_foot_to_the_top() {
         let solid = solid(REACHES, &done());
@@ -2273,17 +2580,31 @@ pub mod tests {
 
         // dropped in from above the foot rather than placed, because a
         // point on a deck can be inside it
+        // **Nine seconds and not a minute.** Jake: it takes way too long
+        // to run up the rainbow bridge, and a test that gave it a
+        // minute could never have told anybody that. This is a walk
+        // rather than a run, so `CARRIES` is the whole of what gets it
+        // up inside the window: unassisted, 4.2 a second over a hundred
+        // metres is twenty four.
+        //
+        // It was six, which fitted while the climb was getting a reach
+        // of free travel out of `walk::over_a_step` at every one of its
+        // 0.12 treads. Taking that away is what `walk::RIDES` did, and
+        // a walk up here is now the 8.5 seconds the pace says it is.
         let start = vec3(foot.x - 1.0, 1.4, foot.z);
-        let ended = walked(start, top, 60.0, &solid);
+        let ended = walked(start, top, 9.0, &solid);
 
         assert!(
             ended.y > RISE * 0.9,
-            "walked for a minute and got to {} up, and the top is {}",
+            "walked for nine seconds and got to {} up, and the top is {}",
             ended.y,
             RISE
         );
+        // **0.92 and not 0.4.** Unassisted this walk covers 37.8 in nine
+        // seconds, so a bound under that passed whether the deck carried
+        // you or not and said nothing about the thing it is there for.
         assert!(
-            foot.x - ended.x > RUN * 0.85,
+            foot.x - ended.x > RUN * 0.92,
             "got {} of the way along a run of {}",
             foot.x - ended.x,
             RUN

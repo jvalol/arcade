@@ -211,9 +211,37 @@ The surround is named once now and both drawn and walked into from there. It
 was written out where it was drawn and nowhere else, which is how it came to
 have no collider at all.
 
+**A slope is walked and a step is stepped, and the two needed telling
+apart.** Everything above is written for a stair: you are stopped by a
+riser, lifted over it, and carried a reach forward, because a sphere
+rests on a lip and cannot get close enough to be standing on the tread.
+On a stair that happens once a tread and nobody can see it.
+
+Bifröst is a slope, and a slope has to be cut into treads for an
+axis-aligned box to hold it up, so its treads are 0.12 long and every
+frame was a step. Every frame took the reach as well as its own
+movement, which made the climb about twice the pace it was given, and
+took it per frame rather than per second, so the better the screen the
+faster the bridge: 39.9 metres a second at sixty frames and 50.9 at a
+hundred and forty four, against a run of 23.5.
+
+So a shallow rise is taken out of the way rather than stepped over. A
+box whose top is within `walk::rides` of your feet cannot stop you, and
+the same allowance lets the ground set you down a little higher than it
+picked you up. The allowance is `RAMPS` away from the body plus a
+doorstep at the body itself, which is the same gradient the climb budget
+already uses to tell a ramp from a stair, because it is the same
+question. Nothing is lost: a rise that small was climbable anyway, since
+`STEP` is four times a doorstep. What changes is that it is walked.
+
+The climb is now 4.5 seconds foot to top at sixty, ninety, a hundred and
+twenty and a hundred and forty four frames a second, within a hundredth
+of a second of each other.
+
 ## Acceptance criteria
 
 - You can walk up a step, and the shallowest is not the hardest. — `walk::tests::it_climbs_a_step`
+- A slope is walked at the pace you were given, whatever the frame rate. — `tests::the_bridge_is_climbed_at_the_pace_it_was_given`
 - You stop far enough from the fire to see it. — `cellar::tests::you_stop_far_enough_from_the_fire_to_see_it`
 - And one taller than a step is a wall. — `walk::tests::it_does_not_climb_a_wall`
 - You come to rest on the floor rather than sinking or hovering. — `walk::tests::it_puts_you_on_the_floor`

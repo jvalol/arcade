@@ -1019,13 +1019,20 @@ pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
         //
         // The square is only needed where the dome has to reach the
         // garden's corners, which is at the rim. It is given up as the
-        // dome rises, for the circle through those same corners so that
-        // nothing it used to cover is uncovered, and by `ROUNDS_BY` the
-        // cross section is a circle and there is nothing left to crease.
+        // dome rises, and by `ROUNDS_BY` the cross section is a circle
+        // and there is nothing left to crease.
+        //
+        // **To the circle inside the square, not the one round it.**
+        // The circle through the corners is wider than the square's own
+        // sides, so easing to it made the dome broader at head height
+        // than at its rim: an overhang, whose underside you could see
+        // from the field as a great pale arc cutting across the sky.
+        // Jake's two pictures of it. Easing inward instead, the radius
+        // only ever falls going up, which is what a dome is.
         let rounds = (v / ROUNDS_BY).clamp(0.0, 1.0);
         let rounds = rounds * rounds * (3.0 - 2.0 * rounds);
-        let corner = (DEEP * DEEP + SPAN * SPAN).sqrt() * 0.5;
-        let wide = vault_rim(round) * (1.0 - rounds) + corner * rounds;
+        let inside = DEEP.min(SPAN) * 0.5;
+        let wide = vault_rim(round) * (1.0 - rounds) + inside * rounds;
 
         vec3(
             round.cos() * wide * out,

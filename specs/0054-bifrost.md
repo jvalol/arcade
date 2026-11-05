@@ -113,6 +113,50 @@ shin deep for the hundred metres in between. Jake saw the step at the foot.
 runs level, so that arriving is standing somewhere rather than walking off
 the end of something.
 
+**And the eye keeps up with the feet.** The camera's height eases toward
+the body's over `EYE_LAGS`, which turns a stair into a slope and is the
+right thing everywhere else in the building. It is a time constant, so
+what it settles at is the rate you are climbing times that, and nothing
+here climbed fast enough for the number to matter until this did: run up,
+the feet gain better than twenty a second and the eye parks two metres
+under them, which is further than the eye is above the feet to begin with.
+The camera went below the deck and stayed there for the steep half of the
+climb, looking up at the underside of the rainbow. Jake, with a recording:
+there is some clipping where the player ends up beneath the bridge for a
+bit, and he said he went straight, which he had.
+
+What hid it is that his feet never left the deck. Three tests already
+walked, ran and lurched up here and all of them measured the body. The
+lag is now capped at one step, which is the discontinuity the easing
+exists for and so changes nothing about a stair.
+
+It is also the first fault in this building whose size depended on the
+refresh rate. The climb was quicker the more frames it got, because a step
+is taken at most once a frame and carries you along by a share of your own
+width: the foot to the top was 2.38 seconds at sixty and 1.87 at a hundred
+and forty four. Measured with the cap off, the least the camera cleared
+the deck by was 0.18 at sixty, and under it at everything above: -0.13 at
+ninety, -0.63 at a hundred and twenty, -1.14 at a hundred and forty four.
+Every test ran at a sixtieth. Jake's screen does not.
+
+**And the climb runs at the pace it was given.** That free reach per
+frame was the whole of why the deck was quick, and it was an accident
+rather than a choice: against a run of 23.5 a second the climb measured
+39.9 at sixty frames and 50.9 at a hundred and forty four. `walk::RIDES`
+takes the risers out of the way instead of stepping over them, so the
+deck is walked, and the climb is 4.5 seconds foot to top at every rate.
+A walk up it is 8.5. `CARRIES` is the lever on both, and it is now the
+only one.
+
+**Steering is still quicker than going straight, and nothing here stops
+it.** Pressed against the kerb the body is stopped by something it cannot
+climb; the probe in `walk::over_a_step` looks the way it was refused,
+reads the deck through the verge, calls it a step and pays the reach out
+again. Measured mid deck at a run of 23.5: straight covers 23.5 a second,
+and against the kerb up to 39.7. Three guards against it were written and
+each took a real stair down with it, so this is recorded rather than
+fixed.
+
 ## The stone at its foot
 
 **Because nobody can tell what any of this is.** Jake, 2026-11-05: a person
@@ -362,6 +406,11 @@ be able to tell is there.
 - The treads lie under the deck that is drawn. — `bridge::tests::the_treads_lie_under_the_drawn_deck`
 - You can walk from the foot to the top. — `bridge::tests::walked_from_the_foot_to_the_top`
 - And walking beside it does not climb, so that walk is of the deck. — `bridge::tests::a_walk_off_the_side_does_not_climb`
+- It is walked up, run up and lurched up without going under it. — `tests::the_bridge_is_walked_up_rather_than_climbed`, `tests::the_bridge_is_run_up_without_falling_through_it`, `tests::a_long_frame_does_not_drop_you_through_the_deck`
+- And off the straight. — `tests::the_bridge_is_climbed_off_the_straight_without_falling_through`
+- The kerb keeps you on it. — `tests::the_kerb_keeps_you_on_the_bridge`
+- And the camera stays over the deck at every refresh rate, not only sixty. — `tests::the_camera_stays_above_the_deck_however_fast_the_screen_is`
+- And it is climbed at the pace it was given, at every refresh rate. — `tests::the_bridge_is_climbed_at_the_pace_it_was_given`
 - The deck fills the width and is centred on it. — `bridge::tests::every_band_is_the_same_width_and_they_fill_it`
 - The top of what you see is the surface you walk on. — `bridge::tests::the_deck_you_see_is_the_deck_you_stand_on`
 - And it springs flush from the grass rather than off a kerb. — `bridge::tests::it_springs_flush_from_the_grass`

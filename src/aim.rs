@@ -1230,6 +1230,46 @@ pub const TROUSERS: [Vec4; 4] = [
     vec4(0.125, 0.11, 0.1, 1.0),
 ];
 
+/// The bar of shadow over somebody's eyes, which is the only thing on
+/// their face. A shade of their own skin rather than black: a black bar
+/// is a visor, and the point of this is to say which way somebody is
+/// turned without saying anything else about them.
+/// What the ones at the top of the bridge wear over their shoulders.
+/// Dyed wool: the colours a person could actually get out of a plant,
+/// which is most of why old cloth looks the way it does.
+pub const CLOAKS: [Vec4; 4] = [
+    vec4(0.21, 0.085, 0.075, 1.0),
+    vec4(0.10, 0.125, 0.185, 1.0),
+    vec4(0.185, 0.155, 0.075, 1.0),
+    vec4(0.095, 0.145, 0.105, 1.0),
+];
+
+/// And on their heads: iron, which out of doors at dusk is barely
+/// lighter than the cloak and is meant to be. A bright helm is a
+/// costume.
+pub const HELM: Vec4 = vec4(0.165, 0.172, 0.185, 1.0);
+
+/// The horn at Heimdall's side, which is horn: not white, not brass,
+/// and darker at the bell where an ox's would be.
+pub const HORN: Vec4 = vec4(0.30, 0.255, 0.185, 1.0);
+
+/// The verge down either side of the rainbow's road.
+///
+/// **Darker than the deck and not part of it.** The deck is past one
+/// in every channel and lights itself; a kerb that did the same would
+/// read as two more bands of the rainbow rather than as the edge of
+/// the road. This is lit like everything else out there, so at dusk it
+/// is a dark line either side of a glowing one, which is exactly what
+/// says where the road stops.
+pub const KERB: Vec4 = vec4(0.17, 0.145, 0.21, 1.0);
+
+pub const BROWS: [Vec4; 4] = [
+    vec4(0.185, 0.135, 0.10, 1.0),
+    vec4(0.105, 0.075, 0.055, 1.0),
+    vec4(0.225, 0.17, 0.135, 1.0),
+    vec4(0.145, 0.10, 0.07, 1.0),
+];
+
 pub const HEADS: [Vec4; 4] = [
     vec4(0.34, 0.25, 0.185, 1.0),
     vec4(0.2, 0.145, 0.105, 1.0),

@@ -65,6 +65,56 @@ pub const STEP: f32 = 0.42;
 /// number for how blocked is blocked enough is a guess.
 pub const BLOCKED: f32 = 0.995;
 
+/// How high a rise is still the ground under you rather than something
+/// in your way.
+///
+/// **Because a sphere cannot get near a lip, and a ramp is all lips.**
+/// Everything above is about a step: you are stopped by a riser, lifted
+/// over it, and carried forward far enough to be standing on the tread,
+/// which is a reach of most of a radius. On a stair that happens once a
+/// tread and nobody can see it. Bifröst is a slope, so its treads are
+/// 0.12 long and every single frame was a step: every frame took the
+/// reach as well as its own movement, and the climb ran at roughly twice
+/// the pace it was given. Worse, the overrun was per frame rather than
+/// per second, so the bridge was quicker the better the screen. Measured
+/// from the foot to the top, against a run of 23.5 a second:
+///
+/// ```text
+/// frames   metres a second
+///   60          39.9
+///   90          43.2
+///  120          47.3
+///  144          50.9
+/// ```
+///
+/// So a shallow rise is taken out of the way instead. A box whose top is
+/// no more than this above your feet cannot stop you, and [`standing_at`]
+/// may lift you onto one, which between them turn a fine staircase back
+/// into the slope it is drawn as. Nothing is lost: a rise this small was
+/// already climbable, since `STEP` is four times it. What changes is that
+/// it is walked rather than stepped.
+///
+/// A doorstep, near enough. It is only the floor of the allowance: what
+/// counts as ground further off is [`rides`], which reads the same
+/// gradient `RAMPS` does, since this is the same question those two ask.
+pub const RIDES: f32 = 0.1;
+
+/// How high the ground may stand over your feet, this far away, and
+/// still be ground.
+///
+/// **A height on its own cannot tell a ramp from a step.** Walking up
+/// Bifröst at a run, the deck a sphere's reach in front of your feet is
+/// a fifth of a metre above them and the deck at the far end of the
+/// frame's movement is another fifth: four tenths in all, which is a
+/// step, and no fixed ceiling admits that without admitting the stair
+/// out of the cellar too. What tells them apart is gradient, which is
+/// what `RAMPS` already is. A step is 0.42 over a tread of 0.3 and this
+/// refuses it at any distance; the bridge is 0.475 to one and this takes
+/// it the whole way.
+pub fn rides(away: f32) -> f32 {
+    RIDES + RAMPS * away.max(0.0)
+}
+
 /// How fast you may gain height, in units a second.
 ///
 /// A step is climbed whole and in one frame, which is right: half way up a
@@ -86,6 +136,48 @@ pub const BLOCKED: f32 = 0.995;
 /// seconds for the same flight.
 pub const CLIMBS: f32 = 2.4;
 
+/// How steep a surface may be before going up it counts as climbing.
+///
+/// **Because a ramp is not a stair and `CLIMBS` cannot tell them
+/// apart.** The budget above is the right idea for a flight of steps
+/// and the wrong one for a slope. Bifröst rises twenty six metres, so
+/// at 2.4 a second the climb was floored at eleven seconds however
+/// fast you were moving, and the pacing arrived as a stop at every
+/// riser: Jake, twice, that the walk up it is slow and jittery. Making
+/// the treads finer made it worse, because it bought eight hundred
+/// stops where there had been a hundred and sixty seven.
+///
+/// What actually tells the two apart is not the height of a riser but
+/// whether any ground was covered while gaining it. A stair is height
+/// with no progress; a ramp is height in proportion to progress. So a
+/// frame is charged only for what it gained beyond this ratio of what
+/// it travelled, and the bridge, whose steepest pitch is 0.475, costs
+/// nothing at all.
+pub const RAMPS: f32 = 0.6;
+
+/// What a frame's movement costs the climb budget: the height it
+/// gained less the part of that a slope would account for.
+pub fn climbed(rose: f32, along: f32) -> f32 {
+    (rose - along * RAMPS).max(0.0)
+}
+
+/// The boxes that can stop you, which is not all of them: one whose top is
+/// no higher than [`RIDES`] over your feet is ground to walk on.
+fn in_the_way(at: Vec3, solid: &[Aabb]) -> Vec<Aabb> {
+    solid
+        .iter()
+        .copied()
+        .filter(|box_| {
+            let near = glam::vec2(
+                at.x.clamp(box_.min.x, box_.max.x) - at.x,
+                at.z.clamp(box_.min.z, box_.max.z) - at.z,
+            );
+
+            box_.max.y > at.y + rides(near.length())
+        })
+        .collect()
+}
+
 /// Where a sphere of this radius sits when its feet are at `at`.
 fn body(at: Vec3, radius: f32) -> Sphere {
     Sphere::new(at + Vec3::Y * radius, radius)
@@ -106,11 +198,14 @@ pub fn walk(
     solid: &[Aabb],
     may_climb: bool,
 ) -> (Vec3, f32) {
+    let from = at;
     let mut at = at;
     let mut climbed = false;
 
     if wish.length_squared() > 1e-6 {
-        let flat = move_and_slide(body(at, radius), wish, dt, solid) - Vec3::Y * radius;
+        // and only against what can actually stop you, per `RIDES`
+        let walls = in_the_way(at, solid);
+        let flat = move_and_slide(body(at, radius), wish, dt, &walls) - Vec3::Y * radius;
         let got = (flat.xz() - at.xz()).length();
         let wanted = wish.length() * dt;
 
@@ -140,7 +235,12 @@ pub fn walk(
     // under your feet is still the tread you left, and this put you straight
     // back on it. One of the two always wins and it has to be the step.
     if falling == 0.0 && !climbed {
-        if let Some(ground) = standing_at(at, at.y - STEP, at.y + 1e-3, solid) {
+        // and up onto a rise as well as down off one, by as much as the
+        // ground you covered says a slope would have risen: walking a
+        // ramp is being set down a little higher than you set off.
+        let went = (at.xz() - from.xz()).length();
+
+        if let Some(ground) = standing_at(at, at.y - STEP, at.y + rides(went), solid) {
             at.y = ground;
         }
     }
