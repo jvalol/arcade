@@ -1643,3 +1643,85 @@ mod tests {
         }
     }
 }
+
+/// Which of a handful a thing standing here takes, off where it stands.
+///
+/// **Because out here a tree has no identity but its place.**
+/// `kinds` is three prototypes and everything in the field is one of
+/// them turned and scaled, so a seed names a species and not a tree.
+/// Two trees never stand in the same spot and a tree never moves, so
+/// the spot is the one thing that tells them apart and keeps telling
+/// them apart across runs.
+///
+/// **Mixed rather than hashed.** A plain FNV of two coordinates gave
+/// two of four colours over sixty-four places, because the scatter lays
+/// trees out on a lattice and the low bits of a lattice are a lattice.
+/// This is a murmur finalizer, which is what a finalizer is for.
+///
+/// Off the exact bits of the position, not a rounded one. A rounded one
+/// has a boundary, and a boundary is a place where two trees a
+/// millimetre apart are different trees. Trees do not move, so there is
+/// nothing for the rounding to protect against.
+pub fn which(stood: &Stood) -> u32 {
+    let mut hash = stood.at.x.to_bits() ^ stood.at.z.to_bits().rotate_left(16);
+
+    hash ^= hash >> 16;
+    hash = hash.wrapping_mul(0x85eb_ca6b);
+    hash ^= hash >> 13;
+    hash = hash.wrapping_mul(0xc2b2_ae35);
+    hash ^= hash >> 16;
+
+    hash
+}
+
+#[cfg(test)]
+mod turning_tests {
+    use super::*;
+
+    fn stood(at: Vec3) -> Stood {
+        Stood {
+            at,
+            turn: 0.0,
+            size: 1.0,
+            what: What::Tree(0),
+        }
+    }
+
+    /// Spec 0040: two trees out here are not the same tree.
+    ///
+    /// **Written because they were.** `kinds` is three prototypes with a
+    /// seed apiece, so the first autumn picked a colour off that seed
+    /// and painted every oak in the field the same one. The field came
+    /// out green and I looked at three screenshots before working out
+    /// why. What differs out here is where a thing stands.
+    #[test]
+    fn two_trees_in_two_places_are_not_the_same_tree() {
+        let mut seen = std::collections::HashSet::new();
+
+        for step in 0..64 {
+            let at = vec3(step as f32 * 3.7, 0.0, step as f32 * -2.3);
+
+            seen.insert(which(&stood(at)) % 4);
+        }
+
+        assert!(
+            seen.len() >= 3,
+            "sixty-four places gave {} of the four, which is a field in \
+             one colour",
+            seen.len()
+        );
+    }
+
+    /// And a tree does not change colour because you walked past it.
+    #[test]
+    fn a_tree_in_one_place_is_always_the_same_tree() {
+        let at = vec3(-61.25, 0.0, 22.5);
+
+        assert_eq!(which(&stood(at)), which(&stood(at)));
+
+        // and two places a stride apart are two places, which is the
+        // other half: a hash that answered the same everywhere would
+        // pass the line above
+        assert_ne!(which(&stood(at)), which(&stood(at + Vec3::X)));
+    }
+}

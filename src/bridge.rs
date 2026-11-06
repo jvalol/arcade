@@ -306,14 +306,21 @@ const RUNES: [&[(f32, f32, f32, f32)]; 7] = [
     ],
 ];
 
-/// How wide a cut stroke is, as a share of the carved face.
-/// How wide a cut stroke is, as a share of the carved face.
+/// How wide a cut stroke is, as a share of the carved face: the ribbon
+/// round the inscription, and the runes inside it.
 ///
 /// **Thin, and fattening it was the wrong fix.** At 0.026 a stroke was
 /// half the width of the rune it belonged to, so every branch ran into
 /// its own stave and consecutive runes touched: the chisel was wider than
 /// the gaps. What the writing needed was to be bigger, not bolder.
+///
+/// **And the two are not one chisel.** They were, at `STROKE` for both,
+/// and Jake read it on the stone: the band is right and the lettering is
+/// heavy. That is what a real stone looks like anyway. The ribbon is the
+/// outline somebody cut first and deepest, and the writing inside it is
+/// finer work.
 pub const STROKE: f32 = 0.0115;
+pub const RUNE_STROKE: f32 = 0.0085;
 
 /// How finely the stone itself is cut, and how far its skin wanders at
 /// each scale.
@@ -584,6 +591,15 @@ pub fn carved_mesh(seed: u32) -> blitzkit::mesh::MeshData {
     mesh
 }
 
+/// One stroke of the carving: where it runs in the face's own square,
+/// nought to one, and how wide the chisel was.
+///
+/// **The chisel travels with the stroke.** The band and the runes are cut
+/// at different widths, and the only thing that says which a stroke is
+/// is what it is. Read off the front of the list instead, the first four
+/// being the band is a fact in two places.
+pub type Cut = ((f32, f32), (f32, f32), f32);
+
 /// Every stroke of the carving, in the face's own square, nought to one.
 ///
 /// **One account, because the stone is cut and not printed.** Jake,
@@ -594,7 +610,7 @@ pub fn carved_mesh(seed: u32) -> blitzkit::mesh::MeshData {
 ///
 /// So this is the lines, once, and both the picture and the cut bars are
 /// stood along them.
-pub fn strokes() -> Vec<((f32, f32), (f32, f32))> {
+pub fn strokes() -> Vec<Cut> {
     // **The ribbon's own numbers, not the runes'.** Its top used to be
     // `far`, which was also its width, and the two agreed only because
     // the band happened to be as wide as it was tall. Narrowed to the
@@ -603,13 +619,17 @@ pub fn strokes() -> Vec<((f32, f32), (f32, f32))> {
     // seven runes were drawn off the stone.
     let (near, far) = (0.385, 0.615);
     let (foot, shoulder, apex) = (0.065, 0.885, 0.945);
+    // **Each stroke carries its own chisel.** The band and the runes are
+    // cut at different widths and the only thing that says which is which
+    // is what it is, so it is said here rather than counted off the front
+    // of the list by whoever draws it.
     let mut out = vec![
         // the band, round the face and open at the foot the way a
         // serpent's body leaves its own tail
-        ((near, foot), (near, shoulder)),
-        ((near, shoulder), (0.5, apex)),
-        ((0.5, apex), (far, shoulder)),
-        ((far, shoulder), (far, foot)),
+        ((near, foot), (near, shoulder), STROKE),
+        ((near, shoulder), (0.5, apex), STROKE),
+        ((0.5, apex), (far, shoulder), STROKE),
+        ((far, shoulder), (far, foot), STROKE),
     ];
 
     // and the runes down the middle of it, reading from the top. Taller
@@ -642,6 +662,7 @@ pub fn strokes() -> Vec<((f32, f32), (f32, f32))> {
             out.push((
                 (0.5 + (x0 - 0.5) * wide, foot + y0 * tall),
                 (0.5 + (x1 - 0.5) * wide, foot + y1 * tall),
+                RUNE_STROKE,
             ));
         }
     }
@@ -701,8 +722,8 @@ pub fn carving() -> blitzkit::texture::TextureData {
 
     // the band, round the face and open at the foot the way a serpent's
     // body leaves its own tail
-    for (from, to) in strokes() {
-        line(from, to, STROKE);
+    for (from, to, thick) in strokes() {
+        line(from, to, thick);
     }
 
     // and the name in letters along the foot, composited into the same
@@ -1644,6 +1665,14 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
     let mut out = treads(reaches);
     out.extend(kerbs(reaches));
     out.extend(landing(reaches, trail));
+    // and the piers, which oversail the kerb they stand on by enough to
+    // put your head in one if they were only drawn
+    out.extend(piers(reaches, trail).into_iter().map(|at| {
+        Aabb::from_center_size(
+            at + Vec3::Y * (PIER_UP + PIER_CAP) * 0.5,
+            vec3(PIER_WIDE, PIER_UP + PIER_CAP, PIER_WIDE),
+        )
+    }));
     out.extend(runestone(reaches, trail).map(|(at, size)| Aabb::from_center_size(at, size)));
 
     out
@@ -1701,6 +1730,7 @@ pub mod tests {
             (RUN / TREAD).ceil() as usize
                 + kerbs(REACHES).len()
                 + landing(REACHES, &done()).len()
+                + piers(REACHES, &done()).len()
                 + runestone(REACHES, &done()).iter().count()
         );
     }
@@ -2680,5 +2710,226 @@ mod look {
         let to = std::env::temp_dir().join("carving.ppm");
         std::fs::write(&to, out).unwrap();
         eprintln!("WROTE {}", to.display());
+    }
+}
+
+/// The piers along the landing's parapet, and the railing between them.
+///
+/// **A kerb you can count along.** Spec 0059's note on the photograph:
+/// the parapet was one bar of grey from corner to corner, 0.62 high, and
+/// a surface with nothing marking its length reads as one thing however
+/// long it is. Piers at intervals in a warm stone, iron between them,
+/// and the kerb becomes the plinth it already was.
+///
+/// **And it gives the landing a height.** At 0.62 you are standing at
+/// the edge of a twenty-six metre drop behind something knee high, which
+/// the walk tests say you cannot fall over and the eye does not believe
+/// for a moment. The railing reaches `RAIL_HIGH`, which is a hand's
+/// height, and you can still see over it because that is what the
+/// landing is for.
+/// **A pier stands through the railing and not under it.** At 0.30 on a
+/// kerb of 0.62 its top came to 0.92 and the rail runs at 1.05, so the
+/// iron passed over every pier and what the eye read was a railing with
+/// some red blocks behind it. In the photograph the stone is the tall
+/// thing and the iron stops at it, which is also what holds a railing
+/// up.
+/// **And it is sunk into the kerb rather than stood on it.** A pier is
+/// wider than the parapet it marks, so its underside oversails the kerb
+/// by three centimetres each side and those two strips share a plane
+/// with the kerb's own top. Two drawn faces in one plane is the fault
+/// this building has found eight times. Sunk by `PIER_SINKS` the
+/// underside is inside the kerb and there is nothing to fight.
+pub const PIER_SINKS: f32 = 0.02;
+pub const PIER_WIDE: f32 = 0.46;
+pub const PIER_UP: f32 = 1.16;
+pub const PIER_CAP: f32 = 0.10;
+pub const RAIL_HIGH: f32 = 1.05;
+pub const BALUSTER: f32 = 0.055;
+
+/// And the stone is the tall thing, which is checked where the numbers
+/// are rather than in a test.
+///
+/// **A test comparing two constants is a test of nothing at run time.**
+/// Clippy says so and it is right: these are known when the file is
+/// compiled, so the place to refuse them is there. Change either number
+/// the wrong way and the build stops.
+const _: () = assert!(
+    PIER_UP + PIER_CAP > RAIL_HIGH + BALUSTER,
+    "a pier has to stand through the railing it carries, not under it"
+);
+
+/// How far apart the balusters are, centre to centre.
+///
+/// **Close enough to read as a railing from the foot of the deck.** At a
+/// hundred metres a bar every half metre is a grey smear and a bar every
+/// 0.14 is a line somebody drew, which is what the photograph's is. It
+/// costs a draw each and they are the cheapest thing in the building.
+pub const BALUSTER_STEP: f32 = 0.14;
+
+/// Each run of the landing's parapet, as the line it follows: where it
+/// starts, where it ends, and how high the kerb under it is.
+///
+/// Taken off `landing` rather than written again, so a parapet that
+/// moves takes its railing with it.
+pub fn parapet_runs(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3)> {
+    landing(reaches, trail)
+        .into_iter()
+        .skip(1)
+        .map(|box_| {
+            let (low, high) = (box_.min, box_.max);
+            let along_x = high.x - low.x > high.z - low.z;
+            let middle = box_.center();
+
+            if along_x {
+                (
+                    vec3(low.x, high.y, middle.z),
+                    vec3(high.x, high.y, middle.z),
+                )
+            } else {
+                (
+                    vec3(middle.x, high.y, low.z),
+                    vec3(middle.x, high.y, high.z),
+                )
+            }
+        })
+        .collect()
+}
+
+/// A pier standing on the parapet: the foot of it, which is a little
+/// inside the kerb's top.
+///
+/// One at each end of every run, so two runs meeting at a corner put a
+/// pier on the corner rather than leaving the two railings to meet in
+/// mid air.
+pub fn piers(reaches: f32, trail: &Trail) -> Vec<Vec3> {
+    let mut out: Vec<Vec3> = Vec::new();
+
+    for (from, to) in parapet_runs(reaches, trail) {
+        for end in [from, to] {
+            let foot = end - Vec3::Y * PIER_SINKS;
+
+            if !out.iter().any(|at| at.distance(foot) < PIER_WIDE) {
+                out.push(foot);
+            }
+        }
+    }
+
+    out
+}
+
+/// And the balusters, as the middle of each one.
+///
+/// **Laid out from the middle of a run outward**, so the gaps either end
+/// are equal and a run that changes length does not slide every bar
+/// along it.
+///
+/// **And cleared against the piers rather than against the run's own
+/// ends.** Two runs meeting at a corner have ends 0.24 apart and share
+/// one pier, so a bar kept clear of its own run's end still stood inside
+/// the stone of the other run's. `no_baluster_stands_inside_a_pier`
+/// found it. The piers are placed first and the iron fits between them,
+/// which is both the order a mason works in and the only way the two
+/// cannot disagree.
+pub fn balusters(reaches: f32, trail: &Trail) -> Vec<Vec3> {
+    let piers = piers(reaches, trail);
+    let clear = (PIER_WIDE + BALUSTER) * 0.5;
+    let mut out = Vec::new();
+
+    for (from, to) in parapet_runs(reaches, trail) {
+        let along = to - from;
+        let fits = (along.length() / BALUSTER_STEP) as u32;
+        let spread = fits as f32 * BALUSTER_STEP;
+        let way = along.normalize_or_zero();
+        let middle = (from + to) * 0.5;
+
+        for n in 0..=fits {
+            let at = middle + way * (n as f32 * BALUSTER_STEP - spread * 0.5);
+            let inside = piers
+                .iter()
+                .any(|pier| (at.x - pier.x).abs() < clear && (at.z - pier.z).abs() < clear);
+
+            if !inside {
+                out.push(at);
+            }
+        }
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod railing_tests {
+    use super::*;
+    use crate::trail::Asked;
+
+    const REACHES: f32 = 20.0;
+
+    fn done() -> Trail {
+        let mut trail = Trail::new();
+
+        for one in Asked::every() {
+            trail.gave(*one);
+        }
+
+        trail
+    }
+
+    /// Spec 0059: a pier at every end of every run, and one where two
+    /// runs meet rather than two in the same place.
+    ///
+    /// **Six and not eight.** The landing's parapet is four runs with
+    /// eight ends, and two pairs of those ends are the same corner. A
+    /// pier drawn twice is a pier with a face in its own plane.
+    #[test]
+    fn a_corner_has_one_pier_and_not_two() {
+        let piers = piers(REACHES, &done());
+
+        assert_eq!(piers.len(), 6, "four runs, eight ends, two corners shared");
+
+        for (n, one) in piers.iter().enumerate() {
+            for other in piers.iter().skip(n + 1) {
+                assert!(
+                    one.distance(*other) > PIER_WIDE,
+                    "two piers at {:?} and {:?} overlap",
+                    one,
+                    other
+                );
+            }
+        }
+    }
+
+    /// Spec 0014: and its underside is not in the plane of the kerb's top.
+    #[test]
+    fn a_pier_is_sunk_into_the_kerb_it_stands_on() {
+        let top = top(REACHES).y + RAIL_UP;
+
+        for at in piers(REACHES, &done()) {
+            assert!(
+                at.y < top - 1e-3,
+                "a pier foot at {:.3} sits in the plane of the kerb top at {:.3}",
+                at.y,
+                top
+            );
+        }
+    }
+
+    /// Spec 0059: every baluster stands between two piers and none in one.
+    #[test]
+    fn no_baluster_stands_inside_a_pier() {
+        let piers = piers(REACHES, &done());
+
+        for bar in balusters(REACHES, &done()) {
+            for pier in piers.iter() {
+                let apart = glam::vec2(bar.x - pier.x, bar.z - pier.z).abs();
+
+                assert!(
+                    apart.x > (PIER_WIDE + BALUSTER) * 0.5 - 1e-3
+                        || apart.y > (PIER_WIDE + BALUSTER) * 0.5 - 1e-3,
+                    "a baluster at {:?} stands inside the pier at {:?}",
+                    bar,
+                    pier
+                );
+            }
+        }
     }
 }

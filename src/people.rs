@@ -100,7 +100,34 @@ pub const BROW_OUT: f32 = 0.055;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Look {
     Guest,
+    /// The watchman at the top of the bridge, and nobody else. Spec 0055.
     Carved,
+    /// The ones already in Valhalla. Spec 0056.
+    ///
+    /// **Carved like him, and without his horn.** They were `Carved`,
+    /// which is the whole kit, so every one of them was holding
+    /// Gjallarhorn. Jake saw it and said he thought that was just
+    /// Heimdall. It is: the horn he has held since the world began and
+    /// sounds once is not something a hall full of people each have one
+    /// of, and it is the one thing on him that says he is the gate
+    /// rather than another of them.
+    Einherjar,
+}
+
+impl Look {
+    /// Whether this one is cut from a block rather than grown: the head,
+    /// the cloak and the helm. Both of the ones at the top of the climb
+    /// are, which is what makes them read as somebody rather than as
+    /// guests who came outside.
+    pub fn carved(self) -> bool {
+        matches!(self, Look::Carved | Look::Einherjar)
+    }
+
+    /// And whether Gjallarhorn hangs from the left fist, which is his
+    /// alone.
+    pub fn horn(self) -> bool {
+        matches!(self, Look::Carved)
+    }
 }
 
 /// How many sides a carved part has.
@@ -622,6 +649,26 @@ pub fn elbow(walked: f32, leg: usize) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0055: the horn is the watchman's and nobody else's.
+    ///
+    /// **Because every one of them had it.** The ones already in Valhalla
+    /// were drawn `Carved`, which is the whole kit, so a hall full of
+    /// people each held Gjallarhorn. Jake saw it and said he thought that
+    /// was just Heimdall.
+    #[test]
+    fn only_the_watchman_carries_the_horn() {
+        assert!(Look::Carved.horn());
+        assert!(!Look::Einherjar.horn());
+        assert!(!Look::Guest.horn());
+
+        // and both of the ones at the top of the climb are cut from a
+        // block, which is what keeps them from reading as guests who
+        // came outside
+        assert!(Look::Carved.carved());
+        assert!(Look::Einherjar.carved());
+        assert!(!Look::Guest.carved());
+    }
+
     use super::*;
     use crate::aleph::Arrival;
 

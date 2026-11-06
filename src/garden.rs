@@ -3521,6 +3521,12 @@ pub fn needles(seed: u32) -> blitzkit::texture::TextureData {
 /// Leaves and not one leaf. What hangs off the end of an oak's limb is a
 /// handful of them at every angle, and a single leaf drawn large is a plant
 /// in a pot.
+/// How bright a broadleaf picture is before anything colours it.
+///
+/// Near the green it used to bake, so the shading across a sprig lands
+/// where it did and only the hue has moved.
+const BROAD_UNDER: f32 = 118.0;
+
 pub fn broadleaf(seed: u32) -> blitzkit::texture::TextureData {
     let n = SPRIG_PIXELS;
     let mut pixels = vec![0u8; (n * n * 4) as usize];
@@ -3542,8 +3548,16 @@ pub fn broadleaf(seed: u32) -> blitzkit::texture::TextureData {
 
         let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
 
-        for (c, under) in [74.0f32, 126.0, 58.0].iter().enumerate() {
-            pixels[at + c] = (under * lit).min(255.0) as u8;
+        // **Grey, and the colour comes from outside.** This baked a green
+        // of its own, which made the colour handed to the draw a tint on
+        // a picture that was already green: `aim::leaf_of` turned the
+        // field's broadleaves to gold and rust and the trees came out
+        // green, four times over, because every one of those was
+        // multiplied by this. What a leaf picture knows is the shape of
+        // a leaf and how the light falls across it. Which leaf it is, in
+        // what season, is the drawing's to say.
+        for c in 0..3 {
+            pixels[at + c] = (BROAD_UNDER * lit).min(255.0) as u8;
         }
         pixels[at + 3] = 255;
     };
