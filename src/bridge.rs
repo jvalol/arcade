@@ -180,29 +180,20 @@ pub fn burning(since: f32) -> f32 {
     let slow = (since * 0.41).sin();
     let under = (since * 0.17 + 1.3).sin();
 
-    BURNS + slow * 0.16 + under * 0.07
+    1.0 + slow * 0.16 + under * 0.07
 }
 
-/// What it burns at before the flicker.
-///
-/// **Raised, because the troughs were taking it out of the glow.**
-/// `RUNE_CUT` is past one in red and under one in green and blue, which
-/// is what makes it read as a hot colour rather than a white one. At
-/// 0.76 the low end of the flicker pulled the red down near one as
-/// well, so on a dark night there was nothing over one at all and the
-/// carving was lit like any other paint: Jake's picture of it is a
-/// brown mark on a grey stone.
-pub const BURNS: f32 = 0.95;
-
-/// And how much harder it burns at night.
+/// How hard it burns while the sun is up, as a share of the night's.
 ///
 /// Jake: the glyphs should especially glow at night. Which is also the
 /// only time it can be seen to: a thing that glows is a thing brighter
-/// than what is round it, and at noon nothing on a field is.
-pub const NIGHTLY: f32 = 1.7;
+/// than what is round it, and at noon nothing on a field is. Never
+/// nought, because a rune that goes out is a rune that was turned off.
+pub const BY_DAY: f32 = 0.30;
 
+/// What it is giving off now: the hour and the flicker together.
 pub fn glows(since: f32) -> f32 {
-    burning(since) * (1.0 + NIGHTLY * nightly(since))
+    burning(since) * (BY_DAY + (1.0 - BY_DAY) * nightly(since))
 }
 
 /// How much of the night it is: nought while the sun is up, one at the
@@ -214,39 +205,93 @@ pub fn nightly(since: f32) -> f32 {
     dark * dark
 }
 
-/// How white the heart of the glow goes at night.
-///
-/// **Because there is no bloom in this engine.** A colour past one is a
-/// thing that is lit with nothing lighting it, and that is the whole of
-/// it: nothing bleeds into the pixels round it. So a red of eight and a
-/// green of three is not a light, it is an orange mark, and Jake's
-/// first night picture of it reads exactly that way.
-///
-/// What a hot thing actually looks like is white in the middle and its
-/// own colour at the edge. With no bloom to do that across the picture,
-/// it is done in the colour: a pale amount added to every channel at
-/// night, so the glyph goes from orange towards white as the light
-/// goes. Jake: the glyphs should especially glow at night.
-pub const RUNE_HOT: f32 = 0.45;
+/// The least the fill is ever divided by, so a black sky is not a
+/// division by nothing.
+const SOME_LIGHT: f32 = 0.02;
 
 /// The colour the carved face is drawn in, glow and all.
+///
+/// **Divided by the light, because the engine multiplies by it.** A
+/// colour past one is a thing lit with nothing lighting it, which is
+/// true of the arithmetic and not of this one: what the shader works out
+/// is the colour times the ambient plus the sun, so a multiplier on a
+/// dark ambient is a dark mark. The fill over this field at the bottom
+/// of the night is three hundredths, and the carving was four point two
+/// red against that, which comes to a third of white. Jake, 2026-11-06:
+/// it reads like a gentle orange, not burning bright like from myth.
+///
+/// Worse than gentle, it was backwards. Every number above says the
+/// carving burns hardest at night, and the fill it was multiplied by
+/// falls faster than they rise, so the one hour it was built for was the
+/// one hour it was dimmest.
+///
+/// So `aim::RUNE_CUT` is now what the carving comes to on screen rather
+/// than what it is multiplied by, and what the engine is handed is that
+/// over the fill it is about to be multiplied by. `garden::filled` is
+/// the same function `main` hands the scene, so the two cannot drift.
+/// The sun is on top of the fill and not divided out, which is why
+/// `BY_DAY` is a third: by day this is an ember in daylight and nothing
+/// is asked to read as burning.
 ///
 /// **Alpha held under one on purpose**, per `aim::RUNE_GLAZE`: at one
 /// the face goes through the engine opaque and is not drawn at all.
 pub fn alight(since: f32) -> glam::Vec4 {
-    let lit = crate::aim::RUNE_CUT * glows(since);
-    let hot = RUNE_HOT * nightly(since);
+    let fill = crate::garden::filled(since).max(glam::Vec3::splat(SOME_LIGHT));
+    let lit = crate::aim::RUNE_CUT.truncate() * glows(since) / fill;
 
-    glam::vec4(
-        lit.x + hot,
-        lit.y + hot,
-        lit.z + hot,
-        crate::aim::RUNE_GLAZE,
+    glam::vec4(lit.x, lit.y, lit.z, crate::aim::RUNE_GLAZE)
+}
+
+/// How far the carving's own light stands off the face, how far it
+/// carries, and how hard it burns at the bottom of the night.
+///
+/// **Because bright is not the same as glowing.** Jake, 2026-11-06: it
+/// looks more neon than glowing; glowing means it is shining brightly
+/// from within what holds it, like the stone. A line that is past white
+/// and throws nothing is a neon tube, which is a thing that is its own
+/// light and lights nothing. What makes a glow read is the surface
+/// round it, so the carving puts a lamp in front of its own face and
+/// the rock takes it.
+///
+/// **This was tried once and taken out again**, and it is worth saying
+/// why it comes back rather than pretending it is new. It washed the
+/// face pale and took the contrast the glyphs were living on, because
+/// the glyphs then were a multiplier on a dark ambient and a lamp on
+/// the same stone could out-shine them. They are four times past white
+/// now, per `alight`, so nothing a lamp does to the rock can reach
+/// them.
+///
+/// Short and weak against the room lamps: this is a groove, not a
+/// lantern, and the thing to light is the stone it is cut in and a
+/// little of the rubble at its foot.
+pub const LAMP_OUT: f32 = 0.26;
+pub const LAMP_RANGE: f32 = 5.0;
+pub const LAMP_LIT: f32 = 0.42;
+
+/// Where that light stands, what colour it is, how hard and how far,
+/// for a stone standing at `at` and scaled by `size`.
+///
+/// **Off the face's own middle rather than a guess at it.** The dressed
+/// panel is the stone's own skin at `u` of a half, lifted by
+/// `FACE_PROUD`, so the one place the light can stand and be in front of
+/// every part of it is on that normal. Taken off `stone_point` and the
+/// same lean the stone is drawn with, so a knobblier seed moves the
+/// lamp with the rock instead of burying it.
+pub fn carving_lamp(at: Vec3, size: Vec3, since: f32) -> (Vec3, Vec3, f32, f32) {
+    let middle = (FACE_FROM + FACE_TO) * 0.5;
+    let local = stone_point(STONE_SEED, 0.5, middle) + Vec3::X * (FACE_PROUD + LAMP_OUT);
+    let stood = at + glam::Quat::from_rotation_z(RUNE_LEANS) * (local * size);
+
+    (
+        stood,
+        crate::aim::RUNE_EMBER.normalize_or(Vec3::X),
+        LAMP_LIT * glows(since),
+        LAMP_RANGE,
     )
 }
 
 /// How fine the carved face is drawn.
-pub const CARVED: u32 = 256;
+pub const CARVED: u32 = 1024;
 
 /// The runes of the name, in younger futhark, as the strokes each is made
 /// of in its own square.
@@ -514,6 +559,15 @@ pub fn foot_half() -> (f32, f32) {
     half_at(RUNE_SUNK / RUNE_TALL)
 }
 
+/// Which stone this is.
+///
+/// **Named once because three things are the same lump.** The stone's
+/// own mesh, the dressed face laid on it and the granite it is
+/// textured with all take it, and a fourth now reads it to work out
+/// where the carving's light stands. Four copies of a magic number is
+/// three chances to carve one rock and light another.
+pub const STONE_SEED: u32 = 0x51A7;
+
 pub fn stone_point(seed: u32, u: f32, v: f32) -> Vec3 {
     use std::f32::consts::TAU;
 
@@ -697,37 +751,59 @@ pub fn carving() -> blitzkit::texture::TextureData {
     let n = CARVED;
     let mut pixels = vec![0u8; (n * n * 4) as usize];
 
-    let mut ink = |x: f32, y: f32| {
-        let (at_x, at_y) = ((x * n as f32) as i32, ((1.0 - y) * n as f32) as i32);
-
+    // **How much of a texel the chisel covered, not whether it touched
+    // it.** The alpha was nought or 255, so every edge was a pixel step
+    // and a stroke running at any angle but a right one came out as a
+    // staircase. Jake read the stone and said the blockiness was
+    // distracting. The carved face is drawn in the blended pass, per
+    // `aim::RUNE_GLAZE`, so a texel can be part covered and say so.
+    //
+    // The most of what is already there, because strokes meet: two
+    // overlapping at a corner must take the deeper cut rather than
+    // adding up to a bright spot at the joint.
+    let mut ink = |at_x: i32, at_y: i32, cover: f32| {
         if at_x < 0 || at_x >= n as i32 || at_y < 0 || at_y >= n as i32 {
             return;
         }
 
         let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
+        let now = (cover.clamp(0.0, 1.0) * 255.0).round() as u8;
+
+        if now <= pixels[at + 3] {
+            return;
+        }
 
         for c in 0..3 {
             pixels[at + c] = 255;
         }
-        pixels[at + 3] = 255;
+        pixels[at + 3] = now;
     };
 
+    // **Measured from the line rather than stamped along it.** This
+    // walked a disc of `ceil(thick * n / 2)` texels along the stroke,
+    // which quantised every width to a whole number: 0.0085 and 0.0115
+    // were the same line, so splitting the chisel in two changed nothing
+    // and was reported as done. A width is a distance now and any value
+    // of it means something.
     let mut line = |from: (f32, f32), to: (f32, f32), thick: f32| {
-        let steps = ((to.0 - from.0).hypot(to.1 - from.1) * n as f32 * 2.0).ceil() as i32;
-        let wide = (thick * n as f32 * 0.5).ceil() as i32;
+        let across = n as f32;
+        let (ax, ay) = (from.0 * across, (1.0 - from.1) * across);
+        let (bx, by) = (to.0 * across, (1.0 - to.1) * across);
+        let half = thick * across * 0.5;
+        let pad = half + 1.5;
+        let (dx, dy) = (bx - ax, by - ay);
+        let along = (dx * dx + dy * dy).max(1e-6);
 
-        for step in 0..=steps.max(1) {
-            let on = step as f32 / steps.max(1) as f32;
-            let (x, y) = (from.0 + (to.0 - from.0) * on, from.1 + (to.1 - from.1) * on);
+        for at_y in (ay.min(by) - pad).floor() as i32..=(ay.max(by) + pad).ceil() as i32 {
+            for at_x in (ax.min(bx) - pad).floor() as i32..=(ax.max(bx) + pad).ceil() as i32 {
+                // the middle of the texel, against the nearest point of
+                // the segment: a stroke has ends and a distance to an
+                // endless line rounds its corners off into the stone
+                let (mid_x, mid_y) = (at_x as f32 + 0.5, at_y as f32 + 0.5);
+                let on = (((mid_x - ax) * dx + (mid_y - ay) * dy) / along).clamp(0.0, 1.0);
+                let off = (mid_x - (ax + dx * on)).hypot(mid_y - (ay + dy * on));
 
-            for dy in -wide..=wide {
-                for dx in -wide..=wide {
-                    if dx * dx + dy * dy > wide * wide {
-                        continue;
-                    }
-
-                    ink(x + dx as f32 / n as f32, y + dy as f32 / n as f32);
-                }
+                ink(at_x, at_y, half + 0.5 - off);
             }
         }
     };
@@ -767,7 +843,13 @@ pub fn carving() -> blitzkit::texture::TextureData {
                 + from.0.min(said.width() - 1))
                 * 4) as usize;
 
-            if said.levels[0].pixels[took + 3] < 128 {
+            // **How much of a letter, not whether there is one.** This
+            // took anything over a half and wrote it solid, which throws
+            // away the font's own antialiasing and leaves the name as
+            // blocky as the strokes were.
+            let cover = said.levels[0].pixels[took + 3];
+
+            if cover == 0 {
                 continue;
             }
 
@@ -784,7 +866,7 @@ pub fn carving() -> blitzkit::texture::TextureData {
             for c in 0..3 {
                 pixels[at + c] = 255;
             }
-            pixels[at + 3] = 255;
+            pixels[at + 3] = pixels[at + 3].max(cover);
         }
     }
 
@@ -794,8 +876,8 @@ pub fn carving() -> blitzkit::texture::TextureData {
 }
 
 /// How far the halo reaches round a cut, in texels, and how strongly.
-pub const HALO_OUT: i32 = 4;
-pub const HALO: f32 = 0.5;
+pub const HALO_OUT: i32 = 24;
+pub const HALO: f32 = 0.50;
 
 /// Spreads a soft skirt of the same colour round everything already cut,
 /// in the picture's own alpha.
@@ -808,65 +890,117 @@ pub const HALO: f32 = 0.5;
 ///
 /// What a glow actually is on screen is the thing plus light around the
 /// thing, and here the cheapest place to put the light around it is in
-/// the same picture: the glyph at full alpha, and a soft skirt of the
-/// same amber at part alpha spreading off it. One texture, one draw,
-/// and it is the glyph's own shape rather than a disc behind it.
+/// the same picture: the glyph at full alpha, and a soft skirt at part
+/// alpha spreading off it in the ember's own colour. One texture, one
+/// draw, and it is the glyph's own shape rather than a disc behind it.
 ///
 /// The skirt goes under the cut and never over it: a glyph whose own
 /// edge has been softened is a blurry glyph, and legibility is the one
 /// thing this carving has cost the most rounds.
 fn halo(pixels: &mut [u8], n: u32) {
-    let was: Vec<u8> = (0..(n * n) as usize).map(|i| pixels[i * 4 + 3]).collect();
-    let reach = (HALO_OUT * HALO_OUT) as f32;
+    // **How far the nearest cut is, rather than a search round every
+    // texel.** This read a disc of `HALO_OUT` either way at every one of
+    // them, which is n squared times the kernel: fine at 256 across with
+    // a reach of 4, and eleven hundred million operations at 1024 with a
+    // reach of 16. The skirt only ever depended on the distance to the
+    // nearest cut, so that is what is worked out, in two passes over the
+    // picture and no kernel at all.
+    //
+    // Chamfered rather than exact: a step to a neighbour counts one and a
+    // step to a corner counts the diagonal, which is within a few per
+    // cent of the true distance and is a soft glow.
+    let far = (n * n) as f32;
+    let mut off: Vec<f32> = (0..(n * n) as usize)
+        .map(|i| if pixels[i * 4 + 3] > 0 { 0.0 } else { far })
+        .collect();
+    let corner = std::f32::consts::SQRT_2;
 
-    for y in 0..n as i32 {
-        for x in 0..n as i32 {
-            let at = ((y as u32 * n + x as u32) * 4) as usize;
+    // down and to the right, then back up and to the left
+    for down in 0..n as i32 {
+        for across in 0..n as i32 {
+            let at = (down * n as i32 + across) as usize;
 
-            if was[(y as u32 * n + x as u32) as usize] > 0 {
-                continue;
-            }
+            for (dx, dy, step) in [
+                (-1, 0, 1.0),
+                (0, -1, 1.0),
+                (-1, -1, corner),
+                (1, -1, corner),
+            ] {
+                let (sx, sy) = (across + dx, down + dy);
 
-            let mut near = 0.0f32;
-
-            for dy in -HALO_OUT..=HALO_OUT {
-                for dx in -HALO_OUT..=HALO_OUT {
-                    let (sx, sy) = (x + dx, y + dy);
-
-                    if sx < 0 || sy < 0 || sx >= n as i32 || sy >= n as i32 {
-                        continue;
-                    }
-
-                    let off = (dx * dx + dy * dy) as f32;
-
-                    if off > reach || was[(sy as u32 * n + sx as u32) as usize] == 0 {
-                        continue;
-                    }
-
-                    near = near.max(1.0 - off / reach);
+                if sx < 0 || sy < 0 || sx >= n as i32 || sy >= n as i32 {
+                    continue;
                 }
-            }
 
-            if near <= 0.0 {
-                continue;
+                off[at] = off[at].min(off[(sy * n as i32 + sx) as usize] + step);
             }
-
-            for c in 0..3 {
-                pixels[at + c] = 255;
-            }
-
-            pixels[at + 3] = (255.0 * near * near * HALO) as u8;
         }
+    }
+
+    for down in (0..n as i32).rev() {
+        for across in (0..n as i32).rev() {
+            let at = (down * n as i32 + across) as usize;
+
+            for (dx, dy, step) in [(1, 0, 1.0), (0, 1, 1.0), (1, 1, corner), (-1, 1, corner)] {
+                let (sx, sy) = (across + dx, down + dy);
+
+                if sx < 0 || sy < 0 || sx >= n as i32 || sy >= n as i32 {
+                    continue;
+                }
+
+                off[at] = off[at].min(off[(sy * n as i32 + sx) as usize] + step);
+            }
+        }
+    }
+
+    let reach = HALO_OUT as f32;
+    let ember = crate::aim::RUNE_EMBER;
+
+    for i in 0..(n * n) as usize {
+        let near = 1.0 - (off[i] * off[i]) / (reach * reach);
+
+        if near <= 0.0 {
+            continue;
+        }
+
+        // **Laid under what is already cut rather than beside it.** The
+        // skirt used to skip any texel that had alpha at all, and a cut
+        // with a soft edge has alpha at all: the outermost texel of every
+        // stroke sat at a fifth of a chisel with no skirt beneath it, so
+        // between each glyph and its glow ran a ring of nearly nothing,
+        // one texel wide and following every jag of the rasteriser.
+        // Composited instead, the cut over the skirt, which is the
+        // arithmetic the engine would do if they were two draws.
+        //
+        // One of the two things wrong with the edge, not the whole of
+        // it. The other was the engine throwing away every alpha under
+        // its cutout, which is spec 0047 amended the same day, and
+        // which of the two Jake's picture was showing has not been
+        // taken apart.
+        let cut = pixels[i * 4 + 3] as f32 / 255.0;
+        let skirt = near * near * HALO * (1.0 - cut);
+        let both = cut + skirt;
+
+        for (c, tint) in ember.to_array().iter().copied().enumerate() {
+            // white where the chisel went and the ember's own colour
+            // where the glow spreads, per `aim::RUNE_EMBER`: the canvas
+            // clips at one, so a glow that is hot in the middle and
+            // amber at the edge has to say so in the picture.
+            pixels[i * 4 + c] = (255.0 * (cut + tint * skirt) / both).round() as u8;
+        }
+
+        pixels[i * 4 + 3] = (255.0 * both).round() as u8;
     }
 }
 
-/// How tall the lettering is cut, how big the stone is, and how far it
-/// leans.
+/// How tall the lettering is asked of the font.
 ///
-/// **Off the side of the way on, not across it.** The deck is six metres
-/// and you walk up the middle of it; a stone in that is a stone you walk
-/// into on the way to the thing it names.
-pub const RUNE_TEXELS: f32 = 64.0;
+/// **The size it is going to be drawn at.** It was a flat sixty four
+/// texels, laid into a block of forty seven, so the name was point
+/// sampled down by a third before anything else happened to it and
+/// came out of that as blocky as the strokes were. A font that is
+/// asked for the right size antialiases it there.
+pub const RUNE_TEXELS: f32 = CARVED as f32 * LATIN_TALL;
 
 /// How tall the Latin name at the foot is, as a share of the carved
 /// picture, and how far it sits off the bottom of it. Held rather than
@@ -2950,27 +3084,147 @@ mod railing_tests {
 mod chisel_tests {
     use super::*;
 
-    /// How wide a stroke actually lands, in texels.
-    fn cut(thick: f32) -> i32 {
-        (thick * CARVED as f32 * 0.5).ceil() as i32 * 2 + 1
+    /// What the carving comes to on screen at an hour, which is the
+    /// colour times the fill the engine multiplies it by.
+    fn on_screen(share: f32) -> glam::Vec3 {
+        let since = crate::garden::when(share);
+
+        alight(since).truncate() * crate::garden::filled(since)
     }
 
-    /// Spec 0054: the writing is cut finer than the ribbon round it.
+    /// Spec 0054: and it burns hardest in the dark.
     ///
-    /// **Asked of the raster and not of the two numbers.** `carving`
-    /// walks a disc a whole number of texels wide, so two different
-    /// widths can be the same line: 0.0085 against 0.0115 is 1.09
-    /// against 1.47 and both ceil to 2. That change was made, reported
-    /// as done and altered nothing, and Jake found it by reading the
-    /// stone. Comparing the constants would have passed it.
+    /// **Written because it was backwards and read as right.** Every
+    /// number round `alight` says the carving burns at night, and the
+    /// fill the engine multiplies the colour by falls faster than those
+    /// numbers rise: at midnight the carving was a third of white and at
+    /// noon it was past it. Nothing in the arithmetic looked wrong,
+    /// because the half that undid it lived in the shader.
     #[test]
-    fn the_runes_are_cut_finer_than_the_band() {
+    fn the_carving_burns_brightest_at_night() {
+        let noon = on_screen(0.25).max_element();
+        let dusk = on_screen(0.5).max_element();
+        let midnight = on_screen(0.75).max_element();
+
         assert!(
-            cut(RUNE_STROKE) < cut(STROKE),
-            "the band lands at {} texels and the runes at {}, which is one \
-             chisel with two names",
-            cut(STROKE),
-            cut(RUNE_STROKE)
+            midnight > dusk && dusk > noon,
+            "the carving comes to {:.2} at noon, {:.2} at dusk and {:.2} at \
+             midnight, which is not a thing that burns in the dark",
+            noon,
+            dusk,
+            midnight
+        );
+
+        // and past one, which is the whole of what a glow is here: a
+        // channel clipped at the top of the canvas with its own colour
+        // round it. Under one is a painted mark.
+        assert!(
+            midnight > 2.0,
+            "at midnight the carving comes to {:.2}, which is lit like any \
+             other paint",
+            midnight
         );
     }
+
+    /// Spec 0054: the glow round a cut carries the ember's colour and
+    /// the cut itself does not.
+    ///
+    /// **Because the canvas clips and cannot tell them apart.** Past one
+    /// every channel comes out the same white, so a glow that is gold in
+    /// the groove and orange at its edge has to say so in the picture.
+    /// Writing the skirt white is one line and leaves a pale wash round
+    /// the runes that reads as fog.
+    #[test]
+    fn the_glow_round_a_cut_is_warmer_than_the_cut() {
+        let cut = carving();
+        let pixels = &cut.levels[0].pixels;
+        let mut whole = None;
+        let mut skirt = None;
+
+        for i in 0..(CARVED * CARVED) as usize {
+            let (red, green, alpha) = (pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 3]);
+
+            match alpha {
+                255 => whole = Some((red, green)),
+                a if a > 16 && a < 64 => skirt = Some((red, green)),
+                _ => (),
+            }
+        }
+
+        let whole = whole.expect("nothing was cut whole");
+        let skirt = skirt.expect("nothing carries a faint skirt");
+
+        assert_eq!(whole, (255, 255), "a texel cut whole is not white");
+        assert!(
+            skirt.1 < whole.1 / 2,
+            "the skirt's green is {} against the cut's {}, so the glow is \
+             the same colour as what it comes off",
+            skirt.1,
+            whole.1
+        );
+    }
+
+    /// Spec 0054: the carving has edges and not steps.
+    ///
+    /// **Because the blockiness was the alpha and not the width.** Every
+    /// texel the chisel touched was written at 255 and every one it
+    /// missed stayed at nought, so a stroke at any angle but a right one
+    /// came out a staircase. Jake read the stone and said so. A part
+    /// covered texel says how much of it was cut now, which the blended
+    /// pass `aim::RUNE_GLAZE` puts the face in can actually show.
+    ///
+    /// Asked of the picture, because that is where the fault was. The
+    /// same change made to the two width constants and checked against
+    /// each other passed while altering nothing.
+    #[test]
+    fn the_carving_is_cut_with_edges_and_not_steps() {
+        let cut = carving();
+        let pixels = &cut.levels[0].pixels;
+        let mut soft = 0;
+        let mut hard = 0;
+
+        // **Over what the halo can reach, which is the trap this test
+        // fell into first.** `halo` lays a soft skirt round everything
+        // cut, so part covered texels exist whether or not a stroke has
+        // an edge, and the first version of this passed its own control.
+        // The skirt tops out at `255 * HALO`, so anything above that and
+        // short of solid came off a chisel.
+        let skirt = (255.0 * HALO) as u8;
+
+        for i in 0..(CARVED * CARVED) as usize {
+            match pixels[i * 4 + 3] {
+                255 => hard += 1,
+                a if a > skirt => soft += 1,
+                _ => (),
+            }
+        }
+
+        assert!(hard > 0, "nothing was cut at all");
+
+        // **Against the length of an edge and not the area inside it.**
+        // This asked for a tenth as many part cut as cut whole, which
+        // compares a perimeter with an area: raising `CARVED` four times
+        // multiplies the inside by sixteen and the edge by four, and the
+        // test failed on a picture that had got better. A row of the
+        // face is a perimeter-sized number and holds at any resolution.
+        assert!(
+            soft > CARVED as usize,
+            "{} texels are part cut against {} cut whole, which is a \
+             picture drawn in steps",
+            soft,
+            hard
+        );
+    }
+
+    /// And the writing is cut finer than the ribbon round it.
+    ///
+    /// **A width is a distance now.** It used to be a whole number of
+    /// texels, so 0.0085 against 0.0115 was 1.09 against 1.47, both
+    /// rounded to 2, and the two chisels were one. Nothing quantises it
+    /// any more, so the only thing to hold is the order, and the place
+    /// to hold that is where the numbers are.
+    const _: () = assert!(
+        RUNE_STROKE < STROKE,
+        "the writing inside the ribbon is the finer work"
+    );
 }

@@ -3429,13 +3429,15 @@ impl Arcade {
             // one and what happened for an afternoon when it did.
             let alight = bridge::alight(self.since);
 
-            // **No lamp on the stone.** There was one, to say the glow
-            // came out of the groove, and what it did was wash the face
-            // pale and take with it the contrast the glyphs were relying
-            // on. Jake: it is almost unintelligible, and glowing from
-            // within was the wrong instruction. What has to read as lit
-            // from inside is the glyph; the source of it does not have to
-            // be seen at all.
+            // **And a lamp on the stone again**, in the light list
+            // above, per `bridge::carving_lamp`. There was one, it
+            // washed the face pale and took the contrast the glyphs
+            // were living on, and it came out. What has changed since
+            // is that the glyphs are four times past white rather than
+            // a multiplier on a dark ambient, so there is nothing left
+            // for a lamp on the rock to out-shine. Jake, 2026-11-06:
+            // glowing means it is shining brightly from within what
+            // holds it, like the stone.
 
             if let (Some(face), Some(carving)) = (self.carved_face, self.carving) {
                 scene.push_textured(
@@ -7691,12 +7693,12 @@ impl Game for Arcade {
         // exactly this: the letters, and what is behind them showing
         // through.
         self.carving = Some(renderer.add_texture(&bridge::carving()));
-        self.granite = Some(renderer.add_texture(&garden::granite(0x51A7)));
+        self.granite = Some(renderer.add_texture(&garden::granite(bridge::STONE_SEED)));
         // out of round, like the garden's set stones, and squashed thin by
         // the transform so the carved face is near enough flat to cut
-        self.standing_stone = Some(renderer.add_mesh(&bridge::stone_mesh(0x51A7)));
+        self.standing_stone = Some(renderer.add_mesh(&bridge::stone_mesh(bridge::STONE_SEED)));
         self.rubble_mound = Some(renderer.add_mesh(&bridge::mound_mesh()));
-        self.carved_face = Some(renderer.add_mesh(&bridge::carved_mesh(0x51A7)));
+        self.carved_face = Some(renderer.add_mesh(&bridge::carved_mesh(bridge::STONE_SEED)));
         self.runes = Some(renderer.add_texture(&blitzkit::text::stencilled(
             bridge::SAYS,
             bridge::RUNE_TEXELS,
@@ -11973,6 +11975,16 @@ impl Game for Arcade {
                 aim::BACK_BAY_LIT,
                 aim::BACK_BAY_RANGE,
             ));
+        }
+
+        // and the carving's own, in front of the runestone's face, which
+        // is what makes the thing read as glowing rather than as a neon
+        // tube stuck on a rock: the light it gives off lands on the
+        // stone holding it. Only while the stone is there to hold it.
+        if let Some((stone, size)) = bridge::runestone(self.room.reaches, &self.trail) {
+            let (at, lit, strength, range) = bridge::carving_lamp(stone, size, self.since);
+
+            shades.push((eye.distance_squared(at), at, lit, strength, range));
         }
 
         // and the pendant over the sign, which is a fitting like any other.

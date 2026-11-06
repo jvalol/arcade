@@ -1,7 +1,7 @@
 # 0054 Bifröst
 
 **Status:** implemented
-**Date:** 2026-11-04
+**Date:** 2026-11-04, amended 2026-11-06
 
 ## Goal
 
@@ -342,11 +342,22 @@ stroke was half the width of the rune it belonged to, so every branch ran
 into its own stave and consecutive runes touched. What the writing needed
 was to be bigger, not bolder.
 
-**And nothing lights the stone.** There was a lamp off the face, put there
-to say the glow came out of the groove. What it did was wash the face pale
-and take with it the contrast the glyphs were relying on. Jake: glowing
-from within was the wrong instruction, the glyph has to read as lit from
-inside and the source does not have to be seen at all.
+**And a lamp off the face, which was taken out and has come back.**
+Reversed 2026-11-06. It was put there to say the glow came out of the
+groove, it washed the face pale and took with it the contrast the glyphs
+were relying on, and it came out: the glyph had to read as lit from
+inside and the source did not have to be seen.
+
+What changed is the glyph. It was a multiplier on a dark ambient, which
+a lamp on the same rock could out-shine; it is four times past white now,
+so nothing a lamp does to the stone can reach it. Jake, 2026-11-06: it
+looks more neon than glowing, and glowing means it is shining brightly
+from within what holds it, like the stone. A line past white that throws
+nothing is a neon tube, which is a thing that is its own light and lights
+nothing at all. What makes a glow read is the surface round it, so the
+carving lights the rock it is cut in, the rubble at its foot takes a
+little, and the painted skirt in the texture came down to a tight bloom
+because the spreading is done by the light now.
 
 **Granite, which is what they are.** Uppland's stones are granite and
 gneiss almost without exception. Drawn as countable crystals rather than
@@ -372,6 +383,34 @@ because a rune that goes out is a rune somebody switched off.
 The pigment's own colour taken up rather than a new one. Red earth in a
 groove, lit from inside, is the stone doing something. A blue-white would
 be a different object sitting in the same hole.
+
+**And it burned dimmest at the hour it was built for.** Amended
+2026-11-06. Everything in the paragraphs above is about a colour past
+one, and what the shader works out is the colour times the light on it.
+The fill over this field goes from fifteen hundredths at dusk to three at
+the bottom of the night, so a multiplier that rose through the evening
+was multiplied by something that fell faster. Jake: it reads like a
+gentle orange, not burning bright like from myth. He was right twice
+over, because the darker it got the gentler it was.
+
+So `aim::RUNE_CUT` is what the carving comes to on screen rather than
+what it is multiplied by, and `bridge::alight` divides it by the fill the
+engine is about to multiply it back by. The sun is not divided out, which
+is why the day gets a flat third of the night's: by day this is an ember
+in daylight and nothing is asked to read as burning.
+
+**The glow carries its own colour because the canvas clips.** Everything
+past one comes out the same white on an eight bit target, so a glow
+cannot be gold in the groove and orange at its edge by brightness alone.
+The hue goes in the picture instead: the carving's texture is white where
+the chisel went and `aim::RUNE_EMBER` where the skirt spreads, and the
+one colour handed to the engine comes out as two.
+
+**And the skirt is laid under the cut and not beside it.** It used to
+skip any texel with alpha at all, and a chisel with a soft edge leaves
+alpha at all, so a ring of nearly nothing ran between every glyph and its
+own glow, one texel wide, following each jag of the rasteriser. The two
+are composited now, the cut over the skirt.
 
 **Painted, which is what was done to them.** Darker letters were tried
 first, since what you read in a carved groove is its shadow, and there is
@@ -419,6 +458,8 @@ be able to tell is there.
 - Nothing is sown where it comes down, or where the stone stands. — `bridge::tests::nothing_is_sown_where_the_bridge_comes_down`
 - It is clear of the garden. — `bridge::tests::it_crosses_nothing`
 - And inside the ground it stands on. — `bridge::tests::it_stays_inside_the_ground_it_stands_on`
+- The carving burns brighter the darker it gets, and past one at the bottom of the night. — `bridge::chisel_tests::the_carving_burns_brightest_at_night`
+- The glow round a cut is warmer than the cut. — `bridge::chisel_tests::the_glow_round_a_cut_is_warmer_than_the_cut`
 
 ### Verified by hand
 

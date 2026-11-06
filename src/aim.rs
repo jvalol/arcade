@@ -962,10 +962,25 @@ pub const RUBBLE: Vec4 = vec4(0.70, 0.695, 0.68, 1.0);
 /// rainbow and the cellar's neon are, and it is the only way a carving
 /// reads at all on a night field.
 ///
-/// The pigment's own colour taken up rather than a new one. Red earth in
-/// a groove, lit from inside, is the stone doing something; a blue-white
-/// would be a different object sitting in the same hole.
-pub const RUNE_CUT: Vec4 = vec4(4.2, 1.45, 0.42, 1.0);
+/// **What it comes to on screen, not what it is multiplied by.** See
+/// `bridge::alight`, which divides this by the fill the engine is about
+/// to multiply it back by. So these are the numbers the heart of the cut
+/// reaches at the bottom of the night: red and green over one and blue
+/// well under, which is a channel clipping to a hot pale gold rather
+/// than to white.
+pub const RUNE_CUT: Vec4 = vec4(3.4, 1.9, 0.55, 1.0);
+/// And the share of that heat the glow round the cut carries.
+///
+/// **Because the canvas is eight bits and clips.** Everything past one
+/// comes out the same white, so a glow cannot be hot in the middle and
+/// its own colour at the edge by brightness alone: at any value that
+/// makes the heart burn, the skirt burns the same colour. The hue has to
+/// be in the picture rather than in the light, so the carving's texture
+/// is white where the chisel went and this where the glow spreads, and
+/// the skirt comes out orange under a gold cut. Red earth in a groove,
+/// lit from inside, is the stone doing something; a blue-white would be
+/// a different object sitting in the same hole.
+pub const RUNE_EMBER: Vec3 = vec3(1.0, 0.34, 0.09);
 /// How solid the carved face is drawn, which is a hair under solid.
 ///
 /// **Not a look, a pass.** A face drawn at one goes through the engine
