@@ -823,6 +823,28 @@ pub const GARDEN_WALL: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
 /// shades.
 pub const GARDEN_PLASTER: Vec4 = vec4(0.96, 0.95, 0.93, 1.0);
 
+/// And what the same plaster is multiplied by on the garden's own side
+/// of its wall.
+///
+/// **The garden had no colour, and it was the walls.** Everything in
+/// there is considered: pale raked gravel, near-black set stones, yellow
+/// green moss thickest where the wall meets the ground, a bamboo screen,
+/// a stone lantern. Two walls three storeys high fill most of every
+/// frame of it and both were the building's own lime, so what you saw
+/// was a grey box with some good things on the floor of it.
+///
+/// An earthen wall, which is what encloses a garden of this kind
+/// anywhere it is actually built: clay rendered on, a tiled cope over
+/// it, warm where everything inside is cool or dark. The gravel reads
+/// pale against it, the rocks read black, the moss reads green and the
+/// bamboo reads at all.
+///
+/// **Inside only.** `field::wall` draws the same wall from the approach
+/// and keeps the lime, because from out there it is the building's
+/// boundary rather than the garden's room. A wall rendered differently
+/// on its two sides is what a garden wall is.
+pub const GARDEN_EARTH: Vec4 = vec4(0.84, 0.68, 0.50, 1.0);
+
 /// The clay tiles capping the garden's walls.
 ///
 /// Dark and barely warm, so the cap reads as a line against the sky rather
@@ -888,6 +910,29 @@ pub const GARDEN_STONE: Vec4 = vec4(0.52, 0.51, 0.47, 1.0);
 /// it, and the garden's value up there is snow.
 pub const THRESHOLD: Vec4 = vec4(0.30, 0.295, 0.275, 1.0);
 pub const THRESHOLD_RAIL: Vec4 = vec4(0.235, 0.23, 0.215, 1.0);
+
+/// And the two materials that punctuate it: a warm stone at the points
+/// that carry something, and iron between them.
+///
+/// **Because one material in one colour has nothing to count along.**
+/// Everything out here is the same cool grey from the foot of the deck
+/// to the gate, and a surface the eye cannot count along is a surface it
+/// reads as one thing however long it is. Jake's photograph of City
+/// Creek is the argument: red sandstone piers at intervals, cool
+/// concrete between them, black iron spanning pier to pier, and the warm
+/// stone only where something stands.
+///
+/// **Flat and unweathered, which is the half of The Witness worth
+/// taking.** No grain, no staining, no wear. Colour carries the material
+/// and the edge between two colours carries the form, which is what this
+/// engine is good at anyway and what the plaster textures have been
+/// quietly working against.
+///
+/// Warm against everything round it, and dark enough that a pier reads
+/// as a solid at dusk rather than as a light.
+pub const PIER: Vec4 = vec4(0.34, 0.175, 0.135, 1.0);
+pub const PIER_CAP: Vec4 = vec4(0.285, 0.145, 0.112, 1.0);
+pub const BALUSTER: Vec4 = vec4(0.055, 0.052, 0.050, 1.0);
 
 /// The stone at the foot of the bridge, and what is cut into it.
 ///
@@ -977,6 +1022,21 @@ pub const VALHALLA_JAMB: Vec4 = vec4(0.10, 0.085, 0.07, 1.0);
 /// whole of what makes that read is the light landing on something: the
 /// ground in front of a door, the wall beside it, whoever is standing
 /// there.
+/// The gate at the top of the bridge, per spec 0058: its oak and its iron.
+///
+/// **Darker than the hall it stands in front of.** `VALHALLA_WALL` is
+/// 0.27 and is lit from inside; this is the thing between you and that,
+/// and what it has to do is read as a shut gate against a lit place. A
+/// gate the colour of the hall is a wall with a hall painted on it.
+///
+/// The iron is nearly black rather than grey. Straps, hinges and a ring
+/// on oak are what say castle rather than shed, and at three metres the
+/// only thing that carries of them is that they are darker than the
+/// boards and run across the grain.
+pub const GATE_OAK: Vec4 = vec4(0.185, 0.130, 0.088, 1.0);
+pub const GATE_BOARD: Vec4 = vec4(0.150, 0.104, 0.070, 1.0);
+pub const GATE_IRON: Vec4 = vec4(0.062, 0.058, 0.055, 1.0);
+
 pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);
 pub const VALHALLA_SPILL_LIT: f32 = 3.1;
 pub const VALHALLA_SPILL_REACH: f32 = 14.0;
@@ -1026,6 +1086,12 @@ pub const PLATE_PAD: f32 = 7.0;
 ///
 /// One account of all three. They were three: a line at twenty, a line at
 /// forty-four, and nothing saying the second was the first plus a line.
+/// The bar on the end of a line somebody is typing. Spec 0059.
+///
+/// **It does not blink.** A blink is a timer, a redraw and a rule about
+/// how fast, and it says nothing the bar does not say standing still.
+pub const CARET: &str = "_";
+
 pub const SAYS_AT: Vec2 = vec2(20.0, 20.0);
 pub const SAYS_SIZE: f32 = 14.0;
 pub const SAYS_LINE: f32 = 24.0;
@@ -1782,16 +1848,76 @@ pub const BEHIND_PORTAL: Vec4 = vec4(1.1, 2.3, 4.6, 1.0);
 pub const BEHIND_DOORWAY: Vec4 = BEHIND_FRAME;
 pub const LEAF: Vec4 = vec4(0.17, 0.31, 0.19, 1.0);
 
+/// And a broadleaf that has turned, which out here most of them have.
+///
+/// **The field is the one place in this building with no colour of its
+/// own.** Every room inside owns one and you know which you are in from
+/// a single frame: the cellar is wood and firelight, the hall is
+/// magenta, the baths are tile, the nook is books. Outside, the garden,
+/// the approach and the field are one dusk grey-green from end to end.
+/// This is the field's.
+///
+/// **Four, because one autumn colour is a painted set.** Jake's
+/// photograph of City Creek is yellow, orange, rust and still-green in
+/// one frame, with bare branches over them, and what makes it read as a
+/// season rather than as a filter is that no two trees agree.
+///
+/// **Which the tree's own seed cannot give out here.** `field::kinds`
+/// is three prototypes with a seed apiece, so every oak in the field is
+/// the same oak turned and scaled, and picking off that seed painted
+/// each species one colour: the oak drew the green one and the whole
+/// field stayed green but for the aspens. What differs from tree to
+/// tree out there is where it stands, so that is what this is picked
+/// off. In the garden, where each tree is written down on its own, it
+/// is the seed.
+///
+/// Darker than they look written down. These multiply the lit result,
+/// and a leaf lit by a low sun with sky behind it goes where it is
+/// going on its own.
+/// **Against a grey picture rather than a green one**, which is what
+/// `garden::broadleaf` draws now. These are the whole colour of the leaf
+/// and not a bias on one, so they are about twice what they would be as
+/// a tint.
+pub const LEAF_TURNED: [Vec4; 4] = [
+    vec4(1.06, 0.72, 0.15, 1.0),
+    vec4(0.90, 0.37, 0.13, 1.0),
+    vec4(1.12, 0.56, 0.14, 1.0),
+    vec4(0.46, 0.60, 0.21, 1.0),
+];
+
+/// What one tree's leaves come out, from its species tint and its seed.
+///
+/// **The conifers do not turn**, which is the other half of the
+/// photograph: the evergreens stay where they are and the broadleaves go
+/// round them. A field that turned all at once would be one colour
+/// again, in orange.
+///
+/// A species tint is a bias on a green and means nothing to a turned
+/// leaf, so a broadleaf takes its colour whole and what tells two
+/// species apart out here is the cutout and the bark.
+pub fn leaf_of(tint: glam::Vec3, which: u32, broad: bool) -> Vec4 {
+    if broad {
+        LEAF_TURNED[which as usize % LEAF_TURNED.len()]
+    } else {
+        LEAF * vec4(tint.x, tint.y, tint.z, 1.0)
+    }
+}
+
 /// The field, per spec 0040: the ground, a tuft of grass standing in it, and
 /// the four flowers.
 ///
-/// **The ground is lighter than a tuft and the tuft is lighter than a leaf.**
-/// Grass seen flat from above is the sky's colour mixed into it and a blade
-/// seen side on is not, so a field painted in one green is a billiard table.
-/// Three greens, each a step down, and the trees' own `LEAF` is the darkest
-/// of them, which is what puts the trees against the ground they stand in.
-pub const FIELD_GROUND: Vec4 = vec4(0.42, 0.50, 0.28, 1.0);
-pub const FIELD_TUFT: Vec4 = vec4(0.33, 0.43, 0.22, 1.0);
+/// **The ground is lighter than a tuft and the tuft is lighter than a
+/// leaf.** Grass seen flat from above is the sky's colour mixed into it
+/// and a blade seen side on is not, so a field painted in one green is a
+/// billiard table. Three steps, each darker than the last, and that
+/// ordering is the argument rather than the particular greens.
+///
+/// **Which is why they could turn and the rule still holds.** Late in
+/// the year grass is tawny rather than green, with the green left in the
+/// blade and gone from the sward. The two here went over by the same
+/// amount, so the step between them is what it was.
+pub const FIELD_GROUND: Vec4 = vec4(0.47, 0.455, 0.235, 1.0);
+pub const FIELD_TUFT: Vec4 = vec4(0.40, 0.375, 0.180, 1.0);
 
 /// And the flowers, as inks rather than lights: a flower is a picture of
 /// stalks with a head on each, so what says which flower it is is what the

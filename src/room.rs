@@ -882,6 +882,14 @@ pub enum Seen {
     /// The one thing in that corridor you can work, and the only way there is
     /// to put somebody in a room or take them out of one.
     Hotel(u64),
+    /// The watchman at the top of the bridge. Spec 0058.
+    ///
+    /// **The one person in this building you can look at and have
+    /// answer.** Everyone else here is somebody passing. He is the gate,
+    /// and looking at him is how he asks, because spec 0003's rule is
+    /// that a room offers what you are looking at and a man nobody has
+    /// looked at has not spoken to you.
+    Watchman,
 }
 
 pub struct Room {

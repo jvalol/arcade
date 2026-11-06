@@ -15,6 +15,7 @@ mod cradle;
 mod display;
 mod field;
 mod garden;
+mod gate;
 mod globe;
 mod gyro;
 // **Allowed to be unused until the bench exists.** Spec 0050's cube is being
@@ -40,6 +41,7 @@ mod tesseract;
 mod tour;
 mod trail;
 mod twine;
+mod typed;
 mod valhalla;
 mod walk;
 mod wrecker;
@@ -666,6 +668,27 @@ struct Arcade {
     /// `--done` fills it at the door, for looking at the end of it without
     /// walking the building first.
     trail: trail::Trail,
+    /// How far the gate at the top of the bridge has swung, nought shut
+    /// and one open, per spec 0058.
+    ///
+    /// **One number is the whole state.** It only ever goes up, so nought
+    /// is also "the riddle is unanswered" and there is no second flag to
+    /// come apart from it.
+    gate: f32,
+    /// The one field anybody is typing into, if there is one. Spec 0059.
+    ///
+    /// **An Option and not a flag beside a buffer.** Open or shut is the
+    /// same fact as whether there is anything to type into, and two
+    /// accounts of it is a field that takes keys while nothing is drawn.
+    field: Option<typed::Field>,
+    /// Whether the watchman has had his answer. Spec 0058.
+    ///
+    /// **Apart from the gate's own number for one frame only.** `gate` is
+    /// nought while shut and nought is also unanswered, so something has
+    /// to carry the moment between the answer landing and the leaves
+    /// starting to move. After that the gate carries it, which is why
+    /// nothing reads this to ask whether the riddle is done.
+    answered: bool,
     /// What the gallery's panel is showing, the texture it is written
     /// into, and what was last written there. Specs 0039 and the engine's
     /// 0074.
@@ -1210,6 +1233,9 @@ impl Arcade {
             headings: Vec::new(),
             marks: Vec::new(),
             carried: register::Carried::new(),
+            gate: 0.0,
+            answered: false,
+            field: None,
             trail: {
                 let mut trail = trail::Trail::new();
 
@@ -1505,6 +1531,21 @@ impl Arcade {
             }
             Some(room::Seen::Desk) => self.hotel.house(),
             Some(room::Seen::Hotel(_)) => (),
+            // **The watchman asks you a question and you write back.**
+            // Spec 0058 answered him by turning round and looking at the
+            // building, which Jake read as a proof you had walked the
+            // place rather than as a riddle. Spec 0059 is the field this
+            // opens, and what he asks and what counts as right are his.
+            //
+            // Not once the gate is moving: he has had his answer and a
+            // field that opens again is a man asking twice.
+            Some(room::Seen::Watchman) if self.gate <= 0.0 => {
+                self.field = Some(typed::Field::asked(
+                    typed::Asking::Watchman,
+                    says::WATCHMAN_ASKS,
+                ));
+            }
+            Some(room::Seen::Watchman) => (),
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
                 metronome::NAME => self.metronome.press(),
@@ -1648,12 +1689,64 @@ impl Arcade {
     /// Its own method because `--walk` has to ask the same question between
     /// frames, and a replay that answered it differently would be checking
     /// a building nobody walks.
+    /// What Return does to an open field: hands the line to whoever
+    /// asked for it. Spec 0059.
+    ///
+    /// **A wrong answer is not a fail.** Spec 0058 is plain that a gate
+    /// which can be failed is a score and that nothing in this building
+    /// counts at you. He says so, the line clears, and the field stays
+    /// open for as long as anybody wants to stand there. Nothing is
+    /// locked, nothing is tallied, and walking away and coming back
+    /// costs nothing but the walk.
+    fn answer_the_field(&mut self) {
+        let Some(field) = self.field.as_mut() else {
+            return;
+        };
+
+        // an empty line is somebody pressing Return at a blank field,
+        // which is not an answer and should not be told it is wrong
+        if field.empty() {
+            return;
+        }
+
+        match field.asking {
+            typed::Asking::Watchman => {
+                let answer = field.answer();
+                let right = says::WATCHMAN_ACCEPTS
+                    .iter()
+                    .any(|one| typed::folded(one) == answer);
+
+                if right {
+                    self.field = None;
+                    self.answered = true;
+                } else {
+                    field.try_again();
+                }
+            }
+        }
+    }
+
     fn what_i_see(&self) -> Option<room::Seen> {
         if self.inside.is_some() {
-            None
-        } else {
-            self.room.looking_at(self.looking_from(), self.facing())
+            return None;
         }
+
+        // **The watchman is not in the building's list and cannot be.**
+        // `Room::looking_at` is the things this building has at fixed
+        // places; he is out past the end of a bridge that is not there
+        // until every room has given up what it asks, and whether he
+        // exists at all is a question about the trail, which `Room` has
+        // no reason to know. Spec 0058.
+        if gate::watched(
+            self.room.reaches,
+            &self.trail,
+            self.looking_from(),
+            self.facing(),
+        ) {
+            return Some(room::Seen::Watchman);
+        }
+
+        self.room.looking_at(self.looking_from(), self.facing())
     }
 
     /// The doors of one frame, and you out of their way.
@@ -3013,7 +3106,9 @@ impl Arcade {
                     }
                 }
 
-                if let (Some(crown), Some((skin, leaf))) = (self.crown, self.foliage(tree)) {
+                if let (Some(crown), Some((skin, leaf))) =
+                    (self.crown, self.foliage(tree, field::which(&stood)))
+                {
                     for sprig in garden::sprigs(tree) {
                         let wide = sprig.wide * stood.size;
                         let tall = sprig.tall * stood.size;
@@ -3104,15 +3199,16 @@ impl Arcade {
         aim::BARK * vec4(of.x, of.y, of.z, 1.0)
     }
 
-    fn foliage(&self, tree: &garden::Tree) -> Option<(TextureId, glam::Vec4)> {
-        let of = match tree.kind.leaf() {
-            garden::Leaf::Needle => &self.needles,
-            garden::Leaf::Broad => &self.broadleaf,
+    fn foliage(&self, tree: &garden::Tree, which: u32) -> Option<(TextureId, glam::Vec4)> {
+        let broad = tree.kind.leaf() == garden::Leaf::Broad;
+        let of = if broad {
+            &self.broadleaf
+        } else {
+            &self.needles
         };
         let skin = of.get(tree.seed as usize % of.len().max(1)).copied()?;
-        let tint = tree.kind.tint();
 
-        Some((skin, aim::LEAF * vec4(tint.x, tint.y, tint.z, 1.0)))
+        Some((skin, aim::leaf_of(tree.kind.tint(), which, broad)))
     }
 
     /// The bridge at the end of the trail, out in the field. Spec 0054.
@@ -3146,6 +3242,63 @@ impl Arcade {
                 } else {
                     aim::THRESHOLD_RAIL
                 },
+            );
+        }
+
+        // and what stands on that parapet: warm stone piers at the ends
+        // of every run and iron between them. Spec 0059, off Jake's
+        // photograph of City Creek and The Witness's flat colour: two
+        // materials in a rhythm, with no grain on either, so the edge
+        // between two colours is what carries the form.
+        for at in bridge::piers(self.room.reaches, &self.trail) {
+            scene.push_colored(
+                cube,
+                &Transform::at(at + Vec3::Y * bridge::PIER_UP * 0.5).with_scale(vec3(
+                    bridge::PIER_WIDE,
+                    bridge::PIER_UP,
+                    bridge::PIER_WIDE,
+                )),
+                aim::PIER,
+            );
+            // a cap, chamfered out over the shaft, which is the one line
+            // of shadow a pier has
+            scene.push_colored(
+                cube,
+                &Transform::at(at + Vec3::Y * (bridge::PIER_UP + bridge::PIER_CAP * 0.5))
+                    .with_scale(vec3(
+                        bridge::PIER_WIDE * 1.14,
+                        bridge::PIER_CAP,
+                        bridge::PIER_WIDE * 1.14,
+                    )),
+                aim::PIER_CAP,
+            );
+        }
+
+        for at in bridge::balusters(self.room.reaches, &self.trail) {
+            scene.push_colored(
+                cube,
+                &Transform::at(at + Vec3::Y * bridge::RAIL_HIGH * 0.5).with_scale(vec3(
+                    bridge::BALUSTER,
+                    bridge::RAIL_HIGH,
+                    bridge::BALUSTER,
+                )),
+                aim::BALUSTER,
+            );
+        }
+
+        // and the rail they carry, along the top of each run
+        for (from, to) in bridge::parapet_runs(self.room.reaches, &self.trail) {
+            let along = to - from;
+            let up = Vec3::Y * (bridge::RAIL_HIGH - bridge::BALUSTER * 0.5);
+
+            scene.push_colored(
+                cube,
+                &Transform::at((from + to) * 0.5 + up).with_scale(vec3(
+                    along.x.abs().max(bridge::BALUSTER * 1.6),
+                    bridge::BALUSTER,
+                    along.z.abs().max(bridge::BALUSTER * 1.6),
+                )),
+                aim::BALUSTER,
             );
         }
 
@@ -3257,6 +3410,131 @@ impl Arcade {
         }
 
         self.draw_valhalla(scene, cube);
+        self.draw_the_gate(scene, cube);
+    }
+
+    /// The gate in the way through, per spec 0058.
+    ///
+    /// **Boards, straps and a ring, and nothing finer than that.** You
+    /// stand right in front of this one, so the grain of it has to hold
+    /// up at arm's length, and it is also a shape on the skyline from
+    /// halfway down the deck, where the only thing that survives is the
+    /// outline of the frame. Both of those are served by the same five
+    /// things: two posts, a head, planked leaves, iron across them.
+    ///
+    /// Each leaf is drawn at whatever angle it has swung to. The drawing
+    /// can turn and the collider cannot, which is why `gate::leaf_solid`
+    /// takes the box round the leaf rather than the leaf.
+    fn draw_the_gate(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+
+        // the wall it is set in, which is the far parapet carried up to the
+        // head. Without it the gate stands in a kerb with the whole
+        // steading in plain sight either side of it.
+        for panel in gate::wall(reaches, &self.trail) {
+            scene.push_colored(
+                cube,
+                &Transform::at(panel.center()).with_scale(panel.size()),
+                aim::THRESHOLD_RAIL,
+            );
+        }
+
+        for (middle, size) in gate::cope(reaches, &self.trail) {
+            scene.push_colored(
+                cube,
+                &Transform::at(middle).with_scale(size),
+                aim::THRESHOLD,
+            );
+        }
+
+        for post in gate::frame(reaches, &self.trail) {
+            scene.push_material(
+                cube,
+                &Transform::at(post.center()).with_scale(post.size()),
+                aim::GATE_OAK,
+                aim::MATTE,
+            );
+        }
+
+        if !gate::shows(&self.trail) {
+            return;
+        }
+
+        let wide = gate::leaf_wide(reaches);
+        let high = gate::leaf_high();
+
+        for side in [-1.0f32, 1.0] {
+            let (middle, turn, _) = gate::leaf(reaches, side, self.gate);
+            let placed = |off: Vec3| Transform::at(middle + turn * off).with_rotation(turn);
+
+            scene.push_material(
+                cube,
+                &placed(Vec3::ZERO).with_scale(vec3(gate::LEAF_THICK, high, wide)),
+                aim::GATE_OAK,
+                aim::MATTE,
+            );
+
+            // the boards, standing a little proud of the leaf so the joint
+            // between each pair is a line of shadow rather than a change
+            // of colour. An odd number, so the middle of a leaf is a board
+            // and not a gap.
+            for n in 0..gate::BOARDS {
+                let across = (n as f32 + 0.5) / gate::BOARDS as f32 - 0.5;
+
+                scene.push_material(
+                    cube,
+                    &placed(vec3(gate::LEAF_THICK * 0.5, 0.0, across * wide)).with_scale(vec3(
+                        gate::PROUD * 2.0,
+                        high - gate::PROUD * 2.0,
+                        wide / gate::BOARDS as f32 - gate::GROOVE,
+                    )),
+                    aim::GATE_BOARD,
+                    aim::MATTE,
+                );
+            }
+
+            // and the iron across them, which is the half of this that
+            // says castle. Across the grain, because a strap along it
+            // would be another board.
+            for up in gate::STRAPS {
+                scene.push_material(
+                    cube,
+                    &placed(vec3(
+                        gate::LEAF_THICK * 0.5 + gate::PROUD,
+                        (up - 0.5) * high,
+                        0.0,
+                    ))
+                    .with_scale(vec3(
+                        gate::PROUD * 2.0,
+                        gate::STRAP,
+                        wide * 0.98,
+                    )),
+                    aim::GATE_IRON,
+                    aim::DULL,
+                );
+            }
+
+            // a ring on each leaf, near the edge it meets its other half
+            // on, which is where a hand goes.
+            if let Some(hoop) = self.hoop {
+                scene.push_material(
+                    hoop,
+                    &placed(vec3(
+                        gate::LEAF_THICK * 0.5 + gate::PROUD,
+                        0.0,
+                        -side * (wide * 0.5 - gate::RING_IN),
+                    ))
+                    .with_rotation(turn * room::laid_on(Vec3::X))
+                    .with_scale(vec3(
+                        gate::RING,
+                        gate::RING_THICK,
+                        gate::RING,
+                    )),
+                    aim::GATE_IRON,
+                    aim::DULL,
+                );
+            }
+        }
     }
 
     /// What is through the door at the top of it. Spec 0056.
@@ -3406,6 +3684,7 @@ impl Arcade {
         // all until every room has given up what it asks. Spec 0054, and
         // spec 0056's Valhalla at the top of it on the same condition.
         out.extend(bridge::solid(self.room.reaches, &self.trail));
+        out.extend(gate::solid(self.room.reaches, &self.trail, self.gate));
         out.extend(valhalla::solid(self.room.reaches, &self.trail));
 
         out
@@ -3526,7 +3805,7 @@ impl Arcade {
             // faces and the short ones got wide ones, which is the
             // one place a body's proportions do not actually follow
             // its height.
-            let carved = look == people::Look::Carved;
+            let carved = look.carved();
 
             scene.push_material(
                 match (carved, carved_head) {
@@ -3727,7 +4006,7 @@ impl Arcade {
                 // for the whole of the world's history and sounds it
                 // once. Hung off the wrist like the hand is, so it
                 // swings with the arm instead of floating beside it.
-                if carved && leg == 1 {
+                if look.horn() && leg == 1 {
                     if let Some(horn) = horn {
                         let fist = wrist + hangs(arm_lower, people::HAND_WIDE);
 
@@ -3836,7 +4115,7 @@ impl Arcade {
                     facing,
                     None,
                     n,
-                    people::Look::Carved,
+                    people::Look::Einherjar,
                 );
             }
         }
@@ -8190,6 +8469,12 @@ impl Game for Arcade {
         let playing = self.playing.now().map(|name| name.to_string());
         self.seen = self.what_i_see();
 
+        // the gate at the top of the bridge, per spec 0058. He asks when
+        // you look at him and press Return, you write back, and the
+        // leaves swing when what you wrote is one of his. Nothing shuts
+        // them again.
+        self.gate = gate::swings(self.gate, self.answered, dt);
+
         // walking away lets go. Looking away cannot happen: while you hold one
         // the mouse is turning it rather than the view.
         if let Some(held) = self.spin.holding() {
@@ -8225,6 +8510,16 @@ impl Game for Arcade {
                 } else {
                     format!("You are carrying {}", self.carried.says())
                 }),
+            ),
+            // the watchman, who asks once you have looked at him and says
+            // one other thing once the gate is moving. Spec 0058.
+            (None, Some(room::Seen::Watchman)) => (
+                Some(String::from("The watchman")),
+                Some(String::from(if self.gate > 0.0 {
+                    says::WATCHMAN_ANSWERED
+                } else {
+                    says::WATCHMAN_ASKS
+                })),
             ),
             (None, Some(room::Seen::Desk)) => (
                 // the event and not the state. "1 housed" is a counter, and
@@ -8473,9 +8768,36 @@ impl Game for Arcade {
             }
         }
 
+        // **A field open is what the prompt says.** Spec 0059: it stands
+        // where the prompt stands, in the same plate, because it is the
+        // same thing. The question is what he asked, the line under it is
+        // what you have written with the caret on the end, and the third
+        // only shows when the last line handed over was not an answer.
+        //
+        // The caret does not blink. A blink is a timer and a redraw that
+        // says nothing the bar does not say standing still.
+        let lines = match self.field.as_ref() {
+            Some(field) => {
+                let mut lines = vec![
+                    (Some(field.question.clone()), aim::PROMPT_SIZE),
+                    (
+                        Some(format!("{}{}", field.said(), aim::CARET)),
+                        aim::PROMPT_SIZE,
+                    ),
+                ];
+
+                if field.again {
+                    lines.push((Some(String::from(says::WATCHMAN_AGAIN)), aim::DETAIL_SIZE));
+                }
+
+                lines
+            }
+            None => vec![(name, aim::PROMPT_SIZE), (detail, aim::DETAIL_SIZE)],
+        };
+
         let said = aim::said(
             self.window,
-            vec![(name, aim::PROMPT_SIZE), (detail, aim::DETAIL_SIZE)]
+            lines
                 .into_iter()
                 .filter_map(|(say, size)| say.map(|say| (say, size)))
                 .collect(),
@@ -9496,7 +9818,7 @@ impl Game for Arcade {
                     &Transform::at(middle)
                         .with_rotation(room::laid_on(looks))
                         .with_scale(vec3(size.x, 1.0, size.y)),
-                    aim::GARDEN_PLASTER,
+                    aim::GARDEN_EARTH,
                     aim::MATTE,
                 );
             }
@@ -9676,7 +9998,9 @@ impl Game for Arcade {
                     }
                 }
 
-                if let (Some(crown), Some((skin, leaf))) = (self.crown, self.foliage(tree)) {
+                if let (Some(crown), Some((skin, leaf))) =
+                    (self.crown, self.foliage(tree, tree.seed))
+                {
                     for sprig in garden::sprigs(tree) {
                         scene.push_textured(
                             crown,
@@ -11855,10 +12179,45 @@ impl Game for Arcade {
         }
     }
 
+    /// What a press came to as text, per the engine's spec 0087. Straight
+    /// into whatever field is open, and nowhere at all when none is.
+    ///
+    /// **Nothing here asks which key it was.** That is the other
+    /// callback's question, and this building's one field wants the
+    /// letter somebody meant rather than the place their finger landed.
+    fn typed(&mut self, text: &str) {
+        if let Some(field) = self.field.as_mut() {
+            field.typed(text);
+        }
+    }
+
     fn process_keyboard(&mut self, input: KeyboardInput) {
         let held = input.state == KeyboardKeyState::Pressed;
         if matches!(input.key, KeyboardKey::LShift | KeyboardKey::RShift) {
             self.shifted = held;
+        }
+
+        // **A field open takes the whole keyboard.** Spec 0059: W is a
+        // letter while anybody is writing one, and a field that let the
+        // walking keys through would walk you off the landing a letter at
+        // a time with your own answer on the screen. The three keys it
+        // does read are the three a line needs, and every other key stops
+        // here whether it was going to do anything or not.
+        if self.field.is_some() {
+            if held {
+                match input.key {
+                    KeyboardKey::Back => {
+                        if let Some(field) = self.field.as_mut() {
+                            field.rubbed_out();
+                        }
+                    }
+                    KeyboardKey::Return if !input.repeat => self.answer_the_field(),
+                    KeyboardKey::Escape if !input.repeat => self.field = None,
+                    _ => (),
+                }
+            }
+
+            return;
         }
 
         // the arrows work whatever toy the sight is on, and walk you about when
@@ -12832,6 +13191,97 @@ mod tests {
             stopped.x,
             free.x
         );
+    }
+
+    /// Specs 0058 and 0059: the whole riddle, from looking at him to the
+    /// leaves moving.
+    ///
+    /// **End to end rather than in pieces.** Every part of this has its
+    /// own test and the thing that was never checked is that they are
+    /// wired to each other: the sight finding him, Return opening a
+    /// field, the characters arriving on the field rather than walking
+    /// you off the landing, Return handing the line over, and the gate
+    /// reading it. Four of those are in different files.
+    #[test]
+    fn the_watchman_is_answered_in_writing() {
+        let mut arcade = Arcade::new();
+
+        for one in trail::Asked::every() {
+            arcade.trail.gave(*one);
+        }
+
+        // standing on the landing, with the sight on him
+        let reaches = arcade.room.reaches;
+        let (him, _) = bridge::watchman(reaches);
+        let top = bridge::top(reaches);
+        let eye = vec3(top.x - 1.0, top.y + EYE, top.z);
+        let look = him + Vec3::Y * people::TALL * 0.5 - eye;
+
+        arcade.at = vec3(eye.x, top.y, eye.z);
+        arcade.eye = top.y;
+        arcade.yaw = look.x.atan2(-look.z);
+        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+
+        assert_eq!(
+            arcade.what_i_see(),
+            Some(room::Seen::Watchman),
+            "the sight is not on him, so nothing else here is being tested"
+        );
+
+        // he asks. `seen` is what `update` leaves behind and `update`
+        // has not run, so it is set here the way the frame would.
+        arcade.seen = arcade.what_i_see();
+        arcade.use_what_i_see();
+        assert!(
+            arcade.field.is_some(),
+            "looking at him and pressing \
+                Return did not open a field"
+        );
+
+        // **and W is a letter now.** The keys that walk you have to stop
+        // at an open field, or writing an answer walks you off the
+        // landing one character at a time.
+        let was = arcade.at;
+        arcade.process_keyboard(KeyboardInput {
+            key: KeyboardKey::W,
+            state: KeyboardKeyState::Pressed,
+            repeat: false,
+        });
+        assert!(!arcade.walking[0], "W walked while a field was open");
+
+        for one in ["A", " ", "Light"] {
+            arcade.typed(one);
+        }
+
+        assert_eq!(arcade.field.as_ref().map(|one| one.said()), Some("A Light"));
+
+        // a wrong one first, which clears the line and does not shut the
+        // field, lock anything or move the gate
+        arcade.field.as_mut().expect("a field").try_again();
+        arcade.typed("not that");
+        arcade.answer_the_field();
+        assert!(
+            arcade.field.is_some(),
+            "a wrong answer shut the gate's field"
+        );
+        assert_eq!(arcade.gate, 0.0, "a wrong answer moved the gate");
+        assert!(arcade.field.as_ref().expect("a field").again);
+
+        // and then one of his
+        for one in says::WATCHMAN_ACCEPTS[0].chars() {
+            arcade.typed(&one.to_string());
+        }
+
+        arcade.answer_the_field();
+        assert!(
+            arcade.field.is_none(),
+            "the field stayed open on a right answer"
+        );
+        assert!(arcade.answered);
+
+        arcade.gate = gate::swings(arcade.gate, arcade.answered, 1.0 / 60.0);
+        assert!(arcade.gate > 0.0, "the leaves never started");
+        assert_eq!(arcade.at, was, "something walked while this was typed");
     }
 
     /// Spec 0041: the reset puts you back where the game opens, from
