@@ -319,8 +319,20 @@ const RUNES: [&[(f32, f32, f32, f32)]; 7] = [
 /// heavy. That is what a real stone looks like anyway. The ribbon is the
 /// outline somebody cut first and deepest, and the writing inside it is
 /// finer work.
+///
+/// **A chisel is a whole number of texels wide.** `carving` walks a disc
+/// of `ceil(thick * CARVED / 2)` along each stroke, so every width
+/// between two of those rounds to the same line. The first thinner rune
+/// was 0.0085 against the band's 0.0115, which is 1.09 against 1.47 and
+/// both ceil to 2: the carving came out byte for byte what it was and
+/// was reported as thinner off two renders at different scales. Jake
+/// read the stone and said the glyphs were still too thick, which they
+/// were, because nothing had moved.
+///
+/// So the steps are what there is to choose from, not the numbers. At
+/// 256 across, the band is five texels and the writing is three.
 pub const STROKE: f32 = 0.0115;
-pub const RUNE_STROKE: f32 = 0.0085;
+pub const RUNE_STROKE: f32 = 0.0070;
 
 /// How finely the stone itself is cut, and how far its skin wanders at
 /// each scale.
@@ -2931,5 +2943,34 @@ mod railing_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod chisel_tests {
+    use super::*;
+
+    /// How wide a stroke actually lands, in texels.
+    fn cut(thick: f32) -> i32 {
+        (thick * CARVED as f32 * 0.5).ceil() as i32 * 2 + 1
+    }
+
+    /// Spec 0054: the writing is cut finer than the ribbon round it.
+    ///
+    /// **Asked of the raster and not of the two numbers.** `carving`
+    /// walks a disc a whole number of texels wide, so two different
+    /// widths can be the same line: 0.0085 against 0.0115 is 1.09
+    /// against 1.47 and both ceil to 2. That change was made, reported
+    /// as done and altered nothing, and Jake found it by reading the
+    /// stone. Comparing the constants would have passed it.
+    #[test]
+    fn the_runes_are_cut_finer_than_the_band() {
+        assert!(
+            cut(RUNE_STROKE) < cut(STROKE),
+            "the band lands at {} texels and the runes at {}, which is one \
+             chisel with two names",
+            cut(STROKE),
+            cut(RUNE_STROKE)
+        );
     }
 }
