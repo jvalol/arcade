@@ -1326,6 +1326,33 @@ pub const ALOFT_BORDER: Vec4 = vec4(0.60, 0.59, 0.55, 1.0);
 /// lighter than what is behind the opening, so the three read as three.
 pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
 
+/// What the glazing of the lantern on the imaginarium's roof burns at, per
+/// spec 0057. The one light this building shows a field a hundred and
+/// thirty metres off.
+///
+/// **Warm, where the room under it is white.** The imaginarium's own six
+/// lamps are `Vec3::ONE`, because the one room with nothing above it should
+/// read as the pale one. This is not that light: `aloft::lantern` is boxed
+/// in behind, so nothing of the room gets out through it. It is a lamp
+/// standing on a roof, and against pale lime at that range a white lamp is
+/// pale lime.
+///
+/// **Far past one, and biased hard warm, because the lamp in the shaft
+/// cannot light it.** Colour here multiplies the lit result, so a panel
+/// with nothing shining on it goes out when the world does, which is
+/// backwards for a lamp. `aloft::lantern_lamp` hangs inside the kerb and
+/// these are its outside faces, pointing away: no lambert, no light. So
+/// the warmth has to survive the clamp instead, and biased this hard it
+/// does. Shot from `bridge::top` it is amber at night, apricot at dusk and
+/// pale yellow at noon, and never white.
+///
+/// **It reads from the bridge and not from the roof.** Ten metres off it
+/// is a flat tan band with nothing coming off it, because what makes a
+/// lamp read up close is what it lands on, and the only thing the shaft's
+/// lamp lands on out there is a pencil of roof at the kerb's foot. The
+/// view this is for is the one at a hundred and thirty metres.
+pub const ALOFT_LANTERN: Vec4 = vec4(6.0, 2.8, 1.0, 1.0);
+
 /// How much the gallery's panel lights itself, per spec 0039. Well short of
 /// the neon's 3.2: a window with something in it, not a sign.
 pub const MANDEL_LIT: Vec4 = vec4(1.7, 1.7, 1.8, 1.0);

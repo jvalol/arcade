@@ -113,19 +113,19 @@ pub fn outside_size() -> Vec2 {
 /// here comes from so that the two rooflines are one roofline.
 ///
 /// **A parapet round the edge and not a lid over the whole top.** A slab
-/// was the first build and it closed the two doorways that stand on this
+/// was the first build and it closed the doorway that stands on this
 /// room's ceiling: spec 0038 puts a way out on all six faces of the cube,
-/// so two of them come up through the roof, and a cope across the footprint
-/// seals both and shares a plane with the sides of each. What is up there
-/// now is a flat roof with two lanterns on it, which is what those doorways
-/// are from outside.
+/// and one of them comes up through the roof, and a cope across the
+/// footprint sealed it and shared a plane with its sides. What is up there
+/// now is a flat roof with one lantern on it, which is what that doorway is
+/// from outside.
 ///
 /// **And it oversails outward only.** The garden's cope throws rain clear
 /// on both sides because a garden wall has two outsides. This one has a
-/// roof on its inside, and those doorways begin exactly at the wall's inner
-/// face, so eleven centimetres of inward oversail lay across the opening of
-/// each: a lintel across the bottom corner of a hole you look up through
-/// from inside the room.
+/// roof on its inside, and that doorway begins exactly at the wall's inner
+/// face, so eleven centimetres of inward oversail lay across its opening: a
+/// lintel across the bottom corner of a hole you look up through from
+/// inside the room.
 pub fn coping() -> Vec<(Vec3, Vec3)> {
     use crate::garden::{COPE_DEEP, COPE_OUT, COPE_ROLL};
 
@@ -177,11 +177,11 @@ pub fn coping() -> Vec<(Vec3, Vec3)> {
 /// doorways, boxed in, with the way it points.
 ///
 /// A way out on all six faces of a cube and a closed recess behind each
-/// means six boxes standing off the outside of it, two on the roof and
-/// four on the walls. Nothing had ever looked at the outside, so all six
-/// were out there in the pale stone of the room's inside: the two on the
-/// roof read as crates somebody had left and the four on the walls as
-/// nothing at all.
+/// means six boxes standing off the outside of it, one on the roof, four
+/// on the walls and one under the floor that is no box at all. Nothing had
+/// ever looked at the outside, so all of them were out there in the pale
+/// stone of the room's inside: the one on the roof read as a crate
+/// somebody had left and the four on the walls as nothing at all.
 pub fn jutting() -> Vec<(Aabb, Vec3)> {
     let mut out = Vec::new();
 
@@ -228,7 +228,7 @@ pub fn jutting() -> Vec<(Aabb, Vec3)> {
 /// it looks), the way `outside` gives the mass's.
 ///
 /// Every face but two: the one against the wall it comes out of, which is
-/// buried, and the one on top, which gets stone. For the two on the roof
+/// buried, and the one on top, which gets stone. For the one on the roof
 /// that leaves the four sides; for the four on the walls it leaves the far
 /// end, the two cheeks and the underside, which is as much on show as any
 /// of them from a field fifteen metres below.
@@ -283,13 +283,95 @@ pub fn jutting_cap(whole: &Aabb) -> (Vec3, Vec3) {
     )
 }
 
+/// The one of those that stands on the roof, which is this room's lantern.
+///
+/// **One, and not two.** Spec 0038 puts a way out on each of the cube's six
+/// faces, so one of them comes out upward and one downward. The downward
+/// one is the hatch in the floor and stands outside nothing, per `jutting`,
+/// which leaves a single box on the roof. Said here rather than counted
+/// again by whoever draws it.
+///
+/// **And it is blind.** `door_recess` closes every one of those openings
+/// with a back and four sides, on purpose, because that is what makes a
+/// doorway dark from inside the room. So nothing of the room's own light
+/// reaches this box and nothing of the sky reaches the room through it: a
+/// lantern here is a lamp standing on a roof, not a hole into a lit room.
+/// Spec 0057 had it the other way round and was wrong.
+pub fn lantern() -> Aabb {
+    jutting()
+        .into_iter()
+        .find(|(_, looks)| *looks == Vec3::Y)
+        .map(|(whole, _)| whole)
+        .expect("the way out through the ceiling")
+}
+
+/// And the glass in the top of it, which is what closes the shaft.
+///
+/// **Because cutting the back out opens a hole in the shell.** The ceiling
+/// of this room is a floor in one of its three frames, per spec 0038, so
+/// an open shaft there is a hole somebody walks into and falls out of the
+/// building through. The hatch in the floor is a way out on purpose and
+/// has a leaf; this would be one by accident.
+///
+/// **Inside the kerb rather than up at the capstone.** The capstone is
+/// drawn and not walked, like the four over the bays, and a collider in
+/// its place would be a second account of a box that is already there:
+/// two faces in one plane, a thing standing outside the shell that is in
+/// no dressed box, and a piece of the room outside the room. All three
+/// checks said so within a minute of trying it. A pane in the head of the
+/// shaft is inside everything that already holds, and it is not drawn
+/// because what you see from under it is the capstone's own underside.
+pub fn lantern_lid() -> Aabb {
+    let shaft = lantern();
+    let glass = 0.04;
+
+    Aabb::new(
+        vec3(shaft.min.x, shaft.max.y - glass, shaft.min.z),
+        vec3(shaft.max.x, shaft.max.y, shaft.max.z),
+    )
+}
+
+/// What hangs in the lantern, per spec 0057.
+///
+/// **It lights the room as well as the shaft, and that is the point of
+/// cutting the back out.** A lamp on that roof used to put a blob on the
+/// imaginarium's ceiling with nothing above it to explain it, which is
+/// what `tests::the_imaginarium_is_drawn` caught. With the hole cut there
+/// is something above it: light coming down a lantern is what a lantern is
+/// for.
+///
+/// Low in the shaft rather than up under the glass, so what it lights most
+/// is the room and the opening, and not a pane nobody is under.
+pub fn lantern_lamp() -> (Vec3, f32, f32) {
+    let shaft = lantern();
+
+    (
+        vec3(
+            shaft.center().x,
+            shaft.min.y + (shaft.max.y - shaft.min.y) * 0.25,
+            shaft.center().z,
+        ),
+        LANTERN_LIT,
+        LANTERN_RANGE,
+    )
+}
+
+/// How brightly it burns and how far it reaches.
+///
+/// Calibrated against this room's own six, which are `DOOR_LAMP_LIT` at
+/// 0.40 over 6.0 and `Vec3::ONE`: a lantern is daylight's hole and should
+/// be the brighter of them, and it reaches far enough down to land on the
+/// floor of the frame under it rather than stopping on the ceiling.
+pub const LANTERN_LIT: f32 = 0.55;
+pub const LANTERN_RANGE: f32 = 9.0;
+
 /// The top of the mass as a surface: where the middle of it is and how far
 /// across, for a quad laid flat on it.
 ///
 /// **The largest surface this building has, and nobody had seen it.** It is
 /// thirteen metres square and it was the pale stone of the room's own
 /// ceiling, because until spec 0041 there was no way to be above it. The
-/// parapet rings it and the two lanterns stand on it, so the quad runs the
+/// parapet rings it and the lantern stands on it, so the quad runs the
 /// whole footprint and the edges of it are buried under the cope.
 pub fn roof() -> (Vec3, Vec2) {
     let out = HALF + THICK;
@@ -770,7 +852,8 @@ fn door_faces(hole: &Aabb) -> (usize, f32) {
     (axis, sign)
 }
 
-/// The recess behind frame `n`'s door `which`: a back and four sides.
+/// The recess behind frame `n`'s door `which`: a back and four sides, or,
+/// for the one that comes out through the ceiling, four sides and the sky.
 ///
 /// **Closed, not a panel hung behind the hole.** One slab with daylight all
 /// round it was the first build, and through the opening you saw a lit
@@ -781,38 +864,49 @@ fn door_faces(hole: &Aabb) -> (usize, f32) {
 ///
 /// Boxed in, the only light that gets in is the room's own, through the
 /// opening, which is what makes a doorway dark.
+///
+/// **Except the one in the ceiling, per spec 0057.** That one stands on the
+/// roof and is the only thing this building shows a field a hundred and
+/// thirty metres off, so it is a roof lantern: four glazed sides, a glazed
+/// lid where the others get stone, and no back. Its kerb runs the depth of
+/// a recess and its own back together, so the box outside and the cap on it
+/// stand exactly where they stood when it was blind.
 pub fn door_recess(n: u64, which: u64) -> Vec<Aabb> {
     let hole = doorway(n, which);
     let (axis, sign) = door_faces(&hole);
+    let open = axis == 1 && sign > 0.0;
     let (mut low, mut high) = (hole.min.to_array(), hole.max.to_array());
+    let deep = if open { DOOR_BACK + THICK } else { DOOR_BACK };
 
     // the recess runs from the wall's far face outward
     if sign > 0.0 {
         low[axis] = high[axis];
-        high[axis] = low[axis] + DOOR_BACK;
+        high[axis] = low[axis] + deep;
     } else {
         high[axis] = low[axis];
-        low[axis] = high[axis] - DOOR_BACK;
+        low[axis] = high[axis] - deep;
     }
 
     let mut out = Vec::new();
 
     // the back of it, grown to cover the ends of the four sides
-    let (mut back_low, mut back_high) = (low, high);
-    if sign > 0.0 {
-        back_low[axis] = high[axis];
-        back_high[axis] = high[axis] + THICK;
-    } else {
-        back_high[axis] = low[axis];
-        back_low[axis] = low[axis] - THICK;
-    }
-    for k in 0..3 {
-        if k != axis {
-            back_low[k] -= THICK;
-            back_high[k] += THICK;
+    if !open {
+        let (mut back_low, mut back_high) = (low, high);
+        if sign > 0.0 {
+            back_low[axis] = high[axis];
+            back_high[axis] = high[axis] + THICK;
+        } else {
+            back_high[axis] = low[axis];
+            back_low[axis] = low[axis] - THICK;
         }
+        for k in 0..3 {
+            if k != axis {
+                back_low[k] -= THICK;
+                back_high[k] += THICK;
+            }
+        }
+        out.push(Aabb::new(Vec3::from(back_low), Vec3::from(back_high)));
     }
-    out.push(Aabb::new(Vec3::from(back_low), Vec3::from(back_high)));
 
     // and its four sides
     for k in 0..3 {
@@ -2367,6 +2461,10 @@ pub fn solid() -> Vec<Aabb> {
             out.extend(door_case(n, which));
         }
     }
+
+    // and the glass over the lantern, which is what closes the hole the
+    // ceiling's doorway now makes, per spec 0057
+    out.push(lantern_lid());
 
     out.extend(way_up());
     out
@@ -4381,10 +4479,10 @@ mod outside_tests {
         assert!(under > 0, "no part of the shaft is under the room at all");
     }
 
-    /// And it leaves the roof's own doorways alone. Spec 0038 puts one on
-    /// every face of the cube, so two of them stand on the ceiling and both
-    /// begin at the wall's inner face. A cope that reaches past that face
-    /// lies across the opening of each, which is what a slab over the whole
+    /// And it leaves the roof's own doorway alone. Spec 0038 puts one on
+    /// every face of the cube, so one of them stands on the ceiling and
+    /// begins at the wall's inner face. A cope that reaches past that face
+    /// lies across its opening, which is what a slab over the whole
     /// footprint did and what an inward oversail of eleven centimetres did
     /// after it.
     #[test]
@@ -4404,6 +4502,32 @@ mod outside_tests {
                 HALF
             );
         }
+    }
+
+    /// Spec 0057: one lantern on the roof, standing on the roof.
+    ///
+    /// **Written because the count was got wrong in prose first.** Spec
+    /// 0057 said two and built a picture on it; there is one, because the
+    /// cube's sixth way out is the hatch in the floor and stands outside
+    /// nothing. A second doorway through the ceiling would be a second
+    /// lantern nobody had drawn and nobody had lit.
+    #[test]
+    fn one_lantern_stands_on_the_roof() {
+        let up: Vec<Aabb> = jutting()
+            .into_iter()
+            .filter(|(_, looks)| *looks == Vec3::Y)
+            .map(|(whole, _)| whole)
+            .collect();
+
+        assert_eq!(up.len(), 1, "the one way out through the ceiling");
+        assert_eq!(up[0], lantern());
+
+        assert!(
+            (lantern().min.y - tops()).abs() < 1e-3,
+            "the lantern starts at {:.3} and the roof is at {:.3}",
+            lantern().min.y,
+            tops()
+        );
     }
 
     /// And nothing of this room stands outside its own shell undressed.

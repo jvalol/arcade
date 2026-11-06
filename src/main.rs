@@ -2801,23 +2801,39 @@ impl Arcade {
                 );
             }
 
-            // and the six things standing off it, which are spec 0038's
-            // doorways seen from the other side: two lanterns on the roof
+            // and the five things standing off it, which are spec 0038's
+            // doorways seen from the other side: one lantern on the roof
             // and four bays on the walls, plastered like the mass with a
             // stone over each.
+            let lantern = aloft::lantern();
+
             for ((face, looks), skin) in aloft::jutting_faces()
                 .into_iter()
                 .zip(self.jutting_skin.iter().copied())
             {
-                scene.push_textured(
-                    mesh,
-                    skin,
-                    &Transform::at(face.center() + looks * 0.02)
-                        .with_rotation(room::laid_on(looks))
-                        .with_scale(room::quad_on(face.size(), looks)),
-                    aim::GARDEN_PLASTER,
-                    aim::MATTE,
-                );
+                let placed = Transform::at(face.center() + looks * 0.02)
+                    .with_rotation(room::laid_on(looks))
+                    .with_scale(room::quad_on(face.size(), looks));
+
+                // **The lantern's four sides are glazed rather than
+                // plastered**, per spec 0057, because this is the one thing
+                // the building shows a field a hundred and thirty metres
+                // off. At that range and four degrees down nothing laid on
+                // a roof reads at all, and a light reads at any size.
+                //
+                // **And it is lit this far past one because the lamp in
+                // the shaft cannot light it.** `aloft::lantern_lamp` hangs
+                // inside the kerb and these are its outside faces, so they
+                // point away from it and take nothing. What the lamp is
+                // for is the room under the hole.
+                //
+                // Its own faces and nothing else's: the test is standing on
+                // the roof, which only this one does.
+                if face.min.y >= lantern.min.y - 1e-3 {
+                    scene.push_colored(mesh, &placed, aim::ALOFT_LANTERN);
+                } else {
+                    scene.push_textured(mesh, skin, &placed, aim::GARDEN_PLASTER, aim::MATTE);
+                }
             }
 
             // the ground storey's roof, which until spec 0041 flew over it
@@ -2879,6 +2895,11 @@ impl Arcade {
             for (whole, _) in aloft::jutting() {
                 let (middle, size) = aloft::jutting_cap(&whole);
 
+                // **Stone on the lantern too, and glass was tried.** A lit
+                // pane over lit sides is one tan mass at night: the colour
+                // clamps to the same value on both and the box loses its
+                // top. What tells you there is a box up there is the dark
+                // slab over it and the line of shadow under its oversail.
                 scene.push_colored(
                     cube,
                     &Transform::at(middle).with_scale(size),
@@ -11507,6 +11528,20 @@ impl Game for Arcade {
             shades.push((eye.distance_squared(at), at, Vec3::ONE, lit, range));
         }
 
+        // and the one hanging in the lantern on the roof, per spec 0057,
+        // which lights the shaft, the opening and the ceiling round it.
+        // White like the room's own six, because it is the room's light
+        // and not the roof's.
+        let (lantern, lit, range) = aloft::lantern_lamp();
+
+        shades.push((
+            eye.distance_squared(lantern),
+            lantern,
+            Vec3::ONE,
+            lit,
+            range,
+        ));
+
         for at in twine::lamps(self.room.reaches) {
             shades.push((
                 eye.distance_squared(at),
@@ -13746,6 +13781,52 @@ mod tests {
     /// and carries you along by a share of your own width: the foot to
     /// the top is 2.38 seconds at sixty and 1.87 at a hundred and
     /// forty four.
+    /// Spec 0057: the lantern on the imaginarium's roof can be seen from
+    /// the landing, which is the whole of why it is lit.
+    ///
+    /// **Because a roof seen from a bridge is a sliver.** Standing at
+    /// `bridge::top`, the imaginarium's lid is a hundred and thirty one
+    /// metres off and seven down, which is 3.8 degrees. At that angle the
+    /// parapet round the roof is as tall in the frame as four metres of
+    /// the roof behind it, and the lantern is 0.48 high. It clears by two
+    /// centimetres. Anything taller on that parapet, or anything shorter
+    /// on that roof, and the one light this building shows the field is
+    /// behind a wall.
+    ///
+    /// The line is taken to the top of the glazing on the near side, which
+    /// is the first of it to come into view.
+    #[test]
+    fn the_lantern_is_seen_from_the_landing() {
+        let reaches = reaches();
+        let eye = bridge::top(reaches) + Vec3::Y * EYE;
+        let lantern = aloft::lantern();
+        let look_at = vec3(lantern.min.x, lantern.max.y, lantern.center().z);
+
+        // the parapet, as boxes, which is the only thing between the two
+        let parapet: Vec<Aabb> = aloft::coping()
+            .into_iter()
+            .map(|(middle, size)| Aabb::new(middle - size * 0.5, middle + size * 0.5))
+            .collect();
+
+        // walked rather than solved, so it holds whatever shape the
+        // parapet grows: a centimetre a step over a hundred and thirty
+        // metres.
+        let steps = ((look_at - eye).length() / 0.01) as u32;
+
+        for step in 0..=steps {
+            let at = eye.lerp(look_at, step as f32 / steps as f32);
+
+            for box_ in &parapet {
+                assert!(
+                    !(at.cmpge(box_.min).all() && at.cmple(box_.max).all()),
+                    "the sight of the lantern runs through the parapet at \
+                     {at:?}, {:.1} of the way from the landing",
+                    step as f32 / steps as f32
+                );
+            }
+        }
+    }
+
     #[test]
     fn the_camera_stays_above_the_deck_however_fast_the_screen_is() {
         for rate in [60.0f32, 90.0, 120.0, 144.0] {
