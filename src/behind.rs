@@ -521,6 +521,15 @@ pub fn inside(reaches: f32, at: Vec3) -> bool {
 /// That is what put a sky behind the solar system: the backdrop asked
 /// `inside`, the garden and this room both said yes, and gating on it
 /// instead took the garden's sky away.
+///
+/// **The backdrop does not ask this any more and nothing in the game
+/// does.** Gating on it covered this room and left the solar system out
+/// past its footprint uncovered, so every staged shot of a planet came
+/// back under a cloudy daylight sky. The sky is drawn on `sees_outdoors`
+/// now, which is the question the field and the building's outside are
+/// already drawn by. What is left here is a region these tests ask about,
+/// so it is theirs.
+#[cfg(test)]
 pub fn in_the_room(reaches: f32, stood: Vec3) -> bool {
     let middle = at(reaches);
     let half = half();

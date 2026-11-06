@@ -406,6 +406,7 @@ thing, and this building knows what those do.
 - And lands on it rather than near it, however long the step. — `beyond::tests::the_ride_does_not_overshoot`
 - The ride steps over the moons. — `beyond::tests::the_ride_steps_over_the_moons`
 - One press is one leg, and a second press stops it. — `tests::a_press_rides_one_leg`
+- Nothing of the day is drawn out here: no sky, no ground, no horizon. — `tests::the_solar_system_is_drawn`, which poses the staged shot's own camera and holds the picture. Written after a refresh of `media/screenshot.png` came back with a cloudy daylight sky over the top half of it, under this room's own line saying Neptune should be as dark as the speck of sun you can see from it. The picture on disk was still the right one, taken before the drift, so what this caught was the next refresh rather than something already out there. The garden's backdrop asked a question of its own three times running; it asks `sees_outdoors` now, which is what the field and the building's outside are already drawn by.
 - The list goes straight to any body, opens where you are and does not wrap. — `tests::the_list_goes_straight_to_a_body`
 - Shift runs out there, the way it does everywhere. — `tests::shift_runs_out_there_too`
 - The staged shot sees the rings and the moon at once. — `beyond::tests::the_staged_shot_sees_the_rings_and_the_moon`

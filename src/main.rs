@@ -9364,15 +9364,25 @@ impl Game for Arcade {
             // The renderer sizes it now, because the far plane is the
             // renderer's and this file could not see it. Spec 0086.
             //
-            // **Asked with the same question the space is drawn by.** It was
-            // `in_the_deep`, which is `z` past the door, while the space
-            // itself is drawn on `behind::inside`, which also wants you
-            // under its lid. For the camera in `what_is_behind_the_wall_is_drawn`
-            // those two disagreed, so that room got the solar system and a
-            // sky behind it at once. Two tests for one question, which is
-            // the fault this project keeps finding.
+            // **Asked with the same question the field is drawn by**, which
+            // is `sees_outdoors`: whether there is any of the outdoors on
+            // the screen at all. `draw_the_field` and `draw_the_outside`
+            // both turn on it and this is the sky over both of them, so a
+            // question of its own here is a third account of one thing.
+            //
+            // It has had two already. `in_the_deep` is `z` past the door
+            // and the space behind the wall is drawn on `behind::inside`,
+            // so for the camera in `what_is_behind_the_wall_is_drawn` those
+            // disagreed and that room got the solar system and a sky behind
+            // it at once. Gating on `behind::in_the_room` fixed that one
+            // room and left the solar system out past it uncovered: every
+            // staged shot of a planet came back with a cloudy daylight sky
+            // over half the frame, which is what `media/screenshot.png`
+            // would have become the next time anybody refreshed it.
+            // `sees_outdoors` is false out there, because `in_the_deep` is
+            // the first half of it.
             if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
-                if !behind::in_the_room(self.room.reaches, self.looking_from()) {
+                if self.sees_outdoors {
                     scene.backdrop(
                         dome,
                         storm,
@@ -15148,6 +15158,30 @@ mod tests {
         let at = vec3(least.x + 2.0, least.y, (least.z + most.z) * 0.5);
 
         looks_right("behind", at, vec3(most.x, at.y + EYE, at.z));
+    }
+
+    /// Spec 0086: and the solar system out past its footprint, which is
+    /// where the sky kept turning up behind it.
+    ///
+    /// **Written because this space had no picture and that is why the
+    /// fault shipped.** Three times now the backdrop and this room have
+    /// been drawn at once, and the one that got out was the one no
+    /// reference held: `media/screenshot.png` went to the site with a
+    /// cloudy daylight sky over the top half of the solar system, under a
+    /// line of its own help text saying Neptune should be as dark as the
+    /// speck of sun you can see from it. `behind.png` is inside the
+    /// footprint and passed through all three.
+    ///
+    /// Posed off `beyond::posed`, which is the pose the staged shot uses,
+    /// so this holds the picture that actually ships rather than one
+    /// nearby.
+    #[test]
+    fn the_solar_system_is_drawn() {
+        let reaches = reaches();
+        let (at, yaw, _) = beyond::posed(beyond::at(reaches)).expect("the staged pose");
+        let look_at = at + Vec3::Y * EYE + vec3(yaw.sin(), 0.0, -yaw.cos()) * 20.0;
+
+        looks_right("solarium", at, look_at);
     }
 
     /// Spec 0027: the back room, from the spot it is arranged to be seen
