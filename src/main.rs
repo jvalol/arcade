@@ -777,6 +777,9 @@ struct Arcade {
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
+    /// Patches of fallen leaves, a handful of pictures to lay about.
+    /// Spec 0059.
+    litter: Vec<TextureId>,
     /// The box one piece of the bridge's deck is drawn on, and the rainbow
     /// laid across its width. Specs 0054 and 0055.
     deck: Option<MeshId>,
@@ -1305,6 +1308,7 @@ impl Arcade {
             jutting_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
+            litter: Vec::new(),
             heads: Vec::new(),
             deck: None,
             rainbow: None,
@@ -3156,6 +3160,41 @@ impl Arcade {
                                 .with_rotation(turned)
                                 .with_scale(vec3(wide, tall, wide)),
                             aim::FIELD_TUFT,
+                            aim::VOID,
+                        );
+                    }
+                    // and what has come off the trees, lying flat. One
+                    // patch takes the colour of the tree it fell from,
+                    // which is `aim::leaf_of` keyed off where the patch
+                    // is rather than where the tree is: a leaf on the
+                    // ground has left its tree and the ground is where
+                    // it is now.
+                    field::What::Litter => {
+                        let (Some(mesh), Some(leaves)) = (
+                            self.ground,
+                            self.litter
+                                .get((stood.turn * 59.0) as usize % self.litter.len().max(1))
+                                .copied(),
+                        ) else {
+                            continue;
+                        };
+                        let wide = field::LITTER_WIDE * stood.size;
+
+                        scene.push_textured(
+                            mesh,
+                            leaves,
+                            // **The flat plane and not the crown.** A
+                            // sprig is three crossed uprights, because
+                            // what it is for is a spray of leaves on a
+                            // tree seen from any side. Turned on its back
+                            // it laid one quad on the ground and left two
+                            // standing, so the field grew little brown
+                            // tokens on their edges. This wants the one
+                            // flat quad the garden's beds are laid with.
+                            &Transform::at(stood.at + Vec3::Y * field::LITTER_LAID)
+                                .with_rotation(turned)
+                                .with_scale(vec3(wide, 1.0, wide)),
+                            aim::litter_of(field::which(&stood)),
                             aim::VOID,
                         );
                     }
@@ -7605,6 +7644,9 @@ impl Game for Arcade {
         // fault the cellar's boards had.
         self.blades = (0..field::TUFTS)
             .map(|n| renderer.add_texture(&field::blades(0x2B19u32.wrapping_add(n * 7901))))
+            .collect();
+        self.litter = (0..field::LITTERS)
+            .map(|n| renderer.add_texture(&garden::fallen(0x8D31u32.wrapping_add(n * 6151))))
             .collect();
         self.heads = aim::FIELD_HEADS
             .iter()

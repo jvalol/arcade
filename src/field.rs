@@ -355,6 +355,8 @@ pub enum What {
     /// Which of the field's flowers it is, which is a colour.
     Flower(usize),
     Tuft,
+    /// A patch of leaves lying where they fell. Spec 0059.
+    Litter,
 }
 
 /// One thing standing in the field.
@@ -387,6 +389,29 @@ pub const FLOWERS: usize = 4;
 pub const TREES_A_CELL: u32 = 2;
 pub const FLOWERS_A_CELL: u32 = 7;
 pub const TUFTS_A_CELL: u32 = 30;
+
+/// And how many patches of fallen leaves.
+///
+/// **More than the tufts, because litter lies in drifts.** A patch is
+/// 0.62 across against a tuft's 0.3, and at twenty a cell it covered an
+/// eighth of the ground, which reads as a few leaves somebody dropped
+/// rather than as a season. Forty is a quarter of it, which is a field
+/// late in the year with grass still coming through.
+///
+/// The near ground was eleven hundred things inside `COVER_REACH` and
+/// this is the cheapest way to put a season on it: one flat quad apiece,
+/// no depth, nothing animated.
+pub const LITTER_A_CELL: u32 = 40;
+/// How many pictures of it there are to lay about.
+pub const LITTERS: u32 = 4;
+pub const LITTER_WIDE: f32 = 0.62;
+
+/// How far a patch floats over the ground.
+///
+/// **Over it rather than in it.** Laid at the ground's own height the two
+/// share a plane and stipple, which is the fault this building has found
+/// eight times. A centimetre is under the grass and over the sward.
+pub const LITTER_LAID: f32 = 0.01;
 
 /// How big a tree, a flower and a tuft are.
 pub const TREE_TALL: f32 = 4.4;
@@ -485,7 +510,7 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
     let mut rolls = Rolls::of(cell, 0xC0F5);
     let mut out = Vec::new();
 
-    for n in 0..(FLOWERS_A_CELL + TUFTS_A_CELL) {
+    for n in 0..(FLOWERS_A_CELL + TUFTS_A_CELL + LITTER_A_CELL) {
         let at = rolls.somewhere(cell);
         let turn = rolls.next() * std::f32::consts::TAU;
         let size = 0.7 + rolls.next() * 0.7;
@@ -500,8 +525,10 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
             size,
             what: if n < FLOWERS_A_CELL {
                 What::Flower((rolls.next() * FLOWERS as f32) as usize % FLOWERS)
-            } else {
+            } else if n < FLOWERS_A_CELL + TUFTS_A_CELL {
                 What::Tuft
+            } else {
+                What::Litter
             },
         });
     }

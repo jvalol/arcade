@@ -1895,6 +1895,17 @@ pub const LEAF_TURNED: [Vec4; 4] = [
 /// A species tint is a bias on a green and means nothing to a turned
 /// leaf, so a broadleaf takes its colour whole and what tells two
 /// species apart out here is the cutout and the bark.
+/// And what a patch of fallen leaves comes out, which is the same list
+/// without the one that has not turned.
+///
+/// **A leaf that is still green is still on the tree.** `LEAF_TURNED`
+/// carries one that is half green on purpose, so a stand of broadleaves
+/// is not all the way over at once. On the ground it reads as grass that
+/// has come loose.
+pub fn litter_of(which: u32) -> Vec4 {
+    LEAF_TURNED[which as usize % (LEAF_TURNED.len() - 1)]
+}
+
 pub fn leaf_of(tint: glam::Vec3, which: u32, broad: bool) -> Vec4 {
     if broad {
         LEAF_TURNED[which as usize % LEAF_TURNED.len()]

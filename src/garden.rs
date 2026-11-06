@@ -3607,6 +3607,81 @@ pub fn broadleaf(seed: u32) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(n, n, pixels)
 }
 
+/// Leaves on the ground, as a patch of them laid flat. Spec 0059.
+///
+/// **The sprig without its twig.** `broadleaf` is a spray of eleven
+/// leaves round a stem, which is what hangs on a tree; this is five of
+/// the same ellipses lying where they fell, spread over the whole square
+/// rather than clustered about a middle, because a patch of litter has
+/// no centre.
+///
+/// Grey, for the reason `broadleaf` is: what a leaf picture knows is the
+/// shape and how the light falls across it. Which leaf it is, in what
+/// season, is the drawing's to say, and litter takes the same
+/// `aim::LEAF_TURNED` the tree above it took.
+///
+/// Thin on the square and not a carpet. Jake's photograph is litter deep
+/// enough to walk through, and a patch dense enough for that is one
+/// opaque brown square: what reads as fallen leaves is the gaps, with
+/// the ground coming through between them.
+pub fn fallen(seed: u32) -> blitzkit::texture::TextureData {
+    let n = SPRIG_PIXELS;
+    let mut pixels = vec![0u8; (n * n * 4) as usize];
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+    let roll = |v: u32| (v % 10_000) as f32 / 10_000.0;
+
+    let mut ink = |x: f32, y: f32, lit: f32| {
+        let (at_x, at_y) = ((x * n as f32) as i32, ((1.0 - y) * n as f32) as i32);
+
+        if at_x < 0 || at_x >= n as i32 || at_y < 0 || at_y >= n as i32 {
+            return;
+        }
+
+        let at = ((at_y as u32 * n + at_x as u32) * 4) as usize;
+
+        for c in 0..3 {
+            pixels[at + c] = (BROAD_UNDER * lit).min(255.0) as u8;
+        }
+        pixels[at + 3] = 255;
+    };
+
+    for _ in 0..5 {
+        // **Anywhere on the square**, and inset only by a leaf's length so
+        // one does not hang off an edge: a patch laid beside another patch
+        // would show the cut.
+        let (mid_x, mid_y) = (0.2 + roll(next()) * 0.6, 0.2 + roll(next()) * 0.6);
+        let long = 0.10 + roll(next()) * 0.06;
+        let fat = long * (0.5 + roll(next()) * 0.25);
+        let turn = roll(next()) * std::f32::consts::TAU;
+        // a wider spread of shade than on the tree, because what is on the
+        // ground has been there for different lengths of time
+        let lit = 0.58 + roll(next()) * 0.62;
+        let (c, s) = (turn.cos(), turn.sin());
+        let across = (long.max(fat) * n as f32).ceil() as i32 + 1;
+
+        for dy in -across..=across {
+            for dx in -across..=across {
+                let (x, y) = (dx as f32 / n as f32, dy as f32 / n as f32);
+                let (u, v) = (x * c + y * s, -x * s + y * c);
+
+                if (u / long).powi(2) + (v / fat).powi(2) > 1.0 {
+                    continue;
+                }
+
+                ink(mid_x + x, mid_y + y, lit * (0.74 + (v / fat).abs() * 0.3));
+            }
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(n, n, pixels)
+}
+
 /// A limb: a taper from the trunk to the pad, built along y.
 pub fn limb_mesh() -> blitzkit::mesh::MeshData {
     crate::cellar::turned(7, 4, |v| (v, 1.0 - v * 0.45))
