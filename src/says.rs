@@ -27,9 +27,15 @@ pub const BIFROST: &str = "BIFROST";
 ///
 /// **He has never seen the building.** He has stood at this end of the
 /// bridge the whole time, which is the one thing he can honestly want
-/// from somebody arriving over it. The answer is not a word: it is
-/// turning round, and the line has to ask for that without saying
-/// "turn round", or the riddle is an instruction.
+/// from somebody arriving over it. The answer is a word, and it is a
+/// word you can only get by turning round, so the line has to ask for
+/// that without saying "turn round", or the riddle is an instruction.
+///
+/// **It was not a word once.** The first build read the answer off the
+/// camera, with nothing typed and no field: whether the lantern was in
+/// view was the whole of it. Jake took that for a proof you had walked
+/// the place rather than for a riddle, so it is written now and
+/// `WATCHMAN_ACCEPTS` below is what he takes. Spec 0058 has the rest.
 ///
 /// The second line is said once, after the gate has started to move. It
 /// does not say well done and it does not say what is through the gate.

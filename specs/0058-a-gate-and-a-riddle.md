@@ -135,12 +135,19 @@ signed `src/says.rs` with `sign-copy` on 2026-11-06, which is what took the
 marker out, and `check-voice` reads the hash in `.copy-signed` rather than
 the marker from then on.
 
-**And that signature is in the way of one thing.** The doc comment over
-`says::WATCHMAN_ASKS` still says the answer is not a word but the act of
-turning round, which was true of the first build and is not true of the
-file three lines under it. The signature is of the whole file's bytes, so
-correcting a comment in it turns `check-voice` red, and signing it again is
-Jake's. Left wrong and written down here rather than quietly broken.
+**And that signature was in the way of one thing**, until 2026-11-07. The
+doc comment over `says::WATCHMAN_ASKS` still said the answer was not a word
+but the act of turning round, which was true of the first build and not of
+the file three lines under it. The signature is of the whole file's bytes,
+so correcting a comment in it turns `check-voice` red and signing it again
+is Jake's, which is why it sat wrong and written down here rather than
+quietly broken. It is corrected and signed now.
+
+Worth keeping, because it is the shape of the thing rather than one
+comment: a signed file is a file nobody can quietly put right. That is the
+point of the gate and it is also its cost, and the cost falls on exactly
+the sentences that go stale, since a file is signed for its words and its
+words are what a comment is.
 
 ## Out of scope
 
