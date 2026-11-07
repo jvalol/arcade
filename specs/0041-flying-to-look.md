@@ -131,7 +131,3 @@ string lookup a frame.
 
 **Fixing what flight shows you.** It turns "the building has an outside" from
 three walls into a list, and the list is not this spec's.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

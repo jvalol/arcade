@@ -169,7 +169,3 @@ door stays. Nothing is built out there and nothing is seen through it.
 
 **Getting out of the imaginarium.** The way down to the nook is still the
 dog-leg and still only reachable from frame nought.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

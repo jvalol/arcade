@@ -98,7 +98,3 @@ move.
 doing and is the right answer for a Latin keyboard.
 
 **Clipboard.** Nothing here pastes.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

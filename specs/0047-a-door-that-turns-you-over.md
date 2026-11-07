@@ -167,7 +167,3 @@ that is a smaller thing than this.
 **Carrying it out of the room.** Leaving by the way up puts you back in
 frame nought. Walking out of an imaginarium sideways is not a thing this
 building needs to answer.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

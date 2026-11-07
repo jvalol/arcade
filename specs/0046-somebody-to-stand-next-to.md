@@ -242,7 +242,3 @@ different one.
 **Standing still well.** This is about the walk. A figure at rest is the same
 figure with the phase held, and whether that reads is a separate question
 nobody has asked yet.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

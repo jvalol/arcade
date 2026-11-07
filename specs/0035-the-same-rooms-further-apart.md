@@ -191,7 +191,3 @@ walk past.
 no arrivals. Spec 0033's people stay next door.
 
 **Saying what phi is.** Not here.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

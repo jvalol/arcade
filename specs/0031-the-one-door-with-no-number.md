@@ -265,7 +265,3 @@ this building has never drawn a person.
 entry and is written in aleph's own `rule.rs` already. Related and separate.
 
 **Explaining what ℵ₀ is.** The hotel does not and neither does this.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

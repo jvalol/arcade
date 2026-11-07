@@ -139,7 +139,3 @@ stop. What makes it not a room nobody wanted is the same test as everything
 else here: it has to use the whole building rather than add to it. For the
 riddle that means an answer you can only have from having walked the
 building. Spec 0055 carries the rest.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

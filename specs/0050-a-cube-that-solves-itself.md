@@ -186,7 +186,3 @@ court has protected is in play.
 None of the above is legal advice and the 2025 disposition is reported
 inconsistently by the commentaries. If it ever matters, read the
 judgments.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

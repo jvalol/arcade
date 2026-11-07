@@ -59,7 +59,3 @@ about.
 **One at a time.** A room where every cabinet starts a window is a dozen windows
 and a dozen sound devices, and the thing meant to show the games off becomes a
 way to lose them behind each other.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

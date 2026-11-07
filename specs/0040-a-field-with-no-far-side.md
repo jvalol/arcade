@@ -592,7 +592,3 @@ field's planting is.
 - The ground has no lit path down the middle of it that turns with you.
   The first build had one: a broad specular highlight on a surface this
   size, which is the garden pond's note on a field.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

@@ -153,7 +153,3 @@ Easing the walk itself. Starting and stopping on the spot is the same
 stiffness in the other axis, and it is a bigger change: the body is a sphere
 pushed through the colliders a frame at a time, so a walk that coasts has to
 coast into walls. The turn carries no such question.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

@@ -91,7 +91,3 @@ that retired it.
 walled off from everything else. `tests::the_fill_gets_to_the_rooms_that_are_open`
 is the one that asks that, and it asks it of three rooms rather than all of
 them.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

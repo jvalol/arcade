@@ -419,7 +419,3 @@ spec 0021's lesson, and I do not have that yet.
 **What spec 0036's trail changes when it gets here.** The trail is a draft
 and its last step is this room, so nothing can be built against it until it
 is settled.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

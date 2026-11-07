@@ -86,7 +86,3 @@ a side effect is a key nothing can check.
 
 **A readout you leave up.** This one runs out. Something that stays on the
 screen while you walk is spec 0013's business and has its own key.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

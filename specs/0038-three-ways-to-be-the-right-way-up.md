@@ -351,7 +351,3 @@ that matters for the status:
 
 - There is something in this room to decide, and you can walk to it from
   the way up. — `aloft::tests::you_can_shut_a_door_from_where_you_stand`
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

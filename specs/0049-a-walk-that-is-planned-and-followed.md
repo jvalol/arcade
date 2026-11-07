@@ -176,7 +176,3 @@ can say about how to approach it is a question for after this works at all.
 
 **The field.** It is made as you walk into it and has no floors to put in a
 graph. A tour that goes out there wants something else.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

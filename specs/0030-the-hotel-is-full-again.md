@@ -178,7 +178,3 @@ enough for.
 
 **The corridor's fittings, lighting and shell**, which are spec 0029's and
 are built.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

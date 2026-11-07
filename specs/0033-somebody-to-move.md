@@ -223,7 +223,3 @@ Raised on 2026-11-01 by [0046](0046-somebody-to-stand-next-to.md), and only
 as far as the room that asked. The bar in this spec is a figure that reads at
 corridor distance without inviting anybody to walk up to it, and the
 imaginarium issues that invitation on its own.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

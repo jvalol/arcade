@@ -230,7 +230,3 @@ number would change under them. It is keyed on what they walked.
 **Any claim about how many names there are.** The room shows that the list
 cannot be finished. It does not name what it is a list of, and `aleph` next
 door does not either.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

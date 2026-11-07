@@ -173,7 +173,3 @@ nowhere.** This says the camera went where the route said. What the last
 frame is of is off the screen and Jake's, and it took him watching it.
 Restaged on the 30th of October to stop short of the water and arc round on
 to it.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

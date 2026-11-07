@@ -161,7 +161,3 @@ nobody is drawn until they are in the corridor and spec 0033 only drew the
 ones already in it.
 
 **Saying which infinity is which.** Not here and not next door.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

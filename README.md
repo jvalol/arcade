@@ -28,7 +28,3 @@ arrow keys work whichever one you are looking at.
 Inside `blitzkit-project` this builds against the engine checkout rather than
 the published crate, because of the `[patch.crates-io]` in
 `blitzkit-project/.cargo/config.toml`.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

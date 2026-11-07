@@ -192,7 +192,3 @@ the one you are meant to arrive in.
 
 **The aurora.** Still parked, with spec 0056's reasoning intact. The panel
 here is a panel.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

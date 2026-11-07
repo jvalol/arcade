@@ -258,7 +258,3 @@ not 2. It costs a round or two a point and nothing else.
   stop. At the bottom a point gets 1624 rounds, which over the whole
   picture is 663 million points-times-rounds against a frame's budget of
   60, and that is why the grid you pan on coarsens by four down there.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

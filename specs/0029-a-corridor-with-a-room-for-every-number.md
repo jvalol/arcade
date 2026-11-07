@@ -383,7 +383,3 @@ corridor has to deal with that, by running over it on a thinner slab, by
 stepping, or by leaving the floor's height alone and taking the cellar's
 ceiling down. Which of those is a question for whoever builds it, and the
 test is the same either way.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.

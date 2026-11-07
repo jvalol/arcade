@@ -154,7 +154,3 @@ already refused for a different reason.
 
 **Anything Heimdall does besides ask and answer.** He does not follow you,
 he does not repeat himself, and he does not comment on how long you took.
-
----
-
-I asked AI to draft this for me. I've edited it. Any surviving AI smells are my oversight.
