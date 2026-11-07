@@ -510,7 +510,7 @@ pub fn inside(reaches: f32, at: Vec3) -> bool {
 }
 
 /// Whether you are in this room's own footprint, and not merely under its
-/// lid. Spec 0086.
+/// lid. The engine's spec 0086.
 ///
 /// **The other question, and `inside` cannot answer it.** That one is a
 /// half space on purpose, bounded above and not along, because what it is
@@ -981,7 +981,7 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 mod tests {
     use super::*;
 
-    /// Spec 0086. `inside` is a half space and says yes to the garden as
+    /// The engine's spec 0086. `inside` is a half space and says yes to
     /// readily as to this room, which is what put a sky behind the solar
     /// system and then took the garden's away.
     #[test]

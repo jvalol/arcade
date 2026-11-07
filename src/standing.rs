@@ -3,8 +3,9 @@
 //!
 //! **Because the building is what all of this was argued from.** The engine
 //! learned to keep a run of instances rather than be told it every frame
-//! (its spec 0058), to draw a kept run where it lies (0059), and to ask the
-//! depth buffer which kept runs a wall hides (0061). Every one of those
+//! (the engine's spec 0058), to draw a kept run where it lies (the
+//! engine's 0059), and to ask the depth buffer which kept runs a wall
+//! hides (the engine's 0061). Every one of those
 //! works on kept runs and this building kept nothing: it pushed eleven
 //! rooms, a carpet and two ceilings, sixty times a second, for a building
 //! in which the only things that move are a ball on a chain, some water, a
@@ -86,7 +87,7 @@ pub struct Run {
 // This file carried a `worth_keeping` and a `KEPT_AT` of 32, with a
 // comment reasoning that the lists in this building are one, three, four,
 // six, thirteen and three hundred and fifty one, so the threshold only had
-// to fall between. Engine spec 0064 took that decision into the engine,
+// to fall between. The engine's spec 0064 took that decision into it,
 // where it is one number with one account of itself rather than one per
 // game. Every run is handed over now and the engine keeps the ones worth
 // keeping.

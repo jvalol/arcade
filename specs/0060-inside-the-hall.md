@@ -161,12 +161,13 @@ a star that is only bright is a white dot.
 
 ## What this turned up and did not fix
 
-**Spec 0059 does not exist.** Twelve places in this crate cite it: the typed
-field, `aim::CARET`, the field's leaf litter, and the bridge's piers and
-balusters. The work all shipped and the spec was never written. `check-specs`
-reads a spec and asks whether the tests it names exist; nothing reads code and
-asks whether the spec it names exists, so the citation rots in the one
-direction nothing checks.
+**Spec 0059 did not exist**, and twelve places in this crate cited it: the
+typed field, `aim::CARET`, the field's leaf litter, and the bridge's piers and
+balusters. Three pieces of work took the same number and none of them wrote
+the file. Fixed the same day: 0059 is the typed field, which is what the
+engine's 0087 points at; the litter went back to spec 0040 and the parapet to
+spec 0055, which own the places they are in. `check-specs` reads the gap in
+the numbering now, which is the one unambiguous part of this.
 
 **`Built::wide` and `Built::long` are the wrong way round for every building
 up here**, not only the hall. Left alone, with a paragraph above instead,

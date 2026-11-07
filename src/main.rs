@@ -769,7 +769,8 @@ struct Arcade {
     storey_skin: Vec<TextureId>,
     outdoors: bool,
     /// Whether the outdoors can be seen from here, which is not the same
-    /// question and is the one the field is drawn on. Spec 0086.
+    /// question and is the one the field is drawn on. The engine's spec
+    /// 0086.
     sees_outdoors: bool,
     storey_faces: Vec<(blitzkit::collision::Aabb, Vec3)>,
     storey_wall_skin: Vec<TextureId>,
@@ -5454,7 +5455,8 @@ impl Arcade {
     /// again, which is one call.
     fn keep_the_building(&mut self, scene: &mut Scene, cube: MeshId) {
         /// What the building tells the engine about itself: that it is the
-        /// same building it was last frame. Spec 0064 takes a version and
+        /// same building it was last frame. The engine's spec 0064 takes
+        /// a version and
         /// this one never moves, because nothing in these runs changes
         /// shape while the game runs. If that stops being true, this is
         /// the number to bump.
@@ -5481,8 +5483,9 @@ impl Arcade {
             // that rectangle is the one room nobody is supposed to find.
             //
             // Out of doors and not `behind::in_the_room`, which is the
-            // tempting test and is wrong by the same margin spec 0086 was
-            // wrong by: it would stop drawing the room while you stood in
+            // tempting test and is wrong by the same margin that
+            // the engine's spec 0086 was wrong by: it would stop drawing
+            // the room while you stood in
             // the hall at its opening looking straight into it. There is
             // no way to see into this room from under the open sky, so
             // anything of it visible from there is a fault.
@@ -5530,7 +5533,8 @@ impl Arcade {
                 (standing::Where::Hall, Some(grain)) => grain,
                 _ => blitzkit::renderer::scene::TextureId::WHITE,
             };
-            // **One call a run, every frame.** Spec 0064: the version
+            // **One call a run, every frame.** The engine's spec 0064:
+            // the version
             // never changes because the building never does, so the boxes
             // are walked once and the engine decides the rest. It keeps a
             // run worth its own draw and pushes one that is not, which is
@@ -8427,7 +8431,7 @@ impl Game for Arcade {
         // doing this work and the half I replaced.
         self.outdoors = !self.in_the_deep() && self.room.out_of_doors(self.looking_from());
         // and whether it is worth drawing, which is a question about sight.
-        // Spec 0086.
+        // The engine's spec 0086.
         self.sees_outdoors = !self.in_the_deep()
             && self
                 .room
@@ -9129,8 +9133,9 @@ impl Game for Arcade {
             // **Wherever the field is drawn and not wherever you stand.**
             // This read `outdoors`, which is `out_of_doors` and is a
             // question about what is over your feet, while the drawing of
-            // the field moved to a question about sight in spec 0086 and
-            // this line did not go with it. Standing in the hall's doorway
+            // the field moved to a question about sight in
+            // the engine's spec 0086 and this line did not go with it.
+            // Standing in the hall's doorway
             // into the garden the field was drawn and the camera stopped
             // at the building's hundred metres, so the far half of it was
             // clipped: Jake, 2026-11-05, the far end of the field does not
@@ -9948,7 +9953,8 @@ impl Game for Arcade {
             // nothing, which is what made this take all morning.
             //
             // The renderer sizes it now, because the far plane is the
-            // renderer's and this file could not see it. Spec 0086.
+            // renderer's and this file could not see it.
+            // The engine's spec 0086.
             //
             // **Asked with the same question the field is drawn by**, which
             // is `sees_outdoors`: whether there is any of the outdoors on
@@ -13289,7 +13295,8 @@ mod tests {
     /// How big a room's picture is.
     ///
     /// Small, because every one of these is committed and read by a person,
-    /// and the same size the engine's own pictures are, per its spec 0062.
+    /// and the same size the engine's own pictures are, per
+    /// the engine's spec 0062.
     const WIDE: u32 = 320;
     const TALL: u32 = 240;
 
@@ -15941,7 +15948,8 @@ mod tests {
         looks_right("behind", at, vec3(most.x, at.y + EYE, at.z));
     }
 
-    /// Spec 0086: and the solar system out past its footprint, which is
+    /// The engine's spec 0086: and the solar system out past its
+    /// footprint, which is
     /// where the sky kept turning up behind it.
     ///
     /// **Written because this space had no picture and that is why the

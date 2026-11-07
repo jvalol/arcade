@@ -2857,7 +2857,7 @@ mod look {
 
 /// The piers along the landing's parapet, and the railing between them.
 ///
-/// **A kerb you can count along.** Spec 0059's note on the photograph:
+/// **A kerb you can count along.** Spec 0055's note on the photograph:
 /// the parapet was one bar of grey from corner to corner, 0.62 high, and
 /// a surface with nothing marking its length reads as one thing however
 /// long it is. Piers at intervals in a warm stone, iron between them,
@@ -3016,7 +3016,7 @@ mod railing_tests {
         trail
     }
 
-    /// Spec 0059: a pier at every end of every run, and one where two
+    /// Spec 0055: a pier at every end of every run, and one where two
     /// runs meet rather than two in the same place.
     ///
     /// **Six and not eight.** The landing's parapet is four runs with
@@ -3055,7 +3055,7 @@ mod railing_tests {
         }
     }
 
-    /// Spec 0059: every baluster stands between two piers and none in one.
+    /// Spec 0055: every baluster stands between two piers and none in one.
     #[test]
     fn no_baluster_stands_inside_a_pier() {
         let piers = piers(REACHES, &done());

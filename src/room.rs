@@ -1642,7 +1642,8 @@ impl Room {
     /// right question for whether the sun reaches you and the wrong one
     /// for whether the field is worth drawing. Stand in the garden's
     /// doorway and that says no, so the ground past the wall was not
-    /// drawn and the sky sat over nothing. Spec 0086 fixed the sky the
+    /// drawn and the sky sat over nothing. The engine's spec 0086 fixed
+    /// the sky the
     /// same way and left this.
     ///
     /// **Rays to the garden, because the garden is the way out.** Every
@@ -2285,7 +2286,8 @@ mod tests {
     /// I enter the garden.** `camera.far` is the building's hundred metres
     /// indoors and the sky's four hundred out, and it was chosen by
     /// `out_of_doors`, which asks what is over your feet. Standing in that
-    /// doorway the field was drawn, because spec 0086 moved the drawing on
+    /// doorway the field was drawn, because the engine's spec 0086 moved
+    /// the drawing on
     /// to a question about sight, and the camera still stopped at a
     /// hundred: the far half of the field was clipped away. One metre west
     /// it all appeared.
@@ -2324,7 +2326,8 @@ mod tests {
     use super::*;
     use glam::vec3;
 
-    /// Spec 0086. The three places that decide this, measured rather than
+    /// The engine's spec 0086. The three places that decide this,
+    /// measured rather than
     /// reasoned about: `out_of_doors` separates the garden from its own
     /// doorway, which is the wrong cut, and `sees_the_sky` is true in all
     /// three including the register, so neither could gate the field.

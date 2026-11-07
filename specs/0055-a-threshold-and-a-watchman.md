@@ -246,6 +246,36 @@ screen in this building and nothing to quit to. The player stays as long as
 they want and then goes back to the rooms. Spec 0036 asks for exactly that,
 nobody rescued and nothing explained.
 
+## The parapet is a parapet and not a bar of grey
+
+Amended 2026-11-06. This built the landing with a kerb 0.62 high all the way
+round and nothing marking its length, and a surface with nothing on it reads
+as one thing however long it is: from the top of the deck the whole far side
+was one bar of grey corner to corner. It also gave you a twenty-six metre
+drop behind something knee high, which the walk tests say you cannot go over
+and the eye does not believe for a moment.
+
+So: piers at intervals in a warm stone, a railing of thin iron balusters
+between them, and the kerb becomes the plinth it already was. The railing
+reaches a hand's height and you can still see over it, which is what the
+landing is for.
+
+**A pier stands through the railing and not under it.** The first ones were
+0.30 on a 0.62 kerb against a 1.05 rail, so the thing meant to carry the
+railing stopped half a metre below it.
+
+**And a baluster stands between two piers and never inside one.** The ends of
+a run and the centres of the piers disagree by a quarter of a metre, so a
+baluster placed off the run alone lands inside the pier at every corner.
+
+This is where `bridge::piers` and `bridge::balusters` are written down. They
+cited a spec 0059 that did not exist until the day this was amended, which is
+the accident spec 0059 opens with.
+
+- One pier at a corner and not two. — `bridge::railing_tests::a_corner_has_one_pier_and_not_two`
+- A pier stands through the railing it carries. — `bridge::railing_tests::a_pier_is_sunk_into_the_kerb_it_stands_on`
+- And no baluster stands inside one. — `bridge::railing_tests::no_baluster_stands_inside_a_pier`
+
 ## Out of scope
 
 **Talking.** See above.

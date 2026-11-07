@@ -970,7 +970,8 @@ pub fn vault_rim(round: f32) -> f32 {
 ///
 /// **Asked of the engine, because the engine decides it.** The sky is
 /// handed over as a backdrop now and the renderer sizes it to sit inside
-/// the far plane, per spec 0086. This file used to choose 22 and the two
+/// the far plane, per the engine's spec 0086. This file used to choose
+/// 22 and the two
 /// tests that matter, that the sky never ends inside the ground and that
 /// it clears every wall round the garden, measured that 22. Once the
 /// renderer took the decision those tests went on passing and neither was
@@ -1018,7 +1019,7 @@ pub fn dome_mesh(by: f32) -> blitzkit::mesh::MeshData {
         // the garden beyond it there was a black strip along the horizon,
         // under the rim and over nothing, because the field's ground is
         // only drawn while you stand out in it. A backdrop that covers
-        // half the view is not a backdrop. Spec 0086.
+        // half the view is not a backdrop. The engine's spec 0086.
         //
         // v nought is `SKIRT` below the rim now and v one is still the top.
         // Taken the other way round the apex came out at the bottom and the
@@ -3630,7 +3631,7 @@ pub fn broadleaf(seed: u32) -> blitzkit::texture::TextureData {
     blitzkit::texture::TextureData::from_pixels(n, n, pixels)
 }
 
-/// Leaves on the ground, as a patch of them laid flat. Spec 0059.
+/// Leaves on the ground, as a patch of them laid flat. Spec 0040.
 ///
 /// **The sprig without its twig.** `broadleaf` is a spray of eleven
 /// leaves round a stem, which is what hangs on a tree; this is five of

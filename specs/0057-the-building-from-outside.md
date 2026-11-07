@@ -1,15 +1,15 @@
 # 0057 The building from outside
 
-**Status:** in build
-**Date:** 2026-11-05
+**Status:** implemented
+**Date:** 2026-11-05, amended 2026-11-07
 
 ## Goal
 
 Make the view back east from the top of the bridge worth the climb, because
 spec 0036 sold the climb on it: the prize is "height and the only sight of
 the arcade from outside itself". Spec 0055 said in as many words that it does
-not pay off yet, and spec 0056's watchman is about to ask you what the place
-looks like from out here.
+not pay off yet, and its watchman is about to ask you what the place looks
+like from out here, which is spec 0058.
 
 ## What you actually see from up there, measured
 
@@ -103,15 +103,6 @@ clamps to the same value on both and the box loses its top. What says
 there is a box up there is the dark slab and the shadow line under its
 oversail.
 
-**What is still not right is the near view.** Ten metres off, on the roof,
-the glazing is a flat tan band and the lamp's only mark outside is a pencil
-of light at the kerb's foot. The view this spec is for is the one at a
-hundred and thirty metres, and that one works.
-
-**One thing stands above the parapet** so the skyline is not a rectangle.
-What that is, and whether a warning light goes on it, is the first thing to
-look at once the lanterns are lit, because the lanterns alone may be enough.
-
 ## Acceptance criteria
 
 - There is one lantern on the roof and it stands on the roof. — `aloft::outside_tests::one_lantern_stands_on_the_roof`
@@ -124,6 +115,20 @@ look at once the lanterns are lit, because the lanterns alone may be enough.
 - Posed at `bridge::top` looking east, the building reads as a building. — run with `--done` and `POSE=-136.85,26.0,15.15,1.5708,-0.05`.
 - The lantern is warm and not white at every hour. — the same pose with `AT=0.45`, `AT=0.68`, `AT=0.80` and `AT=0.97`.
 - From under it, the opening reads as a way out to the sky. — `FLY=1 POSE=-4.55,9.0,-5.75,1.5708,1.15`.
+
+## What is not settled
+
+**The near view.** Ten metres off, on the roof, the glazing is a flat tan
+band and the lamp's only mark outside is a pencil of light at the kerb's
+foot. The view this spec is for is the one at a hundred and thirty metres
+and that one works, so this is recorded rather than owed.
+
+**Whether anything stands above the parapet.** The skyline from the landing
+is a flat top with one bump on it. This spec meant to break that with a mast
+or a vane, and possibly a light on it, and left the decision until the
+lantern was lit, on the argument that the lantern alone might be enough. The
+lantern is lit and nothing has been added, so the question is open. Jake's,
+because it is what the building looks like.
 
 ## Out of scope
 

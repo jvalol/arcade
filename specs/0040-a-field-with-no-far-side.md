@@ -498,6 +498,17 @@ drawing had it, the room behind the wall had it, and this. The shape is
 always the same: a test of where somebody is standing used to answer what
 they can see.
 
+## Leaves on the ground
+
+Amended 2026-11-06. The field turns through the year and for a long time the
+ground under it did not: trees in four colours standing on summer grass.
+`field::What::Litter` is a patch of leaves lying where they fell, sown on the
+same lattice as everything else here and coloured off the same hash, so a
+patch takes a colour one of the trees nearby is already wearing.
+
+It was cited to a spec 0059 that did not exist, and belongs here, where the
+field's planting is.
+
 ## Acceptance criteria
 
 - The field is in sight from the hall's doorway, where you are not yet out of doors. — `room::tests::the_field_is_in_sight_from_the_hall_doorway`

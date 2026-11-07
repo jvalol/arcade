@@ -45,7 +45,8 @@ pub const COVER_REACH: f32 = 22.0;
 ///
 /// What stops it being larger is the sky, which has to clear it: see
 /// `garden::sky_scale`, which asks the engine how big a backdrop it will
-/// draw. This file chose that number itself until spec 0086.
+/// draw. This file chose that number itself until the engine's spec
+/// 0086.
 pub const GROUND_REACH: f32 = 160.0;
 
 /// How big one tile of the ground's own texture is.
@@ -355,7 +356,7 @@ pub enum What {
     /// Which of the field's flowers it is, which is a colour.
     Flower(usize),
     Tuft,
-    /// A patch of leaves lying where they fell. Spec 0059.
+    /// A patch of leaves lying where they fell. Spec 0040.
     Litter,
 }
 
