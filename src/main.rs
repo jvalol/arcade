@@ -788,6 +788,12 @@ struct Arcade {
     /// stone it is cut in, and the name in letters under it.
     runes: Option<TextureId>,
     carving: Option<TextureId>,
+    /// The painted night through the hole in Valhalla's ridge. Spec 0060.
+    night: Option<TextureId>,
+    /// The triangle over each of the hall's gables. Spec 0060.
+    gable: Option<MeshId>,
+    /// One flame of the hall's fire. Spec 0060.
+    hearth_flame: Option<MeshId>,
     granite: Option<TextureId>,
     standing_stone: Option<MeshId>,
     rubble_mound: Option<MeshId>,
@@ -1314,6 +1320,9 @@ impl Arcade {
             rainbow: None,
             runes: None,
             carving: None,
+            night: None,
+            gable: None,
+            hearth_flame: None,
             granite: None,
             standing_stone: None,
             rubble_mound: None,
@@ -3597,37 +3606,52 @@ impl Arcade {
         );
 
         for one in valhalla::built(reaches) {
-            let walls = one.walls();
+            // **Six boxes for the hall and one for everything else.** The
+            // hall is hollow per spec 0060, so its walls are the flanks,
+            // the gables between them and the two runs either side of the
+            // door. Outside it looks exactly as it did: the faces are
+            // where the one box's faces were.
+            let walls: Vec<_> = if one.hall {
+                valhalla::hall_walls(reaches)
+            } else {
+                vec![one.walls()]
+            };
 
-            scene.push_material(
-                cube,
-                &Transform::at(walls.center()).with_scale(walls.size()),
-                aim::VALHALLA_WALL,
-                aim::MATTE,
-            );
+            for wall in walls {
+                scene.push_material(
+                    cube,
+                    &Transform::at(wall.center()).with_scale(wall.size()),
+                    aim::VALHALLA_WALL,
+                    aim::MATTE,
+                );
+            }
 
             // the roof, as two pitches leaning on each other. A box with a
             // lid is a shed and this is a longhouse.
             let rise = one.ridge - one.eaves;
             let slope = (rise / (one.wide * 0.5)).atan();
-            let along = (one.wide * 0.5).hypot(rise);
+            let along = valhalla::slope_run(&one);
 
             for side in [-1.0f32, 1.0] {
-                scene.push_material(
-                    cube,
-                    &Transform::at(vec3(
-                        one.at.x + side * one.wide * 0.25,
-                        one.at.y + one.eaves + rise * 0.5,
-                        one.at.z,
-                    ))
-                    // down as it goes out, not up. The sign was the other
-                    // way and the two pitches flared away from each other
-                    // like wings with the sky between them.
-                    .with_rotation(glam::Quat::from_rotation_z(-side * slope))
-                    .with_scale(vec3(along * 1.06, 0.22, one.long * 1.04)),
-                    aim::VALHALLA_ROOF,
-                    aim::MATTE,
-                );
+                // and in pieces, because the hall's has a hole in it. The
+                // eaves end of the slope is nought and the ridge is one.
+                for (from, to, z_from, z_to) in valhalla::pitch_pieces(&one, one.hall) {
+                    let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+                    let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
+                    let middle = eaves + (ridge - eaves) * (from + to) * 0.5;
+
+                    scene.push_material(
+                        cube,
+                        &Transform::at(vec3(middle.x, middle.y, one.at.z + (z_from + z_to) * 0.5))
+                            // down as it goes out, not up. The sign was the
+                            // other way and the two pitches flared away from
+                            // each other like wings with the sky between them.
+                            .with_rotation(glam::Quat::from_rotation_z(-side * slope))
+                            .with_scale(vec3((to - from) * along * 1.04, 0.22, z_to - z_from)),
+                        aim::VALHALLA_ROOF,
+                        aim::MATTE,
+                    );
+                }
             }
 
             // and one line of neon along the ridge of the hall, which is
@@ -3642,6 +3666,8 @@ impl Arcade {
                 );
             }
         }
+
+        self.draw_the_hall(scene, cube);
 
         // and what those openings throw, which is the whole of why they
         // are openings. One light a building rather than one a window:
@@ -3766,6 +3792,197 @@ impl Arcade {
         }
 
         self.settling = Some(settling);
+    }
+
+    /// Inside the hall, per spec 0060.
+    ///
+    /// **The fire is the only light and everything else is what it falls
+    /// on.** Dark boards, dark timber, a stone kerb, and the underside of
+    /// a roof six metres up with rafters across it. Nothing in here is
+    /// lit that is not the fire or the night through the hole over it.
+    fn draw_the_hall(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+        let one = valhalla::hall(reaches);
+        let floor = valhalla::floor(reaches);
+
+        scene.push_material(
+            cube,
+            &Transform::at(floor.center()).with_scale(floor.size()),
+            aim::HALL_FLOOR,
+            aim::MATTE,
+        );
+
+        // the frame: posts in two rows, the beams across them, and the
+        // benches and the high seat, which are the same timber
+        for piece in valhalla::posts(reaches)
+            .into_iter()
+            .chain(valhalla::ties(reaches))
+            .chain(valhalla::benches(reaches))
+            .chain(std::iter::once(valhalla::high_seat(reaches)))
+        {
+            scene.push_material(
+                cube,
+                &Transform::at(piece.center()).with_scale(piece.size()),
+                aim::HALL_TIMBER,
+                aim::MATTE,
+            );
+        }
+
+        // the rafters, under each pitch and across it, which is the
+        // surface the firelight has to find on its way up
+        let rise = one.ridge - one.eaves;
+        let slope = (rise / (one.wide * 0.5)).atan();
+        let along = valhalla::slope_run(&one);
+        let air = valhalla::inside(reaches);
+        let rafters = ((one.long / 1.6).round() as i32).max(2);
+        // the gable's two faces, which sit either side of the middle of
+        // its wall
+        const WALL_FACE: f32 = valhalla::WALL_THICK * 0.5;
+        const GABLE_IN: f32 = valhalla::GABLE_APART;
+
+        for side in [-1.0f32, 1.0] {
+            for n in 0..rafters {
+                let at_z = air.min.z + (n as f32 + 0.5) / rafters as f32 * (air.max.z - air.min.z);
+
+                // **Not across the hole.** A louvre with the roof's own
+                // rafters running over it is a grating, and what is
+                // wanted is a hole with a night in it.
+                if (at_z - one.at.z).abs() < valhalla::HOLE_LONG * 0.5 + 0.2 {
+                    continue;
+                }
+
+                let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+                let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
+                // under the pitch rather than in it, so the two are not
+                // one surface
+                let middle = (eaves + ridge) * 0.5 - Vec3::Y * 0.16;
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(vec3(middle.x, middle.y, at_z))
+                        .with_rotation(glam::Quat::from_rotation_z(-side * slope))
+                        .with_scale(vec3(along * 0.96, 0.13, 0.16)),
+                    aim::HALL_TIMBER,
+                    aim::MATTE,
+                );
+            }
+        }
+
+        // the stones round the fire, and then the fire
+        let kerb = valhalla::fire(reaches);
+
+        for rail in valhalla::fire_rails(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(rail.center()).with_scale(rail.size()),
+                aim::HEARTH_STONE,
+                aim::MATTE,
+            );
+        }
+
+        // **The fire's own body, which is not the same thing as its
+        // light.** A lamp with nothing where it stands is a room lit by
+        // nobody. The flames are divided by the fill, per
+        // `garden::gives_off`, so the fire is the same fire at noon as at
+        // midnight: the carving was built the other way round and came
+        // out dimmest at the hour it was for.
+        let bed = valhalla::coals(reaches);
+
+        scene.push_material(
+            cube,
+            &Transform::at(bed.center()).with_scale(bed.size()),
+            aim::HEARTH_COALS,
+            aim::MATTE,
+        );
+
+        // and a flame over each of its three lights, so the trench has
+        // something burning in it and not only a glowing floor
+        if let Some(flame) = self.hearth_flame {
+            // **More flames than lights.** Three lights are enough to
+            // light a hall and three flames in sixteen metres of trench
+            // is a fire with gaps in it.
+            for n in 0..valhalla::FLAMES {
+                // each one on its own count, or they rise and fall
+                // together and the fire pulses like a bulb
+                let own = bridge::burning(self.since + n as f32 * 1.31);
+                let (aside, size) = valhalla::flame_sits(n);
+                let along = (n as f32 + 0.5) / valhalla::FLAMES as f32 - 0.5;
+                let at = vec3(
+                    one.at.x + along * (valhalla::FIRE_LONG - 1.0),
+                    kerb.max.y - 0.12,
+                    one.at.z + aside,
+                );
+
+                scene.push_colored(
+                    flame,
+                    &Transform::at(at)
+                        .with_rotation(glam::Quat::from_rotation_y(own * 2.1))
+                        .with_scale(vec3(0.46 * size, (0.26 + own * 0.2) * size, 0.46 * size)),
+                    garden::gives_off(aim::HEARTH_FIRE * own, self.since).extend(1.0),
+                );
+            }
+        }
+
+        // and the light it throws, which is the only light in this room.
+        //
+        // **The middle one asks for a shadow and the other two do not.**
+        // A hall with posts down it and a fire on the floor is a hall
+        // full of long shadows, and that is the whole of what the room
+        // is for. Three casting lamps is three shadow maps of one fire
+        // and only two slots to put them in, and the two that won would
+        // be picked by depth rather than by sense.
+        for (n, at) in valhalla::fires(reaches).into_iter().enumerate() {
+            let own = bridge::burning(self.since + n as f32 * 1.7);
+            let lamp = blitzkit::lighting::PointLight::new(
+                at,
+                aim::HEARTH_SHADE,
+                aim::HEARTH_LIT * own,
+                aim::HEARTH_REACH,
+            );
+
+            scene.push_light(if n == valhalla::FIRES / 2 {
+                lamp.casting()
+            } else {
+                lamp
+            });
+        }
+
+        // the triangle over each gable, which was open to the sky until
+        // there was anybody inside to see it
+        if let Some(gable) = self.gable {
+            let rise = one.ridge - one.eaves;
+
+            for side in [-1.0f32, 1.0] {
+                for turned in [0.0f32, std::f32::consts::PI] {
+                    let face = side * (one.long * 0.5 - WALL_FACE) - side * GABLE_IN * turned.cos();
+
+                    scene.push_material(
+                        gable,
+                        &Transform::at(vec3(one.at.x, one.at.y + one.eaves, one.at.z + face))
+                            .with_rotation(glam::Quat::from_rotation_y(turned))
+                            .with_scale(vec3(one.wide * 0.5, rise, 1.0)),
+                        aim::VALHALLA_WALL,
+                        aim::MATTE,
+                    );
+                }
+            }
+        }
+
+        // the painted night through the hole in the ridge, per spec 0060.
+        // Face down, because it is only ever looked up at.
+        if let (Some(plane), Some(night)) = (self.ground, self.night) {
+            let (at, wide, long) = valhalla::night(reaches);
+
+            scene.push_textured(
+                plane,
+                night,
+                &Transform::at(at)
+                    .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
+                    .with_scale(vec3(wide, 1.0, long)),
+                garden::gives_off(aim::NIGHT_BURNS, self.since).extend(1.0),
+                aim::MATTE,
+            );
+        }
     }
 
     fn draw_the_people(&self, scene: &mut Scene) {
@@ -7693,6 +7910,9 @@ impl Game for Arcade {
         // exactly this: the letters, and what is behind them showing
         // through.
         self.carving = Some(renderer.add_texture(&bridge::carving()));
+        self.night = Some(renderer.add_texture(&valhalla::night_sky()));
+        self.gable = Some(renderer.add_mesh(&valhalla::gable_mesh()));
+        self.hearth_flame = Some(renderer.add_mesh(&valhalla::flame_mesh()));
         self.granite = Some(renderer.add_texture(&garden::granite(bridge::STONE_SEED)));
         // out of round, like the garden's set stones, and squashed thin by
         // the transform so the carved face is near enough flat to cut
@@ -13122,8 +13342,35 @@ mod tests {
         at: Vec3,
         looking_at: Vec3,
     ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        standing_with(at, looking_at, false)
+    }
+
+    /// The same, with every room's question already answered.
+    ///
+    /// **Because the end of the trail is not drawn until it is earned.**
+    /// Spec 0054's rule is read by the bridge, the gate and Valhalla
+    /// alike, so a picture of any of them taken from a fresh game is a
+    /// picture of an empty field.
+    fn standing_at_the_end(
+        at: Vec3,
+        looking_at: Vec3,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        standing_with(at, looking_at, true)
+    }
+
+    fn standing_with(
+        at: Vec3,
+        looking_at: Vec3,
+        done: bool,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
         move |renderer| {
             let mut arcade = Arcade::new();
+
+            if done {
+                for one in trail::Asked::every() {
+                    arcade.trail.gave(*one);
+                }
+            }
 
             arcade.art_from = stand_in_art;
             let mut geometry = Geometry::new();
@@ -14001,6 +14248,15 @@ mod tests {
             &reference(name),
             (WIDE, TALL),
             standing(at, looking_at),
+        );
+    }
+
+    /// The same, from a game with the whole trail answered.
+    fn looks_right_at_the_end(name: &str, at: Vec3, looking_at: Vec3) {
+        blitzkit::picture::drawn_looks_right(
+            &reference(name),
+            (WIDE, TALL),
+            standing_at_the_end(at, looking_at),
         );
     }
 
@@ -15564,6 +15820,27 @@ mod tests {
                 EYE + 3.0,
                 garden::at(reaches).z,
             ),
+        );
+    }
+
+    /// Spec 0060: inside the hall at the end of the trail.
+    ///
+    /// **The one room in this building nobody could photograph.** It did
+    /// not exist, and the three things that would have caught the faults
+    /// in it are all things a picture catches and a number does not: a
+    /// fire washing every surface to cream, a triangle of open sky at
+    /// each gable, and a lit panel painted across a doorway you can now
+    /// walk through.
+    #[test]
+    fn the_hall_inside_is_drawn() {
+        let reaches = reaches();
+        let one = valhalla::hall(reaches);
+        let (door, _, _) = valhalla::doorway(reaches);
+
+        looks_right_at_the_end(
+            "valhalla-hall",
+            vec3(door.x - 2.0, door.y + valhalla::FLOOR_UP, door.z),
+            vec3(one.at.x - one.wide * 0.4, door.y + EYE + 0.2, door.z),
         );
     }
 

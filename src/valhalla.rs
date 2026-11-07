@@ -206,16 +206,13 @@ pub struct Lit {
 /// **The light is in the openings and not on the walls.** The whole of spec
 /// 0055's brief is that the source is out of frame: a wall that glows is a
 /// lamp, and a window that glows is a room you are not in.
+/// **And the hall's door is not one of them any more.** Spec 0060 made
+/// the hall hollow, and a lit panel across the way in is a painted
+/// rectangle where there is now a room: you walk up to the thing it was
+/// standing in for. What comes out of that doorway is the fire.
 pub fn lit(reaches: f32) -> Vec<Lit> {
     let mut out = Vec::new();
-    let (door, wide, high) = doorway(reaches);
-
-    out.push(Lit {
-        at: door - Vec3::X * SET_BACK + Vec3::Y * high * 0.5,
-        wide,
-        high,
-        looks: Vec3::X,
-    });
+    let (door, wide, _) = doorway(reaches);
 
     for one in built(reaches) {
         // down the face that looks at the lane, which for everything here
@@ -264,13 +261,31 @@ pub fn people(reaches: f32) -> Vec<(Vec3, f32)> {
 }
 
 /// What you cannot walk through up here.
+///
+/// **The hall is hollow and the outbuildings are not.** Spec 0060: the
+/// hall is the one you are meant to arrive in, so its walls are six
+/// boxes with a way through them and the other three stay the solid
+/// lumps they have always been.
 pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
     if !crate::bridge::shows(trail) {
         return Vec::new();
     }
 
     let mut out = vec![ground(reaches)];
-    out.extend(built(reaches).iter().map(Built::walls));
+
+    out.extend(
+        built(reaches)
+            .iter()
+            .filter(|one| !one.hall)
+            .map(Built::walls),
+    );
+    out.extend(hall_walls(reaches));
+    out.push(floor(reaches));
+    out.push(fire(reaches));
+    out.extend(posts(reaches));
+    out.extend(ties(reaches));
+    out.extend(benches(reaches));
+    out.push(high_seat(reaches));
 
     out
 }
@@ -297,12 +312,589 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
         .collect()
 }
 
+/// A box from two corners, which is what most of the inside is written
+/// as. `Aabb::from_center_size` wants a middle and a size, and every
+/// piece of a room is easier to say as the two faces it runs between.
+fn corners(from: Vec3, to: Vec3) -> Aabb {
+    Aabb::from_center_size((from + to) * 0.5, to - from)
+}
+
+/// The hall itself, named once.
+///
+/// **Because four things ask where it is.** The doorway, the walls, the
+/// inside and the roof's hole all read it, and `built(reaches)[0]` in
+/// four places is four chances to point at an outbuilding.
+pub fn hall(reaches: f32) -> Built {
+    built(reaches)[0]
+}
+
+/// How thick the hall's walls are.
+///
+/// **Daub on a frame, so not thin.** It is also the number that decides
+/// how far the inside is from the outside, and a wall you can see the
+/// thickness of through a doorway is most of what says you went in.
+pub const WALL_THICK: f32 = 0.45;
+
+/// How far the hall's floor stands above the yard outside it.
+///
+/// **Not flush, because flush is two faces in one plane.** The ground up
+/// here is one slab under everything and a floor laid level with it
+/// z-fights over the whole hall. A threshold is also just true. Well
+/// under `walk::STEP`, so walking in is not a climb.
+pub const FLOOR_UP: f32 = 0.06;
+
+/// The clear air inside the hall.
+pub fn inside(reaches: f32) -> Aabb {
+    let one = hall(reaches);
+
+    corners(
+        vec3(
+            one.at.x - one.wide * 0.5 + WALL_THICK,
+            one.at.y + FLOOR_UP,
+            one.at.z - one.long * 0.5 + WALL_THICK,
+        ),
+        vec3(
+            one.at.x + one.wide * 0.5 - WALL_THICK,
+            one.at.y + one.eaves,
+            one.at.z + one.long * 0.5 - WALL_THICK,
+        ),
+    )
+}
+
+/// The hall's walls, which used to be one box and are now six.
+///
+/// **The flanks run the whole length and the gables fit between them.**
+/// Mitred, the two would meet face to face in one plane down every
+/// corner. Run through, the gable's ends are buried inside the flanks and
+/// there is nothing in a plane with anything.
+///
+/// **And the east flank is in three pieces**, because the door is in it:
+/// the run each side and the lintel over it. The lintel is above head
+/// height and could be left out of the colliders without anybody
+/// noticing, which is the reason to put it in.
+pub fn hall_walls(reaches: f32) -> Vec<Aabb> {
+    let one = hall(reaches);
+    let (door, wide, high) = doorway(reaches);
+    let (foot, head) = (one.at.y, one.at.y + one.eaves);
+    let (west, east) = (one.at.x - one.wide * 0.5, one.at.x + one.wide * 0.5);
+    let (south, north) = (one.at.z - one.long * 0.5, one.at.z + one.long * 0.5);
+
+    vec![
+        corners(
+            vec3(west, foot, south),
+            vec3(west + WALL_THICK, head, north),
+        ),
+        corners(
+            vec3(east - WALL_THICK, foot, south),
+            vec3(east, head, door.z - wide * 0.5),
+        ),
+        corners(
+            vec3(east - WALL_THICK, foot, door.z + wide * 0.5),
+            vec3(east, head, north),
+        ),
+        corners(
+            vec3(east - WALL_THICK, foot + high, door.z - wide * 0.5),
+            vec3(east, head, door.z + wide * 0.5),
+        ),
+        corners(
+            vec3(west + WALL_THICK, foot, south),
+            vec3(east - WALL_THICK, head, south + WALL_THICK),
+        ),
+        corners(
+            vec3(west + WALL_THICK, foot, north - WALL_THICK),
+            vec3(east - WALL_THICK, head, north),
+        ),
+    ]
+}
+
+/// The floor you stand on in there, which is boards and not the yard.
+pub fn floor(reaches: f32) -> Aabb {
+    let one = hall(reaches);
+    let air = inside(reaches);
+
+    corners(
+        vec3(air.min.x, one.at.y - 0.5, air.min.z),
+        vec3(air.max.x, one.at.y + FLOOR_UP, air.max.z),
+    )
+}
+
+/// The fire down the middle: how far it runs, how far across, and how
+/// high its kerb stands.
+///
+/// **A trench down the length and not a hearth at one end.** You come
+/// in at the east gable and the hall runs twenty-four metres away from
+/// you, so a fire at the far end is a bright wall with a dark walk to
+/// it. A trench is what you walk along, and it is what a longhouse has.
+///
+/// **Along `wide` and not along `long`.** The hall's `wide` is its
+/// twenty-four metres and its `long` is its nine, which is the other
+/// way round from what those names say and is the first thing this room
+/// was built wrong: a sixteen metre fire laid along `long` runs out
+/// through both walls.
+pub const FIRE_LONG: f32 = 16.0;
+pub const FIRE_WIDE: f32 = 1.3;
+pub const FIRE_KERB: f32 = 0.22;
+
+/// The trench, which is what you cannot walk into.
+///
+/// **The whole box and not the stones round it.** What is drawn is a rim
+/// with an open middle; what stops you is the lot, because the open
+/// middle is a fire.
+pub fn fire(reaches: f32) -> Aabb {
+    let one = hall(reaches);
+    let foot = one.at.y + FLOOR_UP;
+
+    corners(
+        vec3(one.at.x - FIRE_LONG * 0.5, foot, one.at.z - FIRE_WIDE * 0.5),
+        vec3(
+            one.at.x + FIRE_LONG * 0.5,
+            foot + FIRE_KERB,
+            one.at.z + FIRE_WIDE * 0.5,
+        ),
+    )
+}
+
+/// How wide the stones round the rim are.
+pub const RAIL_WIDE: f32 = 0.3;
+
+/// The four stones round the rim, which is what is drawn of the kerb.
+///
+/// **A rim round a hole, not a lid on a box.** The first build drew the
+/// whole trench as one stone with the coals laid over its top, which is
+/// a raised block with a glowing lid: no trench, no depth, and the two
+/// tops in one plane stippling down the length of the hall.
+pub fn fire_rails(reaches: f32) -> Vec<Aabb> {
+    let whole = fire(reaches);
+
+    vec![
+        corners(
+            whole.min,
+            vec3(whole.max.x, whole.max.y, whole.min.z + RAIL_WIDE),
+        ),
+        corners(
+            vec3(whole.min.x, whole.min.y, whole.max.z - RAIL_WIDE),
+            whole.max,
+        ),
+        // **The ends run between the sides and not across them.** Run
+        // through, the two lap at each corner and their tops are two
+        // exposed faces at one height: a thirty centimetre square of
+        // stipple at each end of the trench.
+        corners(
+            vec3(whole.min.x, whole.min.y, whole.min.z + RAIL_WIDE),
+            vec3(
+                whole.min.x + RAIL_WIDE,
+                whole.max.y,
+                whole.max.z - RAIL_WIDE,
+            ),
+        ),
+        corners(
+            vec3(
+                whole.max.x - RAIL_WIDE,
+                whole.min.y,
+                whole.min.z + RAIL_WIDE,
+            ),
+            vec3(whole.max.x, whole.max.y, whole.max.z - RAIL_WIDE),
+        ),
+    ]
+}
+
+/// The bed of coals inside the rim.
+///
+/// **Under the rim's top and not level with it.** Level, the two faces
+/// fight; under, the rim throws a shadow line along the coals, which is
+/// the thing that says there is a trench.
+pub fn coals(reaches: f32) -> Aabb {
+    let whole = fire(reaches);
+
+    corners(
+        vec3(
+            whole.min.x + RAIL_WIDE,
+            whole.min.y,
+            whole.min.z + RAIL_WIDE,
+        ),
+        vec3(
+            whole.max.x - RAIL_WIDE,
+            whole.max.y - 0.07,
+            whole.max.z - RAIL_WIDE,
+        ),
+    )
+}
+
+/// A flame, turned rather than boxed.
+///
+/// **Because a box the size of a flame is a crate.** Wide at the foot,
+/// pinched, and drawn to a point: the first build put three cubes in
+/// the trench and they read as three cubes.
+pub fn flame_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(10, 14, |v| {
+        let waist = (v * std::f32::consts::PI).sin().powf(0.7) * (1.0 - v * 0.55);
+
+        (v, waist.max(0.0))
+    })
+}
+
+/// How many lights the fire is and how high above the kerb they sit.
+///
+/// **Three, because sixteen metres lit from a point in the middle is a
+/// hearth with a long dark trench either side.** Few enough that the
+/// three read as one fire and the falloff between them is the length of
+/// the hall rather than three lamps in a row.
+pub const FIRES: usize = 3;
+/// And how many flames stand in it, which is a different question: the
+/// lights are what the room is lit by and the flames are what you look
+/// at. Three flames in sixteen metres is a fire with gaps in it.
+pub const FLAMES: usize = 22;
+
+/// Where a flame sits across the trench and how big it is, which is not
+/// the same for any two of them.
+///
+/// **Because evenly spaced and all one size is a row of eggs.** Eleven
+/// identical teardrops a metre and a third apart read as candles in a
+/// line, which is what Jake would have said about them. A fire is one
+/// ragged thing: close enough together to run into each other, and no
+/// two the same.
+///
+/// Off the count rather than off a clock, so the fire is the same shape
+/// from one frame to the next and only its burning moves.
+pub fn flame_sits(which: usize) -> (f32, f32) {
+    let mut hash = (which as u32).wrapping_mul(0x9e37_79b9);
+
+    hash ^= hash >> 15;
+    hash = hash.wrapping_mul(0x85eb_ca6b);
+    hash ^= hash >> 13;
+
+    let aside = (hash & 0xffff) as f32 / 65535.0 - 0.5;
+    let size = ((hash >> 16) & 0xffff) as f32 / 65535.0;
+
+    (
+        aside * (FIRE_WIDE - RAIL_WIDE * 2.0 - 0.3),
+        0.7 + size * 0.75,
+    )
+}
+/// **Up at the flames and not down on the coals.** At a hand above the
+/// bed, the three lamps lit the bed itself harder than anything else in
+/// the room and it came out white: a sixteen metre lightbox. A fire
+/// gives its light off from its flames.
+pub const FIRE_UP: f32 = 0.62;
+
+pub fn fires(reaches: f32) -> Vec<Vec3> {
+    let one = hall(reaches);
+    let foot = one.at.y + FLOOR_UP + FIRE_KERB + FIRE_UP;
+
+    (0..FIRES)
+        .map(|n| {
+            let along = (n as f32 + 0.5) / FIRES as f32 - 0.5;
+
+            vec3(one.at.x + along * FIRE_LONG, foot, one.at.z)
+        })
+        .collect()
+}
+
+/// The posts that carry the roof: how far either side of the middle, how
+/// thick, how many bays they make, and how high the beam across them sits.
+///
+/// **Seven bays and so eight posts a side, which is an even number.** A
+/// longhouse is a nave and two aisles and the posts are what makes the
+/// length read as length, and they are what the firelight has to fall
+/// across: a room lit off the floor with nothing standing up in it is a
+/// lit floor. An odd count puts one of them in the middle, which is dead
+/// in front of the door.
+pub const POST_ASIDE: f32 = 2.6;
+pub const POST_THICK: f32 = 0.32;
+pub const BAYS: usize = 7;
+pub const TIE_UP: f32 = 2.8;
+pub const TIE_DEEP: f32 = 0.26;
+
+/// Where each post stands along the hall, which is along `wide`.
+fn post_line(reaches: f32) -> Vec<f32> {
+    let one = hall(reaches);
+    let run = one.wide - WALL_THICK * 2.0 - POST_THICK * 2.0 - 1.2;
+
+    (0..=BAYS)
+        .map(|n| one.at.x + (n as f32 / BAYS as f32 - 0.5) * run)
+        .collect()
+}
+
+pub fn posts(reaches: f32) -> Vec<Aabb> {
+    let one = hall(reaches);
+    let foot = one.at.y + FLOOR_UP;
+    let head = one.at.y + TIE_UP;
+    let mut out = Vec::new();
+
+    for side in [-1.0f32, 1.0] {
+        for along in post_line(reaches) {
+            let middle = vec3(along, (foot + head) * 0.5, one.at.z + side * POST_ASIDE);
+
+            out.push(Aabb::from_center_size(
+                middle,
+                vec3(POST_THICK, head - foot, POST_THICK),
+            ));
+        }
+    }
+
+    out
+}
+
+/// The beams across the hall, one on each pair of posts.
+pub fn ties(reaches: f32) -> Vec<Aabb> {
+    let one = hall(reaches);
+
+    post_line(reaches)
+        .into_iter()
+        .map(|along| {
+            Aabb::from_center_size(
+                vec3(along, one.at.y + TIE_UP + TIE_DEEP * 0.5, one.at.z),
+                vec3(POST_THICK, TIE_DEEP, POST_ASIDE * 2.0 + POST_THICK),
+            )
+        })
+        .collect()
+}
+
+/// The benches down each wall, and the one seat that is not a bench.
+pub const BENCH_HIGH: f32 = 0.52;
+pub const BENCH_DEEP: f32 = 1.1;
+
+/// **Down both flanks, and nothing in the way of the door.** The door is
+/// in the east gable, so a bench against either flank is beside it and
+/// not across it, and both run the whole length. They fill the aisle
+/// from the wall to just short of the posts, which is a strip narrower
+/// than a body and was never anywhere to walk.
+pub fn benches(reaches: f32) -> Vec<Aabb> {
+    let one = hall(reaches);
+    let air = inside(reaches);
+    let foot = one.at.y + FLOOR_UP;
+    let head = foot + BENCH_HIGH;
+    let seat = high_seat(reaches);
+
+    [-1.0f32, 1.0]
+        .iter()
+        .copied()
+        .map(|side| {
+            let wall = one.at.z + side * (one.long * 0.5 - WALL_THICK);
+            let in_to = wall - side * BENCH_DEEP;
+
+            corners(
+                vec3(seat.max.x + 0.2, foot, wall.min(in_to)),
+                vec3(air.max.x - 0.5, head, wall.max(in_to)),
+            )
+        })
+        .collect()
+}
+
+/// The high seat at the west gable, which is the one thing in here that
+/// is somewhere rather than somewhere to sit.
+///
+/// **At the far end, which is what you walk towards.** You come in at
+/// the east gable and the fire runs away from you down the length; the
+/// thing at the end of it is what the walk is for.
+pub fn high_seat(reaches: f32) -> Aabb {
+    let one = hall(reaches);
+    let air = inside(reaches);
+    let foot = one.at.y + FLOOR_UP;
+
+    corners(
+        vec3(air.min.x, foot, one.at.z - 1.7),
+        vec3(air.min.x + 1.2, foot + BENCH_HIGH + 0.3, one.at.z + 1.7),
+    )
+}
+
+/// The louvre in the ridge: how far it runs along the hall and how far
+/// down each pitch it reaches.
+pub const HOLE_LONG: f32 = 3.4;
+pub const HOLE_DOWN: f32 = 1.2;
+
+/// How far along the slope a pitch runs, which is the one number the
+/// roof's pieces are cut out of.
+pub fn slope_run(one: &Built) -> f32 {
+    (one.wide * 0.5).hypot(one.ridge - one.eaves)
+}
+
+/// The pieces one pitch of a roof is drawn in: how far along the slope
+/// each runs, from the eaves at nought to the ridge at one, and the two
+/// ends of it along the building.
+///
+/// **One piece unless there is a hole in it.** A plain roof is the slab
+/// it has always been. The hall's is three: the run below the hole, the
+/// whole length, and then the top of the slope in two runs either side of
+/// the opening. Split along the slope at one height everywhere rather
+/// than cut round a rectangle, because the first is three boxes and the
+/// second is a mesh.
+pub fn pitch_pieces(one: &Built, holed: bool) -> Vec<(f32, f32, f32, f32)> {
+    // the gable overhang, which is what the length was being multiplied
+    // by before any of this
+    let over = one.long * 0.52;
+
+    if !holed {
+        return vec![(0.0, 1.0, -over, over)];
+    }
+
+    let under = (slope_run(one) - HOLE_DOWN) / slope_run(one);
+
+    vec![
+        (0.0, under, -over, over),
+        (under, 1.0, -over, -HOLE_LONG * 0.5),
+        (under, 1.0, HOLE_LONG * 0.5, over),
+    ]
+}
+
+/// How wide the hole in the ridge comes out, across the hall.
+pub fn hole_wide(one: &Built) -> f32 {
+    HOLE_DOWN * (one.wide * 0.5) / slope_run(one) * 2.0
+}
+
+/// How much wider than the hole the painted night is, and how far under
+/// the ridge it hangs.
+///
+/// **Wider, so no edge of it is ever in shot.** What is wanted is a night
+/// seen through a hole, and a panel you can see the end of is a panel.
+pub const NIGHT_OVER: f32 = 1.5;
+pub const NIGHT_UNDER: f32 = 0.07;
+
+/// The painted night: where its middle is and how big it is.
+pub fn night(reaches: f32) -> (Vec3, f32, f32) {
+    let one = hall(reaches);
+
+    (
+        vec3(one.at.x, one.at.y + one.ridge - NIGHT_UNDER, one.at.z),
+        hole_wide(&one) * NIGHT_OVER,
+        HOLE_LONG * NIGHT_OVER,
+    )
+}
+
+/// The triangle over each gable wall, between the eaves and the roof.
+///
+/// **Open until somebody could get inside.** The walls stop at the eaves
+/// and the roof rises past them to the ridge, which from outside is a
+/// gap tucked under an overhang and from inside is a triangle of night
+/// sky at each end of the hall. Nobody could be inside until spec 0060,
+/// so nobody had seen it.
+///
+/// A tent in a unit square: `x` from minus one to one, `y` from nought
+/// at the eaves to one at the apex, flat in `z`. Scaled to the half
+/// width and the rise, it is the shape the two pitches leave.
+///
+/// **Flat and drawn twice.** It is one surface and has one side, so each
+/// gable gets two: one facing in and one facing out, the second turned
+/// about `y` rather than scaled by a negative, which is the thing that
+/// turns a mesh inside out quietly.
+pub fn gable_mesh() -> blitzkit::mesh::MeshData {
+    let mut mesh = blitzkit::mesh::MeshData::surface(28, 10, |u, v| {
+        let across = u * 2.0 - 1.0;
+
+        vec3(across, v * (1.0 - across.abs()), 0.0)
+    });
+
+    mesh.compute_normals();
+    mesh
+}
+
+/// How far either side of the gable's middle plane its two faces sit.
+pub const GABLE_APART: f32 = 0.16;
+
+/// How fine the painted night is drawn.
+pub const NIGHT_TEXELS: u32 = 512;
+
+/// The eddies the sky turns about: where each one is, how many times the
+/// band goes round it, and how far its pull reaches.
+const EDDIES: [(f32, f32, f32, f32); 3] = [
+    (0.32, 0.38, 3.0, 2.6),
+    (0.70, 0.60, -2.0, 3.4),
+    (0.52, 0.80, 2.0, 4.2),
+];
+
+/// The stars: where each one is, how far its halo reaches, and how hard
+/// it burns.
+const STARS: [(f32, f32, f32, f32); 7] = [
+    (0.20, 0.26, 0.095, 1.00),
+    (0.74, 0.22, 0.062, 0.76),
+    (0.86, 0.54, 0.074, 0.88),
+    (0.44, 0.60, 0.050, 0.62),
+    (0.62, 0.82, 0.066, 0.78),
+    (0.14, 0.72, 0.046, 0.54),
+    (0.50, 0.12, 0.040, 0.48),
+];
+
+/// A night painted rather than photographed, for the hole in the ridge.
+///
+/// **It is a panel in the hall and not the sky.** Spec 0056 parked the
+/// aurora because the weather moves by sliding the sky's own picture and
+/// there is one sky for the whole building, so anything painted into it
+/// turns up over the zen garden. A picture under a hole owes nothing to
+/// any of that.
+///
+/// **Swirl, then stars, in that order.** The swirl is the ground and the
+/// stars are laid over it, which is the way round the painting is made
+/// and the way round that keeps a star from being half a band.
+///
+/// The stars are a bright core inside a wide halo rather than bright
+/// dots. This canvas clips at one, so a star that is only brighter is a
+/// white dot with a hard edge, which is the fault the runestone's carving
+/// spent a day on.
+pub fn night_sky() -> blitzkit::texture::TextureData {
+    let n = NIGHT_TEXELS;
+    let mut pixels = vec![0u8; (n * n * 4) as usize];
+    // the two ends of the sky's own colour, which the bands run between
+    // **Deep, because the panel is multiplied past one.** At the colour
+    // a night sky looks on paper, every band of it clipped and the
+    // whole thing came out light blue with white blotches in it.
+    let deep = vec3(0.020, 0.045, 0.205);
+    let pale = vec3(0.085, 0.300, 0.720);
+    let star = vec3(1.0, 0.74, 0.26);
+
+    for down in 0..n {
+        for across in 0..n {
+            let u = (across as f32 + 0.5) / n as f32;
+            let v = (down as f32 + 0.5) / n as f32;
+            let mut band = ((u * 11.0).sin() + (v * 9.3).cos()) * 0.17;
+
+            for (at_u, at_v, turn, reach) in EDDIES {
+                let (du, dv) = (u - at_u, v - at_v);
+                let away = (du * du + dv * dv).sqrt().max(1e-3);
+
+                // round the eddy and out from it at once, which is what
+                // makes a band curl rather than ring
+                band += (dv.atan2(du) * turn + away * 24.0).sin() * (-(away * reach)).exp();
+            }
+
+            let mut colour = deep + (pale - deep) * (band * 0.5 + 0.5).clamp(0.0, 1.0);
+
+            for (at_u, at_v, reach, hard) in STARS {
+                let away = (u - at_u).hypot(v - at_v);
+                let near = 1.0 - (away / reach).min(1.0);
+                // the halo, and a core inside it that goes white
+                let halo = near * near * near;
+                let core = (1.0 - (away / (reach * 0.26)).min(1.0)).powi(2);
+
+                colour += star * hard * halo + Vec3::ONE * hard * core;
+            }
+
+            let at = ((down * n + across) * 4) as usize;
+
+            for (c, one) in colour.to_array().iter().copied().enumerate() {
+                pixels[at + c] = (one.clamp(0.0, 1.0) * 255.0).round() as u8;
+            }
+
+            pixels[at + 3] = 255;
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(n, n, pixels)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::trail::Asked;
 
     const REACHES: f32 = 20.0;
+
+    /// Everything you can walk into up here, which is this place and the
+    /// bridge it stands on the end of.
+    fn everything() -> Vec<Aabb> {
+        let mut out = crate::bridge::solid(REACHES, &done());
+        out.extend(solid(REACHES, &done()));
+        out
+    }
 
     fn done() -> Trail {
         let mut trail = Trail::new();
@@ -381,6 +973,294 @@ mod tests {
             "it ended {:.2} up and the ground is at {:.2}",
             ended.y,
             middle.y
+        );
+    }
+
+    /// Spec 0060: everything built inside the hall is inside the hall.
+    ///
+    /// **Written because the names lie.** `Built::wide` is the hall's
+    /// twenty-four and `Built::long` is its nine, which is the wrong way
+    /// round from what they say, and the first build of this room was
+    /// written to the names: a sixteen metre fire through both walls and
+    /// benches across the door. Nothing failed. It drew, it was solid,
+    /// and it was a hall with its furniture outside it.
+    #[test]
+    fn everything_inside_is_inside() {
+        let air = inside(REACHES);
+        let mut every = vec![fire(REACHES), floor(REACHES), high_seat(REACHES)];
+
+        every.extend(posts(REACHES));
+        every.extend(ties(REACHES));
+        every.extend(benches(REACHES));
+
+        for one in every {
+            assert!(
+                one.min.x >= air.min.x - 1e-3 && one.max.x <= air.max.x + 1e-3,
+                "something runs from {:.2} to {:.2} across a hall that is \
+                 {:.2} to {:.2}",
+                one.min.x,
+                one.max.x,
+                air.min.x,
+                air.max.x
+            );
+            assert!(
+                one.min.z >= air.min.z - 1e-3 && one.max.z <= air.max.z + 1e-3,
+                "something runs from {:.2} to {:.2} along a hall that is \
+                 {:.2} to {:.2}",
+                one.min.z,
+                one.max.z,
+                air.min.z,
+                air.max.z
+            );
+        }
+
+        for at in fires(REACHES) {
+            assert!(
+                air.contains_point(at),
+                "a light of the fire is at {:?}, which is not in the hall",
+                at
+            );
+        }
+    }
+
+    /// Spec 0060: nothing drawn inside the hall shares a plane with
+    /// anything else drawn inside it.
+    ///
+    /// **Eight times in this building, and the first room anybody could
+    /// stand in the middle of.** The floor is laid on the yard, the
+    /// coals sit in a stone rim, the benches stand against the walls and
+    /// the rafters hang under the pitches: four chances to put two
+    /// exposed faces at one height, and the stipple only shows up from
+    /// inside.
+    #[test]
+    fn nothing_inside_is_in_one_plane_with_anything() {
+        use blitzkit::renderer::coplanar::Fights;
+
+        let looking = blitzkit::renderer::depth::Depth::of(&blitzkit::camera::Camera::default());
+        let air = inside(REACHES);
+        let mut drawn = vec![floor(REACHES), coals(REACHES), ground(REACHES)];
+
+        drawn.extend(hall_walls(REACHES));
+        drawn.extend(fire_rails(REACHES));
+        drawn.extend(posts(REACHES));
+        drawn.extend(ties(REACHES));
+        drawn.extend(benches(REACHES));
+        drawn.push(high_seat(REACHES));
+
+        // a little outside the clear air, because a fight against the
+        // wall's own inner face has its patch in the wall
+        let room = Aabb::new(air.min - Vec3::splat(0.6), air.max + Vec3::splat(0.6));
+
+        for fight in Fights::of(drawn, 0, 0, &looking).fights.iter() {
+            let at = fight.patch.center();
+
+            assert!(
+                !room.contains_point(at),
+                "two drawn faces share a plane at {:?}, over {:.2} by {:.2}",
+                at,
+                fight.patch.size().x.max(fight.patch.size().y),
+                fight.patch.size().z.max(fight.patch.size().y)
+            );
+        }
+    }
+
+    /// Spec 0060: you can get in through the door, and out again.
+    #[test]
+    fn the_hall_is_a_way_in_and_a_way_out() {
+        let solid = everything();
+        let one = hall(REACHES);
+        let (door, _, _) = doorway(REACHES);
+        let outside = vec3(door.x + 3.0, door.y + 0.4, door.z);
+        let in_to = vec3(one.at.x + 6.0, one.at.y, door.z);
+        let got = crate::bridge::tests::walked(outside, in_to, 10.0, &solid);
+
+        assert!(
+            got.x < door.x - 0.6,
+            "it got to {:.2} and the door is at {:.2}, so it never went in",
+            got.x,
+            door.x
+        );
+
+        let back = crate::bridge::tests::walked(
+            vec3(got.x, got.y + 0.3, got.z),
+            vec3(door.x + 4.0, door.y, door.z),
+            10.0,
+            &solid,
+        );
+
+        assert!(
+            back.x > door.x + 0.6,
+            "it got back to {:.2} and the door is at {:.2}, so it is shut in",
+            back.x,
+            door.x
+        );
+    }
+
+    /// Spec 0060: and the hall is hollow rather than a box with a hole in
+    /// the front of it.
+    #[test]
+    fn the_hall_is_hollow() {
+        let solid = everything();
+        let air = inside(REACHES);
+        let (door, _, _) = doorway(REACHES);
+        let start = vec3(door.x - 1.2, door.y + 0.4, door.z);
+
+        for side in [-1.0f32, 1.0] {
+            let want = vec3(air.min.x + 2.0, door.y, door.z + side * 2.6);
+            let got = crate::bridge::tests::walked(start, want, 14.0, &solid);
+
+            assert!(
+                got.x < air.max.x - 8.0,
+                "from the door it got to {:.2} going to {:?}, and the hall \
+                 runs back to {:.2}",
+                got.x,
+                want,
+                air.min.x
+            );
+        }
+    }
+
+    /// Spec 0060: and nothing stands in the doorway.
+    #[test]
+    fn nothing_stands_in_the_doorway() {
+        let (door, wide, high) = doorway(REACHES);
+        let way = Aabb::from_center_size(
+            vec3(door.x - 1.5, door.y + high * 0.5, door.z),
+            vec3(3.0, high, wide),
+        );
+
+        for post in posts(REACHES) {
+            assert!(
+                !post.intersects(&way),
+                "a post at {:?} stands in the way in",
+                post.center()
+            );
+        }
+
+        for bench in benches(REACHES).into_iter().chain([high_seat(REACHES)]) {
+            assert!(
+                !bench.intersects(&way),
+                "something to sit on at {:?} stands in the way in",
+                bench.center()
+            );
+        }
+    }
+
+    /// Spec 0060: the fire is the only light in there.
+    #[test]
+    fn the_fire_is_the_only_light_in_here() {
+        let air = inside(REACHES);
+        let kerb = fire(REACHES);
+
+        for at in lamps(REACHES) {
+            assert!(
+                !air.contains_point(at),
+                "a lamp of the steading is at {:?}, which is inside the hall",
+                at
+            );
+        }
+
+        for at in fires(REACHES) {
+            assert!(
+                at.x > kerb.min.x && at.x < kerb.max.x,
+                "a light of the fire is at {:.2} and the trench runs {:.2} \
+                 to {:.2}",
+                at.x,
+                kerb.min.x,
+                kerb.max.x
+            );
+        }
+
+        assert_eq!(fires(REACHES).len(), FIRES);
+    }
+
+    /// Spec 0060: the hole in the ridge is over the fire.
+    #[test]
+    fn the_smoke_hole_is_over_the_fire() {
+        let one = hall(REACHES);
+        let kerb = fire(REACHES);
+        let across = hole_wide(&one) * 0.5;
+
+        assert!(
+            one.at.x - across > kerb.min.x && one.at.x + across < kerb.max.x,
+            "the hole runs {:.2} either side of {:.2} and the fire runs \
+             {:.2} to {:.2}",
+            across,
+            one.at.x,
+            kerb.min.x,
+            kerb.max.x
+        );
+    }
+
+    /// Spec 0060: and the roof still closes everywhere the hole is not.
+    ///
+    /// **Asked of the pieces and not of the picture.** A roof cut into
+    /// three boxes is three chances to leave a gap, and a gap in a roof
+    /// is a line of sky over a lit room that nobody notices until they
+    /// stand under it.
+    #[test]
+    fn the_roof_closes_round_the_hole() {
+        let one = hall(REACHES);
+        let pieces = pitch_pieces(&one, true);
+        let plain = pitch_pieces(&one, false)[0];
+        let under = pieces[0];
+
+        assert_eq!(pieces.len(), 3, "a holed pitch is three pieces");
+        assert!(
+            (under.0 - plain.0).abs() < 1e-6 && (under.2 - plain.2).abs() < 1e-6,
+            "the piece under the hole does not start where a plain pitch does"
+        );
+        assert!(
+            (under.3 - plain.3).abs() < 1e-6,
+            "the piece under the hole does not run the whole length"
+        );
+
+        for top in &pieces[1..] {
+            assert!(
+                (top.0 - under.1).abs() < 1e-6,
+                "the top of the slope starts at {:.4} and the piece under \
+                 it ends at {:.4}, which is a gap all the way along",
+                top.0,
+                under.1
+            );
+            assert!(
+                (top.1 - 1.0).abs() < 1e-6,
+                "the top does not reach the ridge"
+            );
+        }
+
+        assert!(
+            (pieces[1].3 + HOLE_LONG * 0.5).abs() < 1e-6
+                && (pieces[2].2 - HOLE_LONG * 0.5).abs() < 1e-6,
+            "the two runs either side do not meet the hole"
+        );
+    }
+
+    /// Spec 0060: and the painted night is wider than the hole it is seen
+    /// through, so no edge of it is ever in shot.
+    #[test]
+    fn the_night_is_wider_than_the_hole() {
+        let one = hall(REACHES);
+        let (at, wide, long) = night(REACHES);
+
+        assert!(
+            wide > hole_wide(&one) + 0.2,
+            "the night is {:.2} across and the hole is {:.2}",
+            wide,
+            hole_wide(&one)
+        );
+        assert!(
+            long > HOLE_LONG + 0.2,
+            "the night is {:.2} along and the hole is {:.2}",
+            long,
+            HOLE_LONG
+        );
+        assert!(
+            at.y < one.at.y + one.ridge && at.y > one.at.y + one.eaves,
+            "the night hangs at {:.2}, and the roof runs {:.2} to {:.2}",
+            at.y,
+            one.at.y + one.eaves,
+            one.at.y + one.ridge
         );
     }
 

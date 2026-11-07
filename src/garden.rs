@@ -455,6 +455,29 @@ pub fn filled(since: f32) -> Vec3 {
     night + (crate::aim::FILL - night) * up.powf(1.4)
 }
 
+/// What to hand the engine so a surface comes out at `want` whatever the
+/// hour.
+///
+/// **Because the shader multiplies a colour by the light on it.** A colour
+/// past one is called a thing lit with nothing lighting it, and that is
+/// true of the intent and not of the arithmetic: what is worked out is the
+/// colour times the ambient plus the sun. The fill over this field runs
+/// from a third of white at noon to three hundredths at the bottom of the
+/// night, so a fixed multiplier is a thing that goes out as the world
+/// does, which is backwards for anything that is its own light.
+///
+/// So the fill is divided out, and `want` is what lands on screen. Past
+/// one in a channel is a channel that clips, which on an eight bit canvas
+/// is the whole of what a glow is.
+///
+/// **One place, because two would drift.** The runestone's carving found
+/// this and the painted night under Valhalla's ridge needs the same thing,
+/// and a second copy of these three lines is how the two come apart.
+pub fn gives_off(want: Vec3, since: f32) -> Vec3 {
+    // a black sky is not a division by nothing
+    want / filled(since).max(Vec3::splat(0.02))
+}
+
 /// What the sky's own picture is multiplied by, through the day.
 ///
 /// The storm is past one in every channel, per `aim::SKY`, which is this

@@ -205,10 +205,6 @@ pub fn nightly(since: f32) -> f32 {
     dark * dark
 }
 
-/// The least the fill is ever divided by, so a black sky is not a
-/// division by nothing.
-const SOME_LIGHT: f32 = 0.02;
-
 /// The colour the carved face is drawn in, glow and all.
 ///
 /// **Divided by the light, because the engine multiplies by it.** A
@@ -226,9 +222,10 @@ const SOME_LIGHT: f32 = 0.02;
 /// one hour it was dimmest.
 ///
 /// So `aim::RUNE_CUT` is now what the carving comes to on screen rather
-/// than what it is multiplied by, and what the engine is handed is that
-/// over the fill it is about to be multiplied by. `garden::filled` is
-/// the same function `main` hands the scene, so the two cannot drift.
+/// than what it is multiplied by, and `garden::gives_off` divides it by
+/// the fill the engine is about to multiply it back by. That is the same
+/// function `main` hands the scene, so the two cannot drift, and it is
+/// shared with the painted night under Valhalla's ridge.
 /// The sun is on top of the fill and not divided out, which is why
 /// `BY_DAY` is a third: by day this is an ember in daylight and nothing
 /// is asked to read as burning.
@@ -236,8 +233,7 @@ const SOME_LIGHT: f32 = 0.02;
 /// **Alpha held under one on purpose**, per `aim::RUNE_GLAZE`: at one
 /// the face goes through the engine opaque and is not drawn at all.
 pub fn alight(since: f32) -> glam::Vec4 {
-    let fill = crate::garden::filled(since).max(glam::Vec3::splat(SOME_LIGHT));
-    let lit = crate::aim::RUNE_CUT.truncate() * glows(since) / fill;
+    let lit = crate::garden::gives_off(crate::aim::RUNE_CUT.truncate() * glows(since), since);
 
     glam::vec4(lit.x, lit.y, lit.z, crate::aim::RUNE_GLAZE)
 }

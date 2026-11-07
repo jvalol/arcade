@@ -1052,6 +1052,62 @@ pub const GATE_OAK: Vec4 = vec4(0.185, 0.130, 0.088, 1.0);
 pub const GATE_BOARD: Vec4 = vec4(0.150, 0.104, 0.070, 1.0);
 pub const GATE_IRON: Vec4 = vec4(0.062, 0.058, 0.055, 1.0);
 
+/// Inside the hall, per spec 0060.
+///
+/// **Dark, because the ambient in this building is one number
+/// everywhere.** At noon the fill is a third of white and it reaches
+/// indoors as readily as out, so a pale interior is a flat lit box
+/// whatever the fire does. Dark timber takes almost nothing off the
+/// fill and everything off the fire, which is the whole of what makes
+/// the fire the only thing in the room.
+pub const HALL_FLOOR: Vec4 = vec4(0.155, 0.125, 0.098, 1.0);
+/// The posts, the beams across them, the rafters and the benches. A
+/// shade warmer than the daub round them, so the frame reads against
+/// the wall rather than disappearing into it.
+pub const HALL_TIMBER: Vec4 = vec4(0.215, 0.158, 0.105, 1.0);
+/// The kerb round the fire, which is the one cold thing in here.
+pub const HEARTH_STONE: Vec4 = vec4(0.30, 0.295, 0.285, 1.0);
+/// What the fire itself comes to on screen at the bottom of the night,
+/// before `garden::gives_off` divides the fill back out of it.
+///
+/// Past one in red and green and under it in blue, which clips to a
+/// white-gold core with its own colour at the edge. The same
+/// construction as `RUNE_CUT` and for the same reason: this canvas
+/// clips at one.
+pub const HEARTH_FIRE: Vec3 = glam::vec3(3.6, 1.65, 0.42);
+/// And the bed of coals under them, which is not the same thing.
+///
+/// **A surface the fire lights and not a thing that is lit.** Coals
+/// written past one came out white and sixteen metres long, which is a
+/// lightbox with a hall round it, and `garden::gives_off` could not
+/// save it: that divides out the ambient and the three lamps a hand
+/// above the bed are not the ambient. A dark red that the fire falls on
+/// is what coals are anyway.
+pub const HEARTH_COALS: Vec4 = vec4(0.30, 0.075, 0.025, 1.0);
+/// And the light it throws: its colour, how hard it burns and how far
+/// it carries.
+///
+/// **Reaching past the hall's own walls on purpose.** Sixteen metres of
+/// fire has to light twenty-four metres of room and the underside of a
+/// roof six metres up, and a lamp whose range dies at the wall leaves
+/// the gables black. What goes through the wall is thrown away by the
+/// wall, which is opaque.
+/// **Turned right down from the first build.** At 2.6 over fifteen
+/// metres, three of these inside a twenty-four metre hall washed every
+/// surface in it to cream: the timber, the daub and the roof all came
+/// out the same pale colour and the fire was a white slab in the
+/// middle of them. A Kinkade is mostly dark. What makes the light read
+/// is the falloff, and a lamp that reaches everything has none.
+pub const HEARTH_SHADE: Vec3 = glam::vec3(1.0, 0.63, 0.27);
+pub const HEARTH_LIT: f32 = 0.62;
+pub const HEARTH_REACH: f32 = 9.5;
+/// The painted night through the hole in the ridge, per spec 0060.
+///
+/// What it comes to on screen, through `garden::gives_off`, so the
+/// panel is the same picture at every hour. Over one in every channel:
+/// the star cores in the picture are white and clip, the cobalt round
+/// them does not, so the stars burn and the sky stays blue.
+pub const NIGHT_BURNS: Vec3 = glam::vec3(1.18, 1.18, 1.40);
 pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);
 pub const VALHALLA_SPILL_LIT: f32 = 3.1;
 pub const VALHALLA_SPILL_REACH: f32 = 14.0;
