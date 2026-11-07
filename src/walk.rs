@@ -423,12 +423,22 @@ fn over_a_step(at: Vec3, flat: Vec3, wish: Vec3, radius: f32, dt: f32, solid: &[
         solid,
     ) - Vec3::Y * radius;
 
-    let over = move_and_slide(body(lifted, radius), wish, dt, solid) - Vec3::Y * radius;
-    if (over.xz() - at.xz()).length() <= (flat.xz() - at.xz()).length() {
+    // and that is the whole of the step. It used to walk again from there,
+    // a second `wish * dt` on top of the carry, which is the fault spec 0054
+    // recorded and could not catch: a step is being put on top of the thing
+    // in your way, not a free frame's walking for having been stopped.
+    //
+    // On a stair it hardly shows, because the step fires once per tread and
+    // the carry is most of the tread anyway. Against Bifrost's kerb it fired
+    // every frame: the probe reads the deck through the verge and calls it a
+    // step, the carry is refused by the kerb and gains nothing, and the
+    // second walk was pure speed. Peak along the deck went 45.3 a second
+    // against 23.5 going straight.
+    if (lifted.xz() - at.xz()).length() <= (flat.xz() - at.xz()).length() {
         return flat;
     }
 
-    over
+    lifted
 }
 
 #[cfg(test)]

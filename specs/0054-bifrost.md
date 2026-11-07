@@ -1,7 +1,7 @@
 # 0054 Bifröst
 
 **Status:** implemented
-**Date:** 2026-11-04, amended 2026-11-06
+**Date:** 2026-11-04, amended 2026-11-07
 
 ## Goal
 
@@ -148,14 +148,31 @@ deck is walked, and the climb is 4.5 seconds foot to top at every rate.
 A walk up it is 8.5. `CARRIES` is the lever on both, and it is now the
 only one.
 
-**Steering is still quicker than going straight, and nothing here stops
-it.** Pressed against the kerb the body is stopped by something it cannot
+**Steering was quicker than going straight, and is not now.** Fixed
+2026-11-07. The same double payment as the paragraph above, seen from the
+side. Pressed against the kerb the body is stopped by something it cannot
 climb; the probe in `walk::over_a_step` looks the way it was refused,
-reads the deck through the verge, calls it a step and pays the reach out
-again. Measured mid deck at a run of 23.5: straight covers 23.5 a second,
-and against the kerb up to 39.7. Three guards against it were written and
-each took a real stair down with it, so this is recorded rather than
-fixed.
+reads the deck through the verge, calls it a step, and the carry onto that
+step came with a second `wish * dt` on top of it.
+
+On a stair that hardly shows, because the step fires once a tread and the
+carry is most of the tread anyway. Here it fired every frame, and the
+carry itself gained nothing, because the kerb refuses it. The second walk
+was the whole of the speed.
+
+Three guards were written against the trigger and each took a real stair
+down with it. What answers it is the step not walking again from where it
+put you: a step is being put on top of the thing in your way, not a
+frame's walking handed out for having been stopped.
+
+**And it was written down twice with numbers that disagreed**, which is
+worth keeping. Mid deck the peak against the kerb was 45.3 a second and
+the mean over the middle of the deck was 27.3, both against 23.5 going
+straight, so the same fault reads as either twice the pace or a sixth
+more depending on where the stopwatch starts. What a test can hold is
+neither: timed to nine tenths of the way up, seventeen degrees off the
+straight took 207 frames against 254 going straight, and now never takes
+fewer than straight does.
 
 ## The stone at its foot
 
@@ -450,6 +467,7 @@ be able to tell is there.
 - The kerb keeps you on it. — `tests::the_kerb_keeps_you_on_the_bridge`
 - And the camera stays over the deck at every refresh rate, not only sixty. — `tests::the_camera_stays_above_the_deck_however_fast_the_screen_is`
 - And it is climbed at the pace it was given, at every refresh rate. — `tests::the_bridge_is_climbed_at_the_pace_it_was_given`
+- And steering up it is not quicker than going straight. — `tests::steering_up_the_bridge_is_not_quicker_than_going_straight`
 - The deck fills the width and is centred on it. — `bridge::tests::every_band_is_the_same_width_and_they_fill_it`
 - The top of what you see is the surface you walk on. — `bridge::tests::the_deck_you_see_is_the_deck_you_stand_on`
 - And it springs flush from the grass rather than off a kerb. — `bridge::tests::it_springs_flush_from_the_grass`

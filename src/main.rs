@@ -14627,14 +14627,14 @@ mod tests {
     /// deck is walked rather than stepped. It is now 4.5 seconds foot
     /// to top at every one of these rates, within a hundredth.
     ///
-    /// **Steering is still quicker than going straight, and this does
-    /// not catch it.** Pressed against the kerb the body is stopped by
-    /// something it cannot climb, the probe reads the deck through the
-    /// verge and calls it a step, and the reach is paid out again:
-    /// measured mid deck, 23.5 a second going straight and up to 39.7
-    /// against the kerb. Three guards against it were tried and each
-    /// took a real stair with it, so it is written down rather than
-    /// fixed.
+    /// **And steering is no longer quicker either**, which took until
+    /// 2026-11-07. It was the same double payment seen from the side:
+    /// pressed against the kerb the body is stopped by something it
+    /// cannot climb, the probe reads the deck through the verge and
+    /// calls it a step, and the carry onto that step came with a second
+    /// `wish * dt` on top of it. The step no longer walks again from
+    /// where it put you, and what holds it is
+    /// `steering_up_the_bridge_is_not_quicker_than_going_straight`.
     #[test]
     fn the_bridge_is_climbed_at_the_pace_it_was_given() {
         for rate in [60.0f32, 90.0, 120.0, 144.0] {
@@ -14702,6 +14702,80 @@ mod tests {
         for tenth in -6..=6 {
             climbed_the_bridge_from(true, 1.0 / 60.0, 360, tenth as f32 * 0.05);
         }
+    }
+
+    /// And steering up it is not quicker than going straight.
+    ///
+    /// **The fault spec 0054 recorded and could not catch, until the
+    /// step stopped paying twice.** Pressed against the kerb the body
+    /// is stopped by something it cannot climb, the probe in
+    /// `walk::over_a_step` reads the deck through the verge and calls
+    /// it a step, and the carry onto that step came with a second
+    /// `wish * dt` on top of it. On a stair that hardly shows, because
+    /// the step fires once a tread. Here it fired every frame.
+    ///
+    /// Measured mid deck before the fix: 23.5 a second going straight
+    /// and a peak of 45.3 against the kerb, with the mean over the
+    /// middle of the deck 27.3. Those two are why this was written
+    /// down twice with different numbers.
+    ///
+    /// **Timed to the top rather than measured mid deck**, because
+    /// quicker means getting there sooner and nothing else. A peak of
+    /// one frame is a carry onto one tread, which is what a step is
+    /// everywhere in this building.
+    #[test]
+    fn steering_up_the_bridge_is_not_quicker_than_going_straight() {
+        // straight first, because every other run is measured against it
+        let straight = nine_tenths_up_the_bridge(0.0).expect("straight gets up the bridge");
+
+        for tenth in -6..=6 {
+            let askew = tenth as f32 * 0.05;
+
+            if askew == 0.0 {
+                continue;
+            }
+            let Some(took) = nine_tenths_up_the_bridge(askew) else {
+                continue;
+            };
+
+            assert!(
+                took >= straight,
+                "askew {:.2} got nine tenths of the way up in {} frames against {} \
+                 going straight, so steering is quicker",
+                askew,
+                took,
+                straight
+            );
+        }
+    }
+
+    /// Frames to get nine tenths of the way up Bifrost at a run, or
+    /// `None` for a line that never gets there.
+    fn nine_tenths_up_the_bridge(askew: f32) -> Option<u32> {
+        let mut one = Arcade::new();
+
+        for asked in trail::Asked::every() {
+            one.trail.gave(*asked);
+        }
+
+        let foot = bridge::foot(one.room.reaches);
+
+        one.at = vec3(foot.x - 1.0, 0.1, foot.z);
+        one.eye = one.at.y;
+        one.yaw = -std::f32::consts::FRAC_PI_2 + askew;
+        one.pitch = 0.0;
+        one.shifted = true;
+        one.walking = [true, false, false, false];
+
+        for frame in 0..900 {
+            one.aimed_and_moved(1.0 / 60.0);
+
+            if (foot.x - one.at.x) / bridge::RUN >= 0.9 {
+                return Some(frame + 1);
+            }
+        }
+
+        None
     }
 
     /// And the kerb keeps you on it.
