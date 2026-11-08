@@ -216,6 +216,22 @@ pub fn helm_profile(v: f32) -> (f32, f32) {
 /// rather than a head, so a mannequin became something hooded, and a
 /// corridor of them was a corridor of hooded things. The answer was never
 /// the geometry's resolution.
+/// **Measured against the canon rather than adjusted by eye**, because
+/// three of these were wrong together and each hid the others. Jake,
+/// 2026-11-08, standing at a mirror: the figure needs a face and better
+/// proportions. Spec 0033 settled these for somebody at the far end of a
+/// corridor, where none of it showed; a mirror is nothing but close range.
+///
+/// As fractions of `TALL`, against a 7.5 head figure:
+///
+/// - the head was 0.26, which is one head in 6.65 rather than one in 7.5.
+/// - the arms reached to 0.51 of the height where a hand hangs at 0.39, so
+///   they were a quarter short and ended at the hip.
+/// - the shoulder sat at 1.50 and the head began at 1.47, so the head was
+///   sunk into the shoulders and there was no neck at all.
+///
+/// A big head, short arms and no neck is the mannequin read, and no one of
+/// them alone would have given it.
 pub const SIDES: u32 = 18;
 
 /// Where the parts sit, in metres off the floor.
@@ -226,10 +242,56 @@ pub const SIDES: u32 = 18;
 /// close enough to look for a face.
 pub const LEG_TALL: f32 = 0.95;
 pub const TORSO_FROM: f32 = 0.80;
-pub const TORSO_TALL: f32 = 0.70;
-pub const HEAD_FROM: f32 = 1.47;
+pub const TORSO_TALL: f32 = 0.62;
+pub const HEAD_FROM: f32 = 1.50;
 pub const HEAD_TALL: f32 = TALL - HEAD_FROM;
 pub const HEAD_WIDE: f32 = 0.2;
+
+/// Where the eyes sit on the head, how far apart, and how big.
+///
+/// **Spec 0033 said no face, and was right for what it was deciding.** Its
+/// reasoning is that a face is detail a corridor cannot carry, and at the far
+/// end of one it cannot. A mirror is the opposite case: it is nothing but
+/// close range, and a featureless head at arm's length is the mannequin that
+/// spec spent itself avoiding. Jake, 2026-11-08: the figure needs a face.
+///
+/// **Guests only.** The watchman and the ones in the hall are carvings, and
+/// that spec's other half holds for them: a carved thing has no face in life
+/// either, so the absence is not a gap. Giving them eyes would take away the
+/// one thing that says they are not guests who wandered outside.
+///
+/// Measured off the head rather than written in metres, so a short person's
+/// eyes are not a tall person's eyes in the wrong place.
+pub const EYE_UP: f32 = 0.50;
+/// **Small, because the first go came out as a visor.** At 0.17 of the
+/// head's width each and 0.27 apart they ran together into one dark band
+/// across the whole face. An eye is about a tenth of a head's width and
+/// they sit about a third of it apart, which leaves an eye's worth of gap
+/// between them, which is what a face has.
+pub const EYE_APART: f32 = HEAD_WIDE * 0.16;
+pub const EYE_WIDE: f32 = HEAD_WIDE * 0.085;
+pub const EYE_TALL: f32 = HEAD_WIDE * 0.055;
+pub const EYE_DEEP: f32 = HEAD_WIDE * 0.05;
+/// How far forward of the head's axis they sit: on its face, not floating off
+/// it and not buried in it.
+/// Past half the head's width, so they sit proud of it. At 0.40 they were
+/// inside a skull of radius 0.5 and invisible, which looked exactly like a
+/// reflection showing somebody's back.
+pub const EYE_OUT: f32 = HEAD_WIDE * 0.52;
+
+/// Where the neck starts, which is the top of the torso, and how wide it is.
+///
+/// **It exists because the proportions were fixed.** The shoulder used to
+/// sit at 1.50 and the head began at 1.47, so the head was sunk three
+/// centimetres into the shoulders and nothing between them was ever needed.
+/// Putting the shoulder where a shoulder goes opened an eight centimetre gap
+/// and the head floated in it.
+///
+/// Narrow enough to be a neck and not a second torso: a little over half the
+/// head's width, which is what a neck is.
+pub const NECK_FROM: f32 = TORSO_FROM + TORSO_TALL;
+pub const NECK_TALL: f32 = HEAD_FROM - NECK_FROM;
+pub const NECK_WIDE: f32 = HEAD_WIDE * 0.58;
 
 /// How far from the middle a leg and an arm hang.
 pub const LEGS_APART: f32 = 0.1;
@@ -238,8 +300,8 @@ pub const LEGS_APART: f32 = 0.1;
 /// so hung at 0.205 it stood four centimetres proud of the body and read as
 /// a seam rather than as an arm.
 pub const ARMS_APART: f32 = 0.245;
-pub const ARM_FROM: f32 = 1.44;
-pub const ARM_TALL: f32 = 0.56;
+pub const ARM_FROM: f32 = 1.42;
+pub const ARM_TALL: f32 = 0.74;
 
 /// Where a limb bends, as a fraction of its length down from the joint it
 /// hangs off. Spec 0046.
@@ -750,7 +812,29 @@ mod tests {
             TORSO_FROM < leg,
             "the torso starts above the top of the legs"
         );
-        assert!(HEAD_FROM < torso, "the head floats over the neck");
+        // **The head used to have to overlap the torso, because there was
+        // nothing between them.** It sat three centimetres into the
+        // shoulders and this line said so. Putting the shoulder where a
+        // shoulder goes opened a gap, so there is a neck now and what has to
+        // hold is that the neck closes it at both ends.
+        // consts, so this is a compile-time truth stated where a reader of
+        // this test looks for it
+        const _: () = assert!(NECK_TALL > 0.02);
+        assert!(
+            (NECK_FROM - torso).abs() < 1e-5,
+            "the neck starts at {:.3} and the torso ends at {:.3}, so there \
+             is a gap at the collar",
+            NECK_FROM,
+            torso
+        );
+        assert!(
+            (HEAD_FROM - (NECK_FROM + NECK_TALL)).abs() < 1e-5,
+            "the head starts at {:.3} and the neck ends at {:.3}, so the head \
+             floats",
+            HEAD_FROM,
+            NECK_FROM + NECK_TALL
+        );
+        const _: () = assert!(NECK_WIDE < HEAD_WIDE);
         assert!(
             (head - TALL).abs() < 1e-5,
             "the figure comes out {:.3} tall rather than {:.3}",

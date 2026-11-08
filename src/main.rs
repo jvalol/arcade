@@ -26,6 +26,7 @@ mod gyro;
 mod kociemba;
 mod mandel;
 mod metronome;
+mod mirrors;
 mod neon;
 mod noise;
 mod orrery;
@@ -598,6 +599,13 @@ struct Arcade {
     /// Each game's name, drawn into a texture for its marquee. Spec 0037.
     signs: Vec<TextureId>,
     cube: Option<MeshId>,
+    /// One target per mirrored wall, per engine spec 0091. Two walls,
+    /// because panels in one plane are one reflection and a frame draws two
+    /// mirrors at most.
+    glass_targets: Vec<TextureId>,
+    /// The quad a pane of glass is drawn with. Its uv is never read: engine
+    /// spec 0092 samples where the fragment is, not where the mesh says.
+    pane: Option<MeshId>,
     floor: Option<MeshId>,
     /// The carpet, and the ceiling that stops the room opening onto nothing.
     carpet: Option<TextureId>,
@@ -1209,6 +1217,8 @@ impl Arcade {
                 was: (doorway, 0.0, 0.0),
             }),
             cube: None,
+            glass_targets: Vec::new(),
+            pane: None,
             floor: None,
             carpet: None,
             worn: None,
@@ -1497,6 +1507,10 @@ impl Arcade {
             }
             Some(room::Seen::Display(n)) => self.spin.take(n, self.since),
             // the book that is a handle. Spec 0007.
+            // the other book that is a handle. Spec 0061.
+            Some(room::Seen::MirrorCase) => {
+                self.room.mirror_open = !self.room.mirror_open;
+            }
             Some(room::Seen::Case) => {
                 self.room.open = !self.room.open;
 
@@ -1775,6 +1789,7 @@ impl Arcade {
     /// Replayed without this it is a route that walks into a wall.
     fn the_doors_moved(&mut self, dt: f32) {
         self.room.ease(dt);
+
         self.at = walk::shoved(self.at, RADIUS, &self.room.leaves());
     }
 
@@ -3801,6 +3816,85 @@ impl Arcade {
     /// on.** Dark boards, dark timber, a stone kerb, and the underside of
     /// a roof six metres up with rafters across it. Nothing in here is
     /// lit that is not the fire or the night through the hole over it.
+    /// The corridor of mirrors, spec 0061, and the two reflections in it.
+    ///
+    /// **The order here is the whole of how it works.** The panes are pushed
+    /// as glass, which engine spec 0092 draws in a pass of its own after the
+    /// world; the two walls are pushed as mirrors, which engine spec 0091
+    /// draws *before* the world, into the targets those panes wear. So this
+    /// frame's glass shows this frame's reflection, and a mirror facing a
+    /// mirror shows the other's as it stood last frame.
+    fn draw_the_mirrors(&self, scene: &mut Scene, cube: MeshId) {
+        // **The shell is drawn whatever the glass is doing.** This used to sit
+        // behind a `let ... else { return }` on the targets, so a frame
+        // before `load` had run drew no room at all: the walls were solid
+        // and invisible, and standing in the corridor showed the garden and
+        // the sky through them. A room's walls do not depend on its mirrors.
+        //
+        // the shell: floor, lid, walls, end, and the frames round each panel
+        // `drawn` and not `solid`: the walked floor laps under the hall's
+        // and the drawn one stops at its edge, per spec 0011's lesson
+        for piece in mirrors::drawn() {
+            let dark = piece.max.y > mirrors::PANEL_FOOT;
+            scene.push_material(
+                cube,
+                &Transform::at(piece.center()).with_scale(piece.size()),
+                if dark { aim::PANEL } else { aim::FLOOR },
+                aim::MATTE,
+            );
+        }
+
+        let Some(pane) = self.pane else {
+            return;
+        };
+        if self.glass_targets.len() != mirrors::SIDES.len() {
+            return;
+        }
+
+        for (which, side) in mirrors::SIDES.iter().enumerate() {
+            let target = self.glass_targets[which];
+            let (on, normal) = mirrors::plane(*side);
+
+            // the wall is a mirror, which the engine draws into `target`
+            // before this frame's world. Engine spec 0091.
+            scene.mirror(target, on, normal);
+
+            // and each panel wears it. The quad is turned to face into the
+            // room: `MeshData::plane` lies in xz looking up, so it wants a
+            // quarter turn about x and then a half turn for the far wall.
+            for at in mirrors::along_wall(*side) {
+                let (stands, size) = mirrors::pane(*side, at);
+                // `MeshData::plane` lies in xz looking up, so a pane on a
+                // wall across x wants a quarter turn about z, and the far
+                // wall wants it the other way so both faces look inward
+                let turn = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * side.signum());
+
+                scene.glass(
+                    pane,
+                    target,
+                    &Transform::at(stands)
+                        .with_rotation(turn)
+                        .with_scale(vec3(size.y, 1.0, size.z)),
+                    // white, so the glass is a mirror rather than a tinted
+                    // pane. Engine spec 0092 multiplies this through.
+                    vec4(1.0, 1.0, 1.0, 1.0),
+                );
+            }
+        }
+
+        // the lamps, which come off the frames rather than being written
+        // beside them, for the reason `spa::lamps` does
+        for at in mirrors::lamps() {
+            scene.push_light(blitzkit::lighting::PointLight {
+                position: at,
+                color: aim::SHADE.truncate(),
+                intensity: 0.35,
+                range: 4.5,
+                casts: false,
+            });
+        }
+    }
+
     fn draw_the_hall(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
         let one = valhalla::hall(reaches);
@@ -4005,7 +4099,18 @@ impl Arcade {
                          facing: f32,
                          walked: Option<f32>,
                          shade: usize,
-                         look: people::Look| {
+                         look: people::Look,
+                         // **Only in reflections, per engine spec 0091.**
+                         // True for the figure of you and false for everybody
+                         // else. Bracketed in here rather than around the
+                         // call, partly because this closure holds the scene
+                         // and partly because a bracket next to the pushes it
+                         // guards cannot be left open by a path through the
+                         // caller.
+                         only_in_glass: bool| {
+            if only_in_glass {
+                scene.only_in_reflections();
+            }
             let turn = up * glam::Quat::from_rotation_y(facing);
             // **A coat, trousers and a head.** One colour from crown to
             // toe is a mannequin by definition: the only thing that says a
@@ -4066,6 +4171,24 @@ impl Arcade {
             // its height.
             let carved = look.carved();
 
+            // **A neck, which the proportions made necessary.** With the
+            // shoulder at 1.42 and the head starting at 1.50 there is eight
+            // centimetres of nothing between them, and a head floating over
+            // a torso is worse than one sunk into it. It runs a little into
+            // both ends so there is no seam at either.
+            scene.push_material(
+                body,
+                &Transform::at(up_to(people::NECK_FROM + people::NECK_TALL * 0.5))
+                    .with_rotation(turn)
+                    .with_scale(vec3(
+                        people::NECK_WIDE * built.wide,
+                        (people::NECK_TALL + 0.05) * built.tall,
+                        people::NECK_WIDE * built.wide,
+                    )),
+                skin,
+                aim::DULL,
+            );
+
             scene.push_material(
                 match (carved, carved_head) {
                     (true, Some(cut)) => cut,
@@ -4077,6 +4200,35 @@ impl Arcade {
                 skin,
                 aim::DULL,
             );
+
+            // **Eyes, and only on the guests.** Spec 0033 said no face,
+            // reasoning about somebody at the far end of a corridor, where
+            // one would not show. A mirror is the opposite case and a blank
+            // head at arm's length is the mannequin that spec was avoiding.
+            //
+            // The carvings keep their blankness, which is the same spec's
+            // other half: a carved thing has no face in life either, so on
+            // them the absence is not a gap.
+            if !carved {
+                for hand in [-1.0f32, 1.0] {
+                    scene.push_material(
+                        cube,
+                        &Transform::at(
+                            up_to(people::HEAD_FROM + people::HEAD_TALL * people::EYE_UP)
+                                + ahead * (people::EYE_OUT * built.wide)
+                                + side * (hand * people::EYE_APART * built.wide),
+                        )
+                        .with_rotation(turn)
+                        .with_scale(vec3(
+                            people::EYE_WIDE * built.wide,
+                            people::EYE_TALL * built.tall,
+                            people::EYE_DEEP * built.wide,
+                        )),
+                        aim::EYE,
+                        aim::MATTE,
+                    );
+                }
+            }
 
             if carved {
                 // **A cloak, a helm and a nose bar**, which is the whole
@@ -4293,6 +4445,12 @@ impl Arcade {
                     }
                 }
             }
+
+            // and closed where it was opened, so the bracket cannot be left
+            // open by a path through this closure
+            if only_in_glass {
+                scene.and_everywhere();
+            }
         };
 
         // the ones the wave is passing, crossing to the next number
@@ -4316,6 +4474,7 @@ impl Arcade {
                 Some(who.walked),
                 who.from as usize,
                 people::Look::Guest,
+                false,
             );
         }
 
@@ -4334,6 +4493,7 @@ impl Arcade {
                 None,
                 0,
                 people::Look::Guest,
+                false,
             );
         }
 
@@ -4347,6 +4507,7 @@ impl Arcade {
                 Some(who.walked),
                 who.shade,
                 people::Look::Guest,
+                false,
             );
         }
 
@@ -4363,6 +4524,7 @@ impl Arcade {
                 None,
                 2,
                 people::Look::Carved,
+                false,
             );
 
             // and whoever is already up there. Spec 0056: a few, and none
@@ -4375,9 +4537,49 @@ impl Arcade {
                     None,
                     n,
                     people::Look::Einherjar,
+                    false,
                 );
             }
         }
+
+        // **And you, in the glass.** Spec 0061.
+        //
+        // Inside engine spec 0091's bracket, because the camera is at eye
+        // height: on the screen this figure's head would be around the
+        // camera, and the pipelines cull by face, so what you would see is
+        // the inside of your own skull. The head is 0.26 tall against a near
+        // plane of 0.1, so it clips raggedly rather than disappearing.
+        //
+        // Only while there is a mirror to show it. Nothing else in the
+        // building reflects, so everywhere else this is a figure drawn into
+        // a pass nobody runs.
+        if !self.glass_targets.is_empty() && self.in_the_mirrors() {
+            stand(
+                // `at` is already the feet: `where_am_i` calls it "the feet,
+                // the eye's height, the yaw and the pitch", and `EYE` is
+                // added on top of it for the camera rather than taken off
+                self.at,
+                glam::Quat::IDENTITY,
+                self.yaw,
+                // the gait off the distance the footsteps already keep, so
+                // the legs swing with the walking rather than on a clock of
+                // their own
+                Some(self.paced),
+                // your own coat, which is a seed like anybody else's
+                0,
+                people::Look::Guest,
+                true,
+            );
+        }
+    }
+
+    /// Whether you are in the corridor of mirrors, which is the only place
+    /// the figure of you is worth drawing. Spec 0061.
+    fn in_the_mirrors(&self) -> bool {
+        self.at.x > mirrors::WEST
+            && self.at.x < mirrors::EAST
+            && self.at.z > mirrors::SOUTH - 1.0
+            && self.at.z < mirrors::NORTH + 1.0
     }
 
     /// The other corridor off the hotel's lobby. Spec 0035.
@@ -7576,6 +7778,24 @@ impl Game for Arcade {
         // says why that one room is out of it.
         renderer.set_scene_bounds(self.room.under_the_sun());
 
+        // **The two mirrored walls' targets, per spec 0061.** One each,
+        // because every panel on a wall is in that wall's one plane and
+        // engine spec 0092 samples by screen position, so six panels read
+        // their own parts of the one reflection.
+        //
+        // Half the window's width in each direction, which is a quarter of
+        // the fragments. Nobody reads a reflection the way they read the
+        // room, and each of these is a whole pass over the scene.
+        self.glass_targets = crate::mirrors::SIDES
+            .iter()
+            .map(|_| renderer.add_target(640, 640))
+            .collect();
+
+        // and the quad they are drawn on. A plain one: engine spec 0092
+        // samples where the fragment is, so the uv is never read and there
+        // is no mirrored mesh to build.
+        self.pane = Some(renderer.add_mesh(&blitzkit::mesh::MeshData::plane()));
+
         // No contact shadows in this building, per spec 0029's own limits.
         //
         // The bath house ceiling is eleven ribs hanging fifteen centimetres
@@ -8882,6 +9102,15 @@ impl Game for Arcade {
                     "Click or press enter to open it."
                 })),
             ),
+            (None, Some(room::Seen::MirrorCase)) => {
+                let (what, how) = if self.room.mirror_open {
+                    ("the bookcase", "Click or press enter to push it back.")
+                } else {
+                    ("a bookcase", "another of these is not a book")
+                };
+
+                (Some(String::from(what)), Some(String::from(how)))
+            }
             (None, Some(room::Seen::Case)) => {
                 let (what, how) = if self.room.open {
                     ("the bookcase", "Click or press enter to push it back.")
@@ -9247,6 +9476,15 @@ impl Game for Arcade {
         self.draw_the_hotel(scene, cube, floor);
         self.draw_the_twine(scene, cube, floor);
         self.draw_the_imaginarium(scene, cube);
+        // and the corridor of mirrors behind the nook's bookcases, spec 0061.
+        //
+        // **Here and not beside `draw_the_hall`**, which is Valhalla's
+        // longhouse at the top of the bridge and not this building's hall.
+        // Attached there it was never called at all, and what that looked
+        // like was standing in the corridor seeing the garden and the sky
+        // through walls that were solid: the collision was in `solid` and
+        // the drawing was somewhere nobody goes.
+        self.draw_the_mirrors(scene, cube);
         self.draw_the_people(scene);
         self.draw_the_register(scene, cube, floor);
 
@@ -11358,10 +11596,14 @@ impl Game for Arcade {
                             book.tall,
                             book.tall * 0.44,
                         )),
-                        if cellar::swings(n)
+                        if (cellar::swings(n)
                             && n == cellar::CASE
                             && shelf == cellar::BOOK_SHELF
-                            && which == cellar::BOOK
+                            && which == cellar::BOOK)
+                            || (mirrors::swings(n)
+                                && n == mirrors::CASE
+                                && shelf == mirrors::BOOK_SHELF
+                                && which == mirrors::BOOK)
                         {
                             aim::BOOK_HANDLE
                         } else {

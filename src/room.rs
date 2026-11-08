@@ -859,6 +859,8 @@ pub enum Seen {
     Bench(usize),
     /// The one case that is a door. Spec 0007.
     Case,
+    /// The other one, which is the way into the hall of mirrors. Spec 0061.
+    MirrorCase,
     /// The sauna's glass door. Spec 0008.
     Sauna,
     /// The door between the cellar and the baths. Spec 0008.
@@ -945,6 +947,13 @@ pub struct Room {
     /// open that stops you where it was shut is a worse thing than one that
     /// snaps.
     pub swing: f32,
+    /// Whether the hall of mirrors' pair is latched open, per spec 0061.
+    pub mirror_open: bool,
+    /// How far the hall of mirrors' own pair stands open, per spec 0061.
+    ///
+    /// Its own number and not `swing`, because the two doors are two doors:
+    /// opening the way down should not open the way west as well.
+    pub mirror_swing: f32,
     pub walls: Vec<Aabb>,
     /// How far the room reaches from its middle, worked out from how many
     /// cabinets there are.
@@ -1023,23 +1032,50 @@ impl Room {
                 ),
                 vec3(thick, TALL, hole - cellar::WIDE * 0.5 + reaches),
             ),
+            // and that long north stretch in two, because the hall of
+            // mirrors is through it: spec 0061 cuts an opening in it, and
+            // `mirrors::way` is the only place that says where. It was one
+            // piece until 2026-11-08.
             Aabb::from_center_size(
                 vec3(
                     -side - NOOK_DEEP,
                     TALL * 0.5,
-                    (hole + cellar::WIDE * 0.5 - reaches + NOOK_SPAN) * 0.5,
+                    (hole + cellar::WIDE * 0.5 + crate::mirrors::way().0) * 0.5,
                 ),
                 vec3(
                     thick,
                     TALL,
-                    -reaches + NOOK_SPAN - hole - cellar::WIDE * 0.5,
+                    crate::mirrors::way().0 - hole - cellar::WIDE * 0.5,
                 ),
+            ),
+            Aabb::from_center_size(
+                vec3(
+                    -side - NOOK_DEEP,
+                    TALL * 0.5,
+                    (crate::mirrors::way().1 - reaches + NOOK_SPAN) * 0.5,
+                ),
+                vec3(thick, TALL, -reaches + NOOK_SPAN - crate::mirrors::way().1),
             ),
             // and the lintel over it
             Aabb::from_center_size(
                 vec3(-side - NOOK_DEEP, (cellar::HIGH + TALL) * 0.5, hole),
                 vec3(thick, TALL - cellar::HIGH, cellar::WIDE),
             ),
+            // and the one over the way into the hall of mirrors, for the
+            // same reason: the bookcase standing in that hole is 1.90 and
+            // the wall is 3.20, so without this the opening shows as a
+            // bright strip above it.
+            {
+                let (south, north) = crate::mirrors::way();
+                Aabb::from_center_size(
+                    vec3(
+                        -side - NOOK_DEEP,
+                        (crate::mirrors::HIGH + TALL) * 0.5,
+                        (south + north) * 0.5,
+                    ),
+                    vec3(thick, TALL - crate::mirrors::HIGH, north - south),
+                )
+            },
             {
                 let (at, size) = nook_end(reaches);
                 Aabb::from_center_size(at, size)
@@ -1118,6 +1154,8 @@ impl Room {
             baths_swing: 0.0,
             hotel_doors: Vec::new(),
             swing: 0.0,
+            mirror_open: false,
+            mirror_swing: 0.0,
         }
     }
 
@@ -1225,6 +1263,11 @@ impl Room {
             let (at, swing) = Self::swung(shelved, self.swings_out(n), self.swing);
 
             (at, swing * along)
+        } else if crate::mirrors::swings(n) {
+            let (at, swing) =
+                Self::swung(shelved, crate::mirrors::swings_out(n), self.mirror_swing);
+
+            (at, swing * along)
         } else {
             (shelved.at, along)
         }
@@ -1257,12 +1300,31 @@ impl Room {
         ))
     }
 
+    /// The same for the hall of mirrors' pair, per spec 0061.
+    ///
+    /// Its own handle and not a second use of the cellar's, because two
+    /// secret doors sharing one are one secret door.
+    pub fn mirror_handle(&self) -> Option<Aabb> {
+        let shelved = self.bookcases.get(crate::mirrors::CASE)?;
+
+        Some(Self::swung_box(
+            shelved,
+            crate::mirrors::swings_out(crate::mirrors::CASE),
+            self.mirror_swing,
+        ))
+    }
+
     /// Lets the door catch up with itself.
     pub fn ease(&mut self, dt: f32) {
         let to = if self.open { 1.0 } else { 0.0 };
         let by = dt / Self::SWINGS_IN;
 
         self.swing += (to - self.swing).clamp(-by, by);
+
+        // the hall of mirrors' pair, at the same pace: it is the same four
+        // hundred books on the same hinges
+        let to = if self.mirror_open { 1.0 } else { 0.0 };
+        self.mirror_swing += (to - self.mirror_swing).clamp(-by, by);
 
         // the sauna's door is lighter than a bookcase with four hundred books
         // in it, so it moves at its own pace
@@ -1485,6 +1547,7 @@ impl Room {
             ("the garden", crate::garden::ground(reaches)),
             ("the space behind the wall", crate::behind::floor(reaches)),
             ("the back room", crate::back::floor(reaches)),
+            ("the hall of mirrors", crate::mirrors::floor()),
             ("the hotel's lobby", crate::aleph::floor(reaches)),
             (
                 "the hotel's corridor",
@@ -1541,6 +1604,7 @@ impl Room {
         // them, and the space that gap leads into. Spec 0011.
         out.extend(crate::behind::near_wall(self.reaches));
         out.extend(crate::back::solid(self.reaches));
+        out.extend(crate::mirrors::solid());
 
         if lit_by_the_sun {
             out.extend(crate::behind::solid(self.reaches));
@@ -1581,6 +1645,8 @@ impl Room {
         out.extend(self.bookcases.iter().enumerate().map(|(n, case)| {
             if cellar::swings(n) {
                 Self::swung_box(case, self.swings_out(n), self.swing)
+            } else if crate::mirrors::swings(n) {
+                Self::swung_box(case, crate::mirrors::swings_out(n), self.mirror_swing)
             } else {
                 Self::bookcase_box(case)
             }
@@ -2158,6 +2224,11 @@ impl Room {
             .handle()
             .and_then(|book| slab(from, way, &book).map(|far| (Seen::Case, far)));
 
+        // and the other one that is not a case, per spec 0061
+        let mirror_case = self
+            .mirror_handle()
+            .and_then(|book| slab(from, way, &book).map(|far| (Seen::MirrorCase, far)));
+
         // and the one panel in the gallery, per spec 0039, which is the
         // only flat thing in this building you work
         let panel = {
@@ -2259,6 +2330,7 @@ impl Room {
             .chain(benches)
             .chain(panel)
             .chain(case)
+            .chain(mirror_case)
             .chain(glass)
             .chain(baths)
             .chain(desk)
@@ -2847,6 +2919,7 @@ mod tests {
                 + crate::behind::solid(room.reaches).len()
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
+                + crate::mirrors::solid().len()
                 // and the hotel through the other wall, per spec 0029,
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
@@ -3736,6 +3809,7 @@ mod tests {
                 + crate::behind::solid(room.reaches).len()
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
+                + crate::mirrors::solid().len()
                 // and the hotel through the other wall, per spec 0029,
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()

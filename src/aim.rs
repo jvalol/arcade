@@ -283,6 +283,13 @@ pub const SCONCE: Vec4 = vec4(0.46, 0.34, 0.14, 1.0);
 /// gap between cubies is one shape with no lines in it, and the lines are
 /// what say it is twenty-six things.
 pub const CUBIE: Vec4 = vec4(0.055, 0.055, 0.065, 1.0);
+
+/// An eye. Spec 0033's face, which only the guests have.
+///
+/// Dark and not black: black at this size is a hole punched in a head, and
+/// what reads as an eye is something slightly warmer than the shadow the
+/// brow would throw.
+pub const EYE: Vec4 = vec4(0.10, 0.09, 0.11, 1.0);
 pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 
 /// What the room says about something nobody has compiled.
