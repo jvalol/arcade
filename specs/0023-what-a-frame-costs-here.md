@@ -11,8 +11,12 @@ Know what this building costs to draw, room by room, while standing in it.
 The engine learned to time a frame for its own `load` example, which is a wall
 of cubes with dials on it and exists because there was nothing else to
 measure. This is the thing worth measuring. It is the largest program anybody
-has built on this engine: eleven rooms, a sky, two pools, shadow maps, a
-system of planets and eight cells that are one cell. The number moves as you
+has built on this engine: fourteen grounds you can stand on, a sky, two
+pools, shadow maps, a system of planets and eight cells that are one cell.
+Grounds and not rooms, because `room::grounds` is the one list that says
+what they are and it counts the hotel's corridor apart from its lobby. It
+read eleven rooms when this was written, which was true then and drifted
+quietly, since no prose count has anything keeping it. The number moves as you
 walk from one room to the next, and until now nothing could see it move.
 
 ## Behavior
