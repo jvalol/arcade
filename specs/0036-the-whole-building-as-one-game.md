@@ -1,7 +1,7 @@
 # 0036 The whole building as one game
 
 **Status:** draft
-**Date:** 2026-10-22
+**Date:** 2026-10-22, amended 2026-11-07
 
 ## Goal
 
@@ -97,6 +97,18 @@ says GO LEFT is a sign.
 **A reason to make the rooms worse.** Every room here works standing alone
 and must keep working standing alone. Somebody who never finds the trail
 should not be able to tell it is there.
+
+**And that rule is about the building, not about everything that mentions
+it.** It was written as though it covered the site too, and since
+2026-11-07 it does not: the clip on the front page ends on Bifröst, so the
+first thing anybody learns about this building is that it has a prize in
+it. Jake's call, with the take in front of him. The argument for it is that
+a trailer whose job is to make somebody want to walk the place cannot also
+be the thing that hides what is worth walking to, and the trail is still
+not findable from inside, which is where the rule bites: the lane in the
+carpet is still a thing that happened and nothing in the building says go
+left. What is spoiled is that there is an end. Where it is and what it
+asks are untouched.
 
 **A story.** The player is a guest, not a protagonist. Nobody is rescued and
 nothing is explained at the end.
