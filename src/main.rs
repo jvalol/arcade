@@ -12363,6 +12363,39 @@ impl Game for Arcade {
             ));
         }
 
+        // and the cabinets' neon, which is a lamp like any other and has to
+        // be ranked like one.
+        //
+        // **It was pushed after the sort, so the cap fell on it first.** The
+        // engine keeps the first sixty four lights it is given and drops the
+        // rest without a word, so push order is what decides. The fitted
+        // lamps went in culled and ranked and the neon went in afterwards,
+        // which protected a ceiling lamp over the glow a cabinet throws on
+        // the carpet, in the one room whose whole character is that glow.
+        // Standing at the entrance and sweeping the hall asked for a hundred
+        // and thirteen, so forty nine were dropped and the neon was all of
+        // them.
+        shades.extend(near.iter().map(|&(_, n)| {
+            let stood = &self.room.stood[n];
+            let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
+            let strength = if at == Some(n) {
+                aim::LAMP_LIT
+            } else {
+                aim::LAMP_INTENSITY
+            };
+            let throws = stood.at
+                + Vec3::Y * room::CABINET.y * aim::NEON_UP
+                + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK);
+
+            (
+                eye.distance_squared(throws),
+                throws,
+                glow.truncate().normalize_or(Vec3::ONE),
+                strength,
+                aim::LAMP_RANGE,
+            )
+        }));
+
         // and first, throw away every lamp that cannot light anything you
         // can see. A lamp gives exactly nothing past its range, so all it
         // lights is inside a sphere of that radius, and a sphere that does
@@ -12393,24 +12426,6 @@ impl Game for Arcade {
             scene.push_light(blitzkit::lighting::PointLight::new(at, colour, lit, range));
         }
 
-        for (_, n) in near {
-            let stood = &self.room.stood[n];
-            let glow = aim::neon_of(self.glows.get(n).copied().unwrap_or(Vec3::ONE));
-            let strength = if at == Some(n) {
-                aim::LAMP_LIT
-            } else {
-                aim::LAMP_INTENSITY
-            };
-
-            scene.push_light(blitzkit::lighting::PointLight::new(
-                stood.at
-                    + Vec3::Y * room::CABINET.y * aim::NEON_UP
-                    + stood.facing * (room::CABINET.z * 0.5 + aim::NEON_THICK),
-                glow.truncate().normalize_or(Vec3::ONE),
-                strength,
-                aim::LAMP_RANGE,
-            ));
-        }
         for (n, stood) in self.room.stood.iter().enumerate() {
             let look = aim::look_of(stood.cabinet.is_built(), at == Some(n));
 
