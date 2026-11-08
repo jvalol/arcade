@@ -13185,7 +13185,7 @@ fn main() {
         return;
     }
 
-    start("labyrinth", Box::new(Arcade::new()));
+    start("capriccio", Box::new(Arcade::new()));
 }
 
 #[cfg(test)]
