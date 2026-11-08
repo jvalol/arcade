@@ -259,7 +259,7 @@ fn filmed(room: &room::Room) -> Option<Result<Vec<tour::Step>, String>> {
     let given = std::env::args().find_map(|arg| arg.strip_prefix("--film=").map(str::to_owned))?;
 
     Some(if given == "clip" {
-        Ok(tour::clip(room))
+        Ok(tour::clip(room, done_already()))
     } else {
         tour::read(&given)
     })
@@ -12403,11 +12403,20 @@ impl Game for Arcade {
         // Spec 0050 of the engine.
         //
         // This is what takes the building under the engine's cap rather
-        // than merely ordering what spills over it: a hundred and thirty
-        // three lamps become between twelve and fifty three depending on
-        // where you stand and which way you look, against sixty four
-        // carried. The ranking below stays as the fallback, so a corner
-        // nobody has measured still spills in the right order.
+        // than merely ordering what spills over it: two hundred and
+        // nineteen lamps are pushed and the cull leaves sixty two of them
+        // where you come in, against sixty four carried. It read a hundred
+        // and thirty three and twelve to fifty three when it was last
+        // measured, and both have moved, which is the argument for
+        // measuring again rather than believing this line.
+        //
+        // **And the ranking below is not only a fallback.** One turn on
+        // the spot at the door reaches a hundred and seven and asks for
+        // more than sixty four on 159 frames of 365, so what is dropped is
+        // decided over four tenths of a turn at the way in. Spec 0089 of
+        // the engine is what those frames look like at a cap of 128, which
+        // is byte for byte the same, because the cull is a frustum and the
+        // surplus is behind a wall.
         let seen = camera.frustum();
 
         shades.retain(|(_, at, _, _, reach)| seen.holds_sphere(*at, *reach));
@@ -15085,7 +15094,7 @@ mod tests {
     fn the_clip_walks_the_whole_route() {
         let tick = 1.0 / 60.0;
         let mut game = Arcade::new();
-        let steps = tour::clip(&game.room);
+        let steps = tour::clip(&game.room, true);
         let places = steps.len();
 
         game.filming = Some(Filming {
@@ -15204,7 +15213,7 @@ mod tests {
         // and a gate that was never there both show an empty follower.
         // Nowhere further on will do either, because the route's later
         // places are behind doors this one call cannot have opened.
-        let walked = tour::clip(&game.room)
+        let walked = tour::clip(&game.room, true)
             .into_iter()
             .filter(|step| matches!(step, tour::Step::At(..)))
             .nth(1)
@@ -15260,7 +15269,7 @@ mod tests {
     #[test]
     fn the_sight_finds_what_each_work_in_the_clip_works() {
         let room = room::Room::of(games());
-        let steps = tour::clip(&room);
+        let steps = tour::clip(&room, true);
         let tick = 1.0 / 60.0;
 
         // the three things on this route that are worked, said the way the
@@ -15374,7 +15383,7 @@ mod tests {
     #[test]
     fn every_look_in_the_clip_ends_with_what_it_names_in_shot() {
         let room = room::Room::of(games());
-        let steps = tour::clip(&room);
+        let steps = tour::clip(&room, true);
         let tick = 1.0 / 60.0;
         let most = 30f32.to_radians();
         let mut stood = (room.doorway(), 0u64);

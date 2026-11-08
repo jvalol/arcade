@@ -840,6 +840,23 @@ pub fn read(tour: &str) -> Result<Vec<Step>, String> {
 /// what "in front of" means everywhere in the route below.
 const STANDS_BACK: f32 = 1.4;
 
+/// How far back from the garden's west wall the clip stands to look at
+/// Bifrost, on the garden's own side of it.
+///
+/// **Inside, because the field is not ground the planner knows.**
+/// `tour::ways` lays its lattice over `room::grounds`, and the field is not
+/// in that list: it follows the camera and is three hundred metres across,
+/// so it is not a floor anybody can lay half metre places over. A stop two
+/// metres the other side of the wall planned no way at all and the walk
+/// never left the garden.
+///
+/// And it costs nothing to be inside. At two and a half metres back the
+/// opening is wider than the view, so the jambs are in the corners of the
+/// frame and the arc, the field and the trees either side of it are not
+/// touched. Walking out to the foot is thirty-five metres further, over the
+/// dark ground that cost the solarium its place on this route.
+const BACK_FROM_THE_WAY: f32 = 2.5;
+
 /// How far past the solarium's threshold the clip stands to look down it.
 ///
 /// Its own number rather than `room::INSIDE`, which is how far inside the
@@ -870,7 +887,7 @@ const INSIDE_THE_FIELD: f32 = 2.0;
 /// front door, so they come first. The hall is walked once, end to end.
 /// The nook is at the far end of it and holds both of the remaining ways
 /// on, so it is walked twice with the climb between the visits.
-pub fn clip(room: &crate::room::Room) -> Vec<Step> {
+pub fn clip(room: &crate::room::Room, done: bool) -> Vec<Step> {
     let reaches = room.reaches;
     let mut route = vec![Step::At(room.doorway(), 0)];
 
@@ -885,6 +902,34 @@ pub fn clip(room: &crate::room::Room) -> Vec<Step> {
     ));
     route.push(Step::Look(pond));
     route.push(Step::Stand(2.0));
+
+    // **And through the garden's west wall at the bridge, when there is
+    // one.** Spec 0054 puts Bifrost up only once the trail has been given,
+    // so this is the one place on the route that is not simply there: a run
+    // without `--done` stands here and looks at grass, which is why the
+    // route is told rather than left to guess.
+    //
+    // It is the end of the trail and the one thing the building is for that
+    // nothing published has ever shown.
+    //
+    // Lined up on the way out rather than on the bridge, which are the same
+    // z and are not the same question: `field::way` is a hole in a wall and
+    // `bridge::foot` is a place in a field, and the day one of them moves
+    // this wants to be standing in the opening and not beside it.
+    if done {
+        let (from, to) = crate::field::way(reaches);
+
+        route.push(Step::At(
+            vec3(
+                crate::field::starts(reaches) + BACK_FROM_THE_WAY,
+                0.0,
+                (from + to) * 0.5,
+            ),
+            0,
+        ));
+        route.push(Step::Look(crate::bridge::top(reaches)));
+        route.push(Step::Stand(3.0));
+    }
 
     // **The solarium, down the line rather than along it.** Every planet
     // rests on the line between its sun and its way in, which is
@@ -1296,7 +1341,7 @@ mod tests {
         // the orrery's door is two metres clear of Neptune. What is not
         // clear is the walk out through it, which crosses Neptune's own
         // plane, and that is where the black frame is.
-        let stops: Vec<Vec3> = clip(&room)
+        let stops: Vec<Vec3> = clip(&room, true)
             .into_iter()
             .filter_map(|step| match step {
                 Step::At(at, _) => Some(at),
@@ -1930,7 +1975,7 @@ mod tests {
     #[test]
     fn the_clip_s_tour_gets_all_the_way_round() {
         let mut room = crate::room::Room::of(crate::games());
-        let steps = clip(&room);
+        let steps = clip(&room, true);
         let reaches = room.reaches;
 
         // the two things on this route that swing, read off the same
