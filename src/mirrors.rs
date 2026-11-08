@@ -20,6 +20,9 @@
 
 use crate::room::{TALL, THICK};
 use blitzkit::collision::Aabb;
+use blitzkit::mesh::Transform;
+use blitzkit::renderer::scene::{MeshId, Scene, TextureId};
+use glam::vec4;
 use glam::{vec3, Vec3};
 
 /// The nook's west wall, which is this corridor's east side.
@@ -391,6 +394,100 @@ pub fn lamps() -> Vec<Vec3> {
     }
 
     out
+}
+
+/// Whether somebody is in the corridor, which is the only place the figure
+/// of them is worth drawing. Spec 0061.
+pub fn holds(at: Vec3) -> bool {
+    at.x > WEST && at.x < EAST && at.z > SOUTH - 1.0 && at.z < NORTH + 1.0
+}
+
+/// Everything this room draws: the shell, the two mirrors, the panes that
+/// wear them, and the lamps. Spec 0061.
+///
+/// **Here and not in main.rs, where every other room's drawing still is.**
+/// Put there first, beside `draw_the_hall`, which is Valhalla's longhouse at
+/// the top of the bridge and not this building's hall: it was never called,
+/// the corridor was solid and invisible, and you stood in it seeing the
+/// garden and the sky through its walls. Every test passed, because they all
+/// ask `solid` and none of them asks what was drawn.
+///
+/// Eighteen thousand lines is how two functions eight thousand apart come to
+/// look like neighbours. The geometry was already here; this is the rest of
+/// the room coming to join it.
+pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[TextureId]) {
+    // **The shell is drawn whatever the glass is doing.** This used to sit
+    // behind a `let ... else { return }` on the targets, so a frame
+    // before `load` had run drew no room at all: the walls were solid
+    // and invisible, and standing in the corridor showed the garden and
+    // the sky through them. A room's walls do not depend on its mirrors.
+    //
+    // the shell: floor, lid, walls, end, and the frames round each panel
+    // `drawn` and not `solid`: the walked floor laps under the hall's
+    // and the drawn one stops at its edge, per spec 0011's lesson
+    for piece in drawn() {
+        let dark = piece.max.y > PANEL_FOOT;
+        scene.push_material(
+            cube,
+            &Transform::at(piece.center()).with_scale(piece.size()),
+            if dark {
+                crate::aim::PANEL
+            } else {
+                crate::aim::FLOOR
+            },
+            crate::aim::MATTE,
+        );
+    }
+
+    let Some(quad) = quad else {
+        return;
+    };
+    if targets.len() != SIDES.len() {
+        return;
+    }
+
+    for (which, side) in SIDES.iter().enumerate() {
+        let target = targets[which];
+        let (on, normal) = plane(*side);
+
+        // the wall is a mirror, which the engine draws into `target`
+        // before this frame's world. Engine spec 0091.
+        scene.mirror(target, on, normal);
+
+        // and each panel wears it. The quad is turned to face into the
+        // room: `MeshData::plane` lies in xz looking up, so it wants a
+        // quarter turn about x and then a half turn for the far wall.
+        for at in along_wall(*side) {
+            let (stands, size) = pane(*side, at);
+            // `MeshData::plane` lies in xz looking up, so a pane on a
+            // wall across x wants a quarter turn about z, and the far
+            // wall wants it the other way so both faces look inward
+            let turn = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * side.signum());
+
+            scene.glass(
+                quad,
+                target,
+                &Transform::at(stands)
+                    .with_rotation(turn)
+                    .with_scale(vec3(size.y, 1.0, size.z)),
+                // white, so the glass is a mirror rather than a tinted
+                // pane. Engine spec 0092 multiplies this through.
+                vec4(1.0, 1.0, 1.0, 1.0),
+            );
+        }
+    }
+
+    // the lamps, which come off the frames rather than being written
+    // beside them, for the reason `spa::lamps` does
+    for at in lamps() {
+        scene.push_light(blitzkit::lighting::PointLight {
+            position: at,
+            color: crate::aim::SHADE.truncate(),
+            intensity: 0.35,
+            range: 4.5,
+            casts: false,
+        });
+    }
 }
 
 #[cfg(test)]

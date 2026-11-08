@@ -3824,77 +3824,6 @@ impl Arcade {
     /// draws *before* the world, into the targets those panes wear. So this
     /// frame's glass shows this frame's reflection, and a mirror facing a
     /// mirror shows the other's as it stood last frame.
-    fn draw_the_mirrors(&self, scene: &mut Scene, cube: MeshId) {
-        // **The shell is drawn whatever the glass is doing.** This used to sit
-        // behind a `let ... else { return }` on the targets, so a frame
-        // before `load` had run drew no room at all: the walls were solid
-        // and invisible, and standing in the corridor showed the garden and
-        // the sky through them. A room's walls do not depend on its mirrors.
-        //
-        // the shell: floor, lid, walls, end, and the frames round each panel
-        // `drawn` and not `solid`: the walked floor laps under the hall's
-        // and the drawn one stops at its edge, per spec 0011's lesson
-        for piece in mirrors::drawn() {
-            let dark = piece.max.y > mirrors::PANEL_FOOT;
-            scene.push_material(
-                cube,
-                &Transform::at(piece.center()).with_scale(piece.size()),
-                if dark { aim::PANEL } else { aim::FLOOR },
-                aim::MATTE,
-            );
-        }
-
-        let Some(pane) = self.pane else {
-            return;
-        };
-        if self.glass_targets.len() != mirrors::SIDES.len() {
-            return;
-        }
-
-        for (which, side) in mirrors::SIDES.iter().enumerate() {
-            let target = self.glass_targets[which];
-            let (on, normal) = mirrors::plane(*side);
-
-            // the wall is a mirror, which the engine draws into `target`
-            // before this frame's world. Engine spec 0091.
-            scene.mirror(target, on, normal);
-
-            // and each panel wears it. The quad is turned to face into the
-            // room: `MeshData::plane` lies in xz looking up, so it wants a
-            // quarter turn about x and then a half turn for the far wall.
-            for at in mirrors::along_wall(*side) {
-                let (stands, size) = mirrors::pane(*side, at);
-                // `MeshData::plane` lies in xz looking up, so a pane on a
-                // wall across x wants a quarter turn about z, and the far
-                // wall wants it the other way so both faces look inward
-                let turn = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * side.signum());
-
-                scene.glass(
-                    pane,
-                    target,
-                    &Transform::at(stands)
-                        .with_rotation(turn)
-                        .with_scale(vec3(size.y, 1.0, size.z)),
-                    // white, so the glass is a mirror rather than a tinted
-                    // pane. Engine spec 0092 multiplies this through.
-                    vec4(1.0, 1.0, 1.0, 1.0),
-                );
-            }
-        }
-
-        // the lamps, which come off the frames rather than being written
-        // beside them, for the reason `spa::lamps` does
-        for at in mirrors::lamps() {
-            scene.push_light(blitzkit::lighting::PointLight {
-                position: at,
-                color: aim::SHADE.truncate(),
-                intensity: 0.35,
-                range: 4.5,
-                casts: false,
-            });
-        }
-    }
-
     fn draw_the_hall(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
         let one = valhalla::hall(reaches);
@@ -4553,7 +4482,7 @@ impl Arcade {
         // Only while there is a mirror to show it. Nothing else in the
         // building reflects, so everywhere else this is a figure drawn into
         // a pass nobody runs.
-        if !self.glass_targets.is_empty() && self.in_the_mirrors() {
+        if !self.glass_targets.is_empty() && mirrors::holds(self.at) {
             stand(
                 // `at` is already the feet: `where_am_i` calls it "the feet,
                 // the eye's height, the yaw and the pitch", and `EYE` is
@@ -4571,15 +4500,6 @@ impl Arcade {
                 true,
             );
         }
-    }
-
-    /// Whether you are in the corridor of mirrors, which is the only place
-    /// the figure of you is worth drawing. Spec 0061.
-    fn in_the_mirrors(&self) -> bool {
-        self.at.x > mirrors::WEST
-            && self.at.x < mirrors::EAST
-            && self.at.z > mirrors::SOUTH - 1.0
-            && self.at.z < mirrors::NORTH + 1.0
     }
 
     /// The other corridor off the hotel's lobby. Spec 0035.
@@ -9478,13 +9398,13 @@ impl Game for Arcade {
         self.draw_the_imaginarium(scene, cube);
         // and the corridor of mirrors behind the nook's bookcases, spec 0061.
         //
-        // **Here and not beside `draw_the_hall`**, which is Valhalla's
-        // longhouse at the top of the bridge and not this building's hall.
-        // Attached there it was never called at all, and what that looked
-        // like was standing in the corridor seeing the garden and the sky
-        // through walls that were solid: the collision was in `solid` and
-        // the drawing was somewhere nobody goes.
-        self.draw_the_mirrors(scene, cube);
+        // **Its drawing lives in its own module**, with the geometry it
+        // draws. It sat in here beside `draw_the_hall` first, which is
+        // Valhalla's longhouse and not this building's hall, so it was never
+        // called at all and the corridor was solid and invisible. A file of
+        // eighteen thousand lines is how two functions eight thousand apart
+        // come to look like neighbours.
+        mirrors::draw(scene, cube, self.pane, &self.glass_targets);
         self.draw_the_people(scene);
         self.draw_the_register(scene, cube, floor);
 
