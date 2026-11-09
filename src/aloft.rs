@@ -3562,7 +3562,8 @@ mod tests {
         // own check cannot see them: it reads boxes, and a suspended
         // ceiling is drawn and never collided, so no list it is given has
         // a tile in it.
-        let (_, tiles) = crate::room::Room::of(crate::games()).lattice();
+        let (_, mut tiles, panels) = crate::room::Room::of(crate::games()).lattice();
+        tiles.extend(panels);
         let (low, high) = tiles
             .iter()
             .fold((f32::MAX, f32::MIN), |(low, high), (at, size)| {
@@ -3617,7 +3618,8 @@ mod tests {
     /// to climbing through a ceiling.
     #[test]
     fn the_landing_is_at_the_nooks_ceiling() {
-        let (_, tiles) = crate::room::Room::of(crate::games()).lattice();
+        let (_, mut tiles, panels) = crate::room::Room::of(crate::games()).lattice();
+        tiles.extend(panels);
         let (low, high) = tiles
             .iter()
             .fold((f32::MAX, f32::MIN), |(low, high), (at, size)| {

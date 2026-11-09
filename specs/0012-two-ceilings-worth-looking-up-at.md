@@ -121,6 +121,8 @@ because it was the first answer and the measurement is what settled it.
 
 - The hall's grid is laid to the world and not to each piece of the lid. — `room::tests::the_lid_is_one_grid_laid_to_the_world`
 - No tile is level with a bar, or over one. — `room::tests::no_ceiling_tile_is_level_with_a_bar`
+- The lit panels are the hall's and the nook has none. — `room::tests::no_lit_panel_is_over_the_nook`
+- And every square of the grid is a tile or a panel, and not both. — `room::tests::every_square_of_the_grid_is_a_tile_or_a_panel`
 - Nothing hung from the baths' ceiling runs into anything. — `spa::tests::nothing_hung_from_the_ceiling_runs_into_anything`
 - Both borders are mitred, the ceiling's and the floor's, so no two runs of
   either cross at a corner. — `spa::tests::both_borders_are_mitred`
@@ -178,6 +180,35 @@ a tile is broad enough that it reads as light rather than as a wave.
 it for. The ones that have been looked at since the rooms got brighter have all
 wanted nought: the figure, the rug, and now these. The default is a decision
 that was never made, and it is the engine's to make.
+
+## 2026-11-09: the tiles are lamps now
+
+**Jake: the arcade and maybe some other rooms could benefit from ceiling
+lighting, where the tiles are leds.** The hall had never had a lamp of its
+own. Its light was the cabinets' marquees and the sign over the door, and
+looking up from the middle of it the ceiling was a dark grid with nothing in
+it.
+
+So some squares of that grid are lit panels: the tile itself is past white, a
+lamp sits just under the diffuser, and the lamp comes off the panel's own
+position, so there is no light in the hall that is not in a fitting.
+
+**Every other square, both ways**, picked from three pictures of the same
+spot. The other two were two runs down the length of the hall, which read as a
+corridor and left the ceiling between them dark, and nothing at all. A checker
+lights the ceiling evenly and reads as a room somebody fitted out.
+
+**Cool, where everything else in the building is warm.** A panel in a ceiling
+grid is a tube behind a diffuser, which is the one cold light an arcade has,
+and it keeps the warm end of the room to the neon and the sign.
+
+**None of them is over the nook.** The two rooms share this ceiling and one
+function builds it, and the nook is a study with pendants in it now. Strip
+lighting over four hundred books is an office.
+
+This amends spec 0005, which says the room is dim on purpose, and it still is:
+the panels are 0.30 against a sconce's 0.55, and what you notice standing in
+the hall is still the neon.
 
 ## Out of scope
 

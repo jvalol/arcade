@@ -292,6 +292,11 @@ pub const CUBIE: Vec4 = vec4(0.055, 0.055, 0.065, 1.0);
 pub const EYE: Vec4 = vec4(0.10, 0.09, 0.11, 1.0);
 pub const SHADE: Vec4 = vec4(2.6, 1.9, 1.1, 1.0);
 
+/// A lit ceiling panel in the hall's grid, which is the same idea at the cold
+/// end: past white, so it reads as a thing giving light rather than a pale
+/// tile with a lamp pointed at it.
+pub const CEIL_PANEL: Vec4 = vec4(1.7, 1.9, 2.3, 1.0);
+
 /// What the room says about something nobody has compiled.
 ///
 /// One sentence and not two. A cabinet in the hall and cascada's bench in the

@@ -9553,7 +9553,7 @@ impl Game for Arcade {
 
             // and the grid hung under it, which is what is over an arcade and
             // is also sixteen units of lines running away from you. Spec 0012.
-            let (bars, tiles) = self.room.lattice();
+            let (bars, tiles, panels) = self.room.lattice();
 
             for (at, size) in tiles.iter() {
                 scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_TILE);
@@ -9566,6 +9566,17 @@ impl Game for Arcade {
             // Jake, 2026-11-09: the ceiling has ripples. Painted steel is not
             // glossy. The tiles keep theirs, because what it carries there is
             // the neon washing the ceiling.
+            // and the lit ones, which are the only lamp the hall has of its
+            // own. `aim::CEIL_PANEL` is past white, so a panel reads as a thing
+            // giving light rather than a pale tile. Spec 0005.
+            for (at, size) in panels.iter() {
+                scene.push_material(
+                    cube,
+                    &Transform::at(*at).with_scale(*size),
+                    aim::CEIL_PANEL,
+                    aim::NO_SHINE,
+                );
+            }
             for (at, size) in bars.iter() {
                 scene.push_material(
                     cube,
@@ -12700,6 +12711,20 @@ impl Game for Arcade {
                 behind::LAMP_COLOUR,
                 behind::LAMP_LIT,
                 behind::LAMP_RANGE,
+            ));
+        }
+
+        // and the hall's ceiling panels, off the same list that draws them so
+        // there is no lamp in here that is not in a fitting
+        for (at, _) in self.room.lattice().2.iter() {
+            let lamp = room::panel_lamp(*at);
+
+            shades.push((
+                eye.distance_squared(lamp),
+                lamp,
+                room::PANEL_COLOUR,
+                room::PANEL_LIT,
+                room::PANEL_RANGE,
             ));
         }
 

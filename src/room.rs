@@ -203,6 +203,33 @@ pub fn soffit() -> f32 {
     TALL - CEIL_DROP
 }
 
+/// Which squares of the hall's grid are lit panels rather than tiles.
+///
+/// **Jake, 2026-11-09: the arcade and maybe some other rooms could benefit
+/// from ceiling lighting, where the tiles are leds.** The hall has never had a
+/// lamp of its own. Its light is the cabinets' marquees and the sign over the
+/// door, which spec 0005 is firm about: the room is dim on purpose. So this is
+/// a panel here and there rather than a lit ceiling, and it is dim enough that
+/// what you notice in the room is still the neon.
+///
+/// Every other square both ways, which Jake picked from three. The other two
+/// were two runs down the length of the hall and nothing at all. A checker
+/// lights the ceiling evenly and reads as a room somebody fitted out, where
+/// two runs read as a corridor and left the ceiling between them dark.
+fn lit_square(column: usize, row: usize) -> bool {
+    column % 2 == 1 && row % 2 == 1
+}
+
+/// What one throws, and what colour it is.
+///
+/// Cool where everything else in the building is warm, because a light panel
+/// in a ceiling grid is a fluorescent tube behind a diffuser and that is the
+/// one cold light an arcade has. It is also what keeps it off the neon's
+/// ground: the sign and the marquees own the warm end of this room.
+pub const PANEL_COLOUR: Vec3 = vec3(0.82, 0.88, 1.0);
+pub const PANEL_LIT: f32 = 0.30;
+pub const PANEL_RANGE: f32 = 5.5;
+
 /// How thick a ceiling tile is and where it hangs, which is above the bars
 /// so that nothing up there is level with anything. Spec 0012.
 ///
@@ -928,6 +955,14 @@ pub fn nook_lamps(reaches: f32) -> Vec<(Vec3, f32, f32)> {
                 .map(|shade| (pendant_lamp(shade), PENDANT_LIT, PENDANT_RANGE)),
         )
         .collect()
+}
+
+/// The light in a ceiling panel, from the panel it is in.
+///
+/// Just under the diffuser, so the panel itself is the brightest thing and
+/// the light comes off the thing you can see giving it.
+pub fn panel_lamp(panel: Vec3) -> Vec3 {
+    panel - Vec3::Y * CEIL_TILE_THICK
 }
 
 /// Where the nook's hanging lamps are: the middle of each shade.
@@ -2091,8 +2126,22 @@ impl Room {
     /// centred on the edge: centred, the two pieces' trims at the join would
     /// be the same box drawn twice, and two of those is the oldest fault in
     /// this building.
-    pub fn lattice(&self) -> (Vec<Hung>, Vec<Hung>) {
-        let (mut bars, mut tiles) = (Vec::new(), Vec::new());
+    pub fn lattice(&self) -> (Vec<Hung>, Vec<Hung>, Vec<Hung>) {
+        let (mut bars, mut tiles, mut panels) = (Vec::new(), Vec::new(), Vec::new());
+        // which room each square is in: the hall is the slab you come in by,
+        // found rather than indexed, and the panels are the hall's alone. The
+        // nook shares this ceiling and is a study with its own hanging lamps
+        // in it, and a study with strip lighting is an office.
+        let hall = self
+            .floors()
+            .iter()
+            .copied()
+            .find(|slab| {
+                let door = self.doorway();
+
+                slab.min.x <= door.x && door.x <= slab.max.x && slab.max.z >= door.z - INSIDE
+            })
+            .map(|slab| (slab.min.x, slab.max.x));
 
         // the world's own lines that fall inside a run, with the run's two
         // ends for the trim. A line too near an end is dropped rather than
@@ -2132,9 +2181,9 @@ impl Room {
 
             // and a tile behind every square, sunk above the bars so that
             // nothing up there is level with anything
-            for (near_x, far_x) in down.iter().zip(down.iter().skip(1)) {
-                for (near_z, far_z) in across.iter().zip(across.iter().skip(1)) {
-                    tiles.push((
+            for (column, (near_x, far_x)) in down.iter().zip(down.iter().skip(1)).enumerate() {
+                for (row, (near_z, far_z)) in across.iter().zip(across.iter().skip(1)).enumerate() {
+                    let square = (
                         vec3(
                             (near_x + far_x) * 0.5,
                             tile_middle(),
@@ -2145,7 +2194,16 @@ impl Room {
                             CEIL_TILE_THICK,
                             far_z - near_z - CEIL_BAR,
                         ),
-                    ));
+                    );
+                    let in_the_hall = hall
+                        .map(|(from, to)| square.0.x > from && square.0.x < to)
+                        .unwrap_or(false);
+
+                    if in_the_hall && lit_square(column, row) {
+                        panels.push(square);
+                    } else {
+                        tiles.push(square);
+                    }
                 }
             }
         }
@@ -2174,8 +2232,13 @@ impl Room {
         };
         bars = clipped(&bars);
         tiles = clipped(&tiles);
+        // the lit ones too, though none of them is near the well today: the
+        // panels are the hall's and the stair comes up through the nook. A
+        // list of the grid that the hole is not cut out of is a thing nobody
+        // would think to look at once it stopped being true.
+        panels = clipped(&panels);
 
-        (bars, tiles)
+        (bars, tiles, panels)
     }
 
     /// A box round the whole building, every room of it.
@@ -2460,6 +2523,63 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0012: the lit panels are the hall's and the nook has none.
+    ///
+    /// The two rooms share one ceiling, built by one function, and the nook is
+    /// a study with its own hanging lamps. Strip lighting over the books is an
+    /// office, and it is the kind of thing that arrives by accident when a
+    /// grid is built for one room and reaches into another.
+    #[test]
+    fn no_lit_panel_is_over_the_nook() {
+        let room = super::Room::of(crate::games());
+        let (_, _, panels) = room.lattice();
+        let (middle, size) = super::nook_floor(room.reaches);
+
+        assert!(
+            !panels.is_empty(),
+            "the hall has no lit panels, so it has no light of its own"
+        );
+
+        for (at, _) in panels.iter() {
+            let over_the_nook =
+                (at.x - middle.x).abs() < size.x * 0.5 && (at.z - middle.z).abs() < size.z * 0.5;
+
+            assert!(
+                !over_the_nook,
+                "a lit panel at {:?} is over the nook, which has pendants",
+                at
+            );
+        }
+    }
+
+    /// Spec 0012: every square of the grid is a tile or a panel, and not both.
+    ///
+    /// **Because they were one list and are now two.** A square that falls out
+    /// of both is a hole in the ceiling and a square in both is two faces in
+    /// one plane, and neither shows in a still of the room it is furthest
+    /// from.
+    #[test]
+    fn every_square_of_the_grid_is_a_tile_or_a_panel() {
+        let room = super::Room::of(crate::games());
+        let (_, tiles, panels) = room.lattice();
+        let put = |hung: &Vec<super::Hung>| -> std::collections::BTreeSet<(i64, i64)> {
+            hung.iter()
+                .map(|(at, _)| ((at.x * 1000.0) as i64, (at.z * 1000.0) as i64))
+                .collect()
+        };
+        let (laid, lit) = (put(&tiles), put(&panels));
+
+        assert_eq!(
+            laid.len() + lit.len(),
+            tiles.len() + panels.len(),
+            "two squares of the grid are in the same place"
+        );
+        assert!(
+            laid.is_disjoint(&lit),
+            "a square of the grid is both a tile and a panel"
+        );
+    }
+
     /// Spec 0037: nothing hangs in the way up.
     ///
     /// The nook's ceiling is the one the stair to the imaginarium comes
@@ -2813,7 +2933,7 @@ mod tests {
     fn the_lid_is_one_grid_laid_to_the_world() {
         let room = Room::of(some(12));
         let floors = room.floors();
-        let (bars, _) = room.lattice();
+        let (bars, _, _) = room.lattice();
 
         // where a trim is: flush inside each piece's own four edges
         let mut trims = Vec::new();
@@ -2855,7 +2975,10 @@ mod tests {
     #[test]
     fn no_ceiling_tile_is_level_with_a_bar() {
         let room = Room::of(some(12));
-        let (bars, tiles) = room.lattice();
+        // the lit ones as well: a panel is a tile that gives light, and it
+        // hangs in the same grid at the same height
+        let (bars, mut tiles, panels) = room.lattice();
+        tiles.extend(panels);
 
         assert!(!bars.is_empty() && !tiles.is_empty(), "no grid to speak of");
 
@@ -4123,7 +4246,8 @@ mod tests {
     #[test]
     fn nothing_of_the_grid_hangs_in_the_stairwell() {
         let room = Room::of(crate::games());
-        let (bars, tiles) = room.lattice();
+        let (bars, mut tiles, panels) = room.lattice();
+        tiles.extend(panels);
 
         // **Over the ceiling's own thickness, not over the well's.** Asked
         // of the well's height this cannot fail: whatever height the well

@@ -102,6 +102,18 @@ repeats.
 
 - Walking in and wanting to stay.
 
+## 2026-11-09: the hall has light of its own
+
+This spec says the room is dim on purpose, and that stands. What it did not
+say, because nobody had looked up from the middle of the floor, is that the
+hall had no lamp of its own at all: every photon in it came off a cabinet's
+marquee or the sign over the door.
+
+Some squares of the ceiling grid are lit panels now. The reasoning, the
+pattern and what it is not allowed to do are in
+[0012](0012-two-ceilings-worth-looking-up-at.md). A panel is 0.30 against a
+sconce's 0.55, and what you notice standing in the hall is still the neon.
+
 ## 2026-11-09: the floor is woven rather than painted
 
 **Jake: the arcade floor could be more carpet like.** Every texel of its ground
