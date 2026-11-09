@@ -505,6 +505,33 @@ pub fn lamps() -> Vec<Vec3> {
     out
 }
 
+/// Where the lamp over the way through hangs, on the nook's side of it.
+///
+/// **The way through had a sconce either side of it and none over it.** The
+/// nook's run is spaced every 2.2 and the opening is 2.18 wide, so the two
+/// that bracket it fall a centimetre outside each end by the inset `way`
+/// already carries, and the span between them is the hole. Nothing lit the
+/// threshold, so the floor there read black from both sides of the glass and
+/// twice as black through it: Jake, 2026-11-09, the nook floor still reads
+/// black.
+///
+/// Above the opening rather than beside it, because beside it is the hole.
+/// `HIGH` is the lintel and the lamp clears it by the same 0.18 the
+/// corridor's own lamps clear their panel heads by, so there is wall behind
+/// the fitting. `tests::the_lamp_over_the_way_through_is_on_wall` holds that.
+///
+/// The middle of `way` and not a number of its own, so the door and its lamp
+/// cannot come apart.
+pub fn doorway_lamp(face: f32, out: f32) -> Vec3 {
+    let (south, north) = way();
+
+    vec3(
+        face + out * crate::study::SCONCE_OUT,
+        HIGH + 0.18,
+        (south + north) * 0.5,
+    )
+}
+
 /// Whether somebody is in the corridor, which is the only place the figure
 /// of them is worth drawing. Spec 0061.
 pub fn holds(at: Vec3) -> bool {
@@ -772,6 +799,37 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Spec 0061. The lamp over the way through has wall behind it.
+    ///
+    /// **The run leaves the threshold dark by spacing, not by height.**
+    /// `study::SCONCE_UP` is 1.95 and the opening's head is `HIGH`, 1.90, so
+    /// the run's own height does clear the lintel: by five millimetres, which
+    /// is a plate standing on the edge of a hole. What left the threshold
+    /// dark is that the run is spaced every 2.2 and the opening is 2.18
+    /// wide, so the two that bracket it fall a centimetre outside each end
+    /// and nothing lands between them. This one hangs where a lamp over a
+    /// door hangs, with wall to spare.
+    #[test]
+    fn the_lamp_over_the_way_through_is_on_wall() {
+        let (south, north) = way();
+        let at = doorway_lamp(EAST, 1.0);
+
+        assert!(
+            at.y - 0.09 * 0.5 > HIGH,
+            "the lamp's own fitting reaches down to {} and the opening's head \
+             is {}",
+            at.y - 0.09 * 0.5,
+            HIGH
+        );
+        assert!(
+            at.z > south && at.z < north,
+            "a lamp at z {} is not over the way through, which runs {} to {}",
+            at.z,
+            south,
+            north
+        );
     }
 
     /// Spec 0061. The leaning glass stays in the gap it was given.

@@ -4014,6 +4014,27 @@ impl Arcade {
         }
     }
 
+    /// Which of the nook's two sconce walls the hall of mirrors is behind,
+    /// as the face it stands on and which way a bracket reaches off it.
+    ///
+    /// **Found rather than indexed.** `room::sconce_runs` gives two and
+    /// which is which is not written anywhere, so taking `[1]` would be a
+    /// fact nobody stated that the next person to add a wall would break.
+    /// The one nearest the corridor's own east face is the one the
+    /// bookcases are on.
+    fn bookcase_wall(&self) -> (f32, f32) {
+        room::sconce_runs(self.room.reaches)
+            .iter()
+            .copied()
+            .min_by(|one, other| {
+                (one.0 - mirrors::EAST)
+                    .abs()
+                    .total_cmp(&(other.0 - mirrors::EAST).abs())
+            })
+            .map(|(face, out, _, _)| (face, out))
+            .unwrap_or((mirrors::EAST, 1.0))
+    }
+
     fn draw_the_people(&self, scene: &mut Scene) {
         let (Some(body), Some(head), Some(thigh), Some(shin), Some(cube)) =
             (self.body, self.head, self.thigh, self.shin, self.cube)
@@ -11713,31 +11734,46 @@ impl Game for Arcade {
 
         // the sconces down both long walls, which is where the light in here
         // comes from and is why there is any. Spec 0006.
-        for (face, out, from, to) in room::sconce_runs(self.room.reaches) {
-            for along in study::sconces(from, to) {
-                let at = vec3(face, bench_floor + study::SCONCE_UP, along);
-
-                // a back plate on the wall, a bracket off it, and a shade on the
-                // end of that
-                for (reach, size) in [
-                    (-study::SCONCE_BACK, vec3(0.03, 0.09, 0.09)),
-                    (
-                        study::SCONCE_OUT * 0.5,
-                        vec3(study::SCONCE_OUT, 0.018, 0.018),
-                    ),
-                ] {
-                    scene.push_colored(
-                        cube,
-                        &Transform::at(at + Vec3::X * out * reach).with_scale(size),
-                        aim::SCONCE,
-                    );
-                }
+        // a back plate on the wall, a bracket off it, and a shade on the
+        // end of that
+        let mut sconce = |at: Vec3, out: f32| {
+            for (reach, size) in [
+                (-study::SCONCE_BACK, vec3(0.03, 0.09, 0.09)),
+                (
+                    study::SCONCE_OUT * 0.5,
+                    vec3(study::SCONCE_OUT, 0.018, 0.018),
+                ),
+            ] {
                 scene.push_colored(
                     cube,
-                    &Transform::at(at + Vec3::X * out * study::SCONCE_OUT).with_scale(study::SHADE),
-                    aim::SHADE,
+                    &Transform::at(at + Vec3::X * out * reach).with_scale(size),
+                    aim::SCONCE,
                 );
             }
+            scene.push_colored(
+                cube,
+                &Transform::at(at + Vec3::X * out * study::SCONCE_OUT).with_scale(study::SHADE),
+                aim::SHADE,
+            );
+        };
+
+        for (face, out, from, to) in room::sconce_runs(self.room.reaches) {
+            for along in study::sconces(from, to) {
+                sconce(vec3(face, bench_floor + study::SCONCE_UP, along), out);
+            }
+        }
+
+        // and one over the way through, which the run leaves dark: spec 0061
+        // and `mirrors::doorway_lamp`. The same fitting as the rest of that
+        // wall, higher, because at the run's own height the middle of the
+        // opening is a hole.
+        {
+            let (face, out) = self.bookcase_wall();
+
+            sconce(
+                mirrors::doorway_lamp(face, out) - Vec3::X * out * study::SCONCE_OUT,
+                out,
+            );
         }
 
         // the dominoes on cascada's bench, which do nothing. They are a picture
@@ -12348,6 +12384,22 @@ impl Game for Arcade {
                 )
             })
             .collect();
+
+        // and the one over the way through, which the run leaves dark. Its
+        // fitting is drawn with the rest of that wall's; this is the light
+        // in it, off the same place so the two cannot come apart.
+        {
+            let (face, out) = self.bookcase_wall();
+            let at = mirrors::doorway_lamp(face, out);
+
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                study::SCONCE_COLOUR,
+                study::SCONCE_LIT,
+                study::SCONCE_RANGE,
+            ));
+        }
 
         // and the hotel's, per spec 0029. Derived from `aleph::sconces` so
         // there is no lamp in that corridor which is not in a fitting: the

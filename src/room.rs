@@ -1323,7 +1323,16 @@ impl Room {
 
         // the hall of mirrors' pair, at the same pace: it is the same four
         // hundred books on the same hinges
-        let to = if self.mirror_open { 1.0 } else { 0.0 };
+        // `OPENCASE` holds the hall of mirrors' bookcase open from the
+        // first frame, next to `POSE` and `DUMP`. Everything behind it is
+        // reachable only by pulling the book, so a posed camera arrives in
+        // a corridor with a wall where its way through should be, and four
+        // different faults were chased this way before anybody noticed.
+        let to = if self.mirror_open || std::env::var("OPENCASE").is_ok() {
+            1.0
+        } else {
+            0.0
+        };
         self.mirror_swing += (to - self.mirror_swing).clamp(-by, by);
 
         // the sauna's door is lighter than a bookcase with four hundred books

@@ -183,6 +183,23 @@ in one plane, and it reads as speckle that crawls as you move: Jake,
 first build of this room; the lean is what made it show, by standing the
 frames out where the light catches them.
 
+**A lamp over the way through.** The nook's sconce run is spaced every 2.2
+and the opening is 2.18 wide, so the two that bracket it fall a centimetre
+outside each end and nothing lands between them: the threshold had a lamp
+either side and none over it. Jake, 2026-11-09, the nook floor still reads
+black.
+
+It is the nook's own fitting, higher, hung from the middle of `way` so the
+door and its lamp cannot come apart, and `Arcade::bookcase_wall` finds which
+of the nook's two sconce walls it belongs to rather than indexing one.
+
+**What it does not fix is the floor**, and that was worth finding out. The
+same patch looked at directly from inside the corridor is just as dark as it
+is in the glass, and the nook's own reference picture has a dark carpet from
+end to end. The mirror was telling the truth about a dark room. The lamp
+lifts the threshold and the leaves; a lighter floor in there is the nook's
+decision and not this room's.
+
 **You, in the glass and not on the screen.** The figure stands where you
 stand, facing where you face, with the gait off `paced`, which the footsteps
 already keep. It is pushed inside engine spec 0091's bracket, because the
@@ -208,6 +225,7 @@ carpet torn into bands. Here the seam is crossed level and one number does.
 - Every lamp is over a panel rather than on the ceiling. — `mirrors::tests::every_lamp_sits_over_a_panel`
 - The leaning glass stays off the wall and inside the frame. — `mirrors::tests::the_leaning_glass_clears_both_the_wall_and_the_frame`
 - No two pieces of one frame sit in the same place. — `mirrors::tests::no_two_pieces_of_a_frame_overlap`
+- The lamp over the way through has wall behind it. — `mirrors::tests::the_lamp_over_the_way_through_is_on_wall`
 - The corridor reaches into no other room. — `mirrors::tests::the_corridor_is_clear_of_every_other_room`
 - Nothing is built against the west wall, which would be two walls in one plane. — `mirrors::tests::nothing_is_built_against_the_west_wall`
 
