@@ -4014,25 +4014,10 @@ impl Arcade {
         }
     }
 
-    /// Which of the nook's two sconce walls the hall of mirrors is behind,
-    /// as the face it stands on and which way a bracket reaches off it.
-    ///
-    /// **Found rather than indexed.** `room::sconce_runs` gives two and
-    /// which is which is not written anywhere, so taking `[1]` would be a
-    /// fact nobody stated that the next person to add a wall would break.
-    /// The one nearest the corridor's own east face is the one the
-    /// bookcases are on.
+    /// Which of the nook's two sconce walls the hall of mirrors is behind.
+    /// `room::bookcase_wall`, which the nook's own lamps also ask.
     fn bookcase_wall(&self) -> (f32, f32) {
-        room::sconce_runs(self.room.reaches)
-            .iter()
-            .copied()
-            .min_by(|one, other| {
-                (one.0 - mirrors::EAST)
-                    .abs()
-                    .total_cmp(&(other.0 - mirrors::EAST).abs())
-            })
-            .map(|(face, out, _, _)| (face, out))
-            .unwrap_or((mirrors::EAST, 1.0))
+        room::bookcase_wall(self.room.reaches)
     }
 
     fn draw_the_people(&self, scene: &mut Scene) {
@@ -9573,8 +9558,21 @@ impl Game for Arcade {
             for (at, size) in tiles.iter() {
                 scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_TILE);
             }
+            // and no highlight on a bar. `push_colored` hands out a shininess
+            // of 32, which is a lobe wider than `aim::MATTE`, and the hall's
+            // lamps are a regular row under a grid of long bars: what that
+            // laid along every bar in the room was a chain of highlights, and
+            // what it looked like from under one was a wave running down it.
+            // Jake, 2026-11-09: the ceiling has ripples. Painted steel is not
+            // glossy. The tiles keep theirs, because what it carries there is
+            // the neon washing the ceiling.
             for (at, size) in bars.iter() {
-                scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_BAR);
+                scene.push_material(
+                    cube,
+                    &Transform::at(*at).with_scale(*size),
+                    aim::CEIL_BAR,
+                    aim::NO_SHINE,
+                );
             }
         }
 
@@ -11553,7 +11551,10 @@ impl Game for Arcade {
             let (at, size) = room::nook_floor(self.room.reaches);
             let laid = Transform::at(at + Vec3::Y * 0.002).with_scale(vec3(size.x, 1.0, size.z));
 
-            scene.push_textured(boards_mesh, boards, &laid, aim::BOARDS, aim::MATTE);
+            // and a tight one on the boards rather than a broad one, which is
+            // what a waxed floor does under a lamp. `MATTE` is 64 and that is
+            // a highlight spread wide enough to pale the grain.
+            scene.push_textured(boards_mesh, boards, &laid, aim::BOARDS, aim::DULL);
         }
 
         // and the rug on top of them
@@ -11561,7 +11562,11 @@ impl Game for Arcade {
             let (at, size) = room::open_floor(self.room.reaches);
             let laid = Transform::at(at + Vec3::Y * 0.004).with_scale(vec3(size.x, 1.0, size.z));
 
-            scene.push_textured(rug_mesh, rug, &laid, aim::FLOOR, aim::MATTE);
+            // no highlight on it at all: a rug is cloth. With nothing over the
+            // nook but wall lights it did not matter, and with ten pendants
+            // over it `MATTE` is a hot spot per lamp and the floor reads as a
+            // skating rink. Jake, 2026-11-09. Engine spec 0012.
+            scene.push_textured(rug_mesh, rug, &laid, aim::FLOOR, aim::NO_SHINE);
         }
 
         // the bookcases, stocked. None of it does anything, which is what
@@ -11773,6 +11778,29 @@ impl Game for Arcade {
             sconce(
                 mirrors::doorway_lamp(face, out) - Vec3::X * out * study::SCONCE_OUT,
                 out,
+            );
+        }
+
+        // and the pendants over the open floor, which is what lights the floor:
+        // the sconces are at head height on the two long walls and the middle
+        // of this room is out of reach of all of them. Spec 0006. A shade and a
+        // rod to the ceiling, the same fitting as the one over the pool table,
+        // and the rod runs to `soffit` rather than to `TALL` because the
+        // ceiling in here is a grid with tiles under it.
+        for shade in room::pendant_shades(self.room.reaches) {
+            scene.push_colored(
+                cube,
+                &Transform::at(shade).with_scale(study::PENDANT_SHADE),
+                aim::SHADE,
+            );
+
+            let hung = study::PENDANT_DROP - study::PENDANT_SHADE.y * 0.5;
+
+            scene.push_colored(
+                cube,
+                &Transform::at(vec3(shade.x, room::soffit() - hung * 0.5, shade.z))
+                    .with_scale(vec3(study::PENDANT_ROD, hung, study::PENDANT_ROD)),
+                aim::SIGN_CHAIN,
             );
         }
 
@@ -12363,43 +12391,23 @@ impl Game for Arcade {
             .collect();
         near.sort_by(|one, other| one.0.total_cmp(&other.0));
 
-        // the sconces, because a light with no fitting is a bright patch on a
-        // wall and no reason for it.
-        let walls = room::sconce_runs(self.room.reaches);
-        let mut shades: Vec<(f32, Vec3, Vec3, f32, f32)> = walls
-            .iter()
-            .copied()
-            .flat_map(|(face, out, from, to)| {
-                study::sconces(from, to)
-                    .into_iter()
-                    .map(move |along| vec3(face + out * study::SCONCE_OUT, study::SCONCE_UP, along))
-            })
-            .map(|at| {
+        // the nook's own, because a light with no fitting is a bright patch on
+        // a wall and no reason for it: the sconces down both long walls, the
+        // one over the way through that the run leaves dark, and the pendants
+        // over the open floor. `room::nook_lamps` is the one list, so what the
+        // room is lit by is a question with one answer.
+        let mut shades: Vec<(f32, Vec3, Vec3, f32, f32)> = room::nook_lamps(self.room.reaches)
+            .into_iter()
+            .map(|(at, lit, range)| {
                 (
                     eye.distance_squared(at),
                     at,
                     study::SCONCE_COLOUR,
-                    study::SCONCE_LIT,
-                    study::SCONCE_RANGE,
+                    lit,
+                    range,
                 )
             })
             .collect();
-
-        // and the one over the way through, which the run leaves dark. Its
-        // fitting is drawn with the rest of that wall's; this is the light
-        // in it, off the same place so the two cannot come apart.
-        {
-            let (face, out) = self.bookcase_wall();
-            let at = mirrors::doorway_lamp(face, out);
-
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                study::SCONCE_COLOUR,
-                study::SCONCE_LIT,
-                study::SCONCE_RANGE,
-            ));
-        }
 
         // and the hotel's, per spec 0029. Derived from `aleph::sconces` so
         // there is no lamp in that corridor which is not in a fitting: the

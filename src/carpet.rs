@@ -43,6 +43,20 @@ const THREADS: [[u8; 3]; 5] = [
 /// How many shapes are thrown over one tile.
 const THROWN: u32 = 52;
 
+/// The arcade carpet's pile, per [`pile`]. Eight tiles across thirty units is
+/// a little over two centimetres a texel, which is about a tuft of the cut
+/// pile a floor like this is laid in.
+///
+/// Deeper than the nook's rug, because a broadloom carpet walked on by a few
+/// thousand people is not an even surface and a hand knotted rug very nearly
+/// is. It is also what makes the thrown shapes read as woven into the floor
+/// rather than printed on it, which is most of what the two carpets differ by.
+///
+/// **Jake, 2026-11-09: the arcade floor could be more carpet like too.**
+const WOVEN_PILE: i32 = 24;
+const WOVEN_ROW: i32 = 9;
+pub const WOVEN_SEED: u32 = 0x5EED_0008;
+
 /// The ground it is woven on, as a colour.
 ///
 /// Only the checks ask: the floor's darkness used to live in a constant they
@@ -535,6 +549,15 @@ pub fn afghan(long: f32) -> TextureData {
 pub const RUG: u32 = 512;
 pub const RUG_TILES: f32 = 1.0;
 const RUG_GROUND: [u8; 3] = [52, 20, 24];
+
+/// The nook rug's pile, per [`pile`]. 512 across a rug of seven and three
+/// quarter metres is about a centimetre and a half a texel, which is one knot
+/// of a rug this kind.
+///
+/// **Jake, 2026-11-09: the floor could have texture like a real carpet.**
+const RUG_PILE: i32 = 18;
+const RUG_ROW: i32 = 8;
+pub const RUG_SEED: u32 = 0x5EED_0007;
 const RUG_FIGURE: [u8; 3] = [122, 48, 44];
 const RUG_THREAD: [u8; 3] = [168, 132, 72];
 
@@ -616,7 +639,48 @@ pub fn rug(long: f32) -> TextureData {
         }
     }
 
+    // and the pile over the whole of it, pattern included
+    pile(&mut pixels, wide, tall, RUG_SEED, RUG_PILE, RUG_ROW);
+
     TextureData::from_pixels(wide, tall, pixels)
+}
+
+/// The nap, laid over a carpet that is otherwise drawn in flat colours.
+///
+/// **A carpet of one colour is a painted floor.** Both of this building's have
+/// been one: every texel of the arcade's ground was the same three bytes and so
+/// was every texel of the nook's, and it does not show until the room is lit
+/// well enough to see the floor at all.
+///
+/// A knot rather than a cloud of noise: `deep` is how far a knot may stand off
+/// the shade it is woven in, as a percentage, and `row` is how much darker the
+/// line between two rows of knots is. Knots sit in rows, and that line is what
+/// a carpet has that a field of random numbers has not.
+///
+/// A shade and not a colour, so the hue stays the pattern's and the pile only
+/// says how the light catches it. It goes over the pattern as well as the
+/// ground, because a carpet's pattern is woven in the same pile.
+fn pile(pixels: &mut [u8], wide: u32, tall: u32, seed: u32, deep: i32, row: i32) {
+    let mut rng = seed | 1;
+    let mut next = || {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        rng
+    };
+
+    for y in 0..tall {
+        for x in 0..wide {
+            let n = ((y * wide + x) * 4) as usize;
+            let knot = (next() % (deep as u32 * 2 + 1)) as i32 - deep;
+            let between = if y % 3 == 0 { -row } else { 0 };
+
+            for channel in 0..3 {
+                let was = pixels[n + channel] as i32;
+                pixels[n + channel] = (was * (100 + knot + between) / 100).clamp(0, 255) as u8;
+            }
+        }
+    }
 }
 
 /// A number from a number, so the same tile is woven every time.
@@ -687,6 +751,9 @@ pub fn woven() -> TextureData {
             }
         }
     }
+
+    // and the pile over it, shapes included
+    pile(&mut pixels, WOVEN, WOVEN, WOVEN_SEED, WOVEN_PILE, WOVEN_ROW);
 
     TextureData::from_pixels(WOVEN, WOVEN, pixels)
 }
@@ -1162,8 +1229,17 @@ mod tests {
             [woven[n], woven[n + 1], woven[n + 2]]
         };
         // in from each edge along the middle of that edge, to the first thread
-        let from_left = (0..wide).find(|&x| at(x, tall / 2) == RUG_THREAD);
-        let from_top = (0..tall).find(|&y| at(wide / 2, y) == RUG_THREAD);
+        // within the pile's own swing, because every knot stands off the shade
+        // it is woven in and nothing on this rug is its palette's exact bytes
+        let woven_in = |texel: [u8; 3], colour: [u8; 3]| {
+            (0..3).all(|n| {
+                let off = colour[n] as i32 * (RUG_PILE + RUG_ROW) / 100 + 1;
+
+                (texel[n] as i32 - colour[n] as i32).abs() <= off
+            })
+        };
+        let from_left = (0..wide).find(|&x| woven_in(at(x, tall / 2), RUG_THREAD));
+        let from_top = (0..tall).find(|&y| woven_in(at(wide / 2, y), RUG_THREAD));
 
         assert_eq!(from_left, Some(10), "the border down the side");
         assert_eq!(from_top, Some(10), "the border across the end");
@@ -1171,22 +1247,87 @@ mod tests {
 
         // and the far edges the same way in
         assert_eq!(
-            (0..wide).find(|&x| at(wide - 1 - x, tall / 2) == RUG_THREAD),
+            (0..wide).find(|&x| woven_in(at(wide - 1 - x, tall / 2), RUG_THREAD)),
             Some(10)
         );
         assert_eq!(
-            (0..tall).find(|&y| at(wide / 2, tall - 1 - y) == RUG_THREAD),
+            (0..tall).find(|&y| woven_in(at(wide / 2, tall - 1 - y), RUG_THREAD)),
             Some(10)
         );
     }
 
+    /// Spec 0006: the rug has a pile rather than one flat colour.
+    ///
+    /// **The fault is a field of identical texels**, which is what it was: a
+    /// painted floor rather than a woven one. So the thing asked is that no
+    /// patch of the ground is one shade, and that what varies is the shade and
+    /// not the hue, because a rug mottled in colour is a stain.
+    #[test]
+    fn the_rug_has_a_pile_rather_than_one_flat_colour() {
+        let long = 2.0;
+        let rug = rug(long);
+        let wide = RUG;
+        let woven = &rug.levels[0].pixels;
+        let at = |x: u32, y: u32| {
+            let n = ((y * wide + x) * 4) as usize;
+            [woven[n], woven[n + 1], woven[n + 2]]
+        };
+
+        // a patch of plain ground, well inside the border and off the medallion
+        let (from, span) = (RUG / 20, RUG / 10);
+        let (mut darkest, mut lightest) = (255u8, 0u8);
+
+        for y in from..from + span {
+            for x in from..from + span {
+                let texel = at(x, y);
+
+                darkest = darkest.min(texel[0]);
+                lightest = lightest.max(texel[0]);
+
+                let hue = |n: usize| texel[n] as f32 / texel[0].max(1) as f32;
+                let was = |n: usize| RUG_GROUND[n] as f32 / RUG_GROUND[0] as f32;
+
+                for n in 1..3 {
+                    assert!(
+                        (hue(n) - was(n)).abs() < 0.12,
+                        "a knot at {},{} is {:?}, which is off the ground's own \
+                         colour and not just its shade",
+                        x,
+                        y,
+                        texel
+                    );
+                }
+            }
+        }
+
+        let spread = (lightest - darkest) as f32 / RUG_GROUND[0] as f32;
+
+        assert!(
+            spread > 0.2,
+            "the knots in a patch of the rug's ground run from {} to {}, a \
+             spread of {:.0}% of its own shade, which is a painted floor \
+             rather than a woven one",
+            darkest,
+            lightest,
+            spread * 100.0
+        );
+    }
+
     /// How much of a tile is not the ground it is woven on.
+    ///
+    /// **Within the pile's own swing**, because every tuft stands off the shade
+    /// it is woven in and nothing on the floor is the palette's exact bytes any
+    /// more. Asked for the exact colour this reads as a floor that is all
+    /// pattern and no ground.
     fn thread(carpet: &TextureData) -> f32 {
+        let swing = |colour: u8| colour as i32 * (WOVEN_PILE + WOVEN_ROW) / 100 + 1;
         let level = &carpet.levels[0];
         let lit = level
             .pixels
             .chunks_exact(4)
-            .filter(|texel| [texel[0], texel[1], texel[2]] != GROUND)
+            .filter(|texel| {
+                (0..3).any(|n| (texel[n] as i32 - GROUND[n] as i32).abs() > swing(GROUND[n]))
+            })
             .count();
 
         lit as f32 / (level.pixels.len() / 4) as f32
@@ -1206,6 +1347,43 @@ mod tests {
             on_it < 0.30,
             "{:.3} of it is pattern, which is not a ground",
             on_it
+        );
+    }
+
+    /// Spec 0005: the arcade's floor is woven rather than painted.
+    ///
+    /// The same fault the nook's rug had and the same answer, in the room
+    /// where it matters more: this floor is the largest single thing in every
+    /// view of the arcade. What is asked is that the ground has a spread of
+    /// shades in it rather than one, since one is what it was.
+    #[test]
+    fn the_arcade_floor_has_a_pile() {
+        let carpet = woven();
+        let level = &carpet.levels[0];
+        let swing = |colour: u8| colour as i32 * (WOVEN_PILE + WOVEN_ROW) / 100 + 1;
+        let (mut darkest, mut lightest) = (255u8, 0u8);
+
+        for texel in level.pixels.chunks_exact(4) {
+            // the ground only: a spread taken over the thrown shapes as well
+            // would pass on a floor whose ground was flat
+            if (0..3).any(|n| (texel[n] as i32 - GROUND[n] as i32).abs() > swing(GROUND[n])) {
+                continue;
+            }
+
+            darkest = darkest.min(texel[2]);
+            lightest = lightest.max(texel[2]);
+        }
+
+        let spread = (lightest - darkest) as f32 / GROUND[2] as f32;
+
+        assert!(
+            spread > 0.2,
+            "the tufts of the arcade's ground run from {} to {}, a spread of \
+             {:.0}% of its own shade, which is a painted floor rather than a \
+             woven one",
+            darkest,
+            lightest,
+            spread * 100.0
         );
     }
 

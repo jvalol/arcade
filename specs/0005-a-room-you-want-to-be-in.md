@@ -88,6 +88,7 @@ repeats.
 ## Acceptance criteria
 
 - The carpet has a pattern on it and is still mostly dark ground. — `carpet::tests::it_has_a_pattern_and_is_still_dark`
+- And it is woven rather than painted: its ground is a spread of shades and not one. — `carpet::tests::the_arcade_floor_has_a_pile`
 - It wraps, so a floor of them has no seams. — `carpet::tests::it_wraps_rather_than_seaming`
 - The same tile is woven every time. — `carpet::tests::it_is_woven_the_same_every_time`
 - And it is square and opaque. — `carpet::tests::it_is_square_and_opaque`
@@ -100,6 +101,26 @@ repeats.
 ### Verified by hand
 
 - Walking in and wanting to stay.
+
+## 2026-11-09: the floor is woven rather than painted
+
+**Jake: the arcade floor could be more carpet like.** Every texel of its ground
+was the same three bytes, so the thrown shapes read as printed on a dark
+surface rather than woven into one. The nook's rug had the same fault the same
+morning, and both have a pile now: a tuft per texel, which at eight tiles over
+thirty units is a little over two centimetres, and a darker line every third
+row, because tufts sit in rows and a field of random numbers does not.
+
+Deeper here than on the rug. A broadloom carpet walked over by a few thousand
+people is not an even surface and a hand knotted rug very nearly is, and the
+depth is also most of what makes the shapes look woven in.
+
+`carpet::pile` is the one place it is done, for both floors, so the two cannot
+drift into different ideas of what a carpet is.
+
+**It cost 0.2% of the hall's picture.** Almost all of it averages away in the
+mip levels, which is the right answer for a texture whose whole job is to be
+seen under your feet and not across the room.
 
 ## Out of scope
 

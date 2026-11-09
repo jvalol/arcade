@@ -270,6 +270,22 @@ walking.
 **An explanation.** Nobody says Penrose and nothing says what you are looking
 at.
 
+## 2026-11-09: the middle of the floor and not of the room
+
+**Jake: the staircase in the nook is not centered.** It was, between the two
+walls. The benches down one side are 0.9 deep and the bookcases down the other
+a third of that, so the floor you can actually see is not centred on the
+plaster: the lanes either side of the flight were 2.13 to the books and 1.53 to
+the benches, and the rug it stands on is centred between the furniture.
+
+Nobody could see it for as long as the nook's floor was dark. The same day its
+pendants went in the rug's border read all the way round, visibly wider down
+one side of the stair than the other.
+
+`room::open_middle` is now where both the rug and the flight come from, so they
+cannot drift. Both lanes are 1.83, against the 1.05 a body needs, and every
+shelf in the room is still reachable.
+
 ## Acceptance criteria
 
 ~~The loop:~~

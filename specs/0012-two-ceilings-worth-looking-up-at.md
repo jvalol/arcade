@@ -149,6 +149,36 @@ are, which is a decision rather than an omission:
 - The grid reads as a ceiling rather than as a pattern painted on one.
 - The aisle is longer for having lines running down it.
 
+## 2026-11-09: the ripples down every bar
+
+**Jake, standing under the hall's grid and looking up: the ceiling has
+ripples.** A pale wave ran the length of each bar, and it was there in both
+rooms, because both ceilings are this one function.
+
+Three wrong theories before the right one, each disproved by a picture rather
+than by argument. The tiles' edges were flush with the bars' and that is two
+coplanar faces, so they were buried half a bar deep: no change. Spec 0029's
+contact march was turned off in the shader: no change. The bars' tops are
+exactly the lid's own plane, so they were run up past it: no change, and that
+one was put back, because a face that points up at a quad that faces down is
+not two faces on show.
+
+What it was: **`Scene::push_colored` hands out a shininess of 32**, which is a
+wider lobe than `aim::MATTE`'s 64 and much wider than anything else in this
+room. The hall's lamps are a regular row, the grid is long bars, and a row of
+lamps under a long bar lays a chain of highlights along it. Painted steel is
+not glossy, so the bars take engine spec 0012's nought.
+
+The tiles keep theirs. What the highlight carries on a tile is the neon sign
+washing the ceiling above it, which is one of the better things in the room, and
+a tile is broad enough that it reads as light rather than as a wave.
+
+**The wider question this opens**, and it is not settled here: every
+`push_colored` in this building is a shininess of 32 on a surface nobody chose
+it for. The ones that have been looked at since the rooms got brighter have all
+wanted nought: the figure, the rug, and now these. The default is a decision
+that was never made, and it is the engine's to make.
+
 ## Out of scope
 
 **Light panels in the hall's grid.** An arcade is dim and the lamps it has are

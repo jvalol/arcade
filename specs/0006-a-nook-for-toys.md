@@ -636,8 +636,13 @@ nothing, because a pull is a press and not forty a second.
 - A bench knows which side of it you stand on, and which way your right hand is. — `room::tests::a_bench_knows_which_way_your_right_hand_is`
 - The rug lies on the open floor, not under the benches or the books. — `room::tests::the_rug_lies_between_the_benches_and_the_books`
 - A long rug has an even border rather than one that stretches with it. — `carpet::tests::the_rug_keeps_its_border_even`
+- And it is woven rather than painted: no patch of it is one flat shade. — `carpet::tests::the_rug_has_a_pile_rather_than_one_flat_colour`
 - The boards are planks running one way, jointed out of line. — `carpet::tests::the_boards_are_planks_and_not_a_grid`
 - Every sconce is on a wall. — `room::tests::every_sconce_is_on_a_wall`
+- And every part of the open floor has a lamp on it, which the sconces alone
+  could not say. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
+- A pendant hangs over your head and under the ceiling. — `room::tests::the_pendants_hang_clear_of_your_head_and_the_ceiling`
+- And none of them hangs in the way up. — `room::tests::nothing_hangs_in_the_way_up`
 - Every repo is a cabinet in the hall or a bench in the nook. — `tests::it_knows_every_game_the_project_does`
 - cascada's dominoes stand on its bench and none hangs off it. — `cascada::tests::they_all_stand_on_the_bench`
 - And they are spaced the way cascada says to space them. — `cascada::tests::they_are_close_enough_to_knock_each_other_over`
@@ -721,6 +726,60 @@ nothing, because a pull is a press and not forty a second.
 - And stopping it and leaning on it again, which sends it tumbling.
 - The chain reads as a chain. The beads are half a bead apart, so the links
   between them are drawn as well, or it is a dotted line.
+
+## 2026-11-09: light that reaches the floor
+
+**Jake: the nook floor reads black.** A brighter rug was tried first and moved
+nothing, and the reason it moved nothing is worth writing down: it was the
+wrong rug. `carpet::afghan` is the one in front of the cellar's fire and
+`carpet::rug` is the one in the nook, and the ground that went from 86,24,22 to
+122,34,30 was the afghan's. Two rugs, two functions, and the one the room was
+about was never touched. The commit that did it says the nook's floor.
+
+Then it was measured instead of argued about, which is what should have
+happened first. The sconces hang at 1.95 on the two
+long walls and reach 4.2. The nook is ten metres deep. A band four metres wide
+down the middle of it was out of reach of every lamp in the building: not dim,
+nothing, over the whole of the rug except its two edges. That band is where the
+rug is, and a surface with no light on it is black whatever colour it is
+painted.
+
+**A wall light cannot answer it.** What lights the middle of a room hangs over
+the middle of a room. This building already has one of those over the pool
+table, so the fitting is one it owns rather than a new invention: a shade, a rod
+to the ceiling, and the light inside the shade. The rod runs to `room::soffit`
+and not to `TALL`, because the ceiling in here is a grid with tiles hung under
+it, which is the mistake the neon and the sign both made first.
+
+**Two rows and not one.** The open floor is seven and three quarter metres
+across. One row down the middle of it came out at 0.49 in the middle and 0.04 at
+the rug's own edges, which is where the benches are and where anybody playing
+with a toy stands. Two rows at the quarter points reads 0.13 at the dimmest
+corner against 0.49 at the brightest, and the dimmest corner is the mouth of the
+aisle.
+
+**And then the floor was a skating rink.** `aim::MATTE` is a shininess of 64,
+which that constant's own doc calls small and bright: a hot spot. With nothing
+over the nook but wall lights nothing was above the floor to make one. Ten
+pendants are ten of them, sliding about on the rug as you walk. A rug is cloth,
+so it takes engine spec 0012's nought, the same answer spec 0033's people got
+the same morning for the same reason. The boards under it keep a highlight and
+a tighter one, because a waxed floor under a lamp does that.
+
+**And the rug was painted rather than woven.** Every texel of its ground was
+the same three bytes. That does not show in a dark room and it is the first
+thing you see in a lit one, so the rug has a pile now: a knot per texel, which
+at 512 across seven and three quarter metres is about a centimetre and a half,
+and a darker line every third row, because knots sit in rows and a cloud of
+random numbers does not. A shade rather than a colour, so the hue stays the
+pattern's. It runs over the border and the medallion as well as the ground,
+since a rug's pattern is woven in the same pile.
+
+**What it cost elsewhere.** Ten more lamps in a building that already pushes
+more than three times what the engine carries, so the cap drops ten more and the
+cull keeps a different sixty four in the rooms next door. The hall's picture
+moved by 1.1% of its pixels and the imaginarium's by 0.6%, neither of them
+visible side by side. The nook's moved by 98.8%, which is the point.
 
 ## Out of scope
 

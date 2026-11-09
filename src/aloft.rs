@@ -1649,17 +1649,6 @@ pub const UP_LANDING: f32 = UP_RISE * UP_STEPS as f32;
 /// height clears you by nothing and reads as a lid.
 pub const UP_HEADROOM: f32 = 2.0;
 
-/// The nook's two inner faces, west and east.
-///
-/// Taken from the cellar's own back wall and the hall's own width rather
-/// than written out, so the stair moves when the nook does.
-fn nook() -> (f32, f32) {
-    (
-        crate::cellar::back(),
-        -(crate::room::WALL + crate::room::CABINET.x) - THICK * 0.5,
-    )
-}
-
 /// The west side of the first flight, which stands free in the middle of the
 /// nook.
 ///
@@ -1669,14 +1658,20 @@ fn nook() -> (f32, f32) {
 /// times, and standing it off by a reveal instead left four of the twelve
 /// cases behind a staircase.
 ///
-/// In the middle there is a lane either side: 2.13 to the books and 1.53 to
-/// the benches, against the 1.05 a body needs. It is also the only placing
-/// that leaves every shelf in the room reachable, including the one with
-/// spec 0007's door in it.
+/// In the middle there is a lane either side, against the 1.05 a body needs,
+/// and it is the only placing that leaves every shelf in the room reachable,
+/// including the one with spec 0007's door in it.
+///
+/// **The middle of the floor and not of the room.** Centred between the two
+/// walls it stood 0.3 off the middle of the open floor, because the benches
+/// are 0.9 deep and the bookcases a third of that: the lanes were 2.13 to the
+/// books and 1.53 to the benches, and the rug it stands on is centred between
+/// the furniture rather than the plaster. Nobody could see it until the nook's
+/// floor was lit, and then the rug's border was visibly wider down one side of
+/// the flight than the other. `room::open_middle` is where both of them now
+/// come from.
 pub fn up_west() -> f32 {
-    let (west, east) = nook();
-
-    (west + east) * 0.5 - UP_WIDE * 0.5
+    crate::room::open_middle() - UP_WIDE * 0.5
 }
 
 /// The south edge of the landing, which is the one number the rest of the

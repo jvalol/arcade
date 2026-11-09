@@ -823,6 +823,36 @@ pub fn nook_lining(reaches: f32) -> Vec<Aabb> {
     )]
 }
 
+/// How much bare floor shows round the rug.
+const OPEN_INSET: f32 = 0.35;
+
+/// The two sides of the nook's open floor: the near edge of the benches and the
+/// near edge of the books, each already inset so there is bare floor showing.
+fn open_sides() -> (f32, f32) {
+    let side = WALL + CABINET.x;
+
+    (
+        -side - THICK * 0.5 - BENCH_OFF - BENCH_WIDE - OPEN_INSET,
+        -side - NOOK_DEEP + THICK * 0.5 + crate::study::CASE.y + OPEN_INSET,
+    )
+}
+
+/// The middle of the nook's open floor.
+///
+/// **Not the middle of the nook**, which is half a metre away from it: the
+/// benches are 0.9 deep and the bookcases a third of that, so the floor you can
+/// see is not centred on the plaster. The rug lies on this and the way up
+/// stands on it, because a stair in the middle of the room means the room you
+/// are standing in rather than the one the walls describe. Jake, 2026-11-09:
+/// the staircase in the nook is not centered. It was centred, on the wrong
+/// thing, and nothing said so until the floor was lit well enough to see the
+/// rug's own border either side of it.
+pub fn open_middle() -> f32 {
+    let (benches, books) = open_sides();
+
+    (benches + books) * 0.5
+}
+
 /// The open floor of the nook: where it is and how big, as the middle and the
 /// size of a quad lying on it.
 ///
@@ -834,21 +864,91 @@ pub fn nook_lining(reaches: f32) -> Vec<Aabb> {
 /// Twice as long as it is wide and no longer. The nook is nearly three times as
 /// long as the open floor is wide, and a rug that shape is a runner.
 pub fn open_floor(reaches: f32) -> (Vec3, Vec3) {
-    const INSET: f32 = 0.35;
-
-    let side = WALL + CABINET.x;
-    let benches = -side - THICK * 0.5 - BENCH_OFF - BENCH_WIDE - INSET;
-    let books = -side - NOOK_DEEP + THICK * 0.5 + crate::study::CASE.y + INSET;
+    let (benches, books) = open_sides();
     let across = benches - books;
 
     (
-        vec3((benches + books) * 0.5, 0.0, -reaches + NOOK_SPAN * 0.5),
+        vec3(open_middle(), 0.0, -reaches + NOOK_SPAN * 0.5),
         vec3(
             across,
             0.0,
-            (NOOK_SPAN - THICK - INSET * 2.0).min(across * 2.0),
+            (NOOK_SPAN - THICK - OPEN_INSET * 2.0).min(across * 2.0),
         ),
     )
+}
+
+/// Which of the nook's two sconce walls the hall of mirrors is behind, as the
+/// face it stands on and which way a bracket reaches off it.
+///
+/// **Found rather than indexed.** `sconce_runs` gives two and which is which is
+/// not written anywhere, so taking `[1]` would be a fact nobody stated that the
+/// next person to add a wall would break. The one nearest the corridor's own
+/// east face is the one the bookcases are on.
+pub fn bookcase_wall(reaches: f32) -> (f32, f32) {
+    sconce_runs(reaches)
+        .iter()
+        .copied()
+        .min_by(|one, other| {
+            (one.0 - crate::mirrors::EAST)
+                .abs()
+                .total_cmp(&(other.0 - crate::mirrors::EAST).abs())
+        })
+        .map(|(face, out, _, _)| (face, out))
+        .unwrap_or((crate::mirrors::EAST, 1.0))
+}
+
+/// Every lamp in the nook: where it is, how bright it burns and how far it
+/// reaches.
+///
+/// One list, because the question the nook's lighting kept getting wrong is
+/// what is lit by all of it together rather than by any one fitting. The
+/// sconces down both long walls, the one over the way through that the run
+/// leaves dark, and the pendants over the open floor.
+pub fn nook_lamps(reaches: f32) -> Vec<(Vec3, f32, f32)> {
+    use crate::study::{
+        pendant_lamp, sconces, PENDANT_LIT, PENDANT_RANGE, SCONCE_LIT, SCONCE_OUT, SCONCE_RANGE,
+        SCONCE_UP,
+    };
+
+    let (face, out) = bookcase_wall(reaches);
+
+    sconce_runs(reaches)
+        .iter()
+        .copied()
+        .flat_map(|(face, out, from, to)| {
+            sconces(from, to)
+                .into_iter()
+                .map(move |along| vec3(face + out * SCONCE_OUT, SCONCE_UP, along))
+        })
+        .chain(std::iter::once(crate::mirrors::doorway_lamp(face, out)))
+        .map(|at| (at, SCONCE_LIT, SCONCE_RANGE))
+        .chain(
+            pendant_shades(reaches)
+                .into_iter()
+                .map(|shade| (pendant_lamp(shade), PENDANT_LIT, PENDANT_RANGE)),
+        )
+        .collect()
+}
+
+/// Where the nook's hanging lamps are: the middle of each shade.
+///
+/// Down the middle of the open floor and along it, so the row and the rug are
+/// one list. The rug is what the dark band was, and a pendant that is not over
+/// the rug is not answering anything.
+pub fn pendant_shades(reaches: f32) -> Vec<Vec3> {
+    use crate::study::{pendants, PENDANT_DROP, PENDANT_ROWS};
+
+    let (at, size) = open_floor(reaches);
+    let up = soffit() - PENDANT_DROP;
+
+    (0..PENDANT_ROWS)
+        .map(|n| at.x + size.x * ((n as f32 + 0.5) / PENDANT_ROWS as f32 - 0.5))
+        .flat_map(|across| {
+            pendants(at.z - size.z * 0.5, at.z + size.z * 0.5)
+                .into_iter()
+                .map(move |along| vec3(across, up, along))
+        })
+        .collect()
 }
 
 /// What the middle of the screen is on.
@@ -2360,6 +2460,145 @@ impl Room {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0037: nothing hangs in the way up.
+    ///
+    /// The nook's ceiling is the one the stair to the imaginarium comes
+    /// through, so a row of lamps hung from it is a row of chances to put one
+    /// in the hole. The shade is the wide part and the rod is what reaches the
+    /// ceiling, so both are asked.
+    #[test]
+    fn nothing_hangs_in_the_way_up() {
+        let room = super::Room::of(crate::games());
+        let well = crate::aloft::up_well_cut();
+
+        for shade in super::pendant_shades(room.reaches) {
+            let wide = crate::study::PENDANT_SHADE * 0.5;
+
+            for open in well.iter() {
+                let clear = shade.x + wide.x < open.min.x
+                    || shade.x - wide.x > open.max.x
+                    || shade.z + wide.z < open.min.z
+                    || shade.z - wide.z > open.max.z;
+
+                assert!(
+                    clear,
+                    "a pendant at {:?} hangs in the way up, which is {:?} to {:?}",
+                    shade, open.min, open.max
+                );
+            }
+        }
+    }
+
+    /// Spec 0006: every part of the open floor has a lamp on it.
+    ///
+    /// **Jake, 2026-11-09: the nook floor reads black.** A brighter rug did not
+    /// move it, which is the tell that the fault is the light and not the
+    /// colour. This is the measurement that said so: the sconces are at 1.95 on
+    /// the two long walls and reach 4.2, the nook is ten metres deep, and a
+    /// band four metres wide down the middle of it was out of reach of every
+    /// lamp in the room. Not dim. Nothing, to the last decimal, over the whole
+    /// of the rug except its two edges.
+    ///
+    /// So the floor of it is a floor rather than a tasteful nought: a point of
+    /// the rug with no lamp on it is the fault coming back, and a surface lit
+    /// only by the ambient is the one thing no amount of colour can fix.
+    ///
+    /// The engine's own falloff, which is `(1 - d/range)` squared and reaches
+    /// exactly nothing at the range. Lambert against a floor, so a lamp at head
+    /// height on a wall counts for what it actually lays on the boards rather
+    /// than for its distance.
+    #[test]
+    fn every_part_of_the_open_floor_has_a_lamp_on_it() {
+        /// What the dimmest corner of the rug may be, as a fraction of one
+        /// lamp's own brightness. The band in the middle was at nought.
+        const DIMMEST: f32 = 0.12;
+
+        let room = super::Room::of(crate::games());
+        let reaches = room.reaches;
+        let lamps = super::nook_lamps(reaches);
+        let (at, size) = super::open_floor(reaches);
+
+        let lit = |p: glam::Vec3| -> f32 {
+            lamps
+                .iter()
+                .map(|(lamp, lit, range)| {
+                    let d = (*lamp - p).length();
+
+                    if d > *range || d <= 0.0 {
+                        return 0.0;
+                    }
+
+                    let left = 1.0 - d / range;
+
+                    lit * left * left * ((lamp.y - p.y) / d).max(0.0)
+                })
+                .sum()
+        };
+
+        let steps = 20;
+        let mut worst = (f32::MAX, glam::Vec3::ZERO);
+
+        for down in 0..=steps {
+            for across in 0..=steps {
+                let p = glam::vec3(
+                    at.x + size.x * (across as f32 / steps as f32 - 0.5),
+                    0.0,
+                    at.z + size.z * (down as f32 / steps as f32 - 0.5),
+                );
+
+                if lit(p) < worst.0 {
+                    worst = (lit(p), p);
+                }
+            }
+        }
+
+        assert!(
+            worst.0 >= DIMMEST,
+            "the dimmest part of the nook's open floor has {:.3} on it at {:?}, \
+             under the {:.2} a rug needs to read as anything but black",
+            worst.0,
+            worst.1,
+            DIMMEST
+        );
+    }
+
+    /// Spec 0006: a pendant hangs over your head and under the ceiling.
+    ///
+    /// A hanging lamp is the one fitting in this building that occupies the air
+    /// somebody walks through. There is no collider on it, by the same argument
+    /// as spec 0033's people, so the arithmetic is the whole guard.
+    #[test]
+    fn the_pendants_hang_clear_of_your_head_and_the_ceiling() {
+        /// How tall somebody is, per `people`, and the eye line the camera
+        /// walks at.
+        const HEAD: f32 = 1.73;
+
+        let room = super::Room::of(crate::games());
+        let shades = super::pendant_shades(room.reaches);
+
+        assert!(!shades.is_empty(), "the open floor has no pendants over it");
+
+        for shade in shades {
+            let foot = shade.y - crate::study::PENDANT_SHADE.y * 0.5;
+            let crown = shade.y + crate::study::PENDANT_SHADE.y * 0.5;
+
+            assert!(
+                foot > HEAD,
+                "a pendant's shade hangs at {:.2}, which is through the head of \
+                 anybody {:.2} tall",
+                foot,
+                HEAD
+            );
+            assert!(
+                crown < super::soffit(),
+                "a pendant's shade reaches {:.2} and the ceiling it hangs from \
+                 is at {:.2}",
+                crown,
+                super::soffit()
+            );
+        }
+    }
+
     /// Spec 0040: you can see the field from the hall's doorway into the
     /// garden, which is what decides how far the camera is allowed to see.
     ///

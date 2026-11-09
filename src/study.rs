@@ -59,14 +59,82 @@ pub const SCONCE_COLOUR: Vec3 = vec3(1.0, 0.82, 0.56);
 
 /// Where along a wall the sconces hang.
 pub fn sconces(from: f32, to: f32) -> Vec<f32> {
+    spaced(from, to, SCONCE_EVERY)
+}
+
+/// As many as fit in a run, evenly, with half a gap at each end.
+fn spaced(from: f32, to: f32, every: f32) -> Vec<f32> {
     let run = to - from;
-    let fits = (run / SCONCE_EVERY).floor().max(1.0);
-    let along = fits * SCONCE_EVERY;
-    let first = from + (run - along) * 0.5 + SCONCE_EVERY * 0.5;
+    let fits = (run / every).floor().max(1.0);
+    let along = fits * every;
+    let first = from + (run - along) * 0.5 + every * 0.5;
 
     (0..fits as usize)
-        .map(|n| first + n as f32 * SCONCE_EVERY)
+        .map(|n| first + n as f32 * every)
         .collect()
+}
+
+/// A hanging lamp over the open floor: how big the shade is, how far its middle
+/// hangs below the ceiling, how thick the rod is, and how far apart they are.
+///
+/// The sconces are at 1.95 on the two long walls and reach 4.2, and the nook is
+/// ten metres deep, so a band four metres wide down the middle of it got light
+/// from no lamp at all: ambient and nothing else, measured rather than guessed
+/// (`room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`). That band is
+/// where the rug is. Jake said the floor reads dark and a brighter red did not
+/// move it, which is what a surface with no light on it does.
+///
+/// A wall light cannot answer this. The thing that lights the middle of a room
+/// is hung over the middle of a room, and this building already has one of
+/// those over the pool table, so a pendant is the fitting it owns rather than a
+/// new invention. Same shape: a shade, a rod to the ceiling, and the light
+/// inside the shade.
+pub const PENDANT_SHADE: Vec3 = vec3(0.44, 0.14, 0.44);
+
+/// How far the middle of a shade hangs below `room::soffit`, which is the
+/// underside of the ceiling grid rather than the lid over it. The neon's stem
+/// and the sign's pendant both ran to `TALL` first and hung through the tiles.
+pub const PENDANT_DROP: f32 = 0.78;
+pub const PENDANT_ROD: f32 = 0.022;
+pub const PENDANT_EVERY: f32 = 3.1;
+
+/// How many rows of them, across the open floor.
+///
+/// Two, because the open floor is seven and three quarter metres across and one
+/// row down the middle of it is the wrong shape for the room: the middle came
+/// out at 0.49 and the rug's own edges at 0.04, which is where the benches are
+/// and where anybody playing with one stands. Two rows at the quarter points
+/// gives 0.13 at the dimmest corner against 0.49 in the brightest, measured the
+/// same way.
+pub const PENDANT_ROWS: usize = 2;
+
+/// What one throws.
+///
+/// Brighter and further than a sconce, which is the difference between a light
+/// on a wall and a light over a room. Warm the same, because it is the same
+/// room and two colours of white in one ceiling is a fault rather than a
+/// choice.
+/// Dimmer than one of these would be on its own, because there are ten of them
+/// and the room wanted lighting rather than ten bright spots. The reach is what
+/// gets the light to the edges: the falloff is the distance squared, so a lamp
+/// that only just reaches the far side of the rug lays almost nothing on it.
+pub const PENDANT_LIT: f32 = 0.45;
+pub const PENDANT_RANGE: f32 = 8.0;
+
+/// Where along the open floor they hang.
+pub fn pendants(from: f32, to: f32) -> Vec<f32> {
+    spaced(from, to, PENDANT_EVERY)
+}
+
+/// The light in a pendant, from the shade it is in.
+///
+/// Named because the fitting and the lamp are drawn in different places, which
+/// is the shape two lists of one thing take here. The cellar's hanging lamp is
+/// the pair to look at: its shade is worked out where the table is drawn, and
+/// the light in it again where the lamps are gathered, each from the table by
+/// its own arithmetic. They agree today and nothing holds them to it.
+pub fn pendant_lamp(shade: Vec3) -> Vec3 {
+    shade - Vec3::Y * PENDANT_SHADE.y
 }
 
 /// Panelling: how deep the skirting and the cornice are, how high the dado rail
