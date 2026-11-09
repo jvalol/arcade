@@ -383,8 +383,20 @@ pub fn frames() -> Vec<Aabb> {
 pub fn lamps() -> Vec<Vec3> {
     let mut out = Vec::new();
 
+    // **Every other panel, not every panel.** One each was eight lamps for
+    // a ten metre corridor, and it put the whole building over spec 0050's
+    // cap of sixty four while you were standing in the hotel ten metres
+    // away: measured with them in and out, no overflow at all without them.
+    //
+    // It did not change what the hotel looked like, so nothing was visibly
+    // lost, but a room is not entitled to a seventh of the building's lamps
+    // for lighting its own frames.
     for side in SIDES {
-        for at in along_wall(side) {
+        for (n, at) in along_wall(side).into_iter().enumerate() {
+            if n % 2 == 1 {
+                continue;
+            }
+
             out.push(vec3(
                 middle() + side * (wide() - 0.28),
                 PANEL_HEAD + 0.18,
@@ -611,11 +623,20 @@ mod tests {
     #[test]
     fn every_lamp_sits_over_a_panel() {
         let places = along();
-        // per wall, because the east one leaves out the panels that would
-        // cover the way through
-        let want: usize = SIDES.iter().map(|side| along_wall(*side).len()).sum();
-        assert_eq!(lamps().len(), want);
-        assert!(want < places.len() * SIDES.len(), "no panel was left out");
+        // **Over some panels, not all of them.** One lamp a panel put the
+        // building over spec 0050's cap from another room entirely, so they
+        // are every other one now. What still has to hold is that a lamp is
+        // always over a panel and never on the ceiling or in a wall.
+        let panels: usize = SIDES.iter().map(|side| along_wall(*side).len()).sum();
+
+        assert!(
+            lamps().len() < panels,
+            "a lamp for every panel is what went over the cap"
+        );
+        assert!(
+            lamps().len() >= SIDES.len(),
+            "a wall with no lamp at all is a wall nobody lit"
+        );
 
         for lamp in lamps() {
             assert!(
