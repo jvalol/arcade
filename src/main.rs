@@ -4115,7 +4115,7 @@ impl Arcade {
                     .with_rotation(turn)
                     .with_scale(thick),
                 coat,
-                aim::DULL,
+                aim::NO_SHINE,
             );
             // **A head scaled round and not tall.** Given the height
             // along with everything else, the tall people got long
@@ -4139,7 +4139,7 @@ impl Arcade {
                         people::NECK_WIDE * built.wide,
                     )),
                 skin,
-                aim::DULL,
+                aim::NO_SHINE,
             );
 
             scene.push_material(
@@ -4151,7 +4151,7 @@ impl Arcade {
                     .with_rotation(turn)
                     .with_scale(round),
                 skin,
-                aim::DULL,
+                aim::NO_SHINE,
             );
 
             // **Eyes, and only on the guests.** Spec 0033 said no face,
@@ -4195,7 +4195,7 @@ impl Arcade {
                             .with_rotation(turn)
                             .with_scale(thick),
                         aim::CLOAKS[which],
-                        aim::DULL,
+                        aim::NO_SHINE,
                     );
                 }
 
@@ -4208,7 +4208,7 @@ impl Arcade {
                         .with_rotation(turn)
                         .with_scale(round),
                         aim::HELM,
-                        aim::DULL,
+                        aim::NO_SHINE,
                     );
                     scene.push_material(
                         cube,
@@ -4228,31 +4228,42 @@ impl Arcade {
                             people::NOSE_THICK * built.wide,
                         )),
                         aim::HELM,
-                        aim::DULL,
+                        aim::NO_SHINE,
                     );
                 }
             } else {
-                // and the bar over their eyes, which is the whole of the
-                // face: see `people::BROW_UP`. Not under a helm, where
-                // the nose bar already says which way somebody is turned
-                // and two bars on one face is a mask.
-                scene.push_material(
-                    cube,
-                    &Transform::at(
-                        up_to(people::HEAD_FROM + people::HEAD_TALL * people::BROW_UP)
-                            + ahead
-                                * (people::head_profile(people::BROW_UP).1 * 0.5 * built.wide
-                                    + people::BROW_OUT * 0.22),
-                    )
-                    .with_rotation(turn)
-                    .with_scale(vec3(
-                        people::head_profile(people::BROW_UP).1 * people::BROW_WIDE * built.wide,
-                        people::BROW_TALL * built.wide,
-                        people::BROW_OUT * built.wide,
-                    )),
-                    aim::BROWS[which],
-                    aim::DULL,
-                );
+                // and their brows, which with the eyes under them are the
+                // whole of the face: see `people::BROW_UP`. Not under a
+                // helm, where the nose bar already says which way somebody
+                // is turned and two of those on one face is a mask.
+                let face = people::head_profile(people::BROW_UP).1 * built.wide;
+                // how deep the head is at the brow's outer end, as a share
+                // of the face's width: see `people::BROW_OUT`
+                let out = people::BROW_WIDE * 0.5;
+                let sunk = (0.25 - out * out).max(0.0).sqrt();
+
+                for hand in [-1.0f32, 1.0] {
+                    scene.push_material(
+                        cube,
+                        &Transform::at(
+                            up_to(people::HEAD_FROM + people::HEAD_TALL * people::BROW_UP)
+                                + ahead * (sunk * face)
+                                + side
+                                    * (hand
+                                        * (people::BROW_WIDE + people::BROW_APART)
+                                        * 0.25
+                                        * face),
+                        )
+                        .with_rotation(turn)
+                        .with_scale(vec3(
+                            (people::BROW_WIDE - people::BROW_APART) * 0.5 * face,
+                            people::BROW_TALL * built.wide,
+                            people::BROW_OUT * built.wide,
+                        )),
+                        aim::BROWS[which],
+                        aim::NO_SHINE,
+                    );
+                }
             }
 
             for leg in 0..2 {
@@ -4280,7 +4291,7 @@ impl Arcade {
                     thigh,
                     &Transform::at(hip_at).with_rotation(upper).with_scale(thick),
                     trousers,
-                    aim::DULL,
+                    aim::NO_SHINE,
                 );
                 scene.push_material(
                     shin,
@@ -4288,7 +4299,25 @@ impl Arcade {
                         .with_rotation(lower)
                         .with_scale(thick),
                     trousers,
-                    aim::DULL,
+                    aim::NO_SHINE,
+                );
+                // **And a knee in the joint.** Two bones meeting end to end
+                // are two circles at an angle, and a bent joint opens a
+                // wedge of daylight on the outside of the bend. Jake,
+                // 2026-11-09: there are visible gaps in joints. A ball the
+                // width the table already gives that joint fills it at any
+                // angle, which is what a knee is for.
+                //
+                // The head's own egg, the way the hand is, because a wheel
+                // already turned is cheaper than another one.
+                scene.push_material(
+                    head,
+                    &Transform::at(knee_at).with_rotation(lower).with_scale(
+                        Vec3::splat(people::limb_wide(people::KNEE_AT) / people::HEAD_WIDE)
+                            * vec3(built.wide, built.wide, built.wide),
+                    ),
+                    trousers,
+                    aim::NO_SHINE,
                 );
 
                 // **The foot stays level, which is what an ankle is
@@ -4318,7 +4347,7 @@ impl Arcade {
                         people::FOOT_LONG * built.tall,
                     )),
                     trousers,
-                    aim::DULL,
+                    aim::NO_SHINE,
                 );
 
                 // an arm is the same two bones, thinner and shorter. One
@@ -4343,7 +4372,20 @@ impl Arcade {
                         .with_rotation(arm_upper)
                         .with_scale(thin),
                     coat,
-                    aim::DULL,
+                    aim::NO_SHINE,
+                );
+                scene.push_material(
+                    head,
+                    &Transform::at(elbow_at).with_rotation(arm_lower).with_scale(
+                        Vec3::splat(people::limb_wide(people::KNEE_AT) / people::HEAD_WIDE)
+                            * vec3(
+                                people::ARM_THIN * built.wide,
+                                people::ARM_THIN * built.wide,
+                                people::ARM_THIN * built.wide,
+                            ),
+                    ),
+                    coat,
+                    aim::NO_SHINE,
                 );
                 scene.push_material(
                     shin,
@@ -4351,7 +4393,7 @@ impl Arcade {
                         .with_rotation(arm_lower)
                         .with_scale(thin),
                     coat,
-                    aim::DULL,
+                    aim::NO_SHINE,
                 );
                 // a hand, which is the head's own egg at a fifth of the
                 // size and the same colour as the face
@@ -4361,7 +4403,7 @@ impl Arcade {
                         .with_rotation(arm_lower)
                         .with_scale(Vec3::splat(people::HAND_WIDE / people::HEAD_WIDE)),
                     skin,
-                    aim::DULL,
+                    aim::NO_SHINE,
                 );
 
                 // **And Gjallarhorn in the left hand.** Spec 0055: the
@@ -4393,7 +4435,7 @@ impl Arcade {
                                 )
                                 .with_scale(Vec3::splat(built.tall * bridge::HORN_HELD)),
                             aim::HORN,
-                            aim::DULL,
+                            aim::NO_SHINE,
                         );
                     }
                 }

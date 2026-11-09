@@ -223,3 +223,34 @@ Raised on 2026-11-01 by [0046](0046-somebody-to-stand-next-to.md), and only
 as far as the room that asked. The bar in this spec is a figure that reads at
 corridor distance without inviting anybody to walk up to it, and the
 imaginarium issues that invitation on its own.
+
+## 2026-11-09: the figure at arm's length
+
+Spec 0061 put these people in a mirror, which is the first time anybody has
+been closer than a corridor to one. Jake looked and said the figure needs
+work. Four things, none of them proportion: the skeleton measures as a 1.73 m
+person and always did.
+
+**Brows rather than a bar.** One bar across 82% of the face is a brow at the
+far end of a corridor and a visor at arm's length, and it covered spec 0061's
+eyes entirely. A pair above the eyes is both answers at once. The bar also
+stood 5.5 cm off the face, and a flat bar laid on a round head pokes out at
+its ends: it is a centimetre deep now and set against the head's own depth at
+its outer end.
+
+**A shoulder where the arms are.** The torso went widest at 0.84 of its height
+and narrowed from there to the neck, so the chest domed to a point with the
+head behind it, which is the silhouette of a back whichever way the figure
+faced, and the arms hung in daylight beside a body that had become a neck by
+the time it reached them. Widest at the arms and sloping in from there, which
+also puts the arms against it without moving them.
+
+**A ball in the knee and the elbow.** Two bones meeting end to end are two
+circles at an angle, and any bend opens a wedge. Sized from the same
+`limb_wide` the bones read.
+
+**No highlight on cloth or skin.** Engine spec 0012: a shininess of nought.
+
+None of this moved a reference picture except the imaginarium's, by 0.2% of
+its pixels. The people only appear at sizes the threshold forgives, so the
+suite does not hold any of it. A close portrait would.

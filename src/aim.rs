@@ -645,6 +645,15 @@ pub const MATTE: f32 = 64.0;
 /// that, and neither does stone.
 pub const DULL: f32 = 900.0;
 
+/// For cloth and skin, which have no highlight at all.
+///
+/// **A tight spot is still a bright spot.** `DULL` only makes the highlight
+/// smaller, and a small one at full strength sliding over anything curved is
+/// a bead of plastic: Jake, 2026-11-09, the figure is too reflective, it
+/// looks like plastic. The engine reads nought as no highlight rather than
+/// as the broadest one there is.
+pub const NO_SHINE: f32 = 0.0;
+
 /// The garden, per spec 0010.
 ///
 /// The sky is past one in every channel, which is how this engine says a thing

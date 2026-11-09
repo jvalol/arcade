@@ -84,10 +84,34 @@ pub const HEAVIER: f32 = 0.11;
 /// all is a thing that might be looking at you, and that is most of what
 /// is left of the uncanny once the proportions are right. One bar across
 /// the brow says which way somebody is turned and says nothing else.
-pub const BROW_UP: f32 = 0.46;
-pub const BROW_WIDE: f32 = 0.82;
-pub const BROW_TALL: f32 = 0.042;
-pub const BROW_OUT: f32 = 0.055;
+/// **Two of them, above the eyes.** It was one bar across 82% of the face,
+/// which at the far end of a corridor is a brow and at arm's length in a
+/// mirror is a visor: it covered spec 0061's eyes entirely, so the whole
+/// face was a dark stripe. Jake, 2026-11-09: the figure needs work.
+///
+/// Two answers to "no face" had been stacked on one head, each right for its
+/// own distance. A pair of brows is both answers at once, because that is
+/// what a brow is, and it leaves the eyes somewhere to be.
+///
+/// Up the head from the chin at nought to the crown at one, so this sits
+/// above `EYE_UP` the way a brow sits above an eye.
+pub const BROW_UP: f32 = 0.57;
+/// How far the pair reaches across the face, and the gap between them.
+pub const BROW_WIDE: f32 = 0.62;
+pub const BROW_APART: f32 = 0.16;
+/// **A brow is a line and not a patch.** 0.042 was the height of the one
+/// bar, where it read as the shadow under a brow ridge. Halved into a pair
+/// it came out square, which is two eyes drawn in the wrong place and above
+/// the real ones. A brow is about a centimetre.
+pub const BROW_TALL: f32 = 0.013;
+/// **How far a brow stands off the face, which is millimetres.** 0.055 was
+/// most of a head's radius, and a flat bar laid across a round head sticks
+/// out at its ends by however far the head has curved away: the brows poked
+/// off the sides of the skull like the edge of a visor. Jake, 2026-11-09,
+/// the eyebrows poke out noticeably. Set against the head's own depth at the
+/// brow's outer end rather than at the middle of the face, so the outer end
+/// is the part that is flush and the inner end buries itself.
+pub const BROW_OUT: f32 = 0.010;
 
 /// What a figure is made to look like.
 ///
@@ -385,10 +409,21 @@ pub fn torso_profile(v: f32) -> (f32, f32) {
         (0.10, 0.32),
         (0.22, 0.345),
         (0.42, 0.33),
-        (0.62, 0.40),
-        (0.84, 0.435),
-        (0.94, 0.30),
-        (1.00, 0.135),
+        (0.70, 0.42),
+        // **The widest part is where the arms are, which it was not.** It
+        // went widest at 0.84 and narrowed from there to the neck, so the
+        // body bulged under the armpit and the shoulder itself was narrow:
+        // a dome with the head set behind it, which is the silhouette of a
+        // back however the figure is facing. Jake, 2026-11-09, twice.
+        //
+        // Wide at the arms and sloping in from there, which is a shoulder.
+        // Flat to the neck instead is a drum with a hole in the lid, and
+        // the opening has to come back in to 0.21 or the collar is a wide
+        // dark ring with a head floating over it. Four shapes were drawn
+        // and looked at; this is the one Jake picked.
+        (0.92, 0.45),
+        (0.98, 0.40),
+        (1.00, 0.21),
     ];
 
     (v * TORSO_TALL, through(&SHAPE, v))
@@ -415,7 +450,7 @@ pub fn head_profile(v: f32) -> (f32, f32) {
 /// **One table read by both bones.** The bottom of a thigh and the top of a
 /// shin are the same circle, and two tables for one circle is two answers
 /// that will come apart.
-fn limb_wide(v: f32) -> f32 {
+pub fn limb_wide(v: f32) -> f32 {
     const SHAPE: [(f32, f32); 8] = [
         // an ankle, where this used to close to a point. A leg that tapers
         // to nothing had nothing to meet, and now there is a foot under it:
