@@ -376,7 +376,16 @@ pub fn stonework(seed: u32) -> TextureData {
 }
 
 pub const AFGHAN: u32 = 512;
-const AFGHAN_GROUND: [u8; 3] = [86, 24, 22];
+/// **Brighter than it was, and no lighter in what it is.** 86 of red read as
+/// black in a room this dim, and a floor that reads as black is a hole: the
+/// nook is lit by sconces at head height and almost nothing reaches its
+/// floor, so whatever the ground is has to carry its own colour down into
+/// the dark. Jake, 2026-11-09, it looks accurate, the floor is dark it just
+/// doesn't have a lot of colour.
+///
+/// Still a dark red. The hue is where it was and only the value moved, so
+/// the gul and the ivory still sit above it by the same distance.
+const AFGHAN_GROUND: [u8; 3] = [122, 34, 30];
 const AFGHAN_DARK: [u8; 3] = [38, 14, 16];
 const AFGHAN_GUL: [u8; 3] = [150, 74, 40];
 const AFGHAN_IVORY: [u8; 3] = [196, 170, 128];
