@@ -184,6 +184,10 @@ pub const PANEL_HEAD: f32 = 2.55;
 /// Middle to middle along the corridor.
 pub const PITCH: f32 = 1.80;
 
+/// How hard one lamp over a panel burns, and how far it carries.
+pub const LAMP_LIT: f32 = 0.35;
+pub const LAMP_RANGE: f32 = 4.5;
+
 /// Where the first panel's middle is, so the run is centred on the corridor.
 fn first() -> f32 {
     let run = PANEL_WIDE + PITCH * (PANELS - 1) as f32;
@@ -229,15 +233,83 @@ pub fn along_wall(side: f32) -> Vec<f32> {
 /// nook's own.
 pub const SIDES: [f32; 2] = [-1.0, 1.0];
 
+/// How far off vertical the west wall's glass stands, in degrees.
+///
+/// **Two mirrors dead parallel give a straight stack, not a recession.**
+/// Images in a facing pair turn by twice the angle between the glass each
+/// bounce, so the nth one is `2n` times this off true. At nought they are
+/// collinear and every copy lands behind the one in front of it: eight of
+/// your own head in a column, which is the thing Jake said feels wrong on
+/// 2026-11-09. Real facing mirrors are never parallel to better than about a
+/// degree, which is why the chain in a lift or a barber's arcs away and
+/// leaves rather than running back for ever.
+///
+/// **And the size of it is set by the frame, not by taste.** The glass
+/// pivots about its own middle, so a panel 2.20 tall swings
+/// `1.10 * sin(LEAN)` either way: the head goes toward the wall it stands
+/// `PROUD` of and the foot out toward the frame's `FRAMED`. Past about one
+/// degree the head is in the wall, which is two drawn faces in one plane,
+/// and past about two and a half the foot is through the frame.
+/// `tests::the_leaning_glass_clears_both_the_wall_and_the_frame` holds both
+/// ends and is what bounds this number.
+///
+/// At 0.6 the eighth copy is near enough ten degrees up, which over four
+/// metres is two thirds of a metre of rise: it climbs out of a panel rather
+/// than stacking in it.
+pub const LEAN: f32 = 1.5;
+
+/// The same in radians, and only for the wall that leans.
+///
+/// **One wall and not both**, because what bends the chain is the angle
+/// between them and one is enough to make it. The east wall is the nook's
+/// own and leaning it would lean the nook's bookcases with it.
+pub fn lean(side: f32) -> f32 {
+    if side < 0.0 {
+        LEAN.to_radians()
+    } else {
+        0.0
+    }
+}
+
+/// How far the head and the foot of a leaning panel swing off its own plane.
+///
+/// It turns about its middle, so the head goes one way by this and the foot
+/// the other by the same.
+pub fn swing(side: f32) -> f32 {
+    (PANEL_HEAD - PANEL_FOOT) * 0.5 * lean(side).sin()
+}
+
+/// How far this wall's glass stands off the wall, and its frame.
+///
+/// **The lean is paid for here rather than by the wall.** A panel propped
+/// against a wall and tipped back puts its head into the wall unless the
+/// whole thing is stood further out first, and standing it out is a
+/// centimetre nobody can see while leaning the wall itself would taper the
+/// corridor, move its collision and open a gap at the ceiling. So the
+/// mirrors lean against the wall the way a mirror leans against a wall, and
+/// the wall, the floor, the lid and everything you can walk into stay where
+/// they were.
+pub fn proud(side: f32) -> f32 {
+    PROUD + swing(side)
+}
+
+pub fn framed(side: f32) -> f32 {
+    FRAMED + swing(side)
+}
+
 /// The plane one wall's glass lies in, and which way it faces.
 ///
 /// This is what goes to `Scene::mirror`, and it is the glass's own plane
 /// rather than the wall's.
+///
+/// The point on it is the glass's own middle rather than the floor, because
+/// `lean` turns the pane about that middle and a plane quoted at the floor
+/// would be the one the glass had before it leaned.
 pub fn plane(side: f32) -> (Vec3, Vec3) {
-    (
-        vec3(middle() + side * (wide() - PROUD), 0.0, 0.0),
-        vec3(-side, 0.0, 0.0),
-    )
+    let (lies, _) = pane(side, along()[0]);
+    let turn = glam::Quat::from_rotation_z(lean(side));
+
+    (vec3(lies.x, lies.y, 0.0), turn * vec3(-side, 0.0, 0.0))
 }
 
 /// One panel of glass: where it stands and how big it is.
@@ -246,7 +318,7 @@ pub fn plane(side: f32) -> (Vec3, Vec3) {
 pub fn pane(side: f32, at: f32) -> (Vec3, Vec3) {
     (
         vec3(
-            middle() + side * (wide() - PROUD),
+            middle() + side * (wide() - proud(side)),
             (PANEL_FOOT + PANEL_HEAD) * 0.5,
             at,
         ),
@@ -331,20 +403,35 @@ pub fn solid() -> Vec<Aabb> {
 /// difference between the two is the single thing in here that is easy to get
 /// wrong and invisible when you do: a drawing that reached for `solid` would
 /// put the lap back and tear the carpet.
+/// Everything drawn upright, which is everything but the leaning wall's
+/// frames. Those are turned by `draw` and are not boxes once they are.
 pub fn drawn() -> Vec<Aabb> {
+    let turned = frames_of(-1.0);
+
     solid()
         .into_iter()
         .map(|box_| if box_ == floor() { drawn_floor() } else { box_ })
+        .filter(|box_| lean(-1.0) == 0.0 || !turned.contains(box_))
         .collect()
 }
 
 pub fn frames() -> Vec<Aabb> {
+    SIDES.iter().flat_map(|side| frames_of(*side)).collect()
+}
+
+/// One wall's frames, upright, whatever that wall's glass is doing.
+///
+/// **Upright even on the leaning wall**, because this is what you walk into
+/// and a body does not notice a centimetre and a half of frame. The drawing
+/// turns them; `solid` does not. Two accounts of one frame, on purpose, and
+/// the difference is `swing` which is named once.
+pub fn frames_of(side: f32) -> Vec<Aabb> {
     let mut out = Vec::new();
     let bead = 0.09;
 
-    for side in SIDES {
+    {
         let face = middle() + side * wide();
-        let stood = middle() + side * (wide() - FRAMED);
+        let stood = middle() + side * (wide() - framed(side));
         let (near, far) = (face.min(stood), face.max(stood));
 
         for at in along_wall(side) {
@@ -361,11 +448,23 @@ pub fn frames() -> Vec<Aabb> {
                 ));
             }
 
-            // and a stile each side
+            // and a stile each side, standing between the sill and the head
+            // rather than running past them.
+            //
+            // **They ran the full height and overlapped both.** The sill
+            // spans the whole opening in z and the stiles spanned the whole
+            // of it in y, so at each of the four corners two boxes sat in
+            // the same place with their fronts in one plane and both on
+            // show. That is the fault this building has hit seven times and
+            // it reads as speckle that crawls as you move: Jake,
+            // 2026-11-09, there is stippling around the mirrors. It was
+            // there from the first build of this room and the lean is what
+            // made it show, by standing the frames out where the light
+            // catches them.
             for (near_z, far_z) in [(south - bead, south), (north, north + bead)] {
                 out.push(Aabb::new(
-                    vec3(near, PANEL_FOOT - bead, near_z),
-                    vec3(far, PANEL_HEAD + bead, far_z),
+                    vec3(near, PANEL_FOOT, near_z),
+                    vec3(far, PANEL_HEAD, far_z),
                 ));
             }
         }
@@ -380,23 +479,21 @@ pub fn frames() -> Vec<Aabb> {
 /// `spa::lamps` is `spa::sconces` lifted: two lists of where the light is
 /// come apart, and the baths once had a glowing ceiling and dark sconces.
 /// One over each panel's head, a little out into the room.
+///
+/// **One a panel, which it was not for a day.** Eight lamps put the building
+/// over spec 0050's cap of sixty four from the hotel ten metres away, so they
+/// were halved to five, and the cap was still three over at the way in. The
+/// count was never the fault: `draw` pushed these straight at the scene,
+/// ahead of the ranked and frustum culled set `main` builds, so five lamps
+/// behind a bookcase held five of the building's sixty four slots from
+/// everywhere in it and the three worst ranked lamps at the entrance were
+/// dropped instead. Through that list they are culled like everything else,
+/// and from outside the corridor there are none of them.
 pub fn lamps() -> Vec<Vec3> {
     let mut out = Vec::new();
 
-    // **Every other panel, not every panel.** One each was eight lamps for
-    // a ten metre corridor, and it put the whole building over spec 0050's
-    // cap of sixty four while you were standing in the hotel ten metres
-    // away: measured with them in and out, no overflow at all without them.
-    //
-    // It did not change what the hotel looked like, so nothing was visibly
-    // lost, but a room is not entitled to a seventh of the building's lamps
-    // for lighting its own frames.
     for side in SIDES {
-        for (n, at) in along_wall(side).into_iter().enumerate() {
-            if n % 2 == 1 {
-                continue;
-            }
-
+        for at in along_wall(side) {
             out.push(vec3(
                 middle() + side * (wide() - 0.28),
                 PANEL_HEAD + 0.18,
@@ -427,7 +524,7 @@ pub fn holds(at: Vec3) -> bool {
 /// Eighteen thousand lines is how two functions eight thousand apart come to
 /// look like neighbours. The geometry was already here; this is the rest of
 /// the room coming to join it.
-pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[TextureId]) {
+pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[[TextureId; 2]]) {
     // **The shell is drawn whatever the glass is doing.** This used to sit
     // behind a `let ... else { return }` on the targets, so a frame
     // before `load` had run drew no room at all: the walls were solid
@@ -464,7 +561,7 @@ pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[Te
 
         // the wall is a mirror, which the engine draws into `target`
         // before this frame's world. Engine spec 0091.
-        scene.mirror(target, on, normal);
+        scene.mirror(target[0], target[1], on, normal);
 
         // and each panel wears it. The quad is turned to face into the
         // room: `MeshData::plane` lies in xz looking up, so it wants a
@@ -474,11 +571,16 @@ pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[Te
             // `MeshData::plane` lies in xz looking up, so a pane on a
             // wall across x wants a quarter turn about z, and the far
             // wall wants it the other way so both faces look inward
-            let turn = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * side.signum());
+            // and leaning by `lean`, which is what keeps the recession from
+            // stacking. The same angle the mirror plane is given, so the
+            // glass and the plane the engine reflects in are one account.
+            let turn = glam::Quat::from_rotation_z(
+                std::f32::consts::FRAC_PI_2 * side.signum() + lean(*side),
+            );
 
             scene.glass(
                 quad,
-                target,
+                target[0],
                 &Transform::at(stands)
                     .with_rotation(turn)
                     .with_scale(vec3(size.y, 1.0, size.z)),
@@ -489,17 +591,38 @@ pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[Te
         }
     }
 
-    // the lamps, which come off the frames rather than being written
-    // beside them, for the reason `spa::lamps` does
-    for at in lamps() {
-        scene.push_light(blitzkit::lighting::PointLight {
-            position: at,
-            color: crate::aim::SHADE.truncate(),
-            intensity: 0.35,
-            range: 4.5,
-            casts: false,
-        });
+    // and the leaning wall's frames, which cannot come out of `drawn` because
+    // they are not boxes once they are turned. Spec 0061: they lean with the
+    // glass they hold, about the glass's own middle, so a panel and its frame
+    // are one thing propped against an upright wall.
+    for side in SIDES {
+        if lean(side) == 0.0 {
+            continue;
+        }
+
+        let (on, _) = plane(side);
+        let pivot = vec3(on.x, on.y, 0.0);
+        let turn = glam::Quat::from_rotation_z(lean(side));
+
+        for piece in frames_of(side) {
+            let dark = piece.max.y > PANEL_FOOT;
+
+            scene.push_material(
+                cube,
+                &Transform::at(pivot + turn * (piece.center() - pivot))
+                    .with_rotation(turn)
+                    .with_scale(piece.size()),
+                if dark {
+                    crate::aim::PANEL
+                } else {
+                    crate::aim::FLOOR
+                },
+                crate::aim::MATTE,
+            );
+        }
     }
+
+    // and not the lamps, which `lamps` says why.
 }
 
 #[cfg(test)]
@@ -616,6 +739,99 @@ mod tests {
         }
     }
 
+    /// Spec 0061. No two pieces of one frame sit in the same place.
+    ///
+    /// **Which is how a frame stops speckling.** The stiles ran the full
+    /// height of the opening and the sill runs its full width, so at each
+    /// corner two boxes overlapped with their fronts in one plane and both
+    /// on show. Two drawn faces in one plane is the fault this building has
+    /// hit seven times and it reads as speckle that crawls as you move:
+    /// Jake, 2026-11-09, there is stippling around the mirrors.
+    ///
+    /// Touching is fine and is what a frame is. Overlapping is not.
+    #[test]
+    fn no_two_pieces_of_a_frame_overlap() {
+        for side in SIDES {
+            let pieces = frames_of(side);
+
+            for (n, one) in pieces.iter().enumerate() {
+                for other in pieces.iter().skip(n + 1) {
+                    let over = |low: f32, high: f32, from: f32, to: f32| {
+                        high - from > 1e-4 && to - low > 1e-4
+                    };
+
+                    assert!(
+                        !(over(one.min.x, one.max.x, other.min.x, other.max.x)
+                            && over(one.min.y, one.max.y, other.min.y, other.max.y)
+                            && over(one.min.z, one.max.z, other.min.z, other.max.z)),
+                        "two pieces of a frame on side {} overlap: {:?} and {:?}",
+                        side,
+                        one,
+                        other
+                    );
+                }
+            }
+        }
+    }
+
+    /// Spec 0061. The leaning glass stays in the gap it was given.
+    ///
+    /// **This is what sizes `LEAN`.** The pane turns about its own middle,
+    /// so its head swings toward the wall it stands `PROUD` of and its foot
+    /// swings out toward the frame's `FRAMED`. Too much and the head is in
+    /// the wall, which is two drawn faces in one plane and the fault this
+    /// building has hit seven times; too much the other way and the foot is
+    /// through the frame that is meant to hold it.
+    #[test]
+    fn the_leaning_glass_clears_both_the_wall_and_the_frame() {
+        // what a frame's foot is allowed to put in your way, which is the
+        // thing the lean actually spends. Stated here because nothing else
+        // bounds it once the frame leans with the glass.
+        const UNDERFOOT: f32 = 0.15;
+        let half = (PANEL_HEAD - PANEL_FOOT) * 0.5;
+
+        for side in SIDES {
+            let (lies, _) = pane(side, along()[0]);
+            let wall = middle() + side * wide();
+            let turn = glam::Quat::from_rotation_z(lean(side));
+            // the pane's own up, which is its normal turned a quarter
+            let up = turn * Vec3::Y;
+            // and its own out, which is where the frame in front of it is
+            let out = turn * vec3(-side, 0.0, 0.0);
+
+            for end in [-half, half] {
+                let glass = lies + up * end;
+                // the frame at the same height, off the same lean
+                let face = lies + up * end + out * (framed(side) - proud(side));
+
+                let off = (glass.x - wall) * -side;
+                let frame = (face.x - wall) * -side;
+
+                assert!(
+                    off >= PROUD - 1e-4,
+                    "the glass at y {} stands {} off the wall and PROUD is {}",
+                    glass.y,
+                    off,
+                    PROUD
+                );
+                assert!(
+                    off < frame,
+                    "the glass at y {} stands {} off the wall and its frame {}",
+                    glass.y,
+                    off,
+                    frame
+                );
+                assert!(
+                    frame < UNDERFOOT,
+                    "a frame at y {} is {} into the room, past the {} it is given",
+                    glass.y,
+                    frame,
+                    UNDERFOOT
+                );
+            }
+        }
+    }
+
     /// Spec 0061. Every lamp is in a fitting, which here means over a panel.
     ///
     /// The baths were built with the lamps along the ceiling and the sconces
@@ -623,19 +839,12 @@ mod tests {
     #[test]
     fn every_lamp_sits_over_a_panel() {
         let places = along();
-        // **Over some panels, not all of them.** One lamp a panel put the
-        // building over spec 0050's cap from another room entirely, so they
-        // are every other one now. What still has to hold is that a lamp is
-        // always over a panel and never on the ceiling or in a wall.
         let panels: usize = SIDES.iter().map(|side| along_wall(*side).len()).sum();
 
-        assert!(
-            lamps().len() < panels,
-            "a lamp for every panel is what went over the cap"
-        );
-        assert!(
-            lamps().len() >= SIDES.len(),
-            "a wall with no lamp at all is a wall nobody lit"
+        assert_eq!(
+            lamps().len(),
+            panels,
+            "a panel with no lamp over it is a frame nobody lit"
         );
 
         for lamp in lamps() {

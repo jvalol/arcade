@@ -602,7 +602,9 @@ struct Arcade {
     /// One target per mirrored wall, per engine spec 0091. Two walls,
     /// because panels in one plane are one reflection and a frame draws two
     /// mirrors at most.
-    glass_targets: Vec<TextureId>,
+    glass_targets: Vec<[TextureId; 2]>,
+    /// Whether `DUMP` has already written the mirrors out this run.
+    dumped: bool,
     /// The quad a pane of glass is drawn with. Its uv is never read: engine
     /// spec 0092 samples where the fragment is, not where the mesh says.
     pane: Option<MeshId>,
@@ -1218,6 +1220,7 @@ impl Arcade {
             }),
             cube: None,
             glass_targets: Vec::new(),
+            dumped: false,
             pane: None,
             floor: None,
             carpet: None,
@@ -3822,8 +3825,10 @@ impl Arcade {
     /// as glass, which engine spec 0092 draws in a pass of its own after the
     /// world; the two walls are pushed as mirrors, which engine spec 0091
     /// draws *before* the world, into the targets those panes wear. So this
-    /// frame's glass shows this frame's reflection, and a mirror facing a
-    /// mirror shows the other's as it stood last frame.
+    /// frame's glass shows this frame's reflection, and the wall you have
+    /// your back to is filled first, from the reflection that can see it,
+    /// per engine spec 0095. Filled from the eye instead it came back black,
+    /// and black only inside the other wall's glass.
     fn draw_the_hall(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
         let one = valhalla::hall(reaches);
@@ -4040,7 +4045,25 @@ impl Arcade {
             if only_in_glass {
                 scene.only_in_reflections();
             }
-            let turn = up * glam::Quat::from_rotation_y(facing);
+            // **Minus the facing, which is not a typo.** A turn of `facing`
+            // about y sends a body's own forward of `-Z` to
+            // `(-sin facing, 0, -cos facing)`, and every other account of
+            // where that body is pointing says `(sin facing, 0, -cos facing)`:
+            // `ahead` and `side` below, `forward` on the arcade, and the
+            // `way.x.atan2(-way.z)` that `people::walking` and
+            // `aloft::walking` build a facing with in the first place. The
+            // mesh was the one account disagreeing, so everybody in the
+            // building stood mirrored about the north line.
+            //
+            // Nobody saw it for as long as nobody was looked at straight on.
+            // A guest walking a corridor is near enough sin or cos of nought
+            // for the two to agree, and the eyes went on in spec 0061 at the
+            // `ahead` above, which put them on the back of the head for any
+            // other angle. Jake, 2026-11-09, standing at a panel: here the
+            // user is reflected in a weird way, it just feels wrong.
+            //
+            // `tests::a_figure_faces_the_way_its_own_facing_says` holds it.
+            let turn = up * glam::Quat::from_rotation_y(-facing);
             // **A coat, trousers and a head.** One colour from crown to
             // toe is a mannequin by definition: the only thing that says a
             // figure in a dark corridor is dressed is where the colour
@@ -4075,13 +4098,14 @@ impl Arcade {
             };
             let up_to = |how_high: f32| at + over * (how_high * built.tall + rise);
             // **A limb turns about the walker's own right, not about a
-            // local x.** `turn` is `rot_y(facing)` and this building's
-            // yaw convention is `(sin yaw, 0, -cos yaw)`, which is that
-            // rotation mirrored in x: `turn * rot_x` swung every limb
-            // the wrong way across the body while the feet, placed off
-            // `ahead`, went the right way, and the feet came off the
-            // legs. `side` is the axis the rest of this closure already
-            // agrees with.
+            // local x.** `turn * rot_x` swung every limb the wrong way
+            // across the body while the feet, placed off `ahead`, went the
+            // right way, and the feet came off the legs. That was `turn`
+            // being `rot_y(facing)`, the mirror of this building's
+            // `(sin yaw, 0, -cos yaw)`; `turn` is `rot_y(-facing)` now and
+            // agrees, so the two would come to the same thing. Named off
+            // `side` either way, because an axis the whole closure already
+            // shares cannot drift from one of them again.
             let swung = |angle: f32| glam::Quat::from_axis_angle(side, angle) * turn;
             let hangs = |by: glam::Quat, far: f32| by * vec3(0.0, -far * built.tall, 0.0);
 
@@ -7490,6 +7514,30 @@ impl Game for Arcade {
     /// Declared and never done at first, so `locked` stayed false and every
     /// mouse motion was dropped before it reached the camera.
     fn before_frame(&mut self, renderer: &mut Renderer) {
+        // **`DUMP` writes every mirror's targets out as pictures, once.**
+        // The same kind of tool as `WHERE` and `POSE`: a thing the game can
+        // be asked for rather than a thing somebody has to add again. Engine
+        // spec 0090's `target_picture`, which exists because a night was
+        // spent reading targets through posters and getting it wrong.
+        //
+        // After a couple of seconds, so the room is built and the targets
+        // hold a frame rather than their clear.
+        if std::env::var("DUMP").is_ok() && self.since > 2.0 && !self.dumped {
+            self.dumped = true;
+
+            for (n, pair) in self.glass_targets.iter().enumerate() {
+                for (k, target) in pair.iter().enumerate() {
+                    let shot = renderer.target_picture(*target);
+                    let at = format!("/tmp/mirror-{n}-{k}.png");
+
+                    match blitzkit::picture::save(&shot, std::path::Path::new(&at)) {
+                        Ok(()) => eprintln!("wrote {at}"),
+                        Err(e) => eprintln!("could not write {at}: {e}"),
+                    }
+                }
+            }
+        }
+
         if self.wants_lock != self.locked {
             self.locked = renderer.set_cursor_locked(self.wants_lock) && self.wants_lock;
         }
@@ -7706,9 +7754,14 @@ impl Game for Arcade {
         // Half the window's width in each direction, which is a quarter of
         // the fragments. Nobody reads a reflection the way they read the
         // room, and each of these is a whole pass over the scene.
+        // **Two apiece, per engine spec 0094.** One is what that wall holds
+        // on the screen, drawn from your own reflection in it; the other is
+        // what it holds inside the wall facing it, drawn from that wall's
+        // camera. The glass samples by screen position, so a picture belongs
+        // to the pass that drew it and one texture cannot be both.
         self.glass_targets = crate::mirrors::SIDES
             .iter()
-            .map(|_| renderer.add_target(640, 640))
+            .map(|_| [renderer.add_target(640, 640), renderer.add_target(640, 640)])
             .collect();
 
         // and the quad they are drawn on. A plain one: engine spec 0092
@@ -12341,6 +12394,29 @@ impl Game for Arcade {
             ));
         }
 
+        // and the corridor of mirrors', one over each frame, per spec 0061.
+        //
+        // **Here rather than in `mirrors::draw` where the rest of that room
+        // is.** Pushed at the scene there, they went in ahead of this list
+        // and so survived spec 0050's cap of sixty four wherever you stood,
+        // while the three worst ranked lamps at the entrance were dropped to
+        // make room for lamps behind a bookcase. The count was halved to
+        // five for it and the cap was still three over.
+        //
+        // Pushing them after the cull instead was tried, on the argument
+        // that a mirror is pointed at corridor this frustum throws away. It
+        // changed no picture anywhere the glass was looked at and put the
+        // entrance back over the cap, so it is not in.
+        for at in mirrors::lamps() {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                aim::SHADE.truncate(),
+                mirrors::LAMP_LIT,
+                mirrors::LAMP_RANGE,
+            ));
+        }
+
         // and the back room's two: the bulb over its near half, per spec
         // 0024, and the bay's own, per spec 0025
         {
@@ -12579,10 +12655,21 @@ impl Game for Arcade {
         // the engine is what those frames look like at a cap of 128, which
         // is byte for byte the same, because the cull is a frustum and the
         // surplus is behind a wall.
+        // **The eye's frustum, and not the mirrors' as well.** A reflection
+        // is drawn from behind the glass and is pointed at room this throws
+        // away, so the nook through the open bookcase is lit by lamps that
+        // are culled from in here and its floor reads black in the glass.
+        // Jake, 2026-11-09, twice.
+        //
+        // Adding the two mirror cameras' frustums was tried and is not in.
+        // Measured in the corridor with the case open, it takes the lamps
+        // kept from 43 to 135 against a cap of 64, so the ranking throws the
+        // extra ninety away again and not one pixel moves. What that floor
+        // wants is a ranking that knows about mirrors, which is the cap's
+        // problem rather than the cull's.
         let seen = camera.frustum();
 
         shades.retain(|(_, at, _, _, reach)| seen.holds_sphere(*at, *reach));
-
         // deepest inside its own reach first, so what the engine drops when a
         // building outgrows it is the lamp that could not have lit you
         // anyway. Not a ration: every fitting in the building is pushed and
@@ -16002,6 +16089,89 @@ mod tests {
             vec3(at.x, EYE, -reaches + 1.4),
             vec3(at.x, EYE, at.z),
         );
+    }
+
+    /// Spec 0061: the corridor of mirrors, square on to its west wall.
+    ///
+    /// **Square on, from the middle of the floor**, which is the one bearing
+    /// that cannot be chosen to flatter the room: a mirror facing you either
+    /// shows the corridor or it does not. Along it, the panels are edge on
+    /// and a picture of them says nothing about what is in them.
+    ///
+    /// Spec 0061 and spec 0033. Every account of which way a figure is
+    /// pointing has to be the one account, and for a day there were two.
+    ///
+    /// `people::walking` and `aloft::walking` both build a facing with
+    /// `way.x.atan2(-way.z)`, which is the yaw whose direction is
+    /// `(sin, 0, -cos)`: the same one `Arcade::forward` uses, and the same
+    /// one `stand` places eyes and arms along. The body's mesh was turned
+    /// with `Quat::from_rotation_y(facing)`, which sends its own `-Z` to
+    /// `(-sin, 0, -cos)`, the mirror of all of them about the north line.
+    ///
+    /// Invisible while a torso is a symmetric box and a guest walks a
+    /// corridor, where sin or cos is near enough nought that the two agree.
+    /// What made it show was a face: spec 0061 put eyes on the guests for
+    /// the mirror, placed along `ahead`, so the head pointed one way and
+    /// the body the other.
+    #[test]
+    fn a_figure_faces_the_way_its_own_facing_says() {
+        for facing in [0.0f32, 0.4, 1.3, -1.4539, 2.9, -2.2, 3.0] {
+            let (sin, cos) = facing.sin_cos();
+            let meant = vec3(sin, 0.0, -cos);
+
+            // what `stand` turns the body by
+            let body = glam::Quat::from_rotation_y(-facing) * Vec3::NEG_Z;
+
+            assert!(
+                (body - meant).length() < 1e-5,
+                "a body at facing {} points {:?} and its own eyes point {:?}",
+                facing,
+                body,
+                meant
+            );
+
+            // and the facing a walk is given comes back as the walk. Every
+            // angle above is inside atan2's own half turn either way, so
+            // there is no wrap to allow for.
+            assert!(
+                (meant.x.atan2(-meant.z) - facing).abs() < 1e-5,
+                "the facing {} does not survive the round trip the walkers make it with",
+                facing
+            );
+
+            // **The negative control.** Turning by the facing itself is what
+            // was there, and it is the mirror of this everywhere but where
+            // the sine is nought.
+            let was = glam::Quat::from_rotation_y(facing) * Vec3::NEG_Z;
+
+            if sin.abs() > 1e-3 {
+                assert!(
+                    (was - meant).length() > 1e-3,
+                    "the old turn and the new one agree at facing {}, so this test holds nothing",
+                    facing
+                );
+            }
+        }
+    }
+
+    /// What this holds is the thing Jake reported four times in a day.
+    /// Filled from the eye, the panes in front of you came back as black
+    /// rectangles, and engine spec 0095 is what put the corridor in them.
+    /// The panes inside that reflection are still black: that is the second
+    /// bounce, its target is drawn and lit from behind, and engine spec 0095
+    /// carries what is ruled out so far.
+    #[test]
+    fn the_mirrors_are_drawn() {
+        // **Feet on the floor, which the rooms above this one do not do.**
+        // They pass `EYE` as `at.y`, and `looking_from` reads `at` as the
+        // feet and adds `EYE` to it, so their camera stands at twice eye
+        // height. A hall with a six metre roof carries that; a corridor
+        // whose panels stop at 2.55 puts the camera above all of them, and
+        // the first picture taken here was a picture of the ceiling.
+        let along = (mirrors::SOUTH + mirrors::NORTH) * 0.5;
+        let at = vec3(mirrors::middle(), 0.0, along);
+
+        looks_right("mirrors", at, vec3(mirrors::WEST, at.y + EYE, along));
     }
 
     /// Spec 0027: the way up to the imaginarium, from the nook's own lane.
