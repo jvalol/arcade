@@ -16202,6 +16202,32 @@ mod tests {
     /// The panes inside that reflection are still black: that is the second
     /// bounce, its target is drawn and lit from behind, and engine spec 0095
     /// carries what is ruled out so far.
+    /// Spec 0033. The figure at arm's length.
+    ///
+    /// **The only distance the rest of the suite cannot see.** Four changes
+    /// to this body went in on 2026-11-09 without moving a single reference
+    /// picture: brows instead of a visor, a shoulder where the arms are,
+    /// balls in the knee and the elbow, and no highlight on cloth. The
+    /// people appear everywhere else at sizes the threshold forgives, so
+    /// nothing held any of it and Jake found all four by looking.
+    ///
+    /// Close to the glass and level, so the head and shoulders fill the
+    /// frame. The figure is only drawn in reflections, per engine spec
+    /// 0091's bracket, so a mirror is the only place to take it.
+    #[test]
+    fn the_figure_is_drawn_close() {
+        let along = (mirrors::SOUTH + mirrors::NORTH) * 0.5;
+        let at = vec3(mirrors::WEST + 0.26, 0.0, along);
+
+        looks_right(
+            "figure",
+            at,
+            // a little down, so the shoulder line is in the frame with the
+            // face rather than cut off under it
+            vec3(mirrors::WEST, at.y + EYE - 0.07, along),
+        );
+    }
+
     #[test]
     fn the_mirrors_are_drawn() {
         // **Feet on the floor, which the rooms above this one do not do.**

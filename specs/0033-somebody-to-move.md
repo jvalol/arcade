@@ -180,6 +180,8 @@ Sending everybody to room n+2 instead left it green.
   once. — `people::tests::a_figure_is_not_nothing`
 - A head is about a seventh of somebody and it is domed rather than
   pointed. — `people::tests::a_head_is_a_seventh_of_somebody_and_it_is_domed`
+- The figure, close, through the glass, which is the only place one is ever
+  close. — `tests::the_figure_is_drawn_close`
 - Nobody is one colour from crown to toe, and no two wear the same
   coat. — `people::tests::nobody_is_one_colour_from_crown_to_toe`
 - Nobody is drawn for a guest the wave has not reached, and everybody the wave
@@ -252,5 +254,17 @@ circles at an angle, and any bend opens a wedge. Sized from the same
 **No highlight on cloth or skin.** Engine spec 0012: a shininess of nought.
 
 None of this moved a reference picture except the imaginarium's, by 0.2% of
-its pixels. The people only appear at sizes the threshold forgives, so the
-suite does not hold any of it. A close portrait would.
+its pixels, so the suite held none of it while it was being changed.
+
+**There is a portrait now**, taken through the glass a quarter of a metre off
+it, which is the only place a figure is ever close enough to look at: the
+people are drawn in reflections and nowhere else, per engine spec 0091's
+bracket. Three controls were run against it. Narrowing the shoulder by four
+centimetres fails it, and so does putting the brows back out where they poked
+off the skull. Widening the brows does not: a few pixels of dark either side
+of the face is under spec 0062's share, and the frame cannot get tighter
+without losing the shoulder line it also has to hold.
+
+So it holds the silhouette and anything that stands off the face, and not a
+small change to the face itself. That is a long way from nothing, which is
+what was holding it this morning.
