@@ -1684,19 +1684,21 @@ pub fn up_west() -> f32 {
 /// has settled on for anywhere a body has to pass: 0.9 across with a tenth
 /// either side was tried in spec 0007 and thrown out.
 ///
-/// **Moving it south was tried on 2026-11-10 and put back.** Jake, from the
-/// nook's north end: the staircase should open from the far end of the room,
-/// not the centrepiece. North was not available, since the landing is
-/// already hard against this room's north wall, so south was the only way
-/// out of the middle. It cost seven of this building's own rules, and the
-/// one that settles it is `you_can_walk_up_it`: the flight rises south to
-/// north, so moving it south turns its high end to face the room and leaves
-/// the foot against the far wall where nobody can reach it. Walking up it
-/// ended at y 0.000 rather than on the floor at 6.000.
+/// **This number does not move**, and spec 0037's entry of 2026-11-10 is why.
+/// Jake wants the stair at the far end of the nook rather than in the middle
+/// of it, and twice now that has been tried as a move of this one line.
 ///
-/// Moving it is not a reposition. The flight has to be reversed as well, and
-/// a reversed landing lands at about z -10.4 against this room's south wall
-/// at -9.75, so the arrival in here moves too.
+/// South spends the 1.05 above: the lane is 2.25 and the flight is 1.2 of it,
+/// so any southward move takes the passage. It also turns the flight the
+/// wrong way round, since it rises south to north, which `you_can_walk_up_it`
+/// said as "walking up it ended at y 0.000 rather than on the floor at
+/// 6.000", along with six other rules.
+///
+/// North is not available at all: this is already hard against the room's own
+/// north wall. The far end wants the flight reversed and then it is 0.66
+/// longer than the nook has, and the nook, this room and the garden have 0.40
+/// of slack between them in the whole run. The spec carries the measurements
+/// and what it would cost to make the room for it.
 pub fn up_head() -> f32 {
     MIDDLE_Z + ROOM * 0.5 - UP_WIDE
 }

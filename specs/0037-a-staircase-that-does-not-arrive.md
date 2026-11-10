@@ -435,3 +435,87 @@ spec 0021's lesson, and I do not have that yet.
 **What spec 0036's trail changes when it gets here.** The trail is a draft
 and its last step is this room, so nothing can be built against it until it
 is settled.
+
+## 2026-11-10: the stair at the far end, and why it does not fit
+
+**Jake, from the nook's south end looking north: the staircase should open
+from the far end of the room, not the centrepiece.** It is the centrepiece.
+The flight runs z -3.21 to 2.75 in a room that runs -9.50 to 7.00, so it
+stands in the middle of the carpet with the room continuing behind it.
+
+The far end is the closed north end, at z 7.00. This was tried twice and
+does not fit. The chain, measured rather than reasoned:
+
+| | |
+| --- | --- |
+| nook floor | z -9.50 to 7.00 |
+| nook end wall | z 6.85 to 7.15, inner face 6.85 |
+| landing, as built | z 1.55 to 2.75 |
+| a reversed foot wants | z 7.51 |
+| garden's doorway | z 7.55 to 9.25 |
+
+### The landing cannot move
+
+It is hard against the imaginarium's north wall, and the lane it sits in is
+`(ROOM - SIDE) / 2`, which is 2.25. A flight is 1.2 of it and what is left is
+1.05, which is the width this project has settled on for anywhere a body has
+to pass. Any southward move spends that passage.
+
+The south lane is no use either. Putting the landing against the imaginarium's
+south wall leaves the first flight either back in the middle of the nook or,
+unreversed, with its foot at z -14.51, which is five metres outside the room.
+That second one was built on 2026-11-10 and cost seven of this building's own
+rules, decisively `you_can_walk_up_it`: the flight rises south to north, so
+moving it south turns its high end to face the room.
+
+### So the flight has to reverse, and then it is 0.66 too long
+
+Foot at the far end climbing back toward the room, landing where it already
+is. The run is `UP_GOING * UP_STEPS`, 4.76, so the foot wants z 7.51 and the
+wall's inner face is at 6.85.
+
+### And the nook cannot grow into it
+
+Growing `NOOK_SPAN` moves the garden north on its own, because `garden::at`
+is anchored to `near`, which reads `NOOK_SPAN`. What does not move is the
+garden's doorway: `garden::way` is measured back from the hall's north end,
+deliberately, so that it lands past the last cabinet whatever the cabinet
+count. The gap between the nook's end wall and that doorway is 0.40, so the
+nook can grow 0.40 of the 0.66 it needs before its end wall stands in the way
+into the garden.
+
+### And the hall cannot grow at one end
+
+`reaches` is `along * 0.5 + END`, symmetric about the hall's middle, so there
+is no north end to move on its own. Growing it moves the hotel, the nook's
+south wall and the garden together.
+
+Tried on 2026-11-10, `END` 4.0 to 4.7 with `NOOK_SPAN` 16.5 to 17.9, which is
+the pair that lands the foot at 7.51 with the landing untouched. Sixteen tests
+fell. Ten were pictures, which a longer hall is expected to move. Six were
+rules, in six rooms:
+
+```
+the field is in view from (-12.90, 0.69, -5.10), on the stair to the cellar
+from the nook at z 2.0 you got to x -11.00, which is still outside the corridor
+the opening is z 0.96..3.14 and the leaves cover -0.15..2.05
+the sign is at 2.476, low in a picture that reaches 3.686
+only 5 of eleven places in the garden have the baths within earshot
+you cannot walk from the door to the bookcase at -10.6
+```
+
+The garden hearing the baths and the field showing from the cellar stair are
+the two that matter most: they say the building's proportions are tuned to its
+current length rather than merely consistent with it.
+
+### What this leaves
+
+The nook, the imaginarium and the garden are packed against each other along
+`z` with 0.40 of slack in the whole run. The stair can be at the far end of
+the nook only if the building is re-proportioned, which is a piece of work in
+its own right: six rooms one at a time, then ten pictures to re-bless, and
+those are Jake's to judge rather than a test's.
+
+Not attempted, and the reason is written here rather than left for a third
+attempt at a one-line move. `aloft::up_head`'s own doc carries the short
+version beside the number.
