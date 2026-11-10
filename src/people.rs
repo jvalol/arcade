@@ -1364,7 +1364,7 @@ mod tests {
 
         // and again partway through a wave, with a corridor full of people
         for _ in 0..120 {
-            hotel.tick(1.0 / 60.0);
+            hotel.tick(1.0 / 60.0, crate::aleph::DRAWN);
         }
 
         room.hotel_doors = crate::aleph::window(crate::aleph::at(reaches, 8))

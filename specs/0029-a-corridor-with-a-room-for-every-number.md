@@ -544,12 +544,21 @@ to 0.054 at room 250 against 0.055 at room 15. The deep corridor now reads
 the same as the near one, which is the column of lights running away this
 spec asked for and had only for the first forty rooms.
 
-### What this still does not do
+### And the wave, which had the same number in it
 
-The wave is bounded at forty. `tick` ends when the front reaches `DRAWN`, so
-pressing Enter while standing at room 250 changes that room with no wave
-passing it. That is a separate question from who is in, and it is left as it
-was rather than widened in the same change.
+`tick` ended when the front reached `DRAWN`. Forty was the far edge of the
+window while the window was rooms 1 to 40, so the wave ended out of sight and
+the number looked like a reason. It was the third reading of `DRAWN` as
+though it meant what `window` means.
+
+You can outwalk it. The front travels at 6 rooms a second and a body at
+4.2 m/s covers 2.8, so pressing the key at the desk and running west puts you
+at about room 38 when the second wave ends, looking at rooms up to 57, and the
+sixteen past the front change with nothing passing them.
+
+So `tick` takes how far you can see and runs until it has passed that. The
+caller knows it and the hotel does not. Standing at the desk it is room 40 and
+nothing moves, which is why no kept picture changed.
 
 ## Acceptance criteria
 
@@ -561,3 +570,5 @@ was rather than widened in the same change.
   be a question. — `aleph::tests::every_move_can_be_read_backwards`
 - What claims to fill everything fills everything, so the two accounts of it
   cannot drift. — `aleph::tests::what_fills_everything_fills_everything`
+- A wave passes every room you can see before it
+  ends. — `aleph::tests::the_wave_passes_everything_you_can_see`

@@ -1319,15 +1319,30 @@ impl Hotel {
         self.front = 0.0;
     }
 
-    /// Let the change travel.
-    pub fn tick(&mut self, dt: f32) {
+    /// Let the change travel, as far as `seen_to`.
+    ///
+    /// **It ran forty rooms and stopped, which is a number and not a
+    /// reason.** Forty is `DRAWN`, and while the drawn rooms were rooms 1 to
+    /// 40 for ever that was the far edge of what anybody could see, so the
+    /// wave ending there ended out of sight. `window` made the drawn rooms
+    /// follow you and this did not follow them. You can outwalk it: the
+    /// front travels at 6 rooms a second and a body at 4.2 m/s covers 2.8,
+    /// so pressing the key at the desk and running west puts you at about
+    /// room 38 when the second wave ends, looking at rooms up to 57, and the
+    /// sixteen past the front change with nothing passing them.
+    ///
+    /// So it runs until it has passed the last room you can see, which is
+    /// what the caller knows and this does not. Standing at the desk that is
+    /// room 40 and nothing moves, because that is where the window ends
+    /// there too.
+    pub fn tick(&mut self, dt: f32, seen_to: u64) {
         if self.going.is_none() {
             return;
         }
 
         self.front += dt * TRAVELS_AT;
 
-        if self.front < DRAWN as f32 {
+        if self.front < seen_to as f32 {
             return;
         }
 
@@ -1810,7 +1825,7 @@ mod tests {
 
         hotel.at_the_door = Some(Arrival::Coaches);
         hotel.house();
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         // after the freeing wave only the powers of two that still fit are
         // standing, and everybody else has gone somewhere this corridor does
@@ -1843,8 +1858,8 @@ mod tests {
 
         hotel.at_the_door = Some(Arrival::Coaches);
         hotel.house();
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         let mut lit = 0;
 
@@ -1902,8 +1917,8 @@ mod tests {
         for _ in 0..5 {
             seen.push(hotel.at_the_door().expect("nobody at the desk"));
             hotel.house();
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
         }
 
         assert_eq!(seen[0], Arrival::One);
@@ -2133,7 +2148,7 @@ mod tests {
 
         hotel.apply(Arrival::Endless);
         // let the whole wave through
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         for n in 1..=DRAWN {
             if on_the_left(n) {
@@ -2156,7 +2171,7 @@ mod tests {
         hotel.apply(Arrival::Endless);
 
         // one room's worth of travel, and nothing beyond it has moved
-        hotel.tick(1.0 / TRAVELS_AT);
+        hotel.tick(1.0 / TRAVELS_AT, DRAWN);
 
         let front = hotel.travelling().expect("nothing is travelling");
 
@@ -2181,7 +2196,7 @@ mod tests {
     fn nothing_travels_on_its_own() {
         let mut hotel = Hotel::new();
 
-        hotel.tick(60.0);
+        hotel.tick(60.0, DRAWN);
 
         assert!(hotel.travelling().is_none());
 
@@ -2233,8 +2248,8 @@ mod tests {
         hotel.house();
 
         // both waves, so the arrivals are in
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         for n in [9u64, 2048, 2187, 14_641] {
             assert!(
@@ -2249,6 +2264,55 @@ mod tests {
         for n in [6u64, 2190, 9999] {
             assert!(!hotel.taken(n), "room {} belongs to nobody and is taken", n);
         }
+    }
+
+    /// A wave passes every room you can see before it ends.
+    ///
+    /// **It ran forty rooms, because forty was once the far edge of the
+    /// window.** `window` moved that edge and the wave kept its number, and
+    /// the front travels faster than a body walks, so you can press the key
+    /// at the desk, run west, and watch rooms ahead of you change with
+    /// nothing passing them.
+    ///
+    /// Stated over the coaches, which is the one move that leaves rooms
+    /// empty, so there is something to see at room 57.
+    #[test]
+    fn the_wave_passes_everything_you_can_see() {
+        const SEEN_TO: u64 = 57;
+
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Coaches);
+        hotel.house();
+
+        // 57 is 3 times 19, so the coaches leave it empty and it is taken
+        // until the front gets there
+        assert!(odd_prime_power(9), "9 is a prime power");
+        assert!(!odd_prime_power(SEEN_TO), "57 is nobody's");
+
+        while hotel
+            .travelling()
+            .is_some_and(|front| front < SEEN_TO as f32 - 1.0)
+        {
+            hotel.tick(0.05, SEEN_TO);
+        }
+
+        assert!(
+            hotel.taken(SEEN_TO),
+            "room {} changed before the wave reached it",
+            SEEN_TO
+        );
+
+        // and once it has passed, it has
+        for _ in 0..200 {
+            hotel.tick(0.05, SEEN_TO);
+        }
+
+        assert!(
+            !hotel.taken(SEEN_TO),
+            "room {} never changed at all",
+            SEEN_TO
+        );
     }
 
     /// Reading a move backwards is reading the same move.
@@ -2325,7 +2389,7 @@ mod tests {
         hotel.apply(Arrival::Coaches);
 
         for _ in 0..400 {
-            hotel.tick(0.05);
+            hotel.tick(0.05, DRAWN);
 
             if hotel.travelling().is_some() {
                 continue;
@@ -2361,7 +2425,7 @@ mod tests {
         let mut ever_open = 0;
 
         for _ in 0..600 {
-            hotel.tick(0.02);
+            hotel.tick(0.02, DRAWN);
 
             let Some(front) = hotel.travelling() else {
                 continue;
@@ -2689,8 +2753,8 @@ mod tests {
 
             hotel.house();
             // both waves all the way through
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
+            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
             assert!(hotel.full(), "{:?}: it is not full again", arrival);
         }
@@ -2709,8 +2773,8 @@ mod tests {
         // pressed, before either wave had moved a door.
         assert_eq!(hotel.housed(), 0, "they were counted before they walked in");
 
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         assert_eq!(
             hotel.housed(),
@@ -2739,7 +2803,7 @@ mod tests {
 
         hotel.at_the_door = Some(Arrival::Endless);
         hotel.house();
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         // the freeing wave is through: every odd room stands open
         for n in 1..=DRAWN {
@@ -2748,7 +2812,7 @@ mod tests {
             }
         }
 
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
 
         assert!(hotel.full(), "the endless coach did not fill the odd side");
         assert!(
@@ -2772,14 +2836,14 @@ mod tests {
             "it is filling before it has freed anything"
         );
 
-        hotel.tick(2.0 / TRAVELS_AT);
+        hotel.tick(2.0 / TRAVELS_AT, DRAWN);
         assert!(!hotel.filling(), "it is filling while still freeing");
         assert!(
             !hotel.taken(1),
             "room 1 did not empty behind the first wave"
         );
 
-        hotel.tick(DRAWN as f32 / TRAVELS_AT);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT, DRAWN);
         assert!(hotel.filling(), "the second wave never set off");
     }
 

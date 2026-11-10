@@ -8589,7 +8589,10 @@ impl Game for Arcade {
         // It ticks whether anybody is in there to watch it or not, the same
         // as the rig in the back room: a building that only runs the room
         // you are standing in is a building you can catch out.
-        self.hotel.tick(dt);
+        // as far as the last room you can see, which is this file's to know:
+        // a wave that stops short of the window changes rooms in front of
+        // you with nothing passing them
+        self.hotel.tick(dt, *aleph::window(self.at).end());
         // and where each of its leaves is, told to the room so the sight and
         // the colliders read one account of it rather than two
         // the diagonal, taken as far as you have walked the book. Spec 0031:
@@ -14632,8 +14635,8 @@ mod tests {
             );
 
             arcade.hotel.house();
-            arcade.hotel.tick(60.0);
-            arcade.hotel.tick(60.0);
+            arcade.hotel.tick(60.0, aleph::DRAWN);
+            arcade.hotel.tick(60.0, aleph::DRAWN);
         }
 
         assert!(arcade.hotel.housed() > 0, "it housed nobody at all");
@@ -14650,8 +14653,8 @@ mod tests {
         let was = arcade.hotel.housed();
 
         arcade.use_what_i_see();
-        arcade.hotel.tick(60.0);
-        arcade.hotel.tick(60.0);
+        arcade.hotel.tick(60.0, aleph::DRAWN);
+        arcade.hotel.tick(60.0, aleph::DRAWN);
 
         // **It says yes.** Spec 0031 had this assert the opposite, on the
         // grounds that what you carry is on no line of the book. Jake stood
@@ -14760,7 +14763,7 @@ mod tests {
             // drawn corridor, and `house` refuses while one is going, so a
             // shorter tick leaves the cycle stuck on its first arrival
             for _ in 0..1000 {
-                arcade.hotel.tick(1.0 / 60.0);
+                arcade.hotel.tick(1.0 / 60.0, aleph::DRAWN);
 
                 said.insert(arcade.what_the_desk_says());
             }
