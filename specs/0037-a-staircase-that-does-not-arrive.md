@@ -244,14 +244,20 @@ staircase is complete as an impossible object with it unreachable, which is
 what a Penrose staircase is, so a visitor who never does anything else gets a
 whole room.
 
-**Unless you came the long way.** Spec 0036's trail ends here, and what it
+~~**Unless you came the long way.** Spec 0036's trail ends here, and what it
 buys is not finding this room, which anybody can do. It is that the loop
 opens: having walked the building properly, the fourth flight goes somewhere
-it has never gone before.
+it has never gone before.~~
 
-That is the shape worth having. The room is not a lock and the trail is not a
-key: the room is finished either way and the trail changes what finished
-means.
+~~That is the shape worth having. The room is not a lock and the trail is not
+a key: the room is finished either way and the trail changes what finished
+means.~~
+
+**Struck 2026-11-10. The trail does not end here and has not for some time.**
+`bridge::shows` asks for every `Asked` and what it opens is spec 0054's
+bridge, so the lever this paragraph was counting on is spent elsewhere. The
+shape it describes is still the right shape; what delivers it is no longer
+a fourth flight, because there is no fourth flight.
 
 ## What this must not become
 
@@ -425,16 +431,40 @@ separate flights from the floor are an X of ramps, and three metres over
 thirty two of run is 5.4 degrees and reads as a square walkway. The join is
 nowhere, because at that gradient there is nothing to see.
 
-Two things in this spec are still only written down.
+~~Two things in this spec are still only written down.~~
 
-**The thing above the loop that no flight reaches.** The room is eight
+~~**The thing above the loop that no flight reaches.** The room is eight
 metres tall and the loop climbs three of them, so there is height for it and
 nothing in it. What it is has to be something the room already means, per
-spec 0021's lesson, and I do not have that yet.
+spec 0021's lesson, and I do not have that yet.~~
 
-**What spec 0036's trail changes when it gets here.** The trail is a draft
+~~**What spec 0036's trail changes when it gets here.** The trail is a draft
 and its last step is this room, so nothing can be built against it until it
-is settled.
+is settled.~~
+
+**Restated 2026-11-10, because both were about a room that is not there.**
+The loop went on 2026-10-24 and the trail's last step went to spec 0054's
+bridge, so between them these two asked after a fourth flight and an ending
+that no longer exist.
+
+What survives is the one that was worth having, and it is already built. Spec
+0038 puts a way out on each of the cube's six faces. One of those comes out
+upward and is `aloft::lantern`, and `door_recess` closes it with a back and
+four sides on purpose, so from inside the room it is a doorway that is dark.
+
+That is the Penrose property stated at the top of this spec, standing in the
+room today and arrived at for a different reason: something visible from the
+middle, plainly above you, that you cannot take. It needed no fourth flight
+and it did not go when the loop did.
+
+So the open question is not what to put above the room. It is **what is
+behind the one door of six that is shut**, in a room whose whole subject is
+that up is not a single direction. That is the most interesting thing it
+owns and it costs no geometry, because the door is there.
+
+What it should be is Jake's, per spec 0021's lesson that it has to be
+something the room already means. Whether a thing reads as what it is comes
+back from the window rather than from a test.
 
 ## 2026-11-10: the stair at the far end, and why it does not fit
 
