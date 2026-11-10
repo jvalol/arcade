@@ -135,6 +135,21 @@ touched.
 
 ## What is still open
 
+**Nothing, as of 2026-11-06.** Valhalla is
+[0056](0056-valhalla.md) and the gate and its riddle are
+[0058](0058-a-gate-and-a-riddle.md), both implemented. The riddle meets the
+test this section sets below, which is the part worth keeping: the watchman
+has never seen the arcade, so what he asks is what it looks like from the
+far end of the bridge, and the answer is the lantern spec 0057 put on the
+imaginarium's roof. There is nothing to look up and nobody who has not
+climbed the bridge is ever asked.
+
+This heading said otherwise until 2026-11-10 and sent a reader looking for
+work that was four days finished. Spec 0055's own "this does not build"
+section and spec 0037's tail were stale the same day, which is three in one
+building. What follows is left as written, because it is why those two specs
+exist.
+
 **The room behind Heimdall, and the puzzle he asks you first.** Spec 0055
 built the threshold and the watchman and said there was nothing behind him.
 Jake, 2026-11-04, having walked it: Heimdall should let you into a room, and

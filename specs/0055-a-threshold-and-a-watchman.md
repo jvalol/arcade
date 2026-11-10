@@ -115,6 +115,18 @@ standing in a field.
 
 ## What Jake has since decided, and this does not build
 
+**All of it is built, and this heading stopped being true on 2026-11-06.**
+Valhalla is [0056](0056-valhalla.md), implemented. The gate and the riddle
+are [0058](0058-a-gate-and-a-riddle.md), implemented, with the ornate double
+door Jake asked for on 2026-11-06 and the line he types in
+[0059](0059-a-line-somebody-types.md).
+
+Left standing as written, because what it decided is still why those three
+exist and the reasoning below it is where that reasoning lives. Only the
+claim that none of it is built has gone, and it had been wrong for four days
+by 2026-11-10, where it sent a reader looking for work that was finished.
+Spec 0037's tail did the same thing on the same day.
+
 **Heimdall is the last gate, and what is behind him is Valhalla.** Jake,
 2026-11-04, after walking this: he lets you into a room, there is something
 to answer first, and what is through there is where something stunning and
@@ -122,8 +134,12 @@ beautiful should be. So the far parapet is not the end of what the building
 has, and the two lines this section used to open with, saying there is
 nothing behind him and nothing to enter, are wrong rather than out of scope.
 
-Nothing of it is built. What is built is the landing and the figure, and
-both hold: a threshold is still a threshold when there is a door behind it.
+~~Nothing of it is built. What is built is the landing and the figure, and
+both hold: a threshold is still a threshold when there is a door behind it.~~
+
+The landing and the figure held, which is what that line was for: a
+threshold is still a threshold when there is a door behind it. The door is
+behind it now.
 
 **The gate is a riddle and not a game.** Jake's word is sphinx-like. That
 rules out the thing this file argued for an hour earlier, which was the
@@ -131,7 +147,12 @@ arcade's own `starry` at full size, and he ruled it out on better grounds
 than the ones it was argued on: Van Gogh is already in the building, in a
 cabinet you walk past every time you cross the hall.
 
-**What the riddle has to be, if spec 0036 is to hold.** That spec's rule is
+**What the riddle has to be, if spec 0036 is to hold.** Answered by 0058,
+which asks the one thing no reader of this building could look up: the
+watchman has never seen the arcade, he has stood at this end of the bridge
+the whole time, and what he asks is what it looks like from out here. You
+turn round and answer with the lantern.
+ That spec's rule is
 that a room's clue is the answer to the thing that room already asks, and
 that a room needing something planted in it is a room the trail is wrong
 about. Read strictly that rule governs the eight rooms and not the gate at
