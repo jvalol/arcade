@@ -442,29 +442,36 @@ spec 0021's lesson, and I do not have that yet.~~
 and its last step is this room, so nothing can be built against it until it
 is settled.~~
 
-**Restated 2026-11-10, because both were about a room that is not there.**
-The loop went on 2026-10-24 and the trail's last step went to spec 0054's
-bridge, so between them these two asked after a fourth flight and an ending
-that no longer exist.
+**Both struck 2026-10-24 by [0038](0038-three-ways-to-be-the-right-way-up.md),
+and this tail did not say so until 2026-11-10.**
 
-What survives is the one that was worth having, and it is already built. Spec
-0038 puts a way out on each of the cube's six faces. One of those comes out
-upward and is `aloft::lantern`, and `door_recess` closes it with a back and
-four sides on purpose, so from inside the room it is a doorway that is dark.
+That spec's "what is kept and what goes" strikes the four flights, the four
+landings, the things standing on them, and the thing above the loop that no
+flight reaches. It was not wreckage left by the loop going. It was removed
+in the same decision and for the same reason, and the room is not waiting
+on it.
 
-That is the Penrose property stated at the top of this spec, standing in the
-room today and arrived at for a different reason: something visible from the
-middle, plainly above you, that you cannot take. It needed no fourth flight
-and it did not go when the loop did.
+The trail went the same way. `bridge::shows` asks for every `Asked` and what
+it opens is spec 0054's bridge, so this spec's "spec 0036's trail ends here",
+above, is struck too.
 
-So the open question is not what to put above the room. It is **what is
-behind the one door of six that is shut**, in a room whose whole subject is
-that up is not a single direction. That is the most interesting thing it
-owns and it costs no geometry, because the door is there.
+And the hole both of these were standing in for is filled. Spec 0038 holds
+its own status on one criterion, that there is something in this room to
+decide and you can walk to it from the way up, which is
+`aloft::tests::you_can_shut_a_door_from_where_you_stand`. Every door in there
+is cut in somebody else's floor, so shutting one changes where another frame
+can walk. That is the decision this room needed, and a thing above it that
+nobody reaches would be a reward rather than a decision.
 
-What it should be is Jake's, per spec 0021's lesson that it has to be
-something the room already means. Whether a thing reads as what it is comes
-back from the window rather than from a test.
+**Reopened in error on 2026-11-10 and reverted the same day.** It came back
+as "what is behind the one door of six that is shut", on the grounds that
+`aloft::lantern` is blind and so is visible, above, and not yours. That much
+is true and it is a consequence of `door_recess` closing every opening, not
+a design element: it reads as a dark alcove because it is one. Putting
+anything behind it makes the room a room with an answer in it, which 0037
+and 0038 both forbid in the same words.
+
+Nothing in this spec is open. It is history.
 
 ## 2026-11-10: the stair at the far end, and why it does not fit
 
