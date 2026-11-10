@@ -1683,6 +1683,20 @@ pub fn up_west() -> f32 {
 /// 1.2 of it. What is left is 1.05, which is exactly the width this project
 /// has settled on for anywhere a body has to pass: 0.9 across with a tenth
 /// either side was tried in spec 0007 and thrown out.
+///
+/// **Moving it south was tried on 2026-11-10 and put back.** Jake, from the
+/// nook's north end: the staircase should open from the far end of the room,
+/// not the centrepiece. North was not available, since the landing is
+/// already hard against this room's north wall, so south was the only way
+/// out of the middle. It cost seven of this building's own rules, and the
+/// one that settles it is `you_can_walk_up_it`: the flight rises south to
+/// north, so moving it south turns its high end to face the room and leaves
+/// the foot against the far wall where nobody can reach it. Walking up it
+/// ended at y 0.000 rather than on the floor at 6.000.
+///
+/// Moving it is not a reposition. The flight has to be reversed as well, and
+/// a reversed landing lands at about z -10.4 against this room's south wall
+/// at -9.75, so the arrival in here moves too.
 pub fn up_head() -> f32 {
     MIDDLE_Z + ROOM * 0.5 - UP_WIDE
 }
@@ -2468,6 +2482,35 @@ pub fn solid() -> Vec<Aabb> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every tread of the flight stands on the nook's floor.
+    ///
+    /// **The two rooms are measured from different middles.** The
+    /// imaginarium is laid out about `MIDDLE_Z`, the nook about the arcade's
+    /// `reaches`, and nothing ties them together: `up_head` picks a z out of
+    /// this room's numbers and the nook has whatever floor it has. It fits
+    /// because the middle of one happens to fall over the middle of the
+    /// other, which nothing enforces. Written on 2026-11-10 while trying to
+    /// move the stair south, when it turned out the margin at that end is
+    /// 0.3.
+    #[test]
+    fn the_flight_is_inside_the_nook() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let (at, size) = crate::room::nook_floor(reaches);
+        let (south, north) = (at.z - size.z * 0.5, at.z + size.z * 0.5);
+
+        for tread in up_treads() {
+            assert!(
+                tread.min.z >= south - 1e-3 && tread.max.z <= north + 1e-3,
+                "a tread runs {:.2} to {:.2} and the nook's floor is {:.2} to {:.2}",
+                tread.min.z,
+                tread.max.z,
+                south,
+                north
+            );
+        }
+    }
+
     /// Nothing of the loop lies in the plane of the floor.
     ///
     /// Two faces in one plane speckle as you move, and this building has
