@@ -1477,6 +1477,80 @@ pub fn sconces(reaches: f32, standing: Vec3) -> Vec<Vec3> {
     out
 }
 
+/// The lobby's ceiling: a grid of beams across it.
+///
+/// **The one surface in this room nobody had spent anything on.** The lobby
+/// is `LOBBY_TALL` where the corridor is `TALL`, and that difference is the
+/// whole of what says which is which, per the note on `LOBBY_TALL`. A room
+/// that says it by being taller and then shows you a flat grey lid is making
+/// the argument and dropping it. Jake asked for this after a sweep found the
+/// lid bare.
+///
+/// **A hotel's and not the cellar's.** `cellar::ceiling` is a library's:
+/// coffers of 2.1 on beams of 0.2, which is close work for a room lined with
+/// books. This room is arrived in, so the bays are wider and the beams are
+/// deeper, and they are the hotel's own wood rather than the cellar's oak.
+///
+/// Both ways, because beams one way are stripes. The two sets cross and the
+/// shared volume is inside both, which is hidden rather than fighting; the
+/// cellar settled that already.
+pub const LOBBY_COFFER: f32 = 2.6;
+pub const LOBBY_BEAM: f32 = 0.26;
+pub const LOBBY_BEAM_DOWN: f32 = 0.22;
+
+pub fn lobby_ceiling(reaches: f32) -> Vec<Aabb> {
+    let (west, east) = span();
+    let (from, to) = across(reaches);
+    let (deep, along) = (east - west, to - from);
+    let (bays_x, bays_z) = (
+        (deep / LOBBY_COFFER).round().max(1.0),
+        (along / LOBBY_COFFER).round().max(1.0),
+    );
+    let (step_x, step_z) = (deep / bays_x, along / bays_z);
+    let hung = LOBBY_TALL - LOBBY_BEAM_DOWN;
+    let mut out = Vec::new();
+
+    // **Cut for the doorway, the way the walls are.** The gallery's opening
+    // into this room is full height, y 0 to `LOBBY_TALL` with no head over
+    // it, so the beam that runs down the east wall crosses the top of it. A
+    // run carried straight across an opening is the fault spec 0029 had with
+    // this hotel's own skirting and rail, and `a_doorway_can_be_seen_out_of`
+    // caught this one before anybody walked it: from inside the opening the
+    // view into the lobby fell to a third of the view back into the gallery.
+    let (door_from, door_to) = way(reaches);
+
+    for n in 0..=(bays_x as usize) {
+        let x = west + n as f32 * step_x;
+        let spans: Vec<(f32, f32)> = if x + LOBBY_BEAM * 0.5 >= east {
+            vec![(from, door_from), (door_to, to)]
+        } else {
+            vec![(from, to)]
+        };
+
+        for (a, b) in spans {
+            if b - a <= LOBBY_BEAM {
+                continue;
+            }
+
+            out.push(Aabb::new(
+                vec3(x - LOBBY_BEAM * 0.5, hung, a),
+                vec3(x + LOBBY_BEAM * 0.5, LOBBY_TALL, b),
+            ));
+        }
+    }
+
+    for n in 0..=(bays_z as usize) {
+        let z = from + n as f32 * step_z;
+
+        out.push(Aabb::new(
+            vec3(west, hung, z - LOBBY_BEAM * 0.5),
+            vec3(east, LOBBY_TALL, z + LOBBY_BEAM * 0.5),
+        ));
+    }
+
+    out
+}
+
 /// The lobby's own fittings: one over the desk and one over the sign.
 ///
 /// **The lobby had none.** The corridor was given sconces and the room you
@@ -1659,6 +1733,100 @@ mod tests {
                 two,
                 low,
                 high
+            );
+        }
+    }
+
+    /// The lobby's ceiling is dressed, and dressed all the way to its walls.
+    ///
+    /// **The baths' lesson, applied before it could happen again.** That
+    /// room's ribs stopped short of one end and left 4.24 metres of bare lid,
+    /// because the dressing took its extent from something that was not the
+    /// room. This takes its extent from `span` and `across`, which are the
+    /// room, and this says so.
+    #[test]
+    fn the_lobbys_ceiling_reaches_its_walls() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let beams = lobby_ceiling(reaches);
+        let (west, east) = span();
+        let (from, to) = across(reaches);
+
+        assert!(beams.len() >= 4, "{} beams is not a ceiling", beams.len());
+
+        let got = |lo: f32, hi: f32, of: fn(&Aabb) -> (f32, f32)| {
+            let low = beams.iter().map(|b| of(b).0).fold(f32::MAX, f32::min);
+            let high = beams.iter().map(|b| of(b).1).fold(f32::MIN, f32::max);
+
+            (low - lo, hi - high)
+        };
+        let (west_short, east_short) = got(west, east, |b| (b.min.x, b.max.x));
+        let (south_short, north_short) = got(from, to, |b| (b.min.z, b.max.z));
+
+        for (way, short) in [
+            ("west", west_short),
+            ("east", east_short),
+            ("south", south_short),
+            ("north", north_short),
+        ] {
+            assert!(
+                short <= LOBBY_BEAM * 0.5 + 1e-3,
+                "the beams stop {:.2} short of the {} wall",
+                short,
+                way
+            );
+        }
+    }
+
+    /// And nothing it hangs crosses the way in.
+    ///
+    /// The gallery's opening into this room is full height, so a beam run
+    /// along the east wall crosses the top of it: a bar across a doorway,
+    /// which is what spec 0029's skirting and rail did to the corridor's
+    /// openings before Jake walked into one. `a_doorway_can_be_seen_out_of`
+    /// catches it from inside the opening; this says it in the arithmetic,
+    /// where it reads as a rule rather than as a ratio of two pictures.
+    #[test]
+    fn no_beam_crosses_the_way_in() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let (door_from, door_to) = way(reaches);
+        let (_, east) = span();
+
+        for beam in lobby_ceiling(reaches) {
+            // the ones lying in the wall's own plane, which are thin across
+            // and long along it. A beam running the other way stops at the
+            // wall rather than crossing the opening, and from inside the
+            // opening it is the view rather than a bar across it.
+            if beam.max.x < east - 1e-3 || beam.max.x - beam.min.x > LOBBY_BEAM + 1e-3 {
+                continue;
+            }
+
+            assert!(
+                beam.max.z <= door_from + 1e-3 || beam.min.z >= door_to - 1e-3,
+                "a beam runs z {:.2}..{:.2} across a doorway at {:.2}..{:.2}",
+                beam.min.z,
+                beam.max.z,
+                door_from,
+                door_to
+            );
+        }
+    }
+
+    /// And nothing it hangs comes down to where a head is.
+    #[test]
+    fn the_lobbys_beams_are_overhead() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+
+        for beam in lobby_ceiling(reaches) {
+            assert!(
+                beam.min.y > crate::EYE + 0.3,
+                "a beam hangs to {:.2}, which is in the way of a head at {:.2}",
+                beam.min.y,
+                crate::EYE
+            );
+            assert!(
+                beam.max.y <= LOBBY_TALL + 1e-3,
+                "a beam at {:.2} is above the ceiling it hangs from",
+                beam.max.y
             );
         }
     }

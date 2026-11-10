@@ -5186,6 +5186,18 @@ impl Arcade {
             }
         }
 
+        // and the lobby's ceiling, which is the one surface in here nobody
+        // had spent anything on. Its own wood rather than the wall's colour,
+        // so the beams read as timber laid on plaster and not as a pattern
+        // pressed into it.
+        for beam in aleph::lobby_ceiling(reaches) {
+            scene.push_plain(
+                cube,
+                &Transform::at(beam.center()).with_scale(beam.size()),
+                aim::HOTEL_TRIM,
+            );
+        }
+
         // the sconces, which are the only reason there is any light in here.
         // The lobby's two are in this list so there is no lamp anywhere in
         // the hotel that is not in a fitting.
