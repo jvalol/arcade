@@ -173,7 +173,17 @@ pub const BLOWS: f32 = 0.35;
 pub const BLOWN: f32 = 0.5;
 
 /// The sauna: how big the box is, how tall, and where its middle sits.
-pub const SAUNA: Vec3 = vec3(3.4, 2.3, 3.0);
+///
+/// **2.1 rather than 2.3, so the ceiling's ribs pass over it.** A rib hangs
+/// `RIB_DOWN` under the lid and reaches y -0.825; at 2.3 the sauna's roof
+/// stood at -0.700 and every rib crossing it would have been buried 0.125
+/// deep in it. That is why `ceiling` used to stop the whole dressing short
+/// of the sauna's `x`, which took it off the aisle as well. Lowered, the
+/// roof is at -0.900 and the ribs clear it by 0.075.
+///
+/// It loses nothing. A sauna wants a low ceiling, 2.1 is well over a body,
+/// and the bench and the stove are unchanged.
+pub const SAUNA: Vec3 = vec3(3.4, 2.1, 3.0);
 /// In the corner, where a timber box belongs. Stood out in the floor it was an
 /// object in a room; in the corner it is part of the building.
 pub const SAUNA_AT: Vec2 = vec2(15.9, 1.82);
@@ -1259,10 +1269,21 @@ pub const TILE: f32 = 0.25;
 
 /// The ceiling: a border course round it and the ribs spanning between.
 ///
-/// The border mirrors the one laid into the floor and takes the same two
-/// numbers, called rather than written again. It starts past the sauna where
-/// the floor's does: the sauna's roof is a hand's breadth under this ceiling
-/// and a border drawn over it is a border nobody sees.
+/// The border takes the same two numbers as the one laid into the floor,
+/// called rather than written again, but it does not stop where that one
+/// stops.
+///
+/// **The floor's border frames the open floor and this one frames the lid,
+/// and those are not the same shape.** The sauna stands on the floor, so
+/// there is no floor under it to border. The lid runs over it unbroken and
+/// only the part directly above it is hidden. Both took `one` past the
+/// sauna's `x`, which is a rectangle tested as though it were a half-plane:
+/// the sauna covers z -0.68 to 2.32 of a room running -1.15 to 11.00, so
+/// clamping `x` stripped the ribs off the whole 18 metres of that band and
+/// not the three the sauna is under. Jake walked west past it and found a
+/// flat lid where the beams stopped.
+///
+/// It runs the full width now, and `SAUNA` carries the 0.2 that lets it.
 ///
 /// The ribs stop at the border rather than crossing it. Crossing, the two
 /// overlap and their undersides are one plane over every square they share,
@@ -1278,12 +1299,8 @@ pub fn ceiling(reaches: f32) -> Vec<(Aabb, Made)> {
     let back = foot - DEEP;
     let far_side = side + SPAN;
     let hung = -cellar::DOWN + TALL - RIB_DOWN * 0.5;
-    let box_ = sauna(reaches);
 
-    let (one, two) = (
-        (back + INLAY_IN).max(box_.max.x + INLAY_IN),
-        foot - INLAY_IN,
-    );
+    let (one, two) = (back + INLAY_IN, foot - INLAY_IN);
     let (three, four) = (side + INLAY_IN, far_side - INLAY_IN);
     let mut out = Vec::new();
 
@@ -3135,6 +3152,68 @@ mod tests {
     ///
     /// Found 2026-10-14 by reading spec 0012 claim by claim: eight of them,
     /// three criteria, and this was one of the five with nothing under it.
+    /// The ceiling is dressed the whole width of the room.
+    ///
+    /// **It was dressed over two thirds of it.** `ceiling` took its western
+    /// limit past the sauna's `x`, copying the floor's border, which is right
+    /// for a floor the sauna stands on and wrong for a lid it stands under.
+    /// The sauna is three metres of a room eighteen long, so the clamp took
+    /// the ribs off the whole western band: north of the sauna there was open
+    /// floor with a flat lid over it. Jake walked west past the sauna, looked
+    /// up, and said the beams stop.
+    #[test]
+    fn the_ceiling_is_dressed_the_whole_width() {
+        let ribs: Vec<Aabb> = ceiling(REACHES)
+            .into_iter()
+            .filter(|(_, made)| matches!(made, Made::Rib))
+            .map(|(box_, _)| box_)
+            .collect();
+        let west = ribs.iter().map(|b| b.min.x).fold(f32::MAX, f32::min);
+        let east = ribs.iter().map(|b| b.max.x).fold(f32::MIN, f32::max);
+        let floor = floors(REACHES);
+        let lid_west = floor.iter().map(|b| b.min.x).fold(f32::MAX, f32::min);
+        let lid_east = floor.iter().map(|b| b.max.x).fold(f32::MIN, f32::max);
+
+        // within a bay of each end, which is as close as a rhythm of ribs
+        // laid inside a border can come
+        assert!(
+            west - lid_west < RIB_STEP,
+            "the ribs start at {:.2} in a room that starts at {:.2}, leaving {:.2} bare",
+            west,
+            lid_west,
+            west - lid_west
+        );
+        assert!(
+            lid_east - east < RIB_STEP,
+            "the ribs stop at {:.2} in a room that ends at {:.2}, leaving {:.2} bare",
+            east,
+            lid_east,
+            lid_east - east
+        );
+    }
+
+    /// And nothing it hangs crosses into the sauna's roof.
+    ///
+    /// The reason the clamp existed, kept as a rule now that the clamp has
+    /// gone: a rib reaches `RIB_DOWN` under the lid and the sauna stands
+    /// under it, so the two are a pair of numbers that have to agree.
+    #[test]
+    fn the_ribs_clear_the_sauna() {
+        let roof = sauna(REACHES).max.y;
+
+        for (box_, _) in ceiling(REACHES)
+            .into_iter()
+            .filter(|(_, made)| matches!(made, Made::Rib))
+        {
+            assert!(
+                box_.min.y >= roof,
+                "a rib reaches {:.3} and the sauna's roof is at {:.3}",
+                box_.min.y,
+                roof
+            );
+        }
+    }
+
     #[test]
     fn both_borders_are_mitred() {
         let overlapping = |runs: Vec<Aabb>, what: &str| {
