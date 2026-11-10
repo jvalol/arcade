@@ -2373,7 +2373,7 @@ impl Arcade {
         let far = -self.room.reaches;
         let (back, front) = (-side - room::NOOK_DEEP + 0.15, -side - 0.15);
 
-        vec![
+        let mut out = vec![
             (
                 front,
                 -1.0,
@@ -2381,9 +2381,24 @@ impl Arcade {
                 far + room::NOOK_DOOR,
                 far + room::NOOK_SPAN,
             ),
-            (far + 0.15, 1.0, false, back, front),
             (far + room::NOOK_SPAN - 0.15, -1.0, false, back, front),
-        ]
+        ];
+
+        // **The south side is asked of the wall rather than worked out
+        // again.** It is the lobby's north wall, and `room::nook_lining`
+        // already clamps the nook's dressing to the part of it the nook
+        // actually has: the lobby runs on west past the nook, and the nook's
+        // opening runs on east past the wall. Panelling that run from `back`
+        // to `front` put the skirting, the rail and the panels 2.65 beyond
+        // the wall's east end, hanging across the opening with nothing
+        // behind them, and 0.15 shy of its face everywhere else, so the only
+        // part of it anybody could see was the part that should not have
+        // been there. Jake, twice, from the hall: it's still a wrong wall.
+        for face in room::nook_lining(self.room.reaches) {
+            out.push((face.max.z, 1.0, false, face.min.x, face.max.x));
+        }
+
+        out
     }
 
     /// What you are standing on, which decides which footstep you hear.
