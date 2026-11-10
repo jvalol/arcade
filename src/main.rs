@@ -11728,6 +11728,41 @@ impl Game for Arcade {
                 scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::TRIM);
             }
 
+            // and a stop where a run ends against nothing, for the three of
+            // them to die into.
+            //
+            // **Which end that is, derived rather than listed.** A side wall
+            // runs east to `front` and is met there by the front wall, but
+            // only where the front wall exists: that one starts at the
+            // doorway, `far + NOOK_DOOR`, and the south side sits at
+            // `far + 0.15`, well short of it. So the south wall's east end
+            // is open to the hall and its skirting, rail and cornice ran out
+            // into the air, which is what Jake saw from the arcade on
+            // 2026-11-10 and read as elements that did not belong.
+            if !along {
+                let far = -self.room.reaches;
+                let met = (far + room::NOOK_DOOR..=far + room::NOOK_SPAN).contains(&face);
+
+                if !met {
+                    let deep = study::PROUD * 2.4;
+
+                    scene.push_plain(
+                        cube,
+                        &Transform::at(vec3(
+                            to - study::STOP_WIDE * 0.5,
+                            room::TALL * 0.5,
+                            face + out * deep * 0.5,
+                        ))
+                        .with_scale(vec3(
+                            study::STOP_WIDE,
+                            room::TALL,
+                            deep,
+                        )),
+                        aim::TRIM,
+                    );
+                }
+            }
+
             // and the panels between the skirting and the rail
             let middle = face + out * study::PROUD * 0.5;
             for place in study::panels(from, to) {
@@ -13762,64 +13797,104 @@ mod tests {
         standing_with(at, looking_at, true)
     }
 
+    /// A building loaded and ready to be stood in, which is the part that
+    /// costs.
+    ///
+    /// Measured 2026-11-10: this is 6.3 seconds and the pose that follows it
+    /// is 35 milliseconds, so a sweep that builds one of these per pose pays
+    /// for the building every time. Separated so a sweep can pay once.
+    fn built(
+        renderer: &mut blitzkit::renderer::Renderer,
+        done: bool,
+    ) -> (Arcade, Geometry, TextRenderer, SoundSystem) {
+        let mut arcade = Arcade::new();
+
+        if done {
+            for one in trail::Asked::every() {
+                arcade.trail.gave(*one);
+            }
+        }
+
+        arcade.art_from = stand_in_art;
+        let mut geometry = Geometry::new();
+        let mut text = TextRenderer::new();
+        let sound = SoundSystem::new();
+
+        arcade.load(renderer);
+        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
+
+        (arcade, geometry, text, sound)
+    }
+
+    /// And standing it somewhere, which is the part that does not.
+    ///
+    /// One account of what a pose means, so `standing` and a sweep cannot
+    /// come apart about where somebody is or which way they face.
+    fn posed(
+        arcade: &mut Arcade,
+        geometry: &mut Geometry,
+        text: &mut TextRenderer,
+        sound: &SoundSystem,
+        renderer: &mut blitzkit::renderer::Renderer,
+        at: Vec3,
+        looking_at: Vec3,
+    ) -> (Scene, Camera) {
+        arcade.before_frame(renderer);
+
+        // where it stands and which way it looks, set on the game's own
+        // fields rather than on the camera: `draw` works the camera out
+        // from these, and two ways of saying where somebody is standing
+        // would come apart.
+        //
+        // `at` is where the feet are. The angles are worked out from where
+        // the eyes are, which is `EYE` above that, or a target on the floor
+        // nearby comes out looking at the floor.
+        let look = looking_at - vec3(at.x, at.y + EYE, at.z);
+
+        arcade.at = at;
+        // **And the height, which is not `at.y`.** The camera stands at
+        // `eye`, which eases toward `at.y` over `EYE_LAGS` seconds so that
+        // walking down a step is not a jump. With `dt` at nought it never
+        // eases at all, so a pose set only through `at` is a pose at
+        // whatever height the game opened on: the cellar came out black
+        // and the baths came out looking at the garden, both from a camera
+        // standing on the hall's floor.
+        arcade.eye = at.y;
+        arcade.yaw = look.x.atan2(-look.z);
+        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
+
+        // **One update, at no time at all.** A room's lamps are worked out
+        // from where you are standing, so a frame drawn without this is a
+        // room with the lights off: the cellar came out black the first
+        // time. `dt` of nought is what keeps the pool's surface, the neon
+        // and the metronome where they started.
+        arcade.update(0.0, geometry, text, sound);
+
+        let mut scene = Scene::new();
+        let mut camera = Camera::new();
+
+        arcade.draw(&mut scene, &mut camera);
+
+        (scene, camera)
+    }
+
     fn standing_with(
         at: Vec3,
         looking_at: Vec3,
         done: bool,
     ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
         move |renderer| {
-            let mut arcade = Arcade::new();
+            let (mut arcade, mut geometry, mut text, sound) = built(renderer, done);
 
-            if done {
-                for one in trail::Asked::every() {
-                    arcade.trail.gave(*one);
-                }
-            }
-
-            arcade.art_from = stand_in_art;
-            let mut geometry = Geometry::new();
-            let mut text = TextRenderer::new();
-            let sound = SoundSystem::new();
-
-            arcade.load(renderer);
-            arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
-            arcade.before_frame(renderer);
-
-            // where it stands and which way it looks, set on the game's own
-            // fields rather than on the camera: `draw` works the camera out
-            // from these, and two ways of saying where somebody is standing
-            // would come apart.
-            //
-            // `at` is where the feet are. The angles are worked out from where
-            // the eyes are, which is `EYE` above that, or a target on the floor
-            // nearby comes out looking at the floor.
-            let look = looking_at - vec3(at.x, at.y + EYE, at.z);
-
-            arcade.at = at;
-            // **And the height, which is not `at.y`.** The camera stands at
-            // `eye`, which eases toward `at.y` over `EYE_LAGS` seconds so that
-            // walking down a step is not a jump. With `dt` at nought it never
-            // eases at all, so a pose set only through `at` is a pose at
-            // whatever height the game opened on: the cellar came out black
-            // and the baths came out looking at the garden, both from a camera
-            // standing on the hall's floor.
-            arcade.eye = at.y;
-            arcade.yaw = look.x.atan2(-look.z);
-            arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
-
-            // **One update, at no time at all.** A room's lamps are worked out
-            // from where you are standing, so a frame drawn without this is a
-            // room with the lights off: the cellar came out black the first
-            // time. `dt` of nought is what keeps the pool's surface, the neon
-            // and the metronome where they started.
-            arcade.update(0.0, &mut geometry, &mut text, &sound);
-
-            let mut scene = Scene::new();
-            let mut camera = Camera::new();
-
-            arcade.draw(&mut scene, &mut camera);
-
-            (scene, camera)
+            posed(
+                &mut arcade,
+                &mut geometry,
+                &mut text,
+                &sound,
+                renderer,
+                at,
+                looking_at,
+            )
         }
     }
 
@@ -13828,6 +13903,83 @@ mod tests {
     ///
     /// Nothing at all on a machine with no adapter, which is a skip rather
     /// than a failure, the same as the engine's pictures.
+    /// What share of a frame's pixels sit on an edge.
+    ///
+    /// **A room has edges and a surface pressed against the lens has none.**
+    /// Brightness cannot tell those apart: the plastered doorway spec 0029
+    /// found was a soft gradient whose spread was lower than a lit room's but
+    /// well inside the range a dim one covers. What it had none of was
+    /// detail. So this counts pixels whose neighbour to the right or below
+    /// differs by more than a channel's worth, which is the same `CHANNEL`
+    /// the picture tests call a difference.
+    fn edges(picture: &blitzkit::renderer::Picture) -> f32 {
+        let (wide, tall) = (picture.width as usize, picture.height as usize);
+        let raw = |x: usize, y: usize| picture.pixels[(y * wide + x) * 4 + 1] as i32;
+
+        // **Stretched to its own range first.** A fixed threshold reads a dim
+        // room as a blank one: looking west out of the hotel's doorway into a
+        // lobby full of desk and pigeonholes scored 0.0074, which is what the
+        // fault itself scores, because the room is dark rather than empty.
+        // The band is taken off the 5th and 95th of the pixels rather than the
+        // ends, so one lamp in frame cannot flatten everything else.
+        let mut sorted: Vec<i32> = (0..tall)
+            .flat_map(|y| (0..wide).map(move |x| (x, y)))
+            .map(|(x, y)| raw(x, y))
+            .collect();
+        sorted.sort_unstable();
+
+        let low = sorted[sorted.len() / 20];
+        let high = sorted[sorted.len() - 1 - sorted.len() / 20];
+        let band = (high - low).max(1);
+        let at = |x: usize, y: usize| (raw(x, y) - low) * 255 / band;
+        let mut found = 0;
+
+        for y in 0..tall - 1 {
+            for x in 0..wide - 1 {
+                let here = at(x, y);
+
+                if (here - at(x + 1, y)).abs() > blitzkit::picture::CHANNEL
+                    || (here - at(x, y + 1)).abs() > blitzkit::picture::CHANNEL
+                {
+                    found += 1;
+                }
+            }
+        }
+
+        found as f32 / ((wide - 1) * (tall - 1)) as f32
+    }
+
+    /// Several poses through one building.
+    ///
+    /// **Because standing somewhere is cheap and the building is not.**
+    /// Measured 2026-11-10: the first renderer a process asks for costs 54
+    /// seconds and every one after it 15 milliseconds, so sharing a renderer
+    /// saves nothing. What costs is `built`, at 6.3 seconds, against 35
+    /// milliseconds to pose and draw. Twelve poses through `drawn_from` is
+    /// twelve buildings; this is one.
+    fn drawn_along(poses: &[(Vec3, Vec3)]) -> Option<Vec<blitzkit::renderer::Picture>> {
+        let mut renderer = pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))?;
+        let (mut arcade, mut geometry, mut text, sound) = built(&mut renderer, false);
+        let mut out = Vec::with_capacity(poses.len());
+
+        for (at, looking_at) in poses.iter().copied() {
+            let (scene, camera) = posed(
+                &mut arcade,
+                &mut geometry,
+                &mut text,
+                &sound,
+                &mut renderer,
+                at,
+                looking_at,
+            );
+
+            renderer.set_camera(camera);
+            out.push(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()));
+        }
+
+        Some(out)
+    }
+
     fn drawn_from(at: Vec3, looking_at: Vec3) -> Option<blitzkit::renderer::Picture> {
         let mut renderer = pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))?;
         let (scene, camera) = standing(at, looking_at)(&mut renderer);
@@ -13843,6 +13995,79 @@ mod tests {
         // out for the same reason, so what is written here is what that
         // one does.
         Some(renderer.picture(&scene, &Geometry::new(), &TextRenderer::new()))
+    }
+
+    /// Standing in a doorway, you can see out of it, both ways along the
+    /// wall.
+    ///
+    /// **The fault this is for cannot be seen from either room.** Spec 0029
+    /// found two plastered faces inside the gallery's west doorway, one at
+    /// each side of the opening, each turned inward at the other. Single
+    /// sided, so both cull from the room they face and the doorway looks
+    /// open from the gallery and from the lobby alike. Only from inside the
+    /// opening do both face you, which is a position no picture test stands
+    /// in and nothing else walks to. Jake found it by playing.
+    ///
+    /// So this stands where the wall is, which is a place you can be because
+    /// the doorway is a gap in the colliders, and asks for detail rather than
+    /// for brightness. A room has edges at any light level. A face against
+    /// the lens has none.
+    ///
+    /// Across the thickness rather than at its middle, because the band the
+    /// faces made was narrower than the wall and the middle is not where it
+    /// has to be.
+    /// How far apart the most and least detailed view from one doorway may
+    /// be.
+    ///
+    /// Measured 2026-11-10, roofed: the west doorway spans 1.32 and the east
+    /// 1.77. With the strip unroofed and spec 0029's faces back in the
+    /// opening, the west spans 5.68.
+    const EVENLY: f32 = 3.0;
+
+    #[test]
+    fn a_doorway_can_be_seen_out_of() {
+        let room = room::Room::of(games());
+        let reaches = room.reaches;
+
+        for (name, pieces, way) in [
+            ("west", aleph::gallery_west(reaches), aleph::way(reaches)),
+            ("east", back::gallery_east(reaches), back::way(reaches)),
+        ] {
+            let (from, to) = way;
+            let middle = (from + to) * 0.5;
+            let (near, far) = (pieces[0].min.x, pieces[0].max.x);
+
+            // `.iter().copied()` and not `.into_iter()`: this crate is
+            // edition 2018, where an array's `into_iter` hands out references
+            let poses: Vec<(Vec3, Vec3)> = [0.25f32, 0.5, 0.75]
+                .iter()
+                .copied()
+                .flat_map(|step| {
+                    let at = vec3(near + (far - near) * step, EYE, middle);
+
+                    [(at, at + Vec3::X), (at, at - Vec3::X)]
+                })
+                .collect();
+
+            let Some(drawn) = drawn_along(&poses) else {
+                eprintln!("no adapter here, so nothing was drawn");
+                return;
+            };
+
+            let found: Vec<f32> = drawn.iter().map(edges).collect();
+            let least = found.iter().copied().fold(f32::MAX, f32::min);
+            let most = found.iter().copied().fold(0.0f32, f32::max);
+
+            assert!(
+                most <= least * EVENLY,
+                "the {} doorway shows {:.4} of a frame in detail one way and {:.4} another, \
+                 which is {:.1} times: something is in the opening",
+                name,
+                least,
+                most,
+                most / least.max(1e-6)
+            );
+        }
     }
 
     /// Spec 0041: flight goes the whole way with the building in the way.

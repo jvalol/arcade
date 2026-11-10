@@ -150,6 +150,21 @@ pub const RAIL: f32 = 0.07;
 pub const CORNICE: f32 = 0.14;
 pub const PROUD: f32 = 0.02;
 
+/// How wide the stop is that the skirting, the rail and the cornice die
+/// into where a panelled wall ends at an opening.
+///
+/// **Because a moulding cannot be returned here.** These are plain boxes
+/// with no profile, so turning one back to the wall gives the same rectangle
+/// a little longer and the end still reads as cut off. What a joiner would
+/// do with a profile, this does with a stop: one upright standing a little
+/// prouder than the cornice, for all three to run into.
+///
+/// Jake, 2026-11-10, standing in the hall and looking past the end of the
+/// nook's front wall: the wall has elements that look like they don't
+/// belong. They were the nook's own, seen from the arcade, ending in the
+/// air because nothing closed them.
+pub const STOP_WIDE: f32 = 0.09;
+
 /// A panel: how wide one is and how much stile is left between two.
 pub const PANEL_WIDE: f32 = 0.74;
 pub const PANEL_GAP: f32 = 0.08;
