@@ -13888,6 +13888,33 @@ mod tests {
         // and the metronome where they started.
         arcade.update(0.0, geometry, text, sound);
 
+        // **And it checks it got there**, because the one thing this
+        // function is for is being the single account of where somebody is
+        // standing, and it was not always true.
+        //
+        // `update` resolves the body against the building, and a body set
+        // down inside something can come to rest against it instead. Walking
+        // the imaginarium's floors on 2026-11-10, a pose at its second floor
+        // stuck at -7.30, 6.00, -9.77 and every pose after it in that process
+        // rendered from that same spot, up to eleven metres from where it was
+        // asked to stand. Sixteen sample points and four rooms came back with
+        // one number and nothing said a word.
+        //
+        // Across the floor and not the height. Settling a few centimetres
+        // onto what is under you is the walk working: the imaginarium's own
+        // floors put the body 0.07 up. Moving sideways is not.
+        let drifted = vec3(arcade.at.x - at.x, 0.0, arcade.at.z - at.z).length();
+
+        assert!(
+            drifted < 0.25,
+            "asked to stand at {:.2},{:.2} and came to rest at {:.2},{:.2}, {:.2} away",
+            at.x,
+            at.z,
+            arcade.at.x,
+            arcade.at.z,
+            drifted
+        );
+
         let mut scene = Scene::new();
         let mut camera = Camera::new();
 
