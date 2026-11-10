@@ -661,19 +661,6 @@ pub const DULL: f32 = 900.0;
 /// as the broadest one there is.
 pub const NO_SHINE: f32 = 0.0;
 
-/// For cloth with a lamp hung right over it.
-///
-/// Cloth has no highlight, which is why `NO_SHINE` exists and why the carpets
-/// and the benches use it. The baize is the one exception, and not because
-/// cloth under a pendant is glossy: the pale wash across it is what says a
-/// lamp hangs over this table. Take it away and the cloth is a flat green
-/// rectangle lit by the room.
-///
-/// 32 rather than `MATTE`, because the point is a wash and not a spot. The
-/// honest fix is the lamp's own reach rather than a highlight standing in for
-/// one, which is written down in spec 0007 and not done.
-pub const SHEEN: f32 = 32.0;
-
 /// A mesh in a flat colour, on a surface this building has not chosen.
 ///
 /// `Scene::push_colored` hands out the engine's default of 32, which spec

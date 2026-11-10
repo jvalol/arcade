@@ -12087,12 +12087,11 @@ impl Game for Arcade {
                 // rails and no further: it was inset by a rail's width all
                 // round, which left a lip of bare timber inside the cushions
                 // that nothing on a table has.
-                scene.push_material(
+                scene.push_plain(
                     cube,
                     &Transform::at(bench.at + Vec3::Y * (top - rail * 0.5))
                         .with_scale(vec3(play.x, rail, play.y)),
                     aim::CLOTH,
-                    aim::SHEEN,
                 );
 
                 // the six rails. Each is three boards and not one: a body, a
@@ -12150,14 +12149,13 @@ impl Game for Arcade {
                     let out = thick * 0.5 + cellar::CUSHION * 0.5;
                     let face = size - along + facing.abs() * cellar::CUSHION;
 
-                    scene.push_material(
+                    scene.push_plain(
                         cube,
                         &Transform::at(
                             middle + facing * out - Vec3::Y * (high * 0.26 + cellar::CAP * 0.5),
                         )
                         .with_scale(vec3(face.x, high * 0.48, face.z)),
                         aim::CLOTH,
-                        aim::SHEEN,
                     );
                 }
 

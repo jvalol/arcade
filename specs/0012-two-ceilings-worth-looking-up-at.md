@@ -255,13 +255,14 @@ difference:
 The same ten, to the same tenth, as a run with the engine's own constant set
 to nought. So this is exactly that change, scoped to one game.
 
-**Two surfaces kept a highlight**, both from Jake reading the cellar.
+**Two surfaces were given a highlight back**, both from Jake reading the
+cellar. One of them should not have been, and the section at the end of this
+spec is where that was measured and undone.
 
 The baize. Flat green is what cloth is, and `NO_SHINE`'s own doc says so, but
-the pale wash across it is what says a lamp hangs over this table. It is back
-on `aim::SHEEN`, which is 32 named for what it does. The honest fix is the
-pendant's own reach, which spec 0007 wants and nobody has done; this is a
-highlight standing in for a light, and the constant says as much.
+the pale wash across it looked like what says a lamp hangs over this table,
+so it went back on a new `aim::SHEEN` of 32. That was an eye reading a
+picture whose surroundings had changed, and the measurement is below.
 
 The other was not what it looked like. A pale dome at the near pocket went
 black, and it reads as a stool losing its seat. It is the pocket mouth, whose
@@ -278,3 +279,36 @@ had not.
 ## Acceptance criteria
 
 - Nothing in this building draws on the engine's default surface. — `tests::nothing_here_takes_the_engines_surface`
+
+## 2026-11-10: the baize never needed it
+
+**Jake: do the falloff work.** Engine spec 0012 named two rooms whose lamps
+light them evenly and leave a highlight to stand in for a pool, and this
+building was one of them. Measured, it is not.
+
+`cellar::LAMP_RANGE` is 6.0 and the room is 9 by 10, which is what made it
+look like a lamp washing everything. What matters is the reach across the
+table rather than across the room, and the pendant hangs 0.95 above the
+cloth with the cloth 2.47 long. Asked of `PointLight::shade` at five points
+along it, with the shininess at nought so the answer is diffuse and nothing
+else: 0.2302 in the middle and 0.0997 at either end. A gradient of 2.3. The
+drawn pixels agree, 128 to 147 to 125 of green across the cloth.
+
+Drawing the cloth matte against drawing it at 32 moves it by less than one
+greyscale unit. So `aim::SHEEN` was measuring nothing where it was put. What
+it actually changed was two bright patches on the cushion jaws either side of
+a pocket, which is where the geometry turns far enough for a lamp directly
+overhead to reach the half vector, and which read as a pale blob on the cloth
+at the pocket's mouth. The constant is deleted and the cloth and the cushions
+are on `push_plain`, which is what cloth is.
+
+**The fire lights the walls and not the tables.** It contributes exactly
+nought to the cloth: it sits below the table top, and a surface facing up
+takes nothing from a light beneath it.
+
+**How this got written down wrong.** The same evening, a claim that the cloth
+had come back was checked properly, by comparing a strip of it against the
+old reference, and the answer was that the cloth had not moved at all. That
+reading was right and was filed as a success. The sentence that went into the
+spec said the opposite and nobody compared the two. Two ratios would have
+settled it and neither was taken.
