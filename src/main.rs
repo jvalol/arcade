@@ -47,6 +47,7 @@ mod valhalla;
 mod walk;
 mod wrecker;
 
+use aim::Plain;
 use blitzkit::camera::Camera;
 use blitzkit::collision::Aabb;
 use blitzkit::geometry::Geometry;
@@ -2463,7 +2464,7 @@ impl Arcade {
                 high * 0.6,
             ),
         ] {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * up)
                     .with_rotation(turn)
@@ -2480,7 +2481,7 @@ impl Arcade {
         let along = vec3(swing.cos(), 0.0, inward * swing.sin());
         let out = vec3(-inward * swing.sin(), 0.0, swing.cos());
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(
                 at + Vec3::Y * aleph::HANDLE_UP
@@ -2551,7 +2552,7 @@ impl Arcade {
         let (west, east) = register::along(reaches);
         let (far, near) = register::across(reaches);
 
-        scene.push_colored(
+        scene.push_plain(
             floor,
             &Transform::at(vec3((west + east) * 0.5, 0.0, (far + near) * 0.5)).with_scale(vec3(
                 east - west,
@@ -2565,12 +2566,12 @@ impl Arcade {
         // fitting is a bright patch on a wall and no reason for it, which
         // the cellar was told once and the baths did again worse.
         for at in register::sconces(reaches) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(register::SCONCE),
                 aim::REGISTER_SCONCE,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + vec3(0.0, register::SCONCE.y * 0.3, 0.0)).with_scale(vec3(
                     register::SCONCE.x * 0.7,
@@ -2698,7 +2699,7 @@ impl Arcade {
             if self.carried.differs_from(&self.book, down) {
                 let (at, long) = register::rule_at(reaches, down);
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(at).with_scale(vec3(
                         long,
@@ -2799,7 +2800,7 @@ impl Arcade {
         for box_ in field::wall(reaches, self.at) {
             let (middle, size) = (box_.center(), box_.size());
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(middle).with_scale(size),
                 aim::GARDEN_WALL,
@@ -2810,7 +2811,7 @@ impl Arcade {
             // a step along the top of one wall.
             let wide = garden::COPE_WIDE;
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     middle.x,
@@ -2820,7 +2821,7 @@ impl Arcade {
                 .with_scale(vec3(wide, garden::COPE_DEEP, size.z)),
                 aim::GARDEN_COPE,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     middle.x,
@@ -2878,7 +2879,7 @@ impl Arcade {
                     aim::GARDEN_PLASTER,
                     aim::MATTE,
                 );
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(
                         middle.x,
@@ -2919,7 +2920,7 @@ impl Arcade {
             }
 
             for (middle, size) in aloft::coping() {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(middle).with_scale(size),
                     aim::GARDEN_COPE,
@@ -2955,7 +2956,7 @@ impl Arcade {
                 // Its own faces and nothing else's: the test is standing on
                 // the roof, which only this one does.
                 if face.min.y >= lantern.min.y - 1e-3 {
-                    scene.push_colored(mesh, &placed, aim::ALOFT_LANTERN);
+                    scene.push_plain(mesh, &placed, aim::ALOFT_LANTERN);
                 } else {
                     scene.push_textured(mesh, skin, &placed, aim::GARDEN_PLASTER, aim::MATTE);
                 }
@@ -3025,7 +3026,7 @@ impl Arcade {
                 // clamps to the same value on both and the box loses its
                 // top. What tells you there is a box up there is the dark
                 // slab over it and the line of shadow under its oversail.
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(middle).with_scale(size),
                     aim::GARDEN_COPE,
@@ -3301,7 +3302,7 @@ impl Arcade {
             .into_iter()
             .enumerate()
         {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(box_.center()).with_scale(box_.size()),
                 if n == 0 {
@@ -3318,7 +3319,7 @@ impl Arcade {
         // materials in a rhythm, with no grain on either, so the edge
         // between two colours is what carries the form.
         for at in bridge::piers(self.room.reaches, &self.trail) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * bridge::PIER_UP * 0.5).with_scale(vec3(
                     bridge::PIER_WIDE,
@@ -3329,7 +3330,7 @@ impl Arcade {
             );
             // a cap, chamfered out over the shaft, which is the one line
             // of shadow a pier has
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * (bridge::PIER_UP + bridge::PIER_CAP * 0.5))
                     .with_scale(vec3(
@@ -3342,7 +3343,7 @@ impl Arcade {
         }
 
         for at in bridge::balusters(self.room.reaches, &self.trail) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * bridge::RAIL_HIGH * 0.5).with_scale(vec3(
                     bridge::BALUSTER,
@@ -3358,7 +3359,7 @@ impl Arcade {
             let along = to - from;
             let up = Vec3::Y * (bridge::RAIL_HIGH - bridge::BALUSTER * 0.5);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at((from + to) * 0.5 + up).with_scale(vec3(
                     along.x.abs().max(bridge::BALUSTER * 1.6),
@@ -3501,7 +3502,7 @@ impl Arcade {
         // head. Without it the gate stands in a kerb with the whole
         // steading in plain sight either side of it.
         for panel in gate::wall(reaches, &self.trail) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(panel.center()).with_scale(panel.size()),
                 aim::THRESHOLD_RAIL,
@@ -3509,7 +3510,7 @@ impl Arcade {
         }
 
         for (middle, size) in gate::cope(reaches, &self.trail) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(middle).with_scale(size),
                 aim::THRESHOLD,
@@ -3677,7 +3678,7 @@ impl Arcade {
             // the building's own light turning up in its own heaven. Spec
             // 0055, and wordless: anything with words on it is copy.
             if one.hall {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(one.at.x, one.at.y + one.ridge + 0.06, one.at.z))
                         .with_scale(vec3(0.1, 0.1, one.long * 0.92)),
@@ -3708,7 +3709,7 @@ impl Arcade {
                 vec3(one.wide, one.high, 0.06)
             };
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(one.at).with_scale(across),
                 aim::VALHALLA_LIT,
@@ -3942,7 +3943,7 @@ impl Arcade {
                     one.at.z + aside,
                 );
 
-                scene.push_colored(
+                scene.push_plain(
                     flame,
                     &Transform::at(at)
                         .with_rotation(glam::Quat::from_rotation_y(own * 2.1))
@@ -4616,7 +4617,7 @@ impl Arcade {
             // stair read is the two of them taking the light differently,
             // which one colour over the lot throws away.
             for (step, tread) in aloft::treads(n).iter().enumerate() {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(tread.center()).with_scale(tread.size()),
                     if step % 2 == 0 {
@@ -4632,7 +4633,7 @@ impl Arcade {
             // the border round this frame's floor, which is what says a
             // floor is a floor and not another pale face
             for band in aloft::border(n) {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(band.center()).with_scale(band.size()),
                     aim::ALOFT_BORDER,
@@ -4640,7 +4641,7 @@ impl Arcade {
             }
 
             for leg in aloft::path(n) {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(leg.center()).with_scale(leg.size()),
                     aim::ALOFT_PATH,
@@ -4655,7 +4656,7 @@ impl Arcade {
             // cut in a floor, which is spec 0038's whole point.
             let leaf = aloft::leaf(n, self.room.aloft_slid[n as usize]);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(leaf.center()).with_scale(leaf.size()),
                 aim::ALOFT_FLOOR,
@@ -4665,7 +4666,7 @@ impl Arcade {
             // being an opening on to nothing
             for which in 0..aloft::DOORS {
                 for part in aloft::door_recess(n, which) {
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(part.center()).with_scale(part.size()),
                         aim::ALOFT_DARK,
@@ -4675,7 +4676,7 @@ impl Arcade {
                 // and the casing round it, which is what gives the opening
                 // an edge to catch the light along
                 for part in aloft::door_case(n, which) {
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(part.center()).with_scale(part.size()),
                         aim::ALOFT_CASE,
@@ -4689,14 +4690,14 @@ impl Arcade {
         for (n, at) in aloft::sconces().iter().copied().enumerate() {
             let rod = aloft::sconce_rod(n as u64);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at)
                     .with_rotation(aloft::frame(n as u64))
                     .with_scale(aloft::LAMP_FITTING),
                 aim::ALOFT_CEILING,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(rod.center()).with_scale(rod.size()),
                 aim::ALOFT_CEILING,
@@ -4708,14 +4709,14 @@ impl Arcade {
         for (n, at) in aloft::door_sconces().iter().copied().enumerate() {
             let arm = aloft::door_arm(n as u64);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at)
                     .with_rotation(aloft::frame(n as u64))
                     .with_scale(aloft::LAMP_FITTING),
                 aim::ALOFT_CEILING,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(arm.center()).with_scale(arm.size()),
                 aim::ALOFT_CEILING,
@@ -4724,7 +4725,7 @@ impl Arcade {
 
         // and a fitting for each lamp on the way up
         for at in aloft::up_sconces() {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(vec3(0.16, 0.2, 0.16)),
                 aim::ALOFT_CEILING,
@@ -4739,7 +4740,7 @@ impl Arcade {
             let bowl = at.y - aloft::UP_NEWEL_BOWL;
             let stands = at.y - aloft::UP_NEWEL_UP;
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(at.x, (stands + bowl) * 0.5, at.z)).with_scale(vec3(
                     wide * 0.45,
@@ -4748,7 +4749,7 @@ impl Arcade {
                 )),
                 aim::ALOFT_CEILING,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(at.x, bowl, at.z)).with_scale(vec3(
                     wide,
@@ -4766,7 +4767,7 @@ impl Arcade {
         let from = twine::mouth(reaches);
         let to = twine::end(reaches);
 
-        scene.push_colored(
+        scene.push_plain(
             floor,
             &Transform::at(vec3(middle, 0.0, (from + to) * 0.5)).with_scale(vec3(
                 twine::ACROSS,
@@ -4778,7 +4779,7 @@ impl Arcade {
 
         // the runner, which the hotel's corridor has and this one is the
         // same hall as
-        scene.push_colored(
+        scene.push_plain(
             floor,
             &Transform::at(vec3(middle, 0.002, (from + to) * 0.5)).with_scale(vec3(
                 aleph::RUNNER_WIDE.min(twine::ACROSS - 0.5),
@@ -4820,7 +4821,7 @@ impl Arcade {
                     (aleph::SKIRTING * 0.5, aleph::SKIRTING),
                     (aleph::RAIL_UP, aleph::RAIL_TALL),
                 ] {
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(vec3(
                             middle + out * (twine::ACROSS * 0.5 - aleph::SKIRTING_OUT * 0.5),
@@ -4840,12 +4841,12 @@ impl Arcade {
 
         // the fittings, which the lamps above come from
         for at in twine::sconces(reaches) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(aleph::SCONCE),
                 aim::HOTEL_TRIM,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + vec3(0.0, aleph::SCONCE.y * 0.3, 0.0)).with_scale(vec3(
                     aleph::SCONCE.x * 0.7,
@@ -4862,7 +4863,7 @@ impl Arcade {
 
             // the leaf, shut, lifted off the floor by the gap the light
             // comes under
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     stands.x - out * aleph::DOOR_THICK * 0.5,
@@ -4879,7 +4880,7 @@ impl Arcade {
 
             // its two jambs and the head over it
             for along in [-1.0f32, 1.0] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(
                         stands.x - out * aleph::JAMB_OUT * 0.5,
@@ -4895,7 +4896,7 @@ impl Arcade {
                 );
             }
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     stands.x - out * aleph::JAMB_OUT * 0.5,
@@ -4936,7 +4937,7 @@ impl Arcade {
 
             // and the light under it, which is spec 0029's guest
             for (reach, strength) in aleph::STRIP_STEPS {
-                scene.push_colored(
+                scene.push_plain(
                     floor,
                     &Transform::at(vec3(
                         stands.x - out * (aleph::DOOR_THICK + reach * 0.5),
@@ -4968,7 +4969,7 @@ impl Arcade {
                 middle + aleph::ACROSS * 0.5,
             ),
         ] {
-            scene.push_colored(
+            scene.push_plain(
                 floor,
                 &Transform::at(vec3((x0 + x1) * 0.5, 0.0, (z0 + z1) * 0.5)).with_scale(vec3(
                     x1 - x0,
@@ -4986,7 +4987,7 @@ impl Arcade {
         let body = counter.size();
         let top = counter.max.y;
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(
                 counter.center().x,
@@ -4998,7 +4999,7 @@ impl Arcade {
         );
 
         // the bead, set back under the top so its shadow line reads
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(
                 counter.center().x,
@@ -5013,7 +5014,7 @@ impl Arcade {
             aim::HOTEL_DOOR,
         );
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(
                 counter.center().x,
@@ -5030,7 +5031,7 @@ impl Arcade {
 
         // the bell, the one turned thing in here
         if let Some(bell) = self.bell {
-            scene.push_colored(
+            scene.push_plain(
                 bell,
                 &Transform::at(vec3(
                     counter.center().x + body.x * 0.32,
@@ -5046,7 +5047,7 @@ impl Arcade {
         // who is in, because two lists of one thing drift
         let board = aleph::board(reaches);
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(board).with_scale(vec3(
                 aleph::BOARD_WIDE,
@@ -5069,7 +5070,7 @@ impl Arcade {
                     board.z + aleph::BOARD_THICK * 0.3,
                 );
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(at).with_scale(vec3(
                         step.x * 0.74,
@@ -5124,7 +5125,7 @@ impl Arcade {
         // without it this corridor was the first three.
         let runner = aleph::runner(reaches);
 
-        scene.push_colored(
+        scene.push_plain(
             floor,
             &Transform::at(vec3(runner.center().x, aleph::RUNNER_UP, runner.center().z))
                 .with_scale(vec3(runner.size().x, 1.0, aleph::RUNNER_WIDE)),
@@ -5158,7 +5159,7 @@ impl Arcade {
                 (aleph::SKIRTING * 0.5, aleph::SKIRTING),
                 (aleph::RAIL_UP, aleph::RAIL_TALL),
             ] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(stands.x + aleph::APART * 0.5, up, z)).with_scale(vec3(
                         gap,
@@ -5177,14 +5178,14 @@ impl Arcade {
             .into_iter()
             .chain(aleph::lobby_sconces(reaches))
         {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(aleph::SCONCE),
                 aim::HOTEL_SCONCE,
             );
             // and the shade's mouth, which is the lit part. Past one on every
             // channel, so it glows with nothing falling on it.
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * aleph::SCONCE.y * 0.42).with_scale(vec3(
                     aleph::SCONCE.x * 0.78,
@@ -5218,7 +5219,7 @@ impl Arcade {
             let hinge = vec3(stands.x - wide * 0.5, 0.0, stands.z);
             let leaf = hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * (wide * 0.5);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     leaf.x,
@@ -5244,7 +5245,7 @@ impl Arcade {
             );
 
             for along in [-1.0f32, 1.0] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(
                         stands.x + along * (wide * 0.5 + aleph::JAMB * 0.5),
@@ -5279,7 +5280,7 @@ impl Arcade {
             let along = vec3(swing.cos(), 0.0, inward * swing.sin());
             let at = hinge + along * (aleph::DOOR_WIDE * 0.5);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 // lifted off the floor by the gap the light comes under,
                 // which the first build did not have
@@ -5310,7 +5311,7 @@ impl Arcade {
             // in a flat wall is a brown rectangle, and the frame is what
             // makes it a doorway.
             for along in [-1.0f32, 1.0] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(
                         stands.x + along * (aleph::DOOR_WIDE * 0.5 + aleph::JAMB * 0.5),
@@ -5326,7 +5327,7 @@ impl Arcade {
                 );
             }
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     stands.x,
@@ -5356,7 +5357,7 @@ impl Arcade {
                 Some(texture) => {
                     scene.push_textured(cube, texture, &plaque, aim::HOTEL_PLAQUE, aim::MATTE)
                 }
-                None => scene.push_colored(cube, &plaque, aim::HOTEL_PLAQUE),
+                None => scene.push_plain(cube, &plaque, aim::HOTEL_PLAQUE),
             }
 
             // and the light under it, which is the whole of spec 0029's
@@ -5373,7 +5374,7 @@ impl Arcade {
                     // the tests read one account of it
                     let lies = aleph::strip(reaches, n, out);
 
-                    scene.push_colored(
+                    scene.push_plain(
                         floor,
                         &Transform::at(vec3(lies.center().x, aleph::STRIP_UP, lies.center().z))
                             .with_scale(vec3(lies.size().x, 1.0, out)),
@@ -5400,7 +5401,7 @@ impl Arcade {
             (bay.min.z, bay.max.z, aim::BACK_LINING),
             (bay.max.z, near, aim::BACK_FLOOR),
         ] {
-            scene.push_colored(
+            scene.push_plain(
                 floor,
                 &Transform::at(vec3((west + east) * 0.5, 0.0, (from + to) * 0.5)).with_scale(vec3(
                     east - west,
@@ -5419,7 +5420,7 @@ impl Arcade {
         let at = back::bench(reaches);
         let top = back::BENCH.y;
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(at.x, top - aim::BENCH_TOP * 0.5, at.z)).with_scale(vec3(
                 back::BENCH.x,
@@ -5437,7 +5438,7 @@ impl Arcade {
                     at.z + across * (back::BENCH.z * 0.5 - aim::BENCH_LEG),
                 );
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(leg).with_scale(vec3(
                         aim::BENCH_LEG,
@@ -5474,7 +5475,7 @@ impl Arcade {
         // across the top of them. Spec 0025: the block is on the floor in
         // the bay now rather than clamped over a bench.
         for side in [-1.0f32, 1.0] {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(
                     block.x + side * back::POST_OUT,
@@ -5484,14 +5485,14 @@ impl Arcade {
                 .with_scale(vec3(back::POST, back::BLOCK_TOP, back::POST)),
                 aim::BACK_JIG,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(block.x + side * back::POST_OUT, 0.02, block.z))
                     .with_scale(vec3(back::POST * 3.4, 0.04, back::BLOCK + 0.2)),
                 aim::BACK_JIG,
             );
         }
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(block.x, back::BLOCK_TOP, block.z)).with_scale(vec3(
                 back::POST_OUT * 2.0 + back::POST,
@@ -5588,17 +5589,17 @@ impl Arcade {
         // patch on a wall and no reason for it.
         let bay = back::bay_lamp(reaches);
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(bay + Vec3::Y * back::BAY_SHADE.y * 0.5).with_scale(back::BAY_SHADE),
             aim::BACK_SHADE,
         );
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(bay).with_scale(Vec3::splat(back::BAY_SHADE.y * 0.55)),
             aim::BACK_BULB,
         );
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(
                 bay.x,
@@ -5612,17 +5613,17 @@ impl Arcade {
         // and the bulb in its tin shade, on a stem up to the ceiling
         let lamp = back::lamp(reaches);
 
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(lamp + Vec3::Y * back::SHADE.y * 0.5).with_scale(back::SHADE),
             aim::BACK_SHADE,
         );
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(lamp).with_scale(Vec3::splat(back::SHADE.y * 0.55)),
             aim::BACK_BULB,
         );
-        scene.push_colored(
+        scene.push_plain(
             cube,
             &Transform::at(vec3(
                 lamp.x,
@@ -6499,7 +6500,7 @@ impl Arcade {
                 Some(word) => {
                     scene.push_textured(hung, word, &stood, aim::TESSERACT_WORD, aim::VOID)
                 }
-                None => scene.push_colored(hung, &stood, aim::TESSERACT_WORD),
+                None => scene.push_plain(hung, &stood, aim::TESSERACT_WORD),
             }
 
             // and a small one of the thing standing in the room through it,
@@ -6932,7 +6933,7 @@ impl Arcade {
         {
             let (at, looks) = orrery::exit_sign(self.room.reaches);
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + looks * orrery::SIGN_THICK * 0.5).with_scale(vec3(
                     orrery::SIGN_WIDE + orrery::SIGN_BORDER * 2.0,
@@ -7187,7 +7188,7 @@ impl Arcade {
             // the spine down the line and the posts beside it, which are what
             // the ride is measured against
             for mark in beyond::marked(door) {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(mark.at).with_scale(mark.size),
                     if mark.glows {
@@ -9475,7 +9476,7 @@ impl Game for Arcade {
             // whole floor, which washed the weave's dark ground out to pale
             // grey the first time this was laid.
             Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
-            None => scene.push_colored(floor, &laid, aim::FLOOR),
+            None => scene.push_plain(floor, &laid, aim::FLOOR),
         }
 
         // and the gallery's, which is the aisle's carried through the way in.
@@ -9488,7 +9489,7 @@ impl Game for Arcade {
 
             match self.carpet {
                 Some(carpet) => scene.push_textured(floor, carpet, &laid, aim::FLOOR, aim::MATTE),
-                None => scene.push_colored(floor, &laid, aim::FLOOR),
+                None => scene.push_plain(floor, &laid, aim::FLOOR),
             }
         }
 
@@ -9542,7 +9543,7 @@ impl Game for Arcade {
 
                 // turned over, because a plane faces up and from underneath
                 // that is a back face, which the opaque pass culls
-                scene.push_colored(
+                scene.push_plain(
                     ceiling,
                     &Transform::at(vec3(middle.x, room::TALL, middle.z))
                         .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
@@ -9556,7 +9557,7 @@ impl Game for Arcade {
             let (bars, tiles, panels) = self.room.lattice();
 
             for (at, size) in tiles.iter() {
-                scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_TILE);
+                scene.push_plain(cube, &Transform::at(*at).with_scale(*size), aim::CEIL_TILE);
             }
             // and no highlight on a bar. `push_colored` hands out a shininess
             // of 32, which is a lobe wider than `aim::MATTE`, and the hall's
@@ -9619,7 +9620,7 @@ impl Game for Arcade {
             for stood in if in_the_hall { whole } else { pieces } {
                 match self.wall_grain {
                     Some(grain) => scene.push_textured(cube, grain, &stood, aim::WALL, aim::MATTE),
-                    None => scene.push_colored(cube, &stood, aim::WALL),
+                    None => scene.push_plain(cube, &stood, aim::WALL),
                 }
             }
 
@@ -9684,14 +9685,14 @@ impl Game for Arcade {
             // two uprights and the bar they carry
             let span = cradle::upright_at() * 2.0;
             for end in [-1.0f32, 1.0] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + vec3(0.0, cradle::BAR_UP * 0.5, end * span * 0.5))
                         .with_scale(vec3(cradle::STOCK, cradle::BAR_UP, cradle::STOCK)),
                     aim::CRADLE_FRAME,
                 );
             }
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(top + Vec3::Y * cradle::BAR_UP).with_scale(vec3(
                     cradle::STOCK,
@@ -9710,7 +9711,7 @@ impl Game for Arcade {
                 let length = along.length();
                 if length > 1e-4 {
                     let turn = glam::Quat::from_rotation_arc(Vec3::NEG_Y, along / length);
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(hook + along * 0.5)
                             .with_rotation(turn)
@@ -9748,13 +9749,13 @@ impl Game for Arcade {
             let back = bench.away();
             let across = bench.right();
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(top + Vec3::Y * (metronome::FOOT.y * 0.5))
                     .with_scale(metronome::FOOT),
                 aim::CASE,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(
                     top + back * metronome::PLATE_BACK
@@ -9783,7 +9784,7 @@ impl Game for Arcade {
                 } else {
                     vec3(0.008, 0.006, metronome::NOTCH_LONG)
                 };
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(
                         top + back * (metronome::PLATE_BACK - metronome::PLATE_THICK)
@@ -9797,12 +9798,12 @@ impl Game for Arcade {
 
             // the pivot, the needle above it, the bob under it, and the weight
             // riding the needle
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(pivot).with_scale(vec3(metronome::HINGE_HALF * 3.0, 0.014, 0.014)),
                 aim::PENDULUM,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(pivot + arm.orientation * (Vec3::Y * metronome::NEEDLE * 0.5))
                     .with_rotation(arm.orientation)
@@ -9850,7 +9851,7 @@ impl Game for Arcade {
                 (0.012, 0.024, gyro::STAND * 3.0),
                 (0.004, 0.008, gyro::STAND * 5.0),
             ] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + Vec3::Y * up).with_scale(vec3(wide, tall, wide)),
                     aim::STAND,
@@ -9867,7 +9868,7 @@ impl Game for Arcade {
             // times a second, and since the spindle is the spine of the whole
             // object the object reads as shaking.
             let frame = gyro::gimbal(&self.gyro.bodies);
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(hub).with_rotation(frame).with_scale(vec3(
                     gyro::SPINDLE_OUT * 2.0,
@@ -9910,7 +9911,7 @@ impl Game for Arcade {
             let at = gyro::RADIUS * gyro::MARK;
             for side in [-1.0f32, 1.0] {
                 let out = vec3(side * (gyro::THICK * 0.5 + 0.002), at * 0.76, 0.0);
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + wheel.position + wheel.orientation * out)
                         .with_rotation(wheel.orientation)
@@ -9950,7 +9951,7 @@ impl Game for Arcade {
                         )
                     };
 
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(top + wheel.position + turned * (at * radius))
                             .with_rotation(turned * turn)
@@ -9968,12 +9969,12 @@ impl Game for Arcade {
             // the gilt rim is the whole plank and the painted face stands proud
             // of it, so the gold shows round the edge rather than being four
             // more things to place
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(vec3(sign::WIDE, sign::TALL, sign::THICK)),
                 aim::SIGN_GILT,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(vec3(
                     sign::WIDE - sign::BORDER * 2.0,
@@ -9986,7 +9987,7 @@ impl Game for Arcade {
             // the end cut to a point, which is the direction. The wedge runs
             // out along its own -x, so it needs no turning: the nook is that
             // way from here.
-            scene.push_colored(
+            scene.push_plain(
                 point,
                 &Transform::at(at - Vec3::X * sign::WIDE * 0.5).with_scale(vec3(
                     sign::POINT,
@@ -10003,7 +10004,7 @@ impl Game for Arcade {
 
             match self.says {
                 Some(says) => scene.push_textured(hung, says, &letters, aim::SIGN_LETTERS, 8.0),
-                None => scene.push_colored(hung, &letters, aim::SIGN_LETTERS),
+                None => scene.push_plain(hung, &letters, aim::SIGN_LETTERS),
             }
 
             // two chains to the ceiling, each link turned across the one under
@@ -10019,7 +10020,7 @@ impl Game for Arcade {
                         std::f32::consts::FRAC_PI_2
                     });
 
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(foot + Vec3::Y * (n as f32 + 0.5) * sign::LINK)
                             .with_rotation(turn)
@@ -10031,13 +10032,13 @@ impl Game for Arcade {
 
             // and the pendant over it, which is why you can read it
             let shade = at + Vec3::Y * (sign::TALL * 0.5 + sign::LAMP_UP);
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(shade).with_scale(sign::SHADE),
                 aim::SHADE,
             );
             let stem = (room::soffit() + shade.y + sign::SHADE.y * 0.5) * 0.5;
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(shade.x, stem, shade.z)).with_scale(vec3(
                     0.016,
@@ -10056,13 +10057,13 @@ impl Game for Arcade {
             // the can first, then the tube run standing out of both its faces.
             // The can is nearly black on purpose: a lit tube on a lit box is a
             // box.
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(vec3(neon::WIDE, neon::TALL, neon::THICK)),
                 aim::ARCADE_CAN,
             );
             for (middle, size) in neon::tubes() {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(at + middle).with_scale(size),
                     aim::arcade_tube(),
@@ -10079,14 +10080,14 @@ impl Game for Arcade {
                 Some(named) => {
                     scene.push_textured(hung, named, &letters, aim::arcade_letters(), 8.0)
                 }
-                None => scene.push_colored(hung, &letters, aim::arcade_letters()),
+                None => scene.push_plain(hung, &letters, aim::arcade_letters()),
             }
 
             // two stems to the ceiling. Rigid, where the nook's sign is on
             // chains: there is a transformer in a box this size.
             let long = neon::stem(room::soffit());
             for side in [-1.0f32, 1.0] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(
                         at + Vec3::X * side * neon::STEM_AT
@@ -10111,7 +10112,7 @@ impl Game for Arcade {
             let laid = Transform::at(box_.center()).with_scale(box_.size());
             match made {
                 cellar::Made::Tread => {
-                    scene.push_colored(cube, &laid, aim::BOARDS);
+                    scene.push_plain(cube, &laid, aim::BOARDS);
                 }
                 // the shaft is panelled like the room it leads to. Left as the
                 // stone it started as, the way down is a grey chute into a
@@ -10127,15 +10128,15 @@ impl Game for Arcade {
                 // boarding.
                 // flat, with the boarding laid on its faces below. Textured
                 // here it is one board stretched over the whole wall.
-                cellar::Made::Shaft => scene.push_colored(cube, &laid, aim::TIMBER[0]),
+                cellar::Made::Shaft => scene.push_plain(cube, &laid, aim::TIMBER[0]),
                 cellar::Made::Soffit => {}
                 // the floor warmer and a shade apart from the walls, so a room
                 // is a floor and walls rather than one box
                 cellar::Made::Stone if box_.max.y <= -cellar::DOWN + 1e-3 => {
-                    scene.push_colored(cube, &laid, aim::CELLAR_FLOOR);
+                    scene.push_plain(cube, &laid, aim::CELLAR_FLOOR);
                 }
                 cellar::Made::Stone => {
-                    scene.push_colored(cube, &laid, aim::CELLAR);
+                    scene.push_plain(cube, &laid, aim::CELLAR);
                 }
             }
         }
@@ -10166,7 +10167,7 @@ impl Game for Arcade {
         {
             let laid = Transform::at(box_.center()).with_scale(box_.size());
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &laid,
                 match made {
@@ -10356,7 +10357,7 @@ impl Game for Arcade {
                 .zip(&self.plaster)
             {
                 if face.solid {
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(face.at).with_scale(face.size),
                         aim::GARDEN_WALL,
@@ -10379,7 +10380,7 @@ impl Game for Arcade {
             // the tiled cap along the top of them, which is what makes a wall
             // read as built rather than as a box with a flat top
             for (at, size) in garden::coping(self.room.reaches) {
-                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::GARDEN_COPE);
+                scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::GARDEN_COPE);
             }
 
             // and the moss along their feet, where the ground keeps them damp:
@@ -10406,12 +10407,12 @@ impl Game for Arcade {
             // one wall here meant to look different from the others
             if let Some(pole) = self.pole {
                 for at in garden::screen(self.room.reaches) {
-                    scene.push_colored(pole, &Transform::at(at), aim::BAMBOO);
+                    scene.push_plain(pole, &Transform::at(at), aim::BAMBOO);
                 }
             }
 
             for (at, size) in garden::rails(self.room.reaches) {
-                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::BAMBOO_ROPE);
+                scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::BAMBOO_ROPE);
             }
 
             // the bank round the water, and the bed under it, which are not
@@ -10424,7 +10425,7 @@ impl Game for Arcade {
                     aim::POND_BED,
                 )))
             {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at((box_.min + box_.max) * 0.5).with_scale(box_.max - box_.min),
                     colour,
@@ -10581,10 +10582,10 @@ impl Game for Arcade {
                     let stood =
                         Transform::at(stands).with_scale(vec3(tall * 0.8, tall, tall * 0.8));
 
-                    scene.push_colored(lantern, &stood, aim::GARDEN_STONE);
+                    scene.push_plain(lantern, &stood, aim::GARDEN_STONE);
 
                     if let Some(window) = self.lantern_light {
-                        scene.push_colored(window, &stood, glam::vec4(glow.x, glow.y, glow.z, 1.0));
+                        scene.push_plain(window, &stood, glam::vec4(glow.x, glow.y, glow.z, 1.0));
                     }
                 }
             }
@@ -10677,7 +10678,7 @@ impl Game for Arcade {
                 let (lands, _) = spa::stream(self.room.reaches);
                 let wide = spa::splash(self.since);
 
-                scene.push_colored(
+                scene.push_plain(
                     dish,
                     &Transform::at(vec3(lands.x, at.y + spa::BASIN.y * 0.42 + 0.004, lands.z))
                         .with_scale(vec3(wide, 1.0, wide)),
@@ -10704,7 +10705,7 @@ impl Game for Arcade {
             // them. The slab was what Jake called bland, and a slab is what it
             // was: one box the size of the hole.
             let put = |off: Vec3, size: Vec3, colour: glam::Vec4, scene: &mut Scene| {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(middle + turn * off)
                         .with_rotation(turn)
@@ -10769,7 +10770,7 @@ impl Game for Arcade {
                         aim::TIMBER[0],
                         aim::DULL,
                     ),
-                    None => scene.push_colored(
+                    None => scene.push_plain(
                         cube,
                         &Transform::at(middle).with_scale(size),
                         aim::TIMBER[0],
@@ -10778,12 +10779,12 @@ impl Game for Arcade {
             }
 
             let at = spa::sign(self.room.reaches);
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at).with_scale(vec3(spa::SIGN.x, spa::SIGN.y, spa::SIGN_OUT)),
                 aim::BATHS_EDGE,
             );
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at - Vec3::Z * spa::SIGN_OUT * 0.3).with_scale(vec3(
                     spa::SIGN.x - spa::SIGN_EDGE * 2.0,
@@ -10802,7 +10803,7 @@ impl Game for Arcade {
                     Some(says) => {
                         scene.push_textured(hung, says, &letters, aim::BATHS_LETTERS, 8.0)
                     }
-                    None => scene.push_colored(hung, &letters, aim::BATHS_LETTERS),
+                    None => scene.push_plain(hung, &letters, aim::BATHS_LETTERS),
                 }
             }
         }
@@ -10820,7 +10821,7 @@ impl Game for Arcade {
                     vec3(spa::PANE * 1.4, half.y * 2.0, spa::FRAME)
                 };
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(
                         middle
@@ -10861,7 +10862,7 @@ impl Game for Arcade {
             for (at, size, thick) in
                 spa::fug(spa::sauna(self.room.reaches), self.since, self.steamy)
             {
-                scene.push_colored(
+                scene.push_plain(
                     ball,
                     &Transform::at(at).with_scale(size),
                     aim::STEAM.truncate().extend(thick),
@@ -10870,7 +10871,7 @@ impl Game for Arcade {
 
             for (over, wide) in [(tub_at, tub_wide), (stove, spa::STOVE.x * 2.0)] {
                 for (at, size, thick) in spa::steam(over, wide, self.since) {
-                    scene.push_colored(
+                    scene.push_plain(
                         ball,
                         &Transform::at(at).with_scale(size),
                         aim::STEAM.truncate().extend(thick),
@@ -10923,7 +10924,7 @@ impl Game for Arcade {
 
             match self.grain.get(1) {
                 Some(grain) => scene.push_textured(cube, *grain, &laid, aim::RAFTER, aim::DULL),
-                None => scene.push_colored(cube, &laid, aim::RAFTER),
+                None => scene.push_plain(cube, &laid, aim::RAFTER),
             }
         }
 
@@ -10935,14 +10936,14 @@ impl Game for Arcade {
 
             // a back against the wall, a side at each end, and a shelf for
             // every row of bottles
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(at.x, at.y + rack.y * 0.5, back))
                     .with_scale(vec3(rack.z, rack.y, 0.04)),
                 aim::RACK,
             );
             for end in [-1.0f32, 1.0] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(
                         at.x + end * (rack.z - 0.05) * 0.5,
@@ -10954,7 +10955,7 @@ impl Game for Arcade {
                 );
             }
             for row in 0..=up {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(at.x, at.y + row as f32 / up as f32 * rack.y, at.z))
                         .with_scale(vec3(rack.z, 0.035, rack.x)),
@@ -10994,7 +10995,7 @@ impl Game for Arcade {
 
                     match self.bottle {
                         Some(bottle) => {
-                            scene.push_colored(
+                            scene.push_plain(
                                 bottle,
                                 &Transform::at(deep).with_rotation(laid).with_scale(vec3(
                                     cellar::BOTTLE,
@@ -11011,7 +11012,7 @@ impl Game for Arcade {
                                 let tip =
                                     vec3(middle.x, middle.y, middle.z - side * cellar::CORK * 0.4);
 
-                                scene.push_colored(
+                                scene.push_plain(
                                     peg,
                                     &Transform::at(tip).with_rotation(laid).with_scale(vec3(
                                         cellar::BOTTLE * cellar::NECK * 0.92,
@@ -11022,7 +11023,7 @@ impl Game for Arcade {
                                 );
                             }
                         }
-                        None => scene.push_colored(
+                        None => scene.push_plain(
                             cube,
                             &Transform::at(middle).with_scale(Vec3::splat(cellar::BOTTLE)),
                             glass,
@@ -11058,7 +11059,7 @@ impl Game for Arcade {
 
                 match self.grain.get(n % self.grain.len().max(1)) {
                     Some(grain) => scene.push_textured(cube, *grain, &laid, aim::COFFER, aim::DULL),
-                    None => scene.push_colored(cube, &laid, aim::COFFER),
+                    None => scene.push_plain(cube, &laid, aim::COFFER),
                 }
 
                 for (way, out, span) in [
@@ -11066,7 +11067,7 @@ impl Game for Arcade {
                     (Vec3::Z, size.z, vec3(size.x, cellar::MOULD, cellar::MOULD)),
                 ] {
                     for side in [-1.0f32, 1.0] {
-                        scene.push_colored(
+                        scene.push_plain(
                             cube,
                             &Transform::at(
                                 panel + way * side * (out - cellar::MOULD) * 0.5
@@ -11081,7 +11082,7 @@ impl Game for Arcade {
 
             // the beams over them
             for (at, size) in &beams {
-                scene.push_colored(cube, &Transform::at(*at).with_scale(*size), aim::RAFTER);
+                scene.push_plain(cube, &Transform::at(*at).with_scale(*size), aim::RAFTER);
             }
 
             // and a carved boss where four of them meet, which is the one place
@@ -11093,7 +11094,7 @@ impl Game for Arcade {
                             continue;
                         }
 
-                        scene.push_colored(
+                        scene.push_plain(
                             peg,
                             &Transform::at(vec3(at.x, at.y - cellar::BEAM_DOWN * 0.5, other.z))
                                 .with_scale(vec3(cellar::BOSS, cellar::BOSS * 0.5, cellar::BOSS)),
@@ -11123,23 +11124,21 @@ impl Game for Arcade {
             let field = high - cellar::SKIRTING - cellar::CORNICE;
 
             // a laid up board, turned so its grain runs the way the board does
-            let laid = |middle: Vec3,
-                        size: Vec3,
-                        timber: glam::Vec4,
-                        board: usize,
-                        scene: &mut Scene| match self
-                .grain
-                .get(board % self.grain.len().max(1))
-            {
-                Some(grain) => scene.push_textured(
-                    cube,
-                    *grain,
-                    &Transform::at(middle).with_scale(size),
-                    timber,
-                    aim::DULL,
-                ),
-                None => scene.push_colored(cube, &Transform::at(middle).with_scale(size), timber),
-            };
+            let laid =
+                |middle: Vec3, size: Vec3, timber: glam::Vec4, board: usize, scene: &mut Scene| {
+                    match self.grain.get(board % self.grain.len().max(1)) {
+                        Some(grain) => scene.push_textured(
+                            cube,
+                            *grain,
+                            &Transform::at(middle).with_scale(size),
+                            timber,
+                            aim::DULL,
+                        ),
+                        None => {
+                            scene.push_plain(cube, &Transform::at(middle).with_scale(size), timber)
+                        }
+                    }
+                };
             let put = |across: f32, up: f32, wide: f32, tall: f32, deep: f32| {
                 if along_x {
                     (
@@ -11240,7 +11239,7 @@ impl Game for Arcade {
                 let laid = Transform::at(middle).with_scale(size);
                 match self.stonework {
                     Some(stone) => scene.push_textured(cube, stone, &laid, aim::HEARTH, aim::DULL),
-                    None => scene.push_colored(cube, &laid, aim::HEARTH),
+                    None => scene.push_plain(cube, &laid, aim::HEARTH),
                 }
             }
 
@@ -11260,12 +11259,12 @@ impl Game for Arcade {
                     let on = vec3(shelf.x, shelf.y, shelf.z + side * wide * 0.44);
                     let tall = cellar::CANDLESTICK.y;
 
-                    scene.push_colored(
+                    scene.push_plain(
                         stick,
                         &Transform::at(on + Vec3::Y * tall * 0.5).with_scale(cellar::CANDLESTICK),
                         aim::BRASS,
                     );
-                    scene.push_colored(
+                    scene.push_plain(
                         peg_or_cube,
                         &Transform::at(on + Vec3::Y * (tall + cellar::CANDLE * 0.5))
                             .with_scale(vec3(0.046, cellar::CANDLE, 0.046)),
@@ -11274,7 +11273,7 @@ impl Game for Arcade {
                     if let Some(flame) = self.flame {
                         let own = cellar::flicker(self.since * 2.3 + side * 3.0);
 
-                        scene.push_colored(
+                        scene.push_plain(
                             flame,
                             &Transform::at(
                                 on + Vec3::Y
@@ -11298,14 +11297,14 @@ impl Game for Arcade {
                 let eye = shelf.y + case.y * 0.56;
                 let turned = glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(shelf + Vec3::Y * case.y * 0.5).with_scale(case),
                     aim::CLOCK_CASE,
                 );
                 // a pediment on top, which is what a mantel clock has instead
                 // of a flat lid
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(shelf + Vec3::Y * (case.y + 0.016)).with_scale(vec3(
                         case.x * 1.14,
@@ -11320,7 +11319,7 @@ impl Game for Arcade {
                     (cellar::DIAL_OUT * 0.5, cellar::BEZEL, aim::BRASS),
                     (cellar::DIAL_OUT, 1.0, aim::CLOCK_FACE),
                 ] {
-                    scene.push_colored(
+                    scene.push_plain(
                         peg_or_cube,
                         &Transform::at(vec3(front + out, eye, shelf.z))
                             .with_rotation(turned)
@@ -11339,7 +11338,7 @@ impl Game for Arcade {
                     let turn = quarter as f32 * std::f32::consts::FRAC_PI_2;
                     let (sin, cos) = turn.sin_cos();
 
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(vec3(
                             front + cellar::DIAL_OUT + 0.004,
@@ -11359,7 +11358,7 @@ impl Game for Arcade {
                     let arm = case.y * cellar::DIAL * 0.5 * long;
                     let (sin, cos) = turn.sin_cos();
 
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(vec3(
                             front + cellar::DIAL_OUT + 0.008,
@@ -11375,7 +11374,7 @@ impl Game for Arcade {
                 // and a decanter with two glasses, off to one side, because a
                 // mantel arranged symmetrically is a mantel nobody uses
                 let by = vec3(shelf.x, shelf.y, shelf.z + wide * 0.2);
-                scene.push_colored(
+                scene.push_plain(
                     decanter,
                     &Transform::at(by + Vec3::Y * cellar::DECANTER.y * 0.5)
                         .with_scale(cellar::DECANTER),
@@ -11383,7 +11382,7 @@ impl Game for Arcade {
                 );
                 // what is in it, which is the only reason a decanter is worth
                 // drawing
-                scene.push_colored(
+                scene.push_plain(
                     decanter,
                     &Transform::at(by + Vec3::Y * cellar::DECANTER.y * 0.42).with_scale(vec3(
                         cellar::DECANTER.x * 0.84,
@@ -11395,7 +11394,7 @@ impl Game for Arcade {
                 for n in 0..2 {
                     let at = by + vec3(0.0, 0.0, 0.14 + n as f32 * 0.11);
 
-                    scene.push_colored(
+                    scene.push_plain(
                         wineglass,
                         &Transform::at(at + Vec3::Y * cellar::GLASS.y * 0.5)
                             .with_scale(cellar::GLASS),
@@ -11409,7 +11408,7 @@ impl Game for Arcade {
             // wall with the flames sealed inside it, which is a fireplace with
             // the fire behind the bricks.
             let back = at.x + 0.02;
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(back, at.y + high * 0.5, at.z))
                     .with_scale(vec3(0.04, high, wide)),
@@ -11429,7 +11428,7 @@ impl Game for Arcade {
                     let across = ((n as f32 / 12.0) - 0.5) * wide * 0.74;
                     let hot = cellar::flicker(self.since * (0.7 + roll) + n as f32);
 
-                    scene.push_colored(
+                    scene.push_plain(
                         peg,
                         &Transform::at(vec3(
                             in_it + (roll - 0.5) * 0.14,
@@ -11457,7 +11456,7 @@ impl Game for Arcade {
                     .copied()
                     .enumerate()
                 {
-                    scene.push_colored(
+                    scene.push_plain(
                         barrel,
                         &Transform::at(vec3(
                             in_it,
@@ -11488,7 +11487,7 @@ impl Game for Arcade {
                     let own = cellar::flicker(self.since * beat + across * 7.0);
                     let high = tall * own;
 
-                    scene.push_colored(
+                    scene.push_plain(
                         flame,
                         &Transform::at(vec3(in_it, at.y + 0.11 + high * 0.5, at.z + across))
                             .with_scale(vec3(wide_at, high, wide_at)),
@@ -11507,7 +11506,7 @@ impl Game for Arcade {
                     Some(stave) => {
                         scene.push_textured(barrel, stave, &stood, aim::BARREL, aim::DULL)
                     }
-                    None => scene.push_colored(barrel, &stood, aim::BARREL),
+                    None => scene.push_plain(barrel, &stood, aim::BARREL),
                 }
 
                 // two hoops, which is what says barrel rather than drum. Round
@@ -11524,7 +11523,7 @@ impl Game for Arcade {
                             cellar::LID_DOWN
                         };
 
-                        scene.push_colored(
+                        scene.push_plain(
                             peg,
                             &Transform::at(at + Vec3::Y * (size.y * end + down)).with_scale(vec3(
                                 size.x * (1.0 - cellar::BULGE) * cellar::LID,
@@ -11540,7 +11539,7 @@ impl Game for Arcade {
                     for height in cellar::HOOPS {
                         let round = cellar::waist_at(height) * cellar::HOOP_OUT;
 
-                        scene.push_colored(
+                        scene.push_plain(
                             hoop,
                             &Transform::at(at + Vec3::Y * size.y * height).with_scale(vec3(
                                 size.x * round,
@@ -11615,7 +11614,7 @@ impl Game for Arcade {
                     vec3(case.x, study::BOARD, case.y),
                 ),
             ] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(put(at)).with_rotation(turn).with_scale(size),
                     aim::BOOKCASE,
@@ -11624,7 +11623,7 @@ impl Game for Arcade {
 
             for shelf in 0..study::SHELVES {
                 let up = study::shelf_at(shelf);
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(put(vec3(0.0, up - study::BOARD * 0.5, 0.0)))
                         .with_rotation(turn)
@@ -11635,7 +11634,7 @@ impl Game for Arcade {
                 let books = study::stock(n as u32, shelf);
                 for (which, book) in books.iter().enumerate() {
                     let along = study::along(&books, which) - case.x * 0.5;
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(put(vec3(
                             along,
@@ -11726,7 +11725,7 @@ impl Game for Arcade {
                     )
                 };
 
-                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::TRIM);
+                scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::TRIM);
             }
 
             // and the panels between the skirting and the rail
@@ -11744,7 +11743,7 @@ impl Game for Arcade {
                     )
                 };
 
-                scene.push_colored(cube, &Transform::at(at).with_scale(size), aim::PANEL);
+                scene.push_plain(cube, &Transform::at(at).with_scale(size), aim::PANEL);
             }
         }
 
@@ -11760,13 +11759,13 @@ impl Game for Arcade {
                     vec3(study::SCONCE_OUT, 0.018, 0.018),
                 ),
             ] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(at + Vec3::X * out * reach).with_scale(size),
                     aim::SCONCE,
                 );
             }
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::X * out * study::SCONCE_OUT).with_scale(study::SHADE),
                 aim::SHADE,
@@ -11799,7 +11798,7 @@ impl Game for Arcade {
         // and the rod runs to `soffit` rather than to `TALL` because the
         // ceiling in here is a grid with tiles under it.
         for shade in room::pendant_shades(self.room.reaches) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(shade).with_scale(study::PENDANT_SHADE),
                 aim::SHADE,
@@ -11807,7 +11806,7 @@ impl Game for Arcade {
 
             let hung = study::PENDANT_DROP - study::PENDANT_SHADE.y * 0.5;
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(shade.x, room::soffit() - hung * 0.5, shade.z))
                     .with_scale(vec3(study::PENDANT_ROD, hung, study::PENDANT_ROD)),
@@ -11830,7 +11829,7 @@ impl Game for Arcade {
             for (at, turn, lean) in cascada::laid() {
                 let (_, drop) = cascada::tops_at(at, turn, lean);
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + at - Vec3::Y * drop)
                         .with_rotation(cascada::stood(turn, lean))
@@ -11886,7 +11885,7 @@ impl Game for Arcade {
             for box_ in kociemba::cubies(middle).iter() {
                 let (at, spin) = swept(box_.center());
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(at)
                         .with_rotation(spin)
@@ -11899,7 +11898,7 @@ impl Game for Arcade {
                 let colour = kociemba::face_colour(on[*facelet]);
                 let (at, spin) = swept(sticker.center());
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(at)
                         .with_rotation(spin)
@@ -11943,7 +11942,7 @@ impl Game for Arcade {
                 let turn = piece as f32 * round;
                 let (sin, cos) = turn.sin_cos();
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(middle + leant * (vec3(0.0, cos, sin) * out))
                         .with_rotation(leant * glam::Quat::from_rotation_x(turn))
@@ -11959,7 +11958,7 @@ impl Game for Arcade {
                 (0.014, 0.028, globe::STAND * 3.4),
                 (0.005, 0.01, globe::STAND * 5.2),
             ] {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + Vec3::Y * up).with_scale(vec3(wide, tall, wide)),
                     aim::GLOBE_STAND,
@@ -11981,7 +11980,7 @@ impl Game for Arcade {
             // the lip round the tray. The tray's floor is the bench top itself,
             // so there is nothing to draw for it.
             for lip in wrecker::tray().iter().skip(1) {
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + lip.center()).with_scale(lip.size()),
                     aim::TRAY,
@@ -12009,7 +12008,7 @@ impl Game for Arcade {
                     vec3(post.x.abs(), wrecker::POST, wrecker::POST),
                 ),
             ] {
-                scene.push_colored(cube, &Transform::at(top + at).with_scale(size), aim::GANTRY);
+                scene.push_plain(cube, &Transform::at(top + at).with_scale(size), aim::GANTRY);
             }
 
             // the links themselves. The beads are 0.03 across at 0.045 apart,
@@ -12023,7 +12022,7 @@ impl Game for Arcade {
                     continue;
                 }
 
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(top + one + along * 0.5)
                         .with_rotation(glam::Quat::from_rotation_arc(Vec3::NEG_Y, along / length))
@@ -12038,13 +12037,13 @@ impl Game for Arcade {
                 if n == wrecker::HOOK {
                     // the ring on the jib, which is part of the gantry rather
                     // than part of the chain
-                    scene.push_colored(
+                    scene.push_plain(
                         ball_mesh,
                         &Transform::at(at).with_scale(Vec3::splat(wrecker::BEAD * 1.4)),
                         aim::GANTRY,
                     );
                 } else if n < wrecker::BALL_AT {
-                    scene.push_colored(
+                    scene.push_plain(
                         ball_mesh,
                         &Transform::at(at).with_scale(Vec3::splat(wrecker::BEAD)),
                         aim::CHAIN,
@@ -12088,11 +12087,12 @@ impl Game for Arcade {
                 // rails and no further: it was inset by a rail's width all
                 // round, which left a lip of bare timber inside the cushions
                 // that nothing on a table has.
-                scene.push_colored(
+                scene.push_material(
                     cube,
                     &Transform::at(bench.at + Vec3::Y * (top - rail * 0.5))
                         .with_scale(vec3(play.x, rail, play.y)),
                     aim::CLOTH,
+                    aim::SHEEN,
                 );
 
                 // the six rails. Each is three boards and not one: a body, a
@@ -12110,11 +12110,9 @@ impl Game for Arcade {
                             colour,
                             aim::DULL,
                         ),
-                        None => scene.push_colored(
-                            cube,
-                            &Transform::at(middle).with_scale(size),
-                            colour,
-                        ),
+                        None => {
+                            scene.push_plain(cube, &Transform::at(middle).with_scale(size), colour)
+                        }
                     }
                 };
 
@@ -12152,20 +12150,21 @@ impl Game for Arcade {
                     let out = thick * 0.5 + cellar::CUSHION * 0.5;
                     let face = size - along + facing.abs() * cellar::CUSHION;
 
-                    scene.push_colored(
+                    scene.push_material(
                         cube,
                         &Transform::at(
                             middle + facing * out - Vec3::Y * (high * 0.26 + cellar::CAP * 0.5),
                         )
                         .with_scale(vec3(face.x, high * 0.48, face.z)),
                         aim::CLOTH,
+                        aim::SHEEN,
                     );
                 }
 
                 // the sights, which is the marking every table in the world
                 // carries and the quickest thing that says what this is
                 for at in cellar::sights(bench) {
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(at + Vec3::Y * cellar::CAP * 0.5)
                             .with_scale(Vec3::splat(cellar::SIGHT)),
@@ -12179,7 +12178,7 @@ impl Game for Arcade {
                 // says there is anywhere to go.
                 for at in cellar::pockets(bench) {
                     if let Some(peg) = self.peg {
-                        scene.push_colored(
+                        scene.push_plain(
                             peg,
                             &Transform::at(at - Vec3::Y * 0.012).with_scale(vec3(
                                 cellar::POCKET * 2.0,
@@ -12208,7 +12207,7 @@ impl Game for Arcade {
                 // it, which is what this was.
                 let apron = 0.14;
                 let under = top - high;
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(bench.at + Vec3::Y * (under - apron * 0.5)).with_scale(vec3(
                         bench.size.x - rail,
@@ -12229,7 +12228,7 @@ impl Game for Arcade {
                                 along * (bench.size.z * 0.5 - leg),
                             );
 
-                        scene.push_colored(
+                        scene.push_plain(
                             cube,
                             &Transform::at(at).with_scale(vec3(leg, stands, leg)),
                             frame,
@@ -12239,13 +12238,13 @@ impl Game for Arcade {
 
                 // and the lamp over it, which is what a pool room is lit by
                 let shade = bench.at + Vec3::Y * (top + cellar::LAMP_UP);
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(shade).with_scale(cellar::SHADE),
                     aim::SHADE,
                 );
                 let lid = -cellar::DOWN + cellar::TALL;
-                scene.push_colored(
+                scene.push_plain(
                     cube,
                     &Transform::at(vec3(
                         shade.x,
@@ -12277,7 +12276,7 @@ impl Game for Arcade {
                 .with_scale(vec3(bench.size.x, aim::BENCH_TOP, bench.size.z));
             match self.cabinet_grain {
                 Some(grain) => scene.push_textured(cube, grain, &top, look, aim::MATTE),
-                None => scene.push_colored(cube, &top, look),
+                None => scene.push_plain(cube, &top, look),
             }
 
             // four legs, so it reads as something you stand at rather than a
@@ -12291,7 +12290,7 @@ impl Game for Arcade {
                             (bench.size.y - aim::BENCH_TOP) * 0.5,
                             across * (bench.size.z * 0.5 - inset),
                         );
-                    scene.push_colored(
+                    scene.push_plain(
                         cube,
                         &Transform::at(at).with_scale(vec3(
                             aim::BENCH_LEG,
@@ -12309,14 +12308,14 @@ impl Game for Arcade {
         for at in room::gallery_lamps(self.room.reaches) {
             let shade = room::GALLERY_SHADE;
 
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(at + Vec3::Y * shade.y * 0.5).with_scale(shade),
                 aim::SHADE,
             );
             // and the stem up to the ceiling
             let stem = (at.y + shade.y + room::soffit()) * 0.5;
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(vec3(at.x, stem, at.z)).with_scale(vec3(
                     0.035,
@@ -12333,13 +12332,13 @@ impl Game for Arcade {
             };
 
             let (plinth, size) = display::plinth_under(one);
-            scene.push_colored(cube, &Transform::at(plinth).with_scale(size), aim::PLINTH);
+            scene.push_plain(cube, &Transform::at(plinth).with_scale(size), aim::PLINTH);
             // a turned shape reaches lower than an upright one, so where its
             // middle goes follows which way it is facing. It sank into its
             // plinth otherwise.
             let facing = self.spin.facing(n, self.since);
             let sits = vec3(one.at.x, display::sits_at(one, facing), one.at.z);
-            scene.push_colored(
+            scene.push_plain(
                 mesh,
                 &Transform::at(sits)
                     .with_rotation(facing)
@@ -12377,7 +12376,7 @@ impl Game for Arcade {
 
         // and the frame round it, which is what the picture grows behind
         for side in mandel::surround(self.room.reaches) {
-            scene.push_colored(
+            scene.push_plain(
                 cube,
                 &Transform::at(side.center()).with_scale(side.size()),
                 aim::MANDEL_FRAME,
@@ -12819,7 +12818,7 @@ impl Game for Arcade {
 
             match self.cabinet_grain {
                 Some(grain) => scene.push_textured(cube, grain, &box_, look.body, aim::MATTE),
-                None => scene.push_colored(cube, &box_, look.body),
+                None => scene.push_plain(cube, &box_, look.body),
             }
 
             // the marquee: the game's name lit across the top of its front, in
@@ -12838,7 +12837,7 @@ impl Game for Arcade {
                 Some(sign) => {
                     scene.push_textured(screen_mesh, sign, &placed, aim::neon_of(glow), 8.0)
                 }
-                None => scene.push_colored(screen_mesh, &placed, aim::neon_of(glow)),
+                None => scene.push_plain(screen_mesh, &placed, aim::neon_of(glow)),
             }
 
             // the screen, a thin slab on the face that looks into the room
@@ -12854,7 +12853,7 @@ impl Game for Arcade {
 
             match self.art.get(n).copied().flatten() {
                 Some(art) => scene.push_textured(screen_mesh, art, &placed, look.screen, 32.0),
-                None => scene.push_colored(screen_mesh, &placed, vec4(0.08, 0.08, 0.1, 1.0)),
+                None => scene.push_plain(screen_mesh, &placed, vec4(0.08, 0.08, 0.1, 1.0)),
             }
         }
     }
@@ -17137,6 +17136,39 @@ mod tests {
             room.contains("self.counted."),
             "the gauges are not reading the renderer's own counts"
         );
+    }
+
+    /// Nothing in this building takes the engine's default surface.
+    ///
+    /// `Scene::push_colored` hands out a shininess of 32. Engine spec 0012
+    /// picked that on purpose and defends it, for a game that wants shape out
+    /// of a few boxes. A building is plaster, carpet, oak and tile, and 196
+    /// surfaces here took it because nobody said otherwise: the hall's
+    /// ceiling rippled, the nook's floor read as a skating rink, and a pocket
+    /// mouth meant to be a hole came back a chrome dome. `aim::Plain` says
+    /// what this building wants instead, in one place, and `push_material`
+    /// is still how a surface asks for a highlight.
+    ///
+    /// Read off the two files that draw, because what is guarded is which
+    /// call is made rather than any value it returns.
+    #[test]
+    fn nothing_here_takes_the_engines_surface() {
+        const WHOLE: &str = include_str!("main.rs");
+        const MIRRORS: &str = include_str!("mirrors.rs");
+
+        let drawn = WHOLE
+            .split_once("\nmod tests {")
+            .expect("this file has a test module")
+            .0;
+
+        for (name, source) in [("main.rs", drawn), ("mirrors.rs", MIRRORS)] {
+            assert!(
+                !source.contains(".push_colored("),
+                "{} draws on the engine's default shininess rather than on one \
+                 this building chose",
+                name
+            );
+        }
     }
 
     /// Spec 0056: F turns the frame readout on, and off again, and the

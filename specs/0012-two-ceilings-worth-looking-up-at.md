@@ -178,8 +178,8 @@ a tile is broad enough that it reads as light rather than as a wave.
 **The wider question this opens**, and it is not settled here: every
 `push_colored` in this building is a shininess of 32 on a surface nobody chose
 it for. The ones that have been looked at since the rooms got brighter have all
-wanted nought: the figure, the rug, and now these. The default is a decision
-that was never made, and it is the engine's to make.
+wanted nought: the figure, the rug, and now these. Whether a building should
+take the engine's default at all is this repo's question, not the engine's.
 
 ## 2026-11-09: the tiles are lamps now
 
@@ -217,3 +217,64 @@ in fittings already, per spec 0005. A lit tile is another lamp with no fitting.
 
 **The cellar's ceiling**, which has been right since spec 0007, and the
 garden's, which is the sky.
+
+## 2026-11-09: nothing shines here unless it says so
+
+**Jake: fix the shininess default in the engine. Then: just do capriccio.**
+
+The paragraph above used to say the default was a decision nobody made. That
+was wrong and it is corrected in place. Engine spec 0012 says outright that
+`push_colored` and its siblings use 32, a surface that is neither mirror nor
+chalk, and defends it for a game that wants shape out of a few boxes. The
+decision was made. It was made for something this is not.
+
+So the engine keeps its 32 and the eight other games keep their highlights.
+This building says what it wants instead, in `aim::Plain`: a trait on `Scene`
+with one method, `push_plain`, which is `push_material` at `NO_SHINE`. All 196
+calls were renamed to it, one token each, same arity. `push_material` with the
+constants in `aim` is still how a surface asks for a highlight, and every
+surface that already said so was left alone.
+
+**What it moved**, measured by the room pictures rather than argued. Ten of
+the seventeen, each the share of its pixels past what a picture test calls a
+difference:
+
+| room | moved |
+| --- | --- |
+| cellar | 16.0% |
+| nook | 13.8% |
+| wayup | 9.8% |
+| hall | 9.4% |
+| baths | 6.5% |
+| gallery | 5.9% |
+| field | 4.2% |
+| imaginarium | 2.2% |
+| back-room | 0.3% |
+| corridor-outside | 0.2% |
+
+The same ten, to the same tenth, as a run with the engine's own constant set
+to nought. So this is exactly that change, scoped to one game.
+
+**Two surfaces kept a highlight**, both from Jake reading the cellar.
+
+The baize. Flat green is what cloth is, and `NO_SHINE`'s own doc says so, but
+the pale wash across it is what says a lamp hangs over this table. It is back
+on `aim::SHEEN`, which is 32 named for what it does. The honest fix is the
+pendant's own reach, which spec 0007 wants and nobody has done; this is a
+highlight standing in for a light, and the constant says as much.
+
+The other was not what it looked like. A pale dome at the near pocket went
+black, and it reads as a stool losing its seat. It is the pocket mouth, whose
+own constant calls it darker than anything else in the room because what you
+are looking at is a hole. At 32 a hole was a chrome dome. Black is the fault
+being fixed, so the mouth stays matte and `aim::NET` went from
+`(0.17, 0.13, 0.10)` to `(0.30, 0.23, 0.17)` instead, so the net reads as
+leather under it rather than merging with it.
+
+Found with a magenta probe: every `push_plain` surface drawn in one colour for
+a single render, which said in one picture what four readings of the source
+had not.
+
+## Acceptance criteria
+
+- Nothing in this building draws on the engine's default surface. — `tests::nothing_here_takes_the_engines_surface`

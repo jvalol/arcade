@@ -4,6 +4,8 @@
 //! Nothing here draws. Where the sight goes and how much brighter the lit
 //! cabinet is are arithmetic, so both can be checked without a window.
 
+use blitzkit::mesh::Transform;
+use blitzkit::renderer::scene::{MeshId, Scene};
 use glam::{vec2, vec3, vec4, Vec2, Vec3, Vec4};
 
 /// The sight itself. A cross, because it is one glyph in the font the engine
@@ -368,7 +370,7 @@ pub const CLOTH: Vec4 = vec4(0.10, 0.42, 0.22, 1.0);
 /// The sights down the rails, in bone, and the net under a pocket, which is
 /// leather and string and reads as neither if it is lit like timber.
 pub const DIAMOND: Vec4 = vec4(0.88, 0.85, 0.76, 1.0);
-pub const NET: Vec4 = vec4(0.17, 0.13, 0.10, 1.0);
+pub const NET: Vec4 = vec4(0.30, 0.23, 0.17, 1.0);
 
 /// What stands on the mantel. Spec 0007.
 ///
@@ -658,6 +660,40 @@ pub const DULL: f32 = 900.0;
 /// looks like plastic. The engine reads nought as no highlight rather than
 /// as the broadest one there is.
 pub const NO_SHINE: f32 = 0.0;
+
+/// For cloth with a lamp hung right over it.
+///
+/// Cloth has no highlight, which is why `NO_SHINE` exists and why the carpets
+/// and the benches use it. The baize is the one exception, and not because
+/// cloth under a pendant is glossy: the pale wash across it is what says a
+/// lamp hangs over this table. Take it away and the cloth is a flat green
+/// rectangle lit by the room.
+///
+/// 32 rather than `MATTE`, because the point is a wash and not a spot. The
+/// honest fix is the lamp's own reach rather than a highlight standing in for
+/// one, which is written down in spec 0007 and not done.
+pub const SHEEN: f32 = 32.0;
+
+/// A mesh in a flat colour, on a surface this building has not chosen.
+///
+/// `Scene::push_colored` hands out the engine's default of 32, which spec
+/// 0012 calls neither mirror nor chalk and which is right for a game that
+/// wants shape out of a few boxes. This is not that game. A building is
+/// plaster, carpet, oak and tile, and 196 surfaces took that 32 without
+/// anyone picking it: the hall's ceiling rippled, the nook's floor read as a
+/// skating rink, and the poolside caught the sun in patches.
+///
+/// So nothing here shines unless it says so. `push_material` is still the way
+/// to say so, and the four constants above are what to say.
+pub trait Plain {
+    fn push_plain(&mut self, mesh: MeshId, transform: &Transform, colour: Vec4);
+}
+
+impl Plain for Scene {
+    fn push_plain(&mut self, mesh: MeshId, transform: &Transform, colour: Vec4) {
+        self.push_material(mesh, transform, colour, NO_SHINE);
+    }
+}
 
 /// The garden, per spec 0010.
 ///
