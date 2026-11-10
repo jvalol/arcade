@@ -5189,7 +5189,7 @@ impl Arcade {
         // the sconces, which are the only reason there is any light in here.
         // The lobby's two are in this list so there is no lamp anywhere in
         // the hotel that is not in a fitting.
-        for at in aleph::sconces(reaches)
+        for at in aleph::sconces(reaches, self.at)
             .into_iter()
             .chain(aleph::lobby_sconces(reaches))
         {
@@ -12470,7 +12470,7 @@ impl Game for Arcade {
         // and the hotel's, per spec 0029. Derived from `aleph::sconces` so
         // there is no lamp in that corridor which is not in a fitting: the
         // cellar was told that once and the baths did it again worse.
-        for (at, lit, range) in aleph::corridor_lamps(self.room.reaches)
+        for (at, lit, range) in aleph::corridor_lamps(self.room.reaches, self.at)
             .into_iter()
             .map(|at| (at, aleph::SCONCE_LIT, aleph::SCONCE_RANGE))
             // and the lobby's, which reach further: a corridor at night is

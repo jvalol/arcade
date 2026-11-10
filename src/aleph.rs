@@ -1342,13 +1342,25 @@ pub const SCONCE_LIT: f32 = 0.85;
 ///
 /// Derived from where the doors are rather than laid out again. Two lists of
 /// one thing drift, and this building has paid for that more than once.
-pub fn sconces(reaches: f32) -> Vec<Vec3> {
+///
+/// **Over the rooms that are drawn, which is the half of that this missed.**
+/// It took the doors' positions from `at` and their range from `DRAWN`, so
+/// the geometry followed you and the range did not: the sconces sat over
+/// rooms 1 to 40 for ever, which is the first sixty metres. `window` moves
+/// the doors down the corridor with you and nothing moved the lamps after
+/// them, so past about room 40 there were doors, numbers, skirting and a
+/// runner and no light anywhere to show them. At room 250 the corridor was
+/// black, the ceiling with it, and the walls read as flat slabs because the
+/// only light on them was the ambient fill. Jake, from down the corridor:
+/// the ceiling is missing.
+pub fn sconces(reaches: f32, standing: Vec3) -> Vec<Vec3> {
+    let drawn = window(standing);
     let mut out = Vec::new();
 
-    for n in 1..DRAWN {
+    for n in drawn.clone() {
         // the gap between room n and the next on the same side, which is two
         // along
-        if n + 2 > DRAWN {
+        if n + 2 > *drawn.end() {
             continue;
         }
 
@@ -1404,8 +1416,8 @@ pub fn lobby_sconces(reaches: f32) -> Vec<Vec3> {
 /// burns differently from the corridor. The rule is still about all of them,
 /// so this is where it is said.
 #[cfg(test)]
-pub fn lamps(reaches: f32) -> Vec<Vec3> {
-    corridor_lamps(reaches)
+pub fn lamps(reaches: f32, standing: Vec3) -> Vec<Vec3> {
+    corridor_lamps(reaches, standing)
         .into_iter()
         .chain(lobby_lamps(reaches))
         .collect()
@@ -1427,8 +1439,8 @@ pub const LOBBY_RANGE: f32 = 4.6;
 pub const LOBBY_LIT: f32 = 0.95;
 
 /// The corridor's lamps and the lobby's, which burn differently.
-pub fn corridor_lamps(reaches: f32) -> Vec<Vec3> {
-    sconces(reaches)
+pub fn corridor_lamps(reaches: f32, standing: Vec3) -> Vec<Vec3> {
+    sconces(reaches, standing)
         .into_iter()
         .map(|at| at + Vec3::Y * SCONCE.y * 0.3)
         .collect()
@@ -1564,11 +1576,12 @@ mod tests {
     #[test]
     fn every_lamp_is_in_a_fitting() {
         let reaches = crate::room::Room::of(crate::games()).reaches;
-        let fittings: Vec<_> = sconces(reaches)
+        let standing = at(reaches, 1);
+        let fittings: Vec<_> = sconces(reaches, standing)
             .into_iter()
             .chain(lobby_sconces(reaches))
             .collect();
-        let lamps = lamps(reaches);
+        let lamps = lamps(reaches, standing);
 
         assert_eq!(
             lamps.len(),
@@ -1579,7 +1592,7 @@ mod tests {
         );
         assert_eq!(
             lamps.len(),
-            corridor_lamps(reaches).len() + lobby_lamps(reaches).len(),
+            corridor_lamps(reaches, standing).len() + lobby_lamps(reaches).len(),
             "the two sets do not add up to the whole"
         );
 
@@ -1602,6 +1615,44 @@ mod tests {
                 .any(|at| (*at - stands).length() < LOBBY_RANGE),
             "nothing in the lobby reaches where somebody waits"
         );
+    }
+
+    /// Wherever you stand in this corridor, the doors around you are lit.
+    ///
+    /// **The doors follow you down it and the sconces did not.** `window`
+    /// moves the drawn rooms with you and `sconces` took its range from
+    /// `DRAWN` instead, so the lamps stayed over rooms 1 to 40 while the
+    /// doors walked off west without them. Sixty metres in there was nothing
+    /// lighting anything: the doors, the numbers, the runner and the ceiling
+    /// were all still drawn and all of them were black, which from inside
+    /// reads as a corridor with no ceiling on it. Jake found it walking.
+    ///
+    /// Stated over the drawn doors rather than over a count of lamps,
+    /// because what went wrong was not how many there were.
+    #[test]
+    fn the_drawn_doors_are_lit_wherever_you_stand() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let middle = middle_z(reaches);
+
+        // the lobby end, a little way in, and far enough down that nothing
+        // of the lobby's own light can reach
+        for room in [1u64, 40, 250, 10_000] {
+            let standing = vec3(at(reaches, room).x, 0.0, middle);
+            let lamps = corridor_lamps(reaches, standing);
+
+            for n in window(standing) {
+                let door = at(reaches, n);
+
+                assert!(
+                    lamps
+                        .iter()
+                        .any(|lamp| (*lamp - door).length() < SCONCE_RANGE * 2.0),
+                    "standing at room {room}, door {n} at {:.1} has no lamp within {:.1}",
+                    door.x,
+                    SCONCE_RANGE * 2.0
+                );
+            }
+        }
     }
 
     /// Whether `n` is a power of a single prime, which is where everybody

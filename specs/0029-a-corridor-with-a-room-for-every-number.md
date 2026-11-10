@@ -439,3 +439,47 @@ Four readings of the source before that named the wrong object twice.
 ## Acceptance criteria
 
 - A doorway in a shared wall is roofed across the whole thickness. — `room::tests::a_doorway_is_roofed_across_the_whole_wall`
+
+## 2026-11-10: the corridor's lamps stayed at the lobby
+
+**Jake, walking west: the corridor's missing ceiling.**
+
+It was not missing. The shell's ceiling is a box in `aleph::solid`, it is in
+the `HotelCeiling` run, and the engine draws it the whole two kilometres. It
+was black, and so was everything under it.
+
+`window` moves the drawn rooms with you, so the doors, their plaques, the
+skirting and the rail all walk down the corridor as you do. `sconces` took
+its positions from `at`, which takes any room number, and its range from
+`DRAWN`, which is a count and not a window. So the geometry followed and the
+range did not: the lamps sat over rooms 1 to 40 for ever, which is the first
+sixty metres of two thousand.
+
+Past that there was a corridor with doors, numbers, a runner and a ceiling in
+it and no light anywhere. The ambient fill is what was left, which reads as
+flat slabs with no edges on them, and the ceiling is the surface with nothing
+else near it to give it an edge, so the ceiling is the part you notice is
+gone.
+
+| standing at | drawn rooms | lamps |
+| --- | --- | --- |
+| room 1 | 1 to 40 | 1 to 40 |
+| room 40 | 20 to 59 | 1 to 40 |
+| room 250 | 230 to 269 | 1 to 40 |
+
+**The same fault as the plaques, which this spec already caught once.**
+`every_drawn_door_has_its_number` exists because the numbers were a second
+account of which rooms are drawn. The lamps were a third. `sconces` takes
+where you are standing now and asks `window`, so there is one account of the
+range and the fittings and the lamps both read it.
+
+Spec 0035's corridor is a fixed set of doors with a lamp beside each, so it
+never had this.
+
+Nothing a picture test draws moved: every kept view of the hotel stands
+inside the first forty rooms, where the window was already 1 to 40.
+
+## Acceptance criteria
+
+- Wherever you stand in the corridor, every drawn door has a lamp within
+  reach of it. — `aleph::tests::the_drawn_doors_are_lit_wherever_you_stand`
