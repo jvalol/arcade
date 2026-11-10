@@ -909,6 +909,49 @@ impl Arrival {
         }
     }
 
+    /// And the room somebody in room `m` was in before this move, which is
+    /// the only part of a move an endless corridor can afford to ask.
+    ///
+    /// **A move is read backwards out here.** Pushing every taken room
+    /// forward means knowing which rooms are taken, which is a list, and a
+    /// list is forty rooms of a corridor two thousand metres long. Asked the
+    /// other way it is one division: room `m` has somebody in it if the room
+    /// this move sends here had somebody in it. Nothing is an answer, and
+    /// means nobody was sent to `m` at all.
+    ///
+    /// The inverse of [`sends`](Arrival::sends), which
+    /// `every_move_can_be_read_backwards` holds the two to.
+    pub fn came_from(&self, m: u64) -> Option<u64> {
+        let from = match self {
+            Arrival::One => m.checked_sub(1),
+            Arrival::Coach(many) => m.checked_sub(*many),
+            Arrival::Endless => m.is_multiple_of(2).then_some(m / 2),
+            // 2ⁿ backwards is which power of two it is, and a room that is
+            // not one came from nobody
+            Arrival::Coaches => m.is_power_of_two().then(|| m.trailing_zeros() as u64),
+        };
+
+        from.filter(|from| *from >= 1)
+    }
+
+    /// Whether this move's arrivals take every room it frees.
+    ///
+    /// **The second half of what a move does.** Three of these four seat
+    /// their guests in everything they open up, so the hotel is full again
+    /// however it started. The coaches do not: seat s of coach c goes to
+    /// room pˢ, so the rooms that fill are the odd prime powers and room 6
+    /// stays empty for ever.
+    ///
+    /// This is a second account of [`fills`](Arrival::fills) and two lists of
+    /// one thing drift, so `what_fills_everything_fills_everything` holds
+    /// them together rather than a comment asking the next person to.
+    pub fn fills_everything(&self) -> bool {
+        match self {
+            Arrival::Coaches => false,
+            Arrival::One | Arrival::Coach(_) | Arrival::Endless => true,
+        }
+    }
+
     /// Whether an arrival takes room `n`, once the move has freed it.
     ///
     /// **The coaches do not take everything that is free.** A shuffle frees
@@ -996,13 +1039,79 @@ enum Doing {
     Filling,
 }
 
+/// Who is in, as a question you can ask of any room.
+///
+/// **Not a list of forty.** It was `Vec<bool>`, one entry a drawn room, and
+/// that was right while the drawn rooms were rooms 1 to 40 for ever. `window`
+/// made the drawn rooms follow you and this did not follow them: past the
+/// fortieth every room answered empty, so every door out there stood wide
+/// open and dark, for two kilometres. A hotel whose whole premise is that it
+/// is full showed an empty one everywhere except the first sixty metres, and
+/// the rank of open leaves is what Jake saw and called blocky.
+///
+/// A list cannot be the answer, because there is no end to index to. So the
+/// state is what it has always been in the argument itself: a full hotel with
+/// some moves applied to it. Asking room `m` walks those moves backwards,
+/// which is a division apiece.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Who {
+    /// Everybody, which is where this starts and is the whole premise.
+    Everybody,
+    /// Whoever a move sent here, which is the freeing wave.
+    Moved { was: Box<Who>, by: Arrival },
+    /// And the arrivals in the rooms it freed, which is the filling wave.
+    Filled { was: Box<Who>, by: Arrival },
+}
+
+impl Who {
+    /// Whether room `n` has somebody in it.
+    ///
+    /// Room 0 is not a room. Rooms are counted from one, here and in `at`.
+    pub fn has(&self, n: u64) -> bool {
+        if n == 0 {
+            return false;
+        }
+
+        match self {
+            Who::Everybody => true,
+            Who::Moved { was, by } => by.came_from(n).is_some_and(|from| was.has(from)),
+            Who::Filled { was, by } => was.has(n) || by.fills(n),
+        }
+    }
+
+    /// What a move leaves: whoever it sent here.
+    fn moved(self, by: Arrival) -> Who {
+        Who::Moved {
+            was: Box::new(self),
+            by,
+        }
+    }
+
+    /// And what the arrivals leave, once they are in.
+    ///
+    /// **A move that fills everything it frees is a full hotel**, whatever it
+    /// was before, so that is what it is called. Said here rather than left
+    /// to the reader, because otherwise every key press adds two links to a
+    /// chain that is walked once per door per frame and never gets shorter.
+    fn filled(self, by: Arrival) -> Who {
+        if by.fills_everything() {
+            return Who::Everybody;
+        }
+
+        Who::Filled {
+            was: Box::new(self),
+            by,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Hotel {
-    /// Whether each drawn room has somebody in it, room 1 first.
-    taken: Vec<bool>,
+    /// Who is in, as it stands.
+    taken: Who,
     /// What the rule is moving everybody to, while the change is travelling,
     /// and nothing when it has arrived.
-    going: Option<Vec<bool>>,
+    going: Option<Who>,
     /// How far down the corridor the change has got, in rooms.
     ///
     /// **The change does not arrive everywhere at once.** Spec 0029: it
@@ -1013,7 +1122,7 @@ pub struct Hotel {
     doing: Doing,
     /// And what the rooms look like once the arrivals are in, held until the
     /// freeing wave has finished so the two run one after the other.
-    then_filled: Option<Vec<bool>>,
+    then_filled: Option<Who>,
     /// Who is at the desk.
     at_the_door: Option<Arrival>,
     /// And which move is running, so the people crossing know where they are
@@ -1059,7 +1168,7 @@ impl Hotel {
     /// A full hotel, which is where this starts and is the whole premise.
     pub fn new() -> Self {
         Self {
-            taken: vec![true; DRAWN as usize],
+            taken: Who::Everybody,
             going: None,
             front: 0.0,
             doing: Doing::Freeing,
@@ -1145,23 +1254,20 @@ impl Hotel {
     /// The two waves, for whoever it is.
     fn take(&mut self, arrival: Arrival) {
         self.moving_by = Some(arrival);
-        self.apply(|n| arrival.sends(n));
+        self.apply(arrival);
 
         // and who is in once the arrivals are in: whatever the move leaves,
         // plus the rooms they take
-        let mut filled = self.going.clone().unwrap_or_default();
-        let mut came = 0u64;
+        let freed = self.going.clone().unwrap_or(Who::Everybody);
 
-        for n in 1..=DRAWN {
-            if filled[n as usize - 1] || !arrival.fills(n) {
-                continue;
-            }
+        // **How many came in is counted over the forty by the desk.** The
+        // corridor has no end, so how many rooms a move fills is not a
+        // number for three of these four, and the desk is at this end of it.
+        let came = (1..=DRAWN)
+            .filter(|n| !freed.has(*n) && arrival.fills(*n))
+            .count() as u64;
 
-            filled[n as usize - 1] = true;
-            came += 1;
-        }
-
-        self.then_filled = Some(filled);
+        self.then_filled = Some(freed.filled(arrival));
         // **Counted when they are in, not when they are asked for.** This
         // said `housed += came` here, so the desk read "1 housed" the instant
         // you pressed, before either wave had moved a door. Jake pressed and
@@ -1188,50 +1294,28 @@ impl Hotel {
     /// That is the whole of the wave.
     pub fn taken(&self, n: u64) -> bool {
         let Some(going) = self.going.as_ref() else {
-            return self.at(&self.taken, n);
+            return self.taken.has(n);
         };
 
         if (n as f32) <= self.front {
-            self.at(going, n)
+            going.has(n)
         } else {
-            self.at(&self.taken, n)
+            self.taken.has(n)
         }
     }
 
-    fn at(&self, which: &[bool], n: u64) -> bool {
-        if n == 0 || n > DRAWN {
-            return false;
-        }
-
-        which[n as usize - 1]
-    }
-
-    /// Move everybody: room n becomes room a·n + b.
+    /// Move everybody: room n becomes room `by.sends(n)`.
     ///
-    /// Only the rooms that are drawn can be said anything about. A guest sent
-    /// past the fortieth has gone somewhere this corridor does not show,
-    /// which is the point of the hotel rather than a limitation of it.
-    pub fn apply(&mut self, sends: impl Fn(u64) -> Option<u64>) {
-        let mut going = vec![false; DRAWN as usize];
-
-        for n in 1..=DRAWN {
-            if !self.at(&self.taken, n) {
-                continue;
-            }
-
-            // nowhere drawable is an answer: they have gone somewhere past
-            // the end of what the corridor shows, which under spec 0034 is
-            // most of them
-            let Some(to) = sends(n) else {
-                continue;
-            };
-
-            if (1..=DRAWN).contains(&to) {
-                going[to as usize - 1] = true;
-            }
-        }
-
-        self.going = Some(going);
+    /// **Every room, rather than the forty that used to be drawn.** This
+    /// walked rooms 1 to 40 and wrote where each of them landed, which can
+    /// only answer for a corridor with an end. `Who` reads the move
+    /// backwards instead, so a room eleven thousand along answers in the
+    /// same division as room 2.
+    ///
+    /// A move rather than a closure, because reading one backwards is the
+    /// move's own arithmetic and `Arrival` is where that arithmetic lives.
+    pub fn apply(&mut self, by: Arrival) {
+        self.going = Some(self.taken.clone().moved(by));
         self.front = 0.0;
     }
 
@@ -2047,7 +2131,7 @@ mod tests {
             assert!(hotel.taken(n), "room {} started empty", n);
         }
 
-        hotel.apply(|n| Arrival::Endless.sends(n));
+        hotel.apply(Arrival::Endless);
         // let the whole wave through
         hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
 
@@ -2069,7 +2153,7 @@ mod tests {
     fn the_change_travels() {
         let mut hotel = Hotel::new();
 
-        hotel.apply(|n| Arrival::Endless.sends(n));
+        hotel.apply(Arrival::Endless);
 
         // one room's worth of travel, and nothing beyond it has moved
         hotel.tick(1.0 / TRAVELS_AT);
@@ -2114,11 +2198,131 @@ mod tests {
     /// through it, and the room behind it is still somebody's. The light
     /// says who is in and the door says who is moving, so they only have to
     /// agree when nobody is.
+    /// A hotel that has had nothing done to it is full the whole way.
+    ///
+    /// **It was full for sixty metres and empty for two kilometres.** Who was
+    /// in was a list of forty, indexed by the absolute room number, and
+    /// `window` made the drawn rooms follow you without it. Past the
+    /// fortieth every room answered empty, so `open_by` swung every door out
+    /// there wide and `lit_under` put a light under none of them. Jake walked
+    /// west and called it blocky, which is the rank of open leaves cutting
+    /// into the corridor.
+    #[test]
+    fn a_full_hotel_is_full_wherever_you_look() {
+        let hotel = Hotel::new();
+
+        // the fortieth, the first one past it, one a player actually reaches
+        // on foot, and one far enough out that only arithmetic gets there
+        for n in [1, DRAWN, DRAWN + 1, 250, 10_000, MOST] {
+            assert!(hotel.taken(n), "room {} is empty in a full hotel", n);
+            assert_eq!(hotel.open_by(n), 0.0, "room {}'s door stands open", n);
+            assert!(hotel.lit_under(n), "room {} has no light under its door", n);
+        }
+    }
+
+    /// And the rule reaches as far as the corridor does.
+    ///
+    /// Under spec 0034 the coaches fill the odd prime powers and nothing
+    /// else, so room 6 is nobody's. That has to be as true at 2187 as at 9,
+    /// or the argument stops where the old list did.
+    #[test]
+    fn the_rule_reaches_past_the_fortieth() {
+        let mut hotel = Hotel::new();
+
+        hotel.at_the_door = Some(Arrival::Coaches);
+        hotel.house();
+
+        // both waves, so the arrivals are in
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0);
+
+        for n in [9u64, 2048, 2187, 14_641] {
+            assert!(
+                hotel.taken(n),
+                "room {} is a prime power and stands empty",
+                n
+            );
+        }
+
+        // 6 is 2·3 and belongs to nobody, and so does every multiple of two
+        // primes however far out
+        for n in [6u64, 2190, 9999] {
+            assert!(!hotel.taken(n), "room {} belongs to nobody and is taken", n);
+        }
+    }
+
+    /// Reading a move backwards is reading the same move.
+    ///
+    /// `Who` asks `came_from` where `apply` used to push with `sends`, so the
+    /// two are one account of a move seen from either end. They are written
+    /// separately, which is what this holds together.
+    #[test]
+    fn every_move_can_be_read_backwards() {
+        for by in [
+            Arrival::One,
+            Arrival::Coach(42),
+            Arrival::Endless,
+            Arrival::Coaches,
+        ] {
+            for n in 1..=200u64 {
+                let Some(to) = by.sends(n) else { continue };
+
+                assert_eq!(
+                    by.came_from(to),
+                    Some(n),
+                    "{:?} sends {} to {} and reads it back as somebody else",
+                    by,
+                    n,
+                    to
+                );
+            }
+
+            // and a room nobody was sent to says so, rather than naming
+            // whoever is nearest
+            for m in 1..=200u64 {
+                if let Some(from) = by.came_from(m) {
+                    assert_eq!(
+                        by.sends(from),
+                        Some(m),
+                        "{:?} reads {} back as {}, who is sent elsewhere",
+                        by,
+                        m,
+                        from
+                    );
+                }
+            }
+        }
+    }
+
+    /// And what fills everything fills everything.
+    ///
+    /// `fills_everything` is a second account of `fills`, which is how this
+    /// building keeps breaking itself, so the two are held together rather
+    /// than left to whoever edits one of them.
+    #[test]
+    fn what_fills_everything_fills_everything() {
+        for by in [
+            Arrival::One,
+            Arrival::Coach(42),
+            Arrival::Endless,
+            Arrival::Coaches,
+        ] {
+            assert_eq!(
+                by.fills_everything(),
+                (1..=200u64).all(|n| by.fills(n)),
+                "{:?} disagrees with itself about what it fills",
+                by
+            );
+        }
+    }
+
     #[test]
     fn the_light_says_what_the_door_says() {
         let mut hotel = Hotel::new();
 
-        hotel.apply(|n| n.checked_mul(2).and_then(|to| to.checked_add(1)));
+        // the one move that does not fill everything it frees, so the hotel
+        // this is stated over has empty rooms in it to be wrong about
+        hotel.apply(Arrival::Coaches);
 
         for _ in 0..400 {
             hotel.tick(0.05);
@@ -2127,7 +2331,9 @@ mod tests {
                 continue;
             }
 
-            for n in 1..=DRAWN {
+            // past the fortieth as well as inside it, which is where the
+            // two used to agree only by both being wrong
+            for n in (1..=DRAWN).chain([250, 10_000]) {
                 assert_eq!(
                     hotel.lit_under(n),
                     hotel.open_by(n) == 0.0,

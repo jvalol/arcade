@@ -483,3 +483,81 @@ inside the first forty rooms, where the window was already 1 to 40.
 
 - Wherever you stand in the corridor, every drawn door has a lamp within
   reach of it. — `aleph::tests::the_drawn_doors_are_lit_wherever_you_stand`
+
+## 2026-11-10: who is in, as a question rather than a list
+
+Walking west past the fortieth room, every door stood wide open on a dark
+room, for two kilometres. The rank of open leaves juts into the corridor and
+takes a bite out of the runner at every door, which is the stepped, blocky
+look Jake reported; and a door nobody is behind has no light under it, so the
+one thing this spec says stands for a guest was missing the whole way.
+
+Who was in was a `Vec<bool>`, one entry per drawn room, indexed by the
+absolute room number. That was right while the drawn rooms were rooms 1 to 40
+for ever. `window` made them follow you and this did not follow them, so past
+the fortieth `taken` answered empty, `open_by` swung the door and `lit_under`
+put no light under it. A hotel whose entire premise is that it is full showed
+an empty one everywhere except the first sixty metres.
+
+This is the third place the same drift has been found in two days. The
+plaques were the first, which is what `every_drawn_door_has_its_number`
+holds. The sconces were the second, earlier today. The shape is always the
+same: the geometry reads `window` and the state reads `DRAWN`.
+
+### A list cannot be the answer
+
+There is no end to index to. Eleven million entries is not a fix either; it
+is the same mistake with a bigger number, and spec 0029 is explicit that
+eleven million is not infinity.
+
+So the state is what it already is in the argument: a full hotel with some
+moves applied to it.
+
+```
+Who::Everybody                  everybody, which is where this starts
+Who::Moved { was, by }          whoever the move sent here
+Who::Filled { was, by }         and the arrivals in the rooms it freed
+```
+
+Asking room `m` walks those moves backwards. `Arrival::came_from` is
+`Arrival::sends` read the other way, which for all four moves is a
+subtraction or a division, so room eleven thousand costs what room 2 costs.
+`apply` used to walk rooms 1 to 40 forward and write down where each landed,
+which is the one thing an endless corridor cannot afford.
+
+A move that fills every room it frees leaves a full hotel whatever it started
+from, so `filled` says `Everybody` rather than adding two links to a chain
+that is walked once per door per frame and never shortens. Three of the four
+moves are like that; the coaches are not, and that is spec 0034 showing
+through.
+
+### What it is worth
+
+| standing at | shut | lit under |
+| --- | --- | --- |
+| room 15, before and after | 40 | 40 |
+| room 250, before | 0 | 0 |
+| room 250, after | 40 | 40 |
+
+Detail in frame, by the edge measure the picture tests use, goes from 0.019
+to 0.054 at room 250 against 0.055 at room 15. The deep corridor now reads
+the same as the near one, which is the column of lights running away this
+spec asked for and had only for the first forty rooms.
+
+### What this still does not do
+
+The wave is bounded at forty. `tick` ends when the front reaches `DRAWN`, so
+pressing Enter while standing at room 250 changes that room with no wave
+passing it. That is a separate question from who is in, and it is left as it
+was rather than widened in the same change.
+
+## Acceptance criteria
+
+- A hotel nothing has been done to is full wherever you look, including past
+  the fortieth room. — `aleph::tests::a_full_hotel_is_full_wherever_you_look`
+- The prime powers rule reaches as far as the corridor does, so room 2187 is
+  taken and room 2190 is nobody's. — `aleph::tests::the_rule_reaches_past_the_fortieth`
+- Reading a move backwards reads the same move, which is what lets the state
+  be a question. — `aleph::tests::every_move_can_be_read_backwards`
+- What claims to fill everything fills everything, so the two accounts of it
+  cannot drift. — `aleph::tests::what_fills_everything_fills_everything`
