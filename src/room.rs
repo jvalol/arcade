@@ -2855,6 +2855,67 @@ mod tests {
         }
     }
 
+    /// Every doorway in a shared wall is roofed across the wall's whole
+    /// thickness.
+    ///
+    /// **A strip roofed by neither room reads as open sky where the wall is
+    /// cut.** `outside` probes just past each lid's edge and plasters a face
+    /// wherever nothing is over the probe. Along a solid wall that never
+    /// fires. At a doorway it did: two faces, one at each side of the
+    /// opening, looking at each other. Both are culled from either room, so
+    /// the doorway looked open, and standing in it the view was plaster
+    /// whichever way you turned along the wall. Jake walked into the hotel
+    /// and found it, 2026-11-09.
+    ///
+    /// Both lids stopped flush on the side they share with the gallery while
+    /// oversailing by a thickness on every other, so this walks the whole
+    /// strip rather than checking the two edges: it is the middle that was
+    /// bare.
+    #[test]
+    fn a_doorway_is_roofed_across_the_whole_wall() {
+        let room = Room::of(crate::games());
+        let reaches = room.reaches;
+        let lids = room.lids();
+
+        let roofed = |at: Vec3| {
+            lids.iter().any(|lid| {
+                lid.min.x <= at.x && at.x <= lid.max.x && lid.min.z <= at.z && at.z <= lid.max.z
+            })
+        };
+
+        for (name, pieces, way) in [
+            (
+                "west",
+                crate::aleph::gallery_west(reaches),
+                crate::aleph::way(reaches),
+            ),
+            (
+                "east",
+                crate::back::gallery_east(reaches),
+                crate::back::way(reaches),
+            ),
+        ] {
+            let (from, to) = way;
+            let middle = (from + to) * 0.5;
+            let (near, far) = (pieces[0].min.x, pieces[0].max.x);
+
+            let mut step = 0.0;
+
+            while step <= 1.0 {
+                let at = vec3(near + (far - near) * step, 0.0, middle);
+
+                assert!(
+                    roofed(at),
+                    "the {} wall's doorway is open to the sky at x {}",
+                    name,
+                    at.x
+                );
+
+                step += 0.05;
+            }
+        }
+    }
+
     /// Spec 0015: the sun's bounds leave out the space behind the wall.
     ///
     /// The sun gets one shadow map over whatever it is given, so a room with

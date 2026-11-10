@@ -3,7 +3,7 @@
 **Status:** implemented
 **Built:** 2026-10-20, the same day, and short of what this spec says in one way that matters. See "What this shipped short".
 **Date:** 2026-10-20
-**Amended:** 2026-10-20, twice, both on the day it was written.
+**Amended:** 2026-10-20, twice, both on the day it was written, and 2026-11-09 for a doorway roofed by neither room.
 
 Jake, having read the first draft: where is the hotel. It specified a corridor
 and called it a hotel, which is the fault aleph has and which this was
@@ -383,3 +383,59 @@ corridor has to deal with that, by running over it on a thinner slab, by
 stepping, or by leaving the floor's height alone and taking the cellar's
 ceiling down. Which of those is a question for whoever builds it, and the
 test is the same either way.
+
+## 2026-11-09: a doorway roofed by neither room
+
+**Jake, with a screen recording: there's a glitch walking in to the hotel.**
+Walking west out of the gallery, the view flipped to a flat plastered surface
+and back, several times, and then stayed.
+
+Both of this spec's doorways are cut as a gap between two wall pieces. The
+wall is 0.3 thick and the two rooms either side each roof up to their own
+face of it, so the strip the wall stands on was roofed by neither. Along the
+solid run of the wall that mattered to nothing, because the wall fills the
+strip itself. At the doorway, where the strip is cut away, it did.
+
+`Room::outside` finds the walls the sky can see by probing just past each
+lid's edge and plastering a face wherever nothing is over the probe. In the
+opening nothing was, so it took the doorway for an outside wall and plastered
+a face on each side of the gap, in the garden's own plaster, facing each
+other. Each is one-sided and turned inward, so from the gallery and from the
+lobby alike it is back-facing and culled: the doorway looks open from both
+rooms, and only from inside the opening do both face you. The band is narrow,
+which is why it flickered rather than stopping him: the view is flat at every
+x from -5.36 to -5.24 and clear at -5.40 and -5.20, so somewhere between 0.12
+and 0.20 of a 0.3 wall.
+
+**It was in the other doorway too**, with one face rather than two. Walking
+east into the back room is clear and walking west out of it is not, which is
+the only reason this read as the hotel's.
+
+| crossing | facing | before |
+| --- | --- | --- |
+| gallery to hotel | west | plaster |
+| hotel to gallery | east | plaster |
+| gallery to back room | east | clear |
+| back room to gallery | west | plaster |
+
+**Roofed rather than clipped.** The face could have been cut around the
+opening wherever one is found, which fixes the two doorways that exist. The
+strip is genuinely roofed in a building, so roofing it takes the condition
+away instead, and the next opening cut in a shared wall starts right. Each
+lid now reaches the far face of the wall it shares, off `GALLERY_WIDE` where
+`gallery_west` and `gallery_east` put that face, rather than off its own
+`span()` plus a thickness: those two agree today and are not the same
+question.
+
+Nothing a picture test draws moved. The lid grows above the wall, out of
+every view the building keeps.
+
+**Found by posing the camera, not by walking.** The recording had no
+coordinates in it, so the way in was `aleph`'s own geometry: the doorway's
+gap, a sweep of poses across the wall's thickness, and the engine's funnel
+`push_textured` made to print a backtrace for anything enclosing the point.
+Four readings of the source before that named the wrong object twice.
+
+## Acceptance criteria
+
+- A doorway in a shared wall is roofed across the whole thickness. — `room::tests::a_doorway_is_roofed_across_the_whole_wall`

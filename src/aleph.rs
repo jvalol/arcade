@@ -505,13 +505,27 @@ pub fn leaf_box(reaches: f32, n: u64, open: f32) -> Aabb {
 ///
 /// Named rather than built inside `solid`, because spec 0040 lays a roof on
 /// it and a second account of where it is would drift from the first.
+/// **East to the far face of the wall it shares, not to its near one.**
+/// Every other side of this lid oversails by a thickness and this one used to
+/// stop flush, which left the 0.3 the gallery's west wall stands on roofed by
+/// neither room. Along the solid wall nothing noticed. At the doorway, where
+/// that strip is cut away, `Room::outside` probed it, found nothing over it,
+/// and took the opening for a wall the sky could see: it plastered a face on
+/// each side of the gap, facing each other. Both are culled from either room,
+/// so the doorway looked open, and standing between them the view was plaster
+/// whichever way you turned along the wall. Jake walked into the hotel and
+/// found it.
+///
+/// Taken off `GALLERY_WIDE` rather than `east + THICK`, because that is where
+/// `gallery_west` puts the wall's far face. The two agree today and they are
+/// not the same question.
 pub fn lid(reaches: f32) -> Aabb {
-    let (west, east) = span();
+    let (west, _) = span();
     let (from, to) = across(reaches);
 
     Aabb::new(
         vec3(west - THICK, LOBBY_TALL, from - THICK),
-        vec3(east, LOBBY_TALL + THICK, to + THICK),
+        vec3(-GALLERY_WIDE * 0.5, LOBBY_TALL + THICK, to + THICK),
     )
 }
 

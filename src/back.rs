@@ -122,12 +122,18 @@ pub fn floor(reaches: f32) -> Aabb {
 /// it: it is a thing in the way now, and nothing else.
 /// The lid over this room, which is low, and is what it shows the sky. Spec
 /// 0040 lays a roof on it, and two accounts of where it is would drift.
+/// **West to the near face of the wall it shares, not to its far one.**
+/// The same fault as `aleph::lid`, which carries the account of it: the strip
+/// the gallery's east wall stands on was roofed by neither room, so the
+/// doorway cut through it read as open sky and was plastered across.
+///
+/// Taken off `GALLERY_WIDE`, where `gallery_east` puts that face.
 pub fn lid(reaches: f32) -> Aabb {
-    let (west, east) = span();
+    let (_, east) = span();
     let (far, near) = deep(reaches);
 
     Aabb::new(
-        vec3(west, TALL, far - THICK),
+        vec3(GALLERY_WIDE * 0.5, TALL, far - THICK),
         vec3(east + THICK, TALL + THICK, near + THICK),
     )
 }
