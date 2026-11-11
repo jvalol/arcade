@@ -12555,6 +12555,468 @@ mod tests {
         );
     }
 
+    /// The spike spec 0098 asks for: does a box-only arcade read as the
+    /// arcade. Traced on the CPU, writing pictures and nothing else.
+    #[test]
+    #[ignore]
+    fn zz_spike() {
+        let out = std::path::PathBuf::from(std::env::var("WALK_OUT").expect("WALK_OUT"));
+        let (wide, tall) = (900u32, 720u32);
+        let room = room::Room::of(games());
+        let reaches = room.reaches;
+        // **The lids as well as the colliders.** A suspended ceiling is
+        // drawn and never collided, so `solid` alone traces a hall with no
+        // roof: the first picture of this came back with the sky where the
+        // arcade's ceiling is. The same pair `Room::outside` already makes.
+        let mut boxes: Vec<blitzkit::collision::Aabb> = room.solid();
+        boxes.extend(room.lids());
+
+        // **The room spec 0064 wants, which does not exist.** A stand-in,
+        // read by nothing but this test.
+        //
+        // **Long, because the spike said so.** A sphere squeezes a wide
+        // cone of the world into a disc, so a box two metres deep gives a
+        // flat disc whatever is in it. The hall's aisle works because it is
+        // sixteen metres of repeating cabinets. So this room is the nook's
+        // own length over the nook, with frames down it at the corridor's
+        // own pitch, and the sphere at the far end from the way in.
+        let foot = 6.0f32;
+        let head = foot + room::TALL;
+        let (west, east) = (-10.5f32, -5.0);
+        let (south, north) = (-9.0f32, 6.5);
+        let thick = room::THICK;
+        let put = blitzkit::collision::Aabb::new;
+
+        boxes.extend([
+            put(vec3(west, foot - thick, south), vec3(east, foot, north)),
+            put(vec3(west - thick, foot, south), vec3(west, head, north)),
+            put(vec3(east, foot, south), vec3(east + thick, head, north)),
+            put(
+                vec3(west - thick, foot, south - thick),
+                vec3(east + thick, head, south),
+            ),
+            put(
+                vec3(west - thick, foot, north),
+                vec3(east + thick, head, north + thick),
+            ),
+            put(
+                vec3(west - thick, head, south - thick),
+                vec3(east + thick, head + thick, north + thick),
+            ),
+            // **The plinth in the middle of the room, not at its end.**
+            // A sphere shows what is behind it, so a plinth against the end
+            // wall puts the room's length behind the eye instead: the first
+            // try of this was a flat disc in a corner. In the middle there
+            // is length behind it whichever end you come from.
+            put(vec3(-8.05, foot, -1.55), vec3(-7.45, foot + 0.95, -0.95)),
+        ]);
+
+        // and the frames down its length, which are what the cone has to
+        // find something different in at every angle
+        let mut at = south + 3.0;
+
+        while at < north - 1.0 {
+            for side in [-1.0f32, 1.0] {
+                let x = (west + east) * 0.5 + side * ((east - west) * 0.5 - 0.18);
+
+                boxes.push(put(
+                    vec3(x - 0.18, foot, at - 0.16),
+                    vec3(x + 0.18, head, at + 0.16),
+                ));
+            }
+
+            boxes.push(put(
+                vec3(west, head - 0.34, at - 0.16),
+                vec3(east, head, at + 0.16),
+            ));
+
+            at += mirrors::PITCH;
+        }
+
+        let ball = (vec3(-7.75, foot + 0.95 + 0.45, -1.25), 0.45);
+
+        eprintln!("SPIKE {} boxes", boxes.len());
+
+        // **Capsules, because the figure is not boxes.** `people.rs` is
+        // turned profiles, so a tracer that knows only boxes reflects a
+        // corridor with nobody in it, which is the one thing spec 0061 was
+        // built for. Six of them off the same profiles the mesh uses.
+        let figure = |at: Vec3| -> Vec<(Vec3, Vec3, f32)> {
+            let up = |y: f32| at + Vec3::Y * y;
+
+            vec![
+                (up(0.86), up(1.42), 0.17),
+                (up(1.52), up(1.62), 0.11),
+                (up(0.04) - Vec3::Z * 0.11, up(0.84) - Vec3::Z * 0.11, 0.09),
+                (up(0.04) + Vec3::Z * 0.11, up(0.84) + Vec3::Z * 0.11, 0.09),
+                (up(1.34) - Vec3::Z * 0.24, up(0.94) - Vec3::Z * 0.28, 0.07),
+                (up(1.34) + Vec3::Z * 0.24, up(0.94) + Vec3::Z * 0.28, 0.07),
+            ]
+        };
+
+        let bodies: Vec<(Vec3, Vec3, f32)> = figure(vec3(
+            mirrors::middle() + 0.30,
+            0.0,
+            (mirrors::SOUTH + mirrors::NORTH) * 0.5 - 0.6,
+        ));
+
+        // a ray against a capsule, which is a segment with a radius
+        let capsule = |from: Vec3, way: Vec3, one: Vec3, two: Vec3, radius: f32| {
+            let along = two - one;
+            let to = from - one;
+            let (aa, ab, ac) = (along.dot(along), along.dot(way), along.dot(to));
+            let (bb, bc) = (way.dot(way), way.dot(to));
+            let a = aa * bb - ab * ab;
+            let k = to.dot(to) - radius * radius;
+            let c = aa * k - ac * ac;
+
+            if a.abs() < 1e-9 {
+                return None;
+            }
+
+            let b = aa * bc - ab * ac;
+            let under = b * b - a * c;
+
+            if under < 0.0 {
+                return None;
+            }
+
+            let at = (-b - under.sqrt()) / a;
+
+            if at < 1e-4 {
+                return None;
+            }
+
+            let on = ac + at * ab;
+            let share = (on / aa).clamp(0.0, 1.0);
+            let axis = one + along * share;
+            let point = from + way * at;
+
+            Some((at, (point - axis).normalize()))
+        };
+
+        // a slab test that also says which face was struck
+        let hit = |from: Vec3, way: Vec3| -> Option<(f32, Vec3, usize)> {
+            let mut best: Option<(f32, Vec3, usize)> = None;
+
+            for (which, box_) in boxes.iter().enumerate() {
+                let (mut near, mut far) = (f32::MIN, f32::MAX);
+                let mut axis = 0usize;
+                let mut sign = 1.0f32;
+                let mut good = true;
+
+                for n in 0..3 {
+                    let (o, d) = (from.to_array()[n], way.to_array()[n]);
+                    let (lo, hi) = (box_.min.to_array()[n], box_.max.to_array()[n]);
+
+                    if d.abs() < 1e-7 {
+                        if o < lo || o > hi {
+                            good = false;
+                            break;
+                        }
+                        continue;
+                    }
+
+                    let (mut one, mut two) = ((lo - o) / d, (hi - o) / d);
+                    let mut way_sign = -1.0;
+
+                    if one > two {
+                        std::mem::swap(&mut one, &mut two);
+                        way_sign = 1.0;
+                    }
+                    if one > near {
+                        near = one;
+                        axis = n;
+                        sign = way_sign;
+                    }
+                    far = far.min(two);
+                    if near > far {
+                        good = false;
+                        break;
+                    }
+                }
+
+                if !good || far < 1e-4 {
+                    continue;
+                }
+
+                let at = if near > 1e-4 { near } else { continue };
+
+                if best.map(|(was, _, _)| at < was).unwrap_or(true) {
+                    let mut normal = Vec3::ZERO;
+                    normal[axis] = sign;
+                    best = Some((at, normal, which));
+                }
+            }
+
+            for (one, two, radius) in bodies.iter().copied() {
+                if let Some((at, normal)) = capsule(from, way, one, two, radius) {
+                    if best.map(|(was, _, _)| at < was).unwrap_or(true) {
+                        best = Some((at, normal, usize::MAX));
+                    }
+                }
+            }
+
+            best
+        };
+
+        // one light, high and to one side, plus an ambient, plus distance
+        // **The two walls are mirrors.** A ray that meets one reflects and
+        // carries on, which is the whole of what a render to texture cannot
+        // do: spec 0061's corridor is one bounce because it is a second
+        // camera, and this is as many as the budget allows.
+        let panes: Vec<(Vec3, Vec3)> = mirrors::SIDES.iter().copied().map(mirrors::plane).collect();
+        let bounces: usize = std::env::var("SPIKE_BOUNCES")
+            .ok()
+            .and_then(|one| one.parse().ok())
+            .unwrap_or(1);
+
+        let shade = |from: Vec3, way: Vec3| -> Vec3 {
+            let (mut from, mut way) = (from, way);
+            let mut carried = 1.0f32;
+
+            for _ in 0..bounces {
+                // the nearest pane this ray meets, inside the glass
+                let mut soonest: Option<(f32, Vec3)> = None;
+
+                for (on, normal) in panes.iter().copied() {
+                    let facing = way.dot(normal);
+
+                    if facing.abs() < 1e-6 {
+                        continue;
+                    }
+
+                    let at = (on - from).dot(normal) / facing;
+
+                    if at < 1e-3 {
+                        continue;
+                    }
+
+                    let point = from + way * at;
+
+                    if point.y < mirrors::PANEL_FOOT
+                        || point.y > mirrors::PANEL_HEAD
+                        || point.z < mirrors::SOUTH
+                        || point.z > mirrors::NORTH
+                    {
+                        continue;
+                    }
+
+                    if soonest.map(|(was, _)| at < was).unwrap_or(true) {
+                        soonest = Some((at, normal));
+                    }
+                }
+
+                let Some((at, normal)) = soonest else {
+                    break;
+                };
+
+                // and nothing nearer than the glass
+                if hit(from, way)
+                    .map(|(near, _, _)| near < at)
+                    .unwrap_or(false)
+                {
+                    break;
+                }
+
+                from += way * at;
+                way = (way - 2.0 * way.dot(normal) * normal).normalize();
+                from += way * 1e-3;
+                carried *= 0.86;
+            }
+
+            carried
+                * match hit(from, way) {
+                    Some((at, normal, which)) => {
+                        let lamp = vec3(0.35, 0.86, 0.37).normalize();
+                        let lit = 0.22 + 0.78 * normal.dot(lamp).max(0.0);
+                        let far = (1.0 - (at / 46.0)).clamp(0.12, 1.0);
+                        // a stand-in for the material table spec 0098 asks for:
+                        // every box its own colour, so the question is whether
+                        // colour is what makes an inverted room legible
+                        if which == usize::MAX {
+                            return vec3(0.82, 0.66, 0.52) * lit * far;
+                        }
+
+                        let mut hash = (which as u32).wrapping_mul(0x9e37_79b9);
+                        hash ^= hash >> 15;
+                        hash = hash.wrapping_mul(0x85eb_ca6b);
+                        hash ^= hash >> 13;
+                        let tint = if std::env::var("SPIKE_FLAT").is_ok() {
+                            Vec3::ONE
+                        } else {
+                            vec3(
+                                0.55 + (hash & 0xff) as f32 / 255.0 * 0.45,
+                                0.55 + ((hash >> 8) & 0xff) as f32 / 255.0 * 0.45,
+                                0.55 + ((hash >> 16) & 0xff) as f32 / 255.0 * 0.45,
+                            )
+                        };
+
+                        tint * lit * far
+                    }
+                    None => vec3(0.05, 0.06, 0.09),
+                }
+        };
+
+        let frame = |name: &str, eye: Vec3, looking_at: Vec3, ball: Option<(Vec3, f32)>| {
+            let forward = (looking_at - eye).normalize();
+            let right = forward.cross(Vec3::Y).normalize();
+            let up = right.cross(forward);
+            let half_y = (60f32.to_radians() * 0.5).tan();
+            let half_x = half_y * wide as f32 / tall as f32;
+            let mut pixels = vec![0u8; (wide * tall * 4) as usize];
+
+            for y in 0..tall {
+                for x in 0..wide {
+                    let ndc_x = (x as f32 + 0.5) / wide as f32 * 2.0 - 1.0;
+                    let ndc_y = 1.0 - (y as f32 + 0.5) / tall as f32 * 2.0;
+                    let way = (forward + right * ndc_x * half_x + up * ndc_y * half_y).normalize();
+
+                    // through the glass if there is any and the ray meets it
+                    let lit = match ball.and_then(|(at, radius)| {
+                        let to = eye - at;
+                        let b = to.dot(way);
+                        let c = to.length_squared() - radius * radius;
+                        let d = b * b - c;
+
+                        if d < 0.0 {
+                            return None;
+                        }
+
+                        let near = -b - d.sqrt();
+
+                        if near < 1e-3 {
+                            return None;
+                        }
+
+                        Some((at, radius, near))
+                    }) {
+                        Some((at, radius, near)) => {
+                            let on = eye + way * near;
+                            let normal = (on - at) / radius;
+                            let inside = refracted(way, normal, 1.0 / 1.5);
+                            // out the far side of the ball
+                            let to = on - at;
+                            let b = to.dot(inside);
+                            let far = -b
+                                + (b * b - to.length_squared() + radius * radius)
+                                    .max(0.0)
+                                    .sqrt();
+                            let leaves = on + inside * far;
+                            let out_normal = (leaves - at) / radius;
+                            let onward = refracted(inside, -out_normal, 1.5);
+
+                            shade(leaves + onward * 1e-3, onward)
+                        }
+                        None => shade(eye, way),
+                    };
+
+                    let put = ((y * wide + x) * 4) as usize;
+
+                    for (n, one) in lit.to_array().iter().copied().enumerate() {
+                        pixels[put + n] = (one.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0) as u8;
+                    }
+
+                    pixels[put + 3] = 255;
+                }
+            }
+
+            let picture = blitzkit::renderer::Picture {
+                width: wide,
+                height: tall,
+                pixels,
+            };
+
+            blitzkit::picture::save(&picture, &out.join(format!("{}.png", name))).expect("saved");
+            eprintln!("SPIKE {}", name);
+        };
+
+        let doorway = room.doorway();
+        let eye = vec3(doorway.x, doorway.y + EYE, doorway.z);
+
+        frame("spike-hall", eye, vec3(0.0, EYE, -reaches * 0.5), None);
+
+        let ahead = (vec3(0.0, EYE, -reaches * 0.5) - eye).normalize();
+
+        frame(
+            "spike-ball",
+            eye,
+            vec3(0.0, EYE, -reaches * 0.5),
+            Some((eye + ahead * 2.2, 0.45)),
+        );
+
+        let (nook, _) = room::nook_floor(reaches);
+        let nook_eye = vec3(nook.x, EYE, nook.z + 5.0);
+
+        frame(
+            "spike-nook",
+            nook_eye,
+            vec3(nook.x, EYE, nook.z - 6.0),
+            None,
+        );
+
+        // from the nook's own floor, with its length behind the ball
+        // from the way in, at the far end, with the room through it
+        frame(
+            "spike-room",
+            vec3(-7.75, foot + EYE, north - 1.2),
+            ball.0,
+            Some(ball),
+        );
+        // and from the gallery above, looking down on it
+        frame(
+            "spike-room-along",
+            vec3(-7.75, foot + EYE, ball.0.z + 4.6),
+            ball.0,
+            Some(ball),
+        );
+        frame(
+            "spike-room-empty",
+            vec3(-7.75, foot + EYE, north - 1.2),
+            ball.0,
+            None,
+        );
+        // and what the gallery itself looks down on
+        // and across the nook's width
+        frame(
+            "spike-room-across",
+            vec3(-7.75, foot + EYE, ball.0.z + 2.6),
+            ball.0,
+            Some(ball),
+        );
+        // the corridor of mirrors, from where its own picture test stands
+        let along_it = (mirrors::SOUTH + mirrors::NORTH) * 0.5;
+
+        frame(
+            "spike-mirrors",
+            vec3(mirrors::middle(), EYE, along_it),
+            vec3(mirrors::middle() - mirrors::wide(), EYE, along_it),
+            None,
+        );
+        frame(
+            "spike-mirrors-figure",
+            vec3(mirrors::middle() + 0.30, EYE, along_it + 2.4),
+            vec3(
+                mirrors::middle() - mirrors::wide(),
+                EYE - 0.1,
+                along_it - 0.6,
+            ),
+            None,
+        );
+    }
+
+    /// Snell, for the spike above.
+    fn refracted(way: Vec3, normal: Vec3, index: f32) -> Vec3 {
+        let cos = (-way).dot(normal).clamp(-1.0, 1.0);
+        let under = 1.0 - index * index * (1.0 - cos * cos);
+
+        if under < 0.0 {
+            return way - 2.0 * way.dot(normal) * normal;
+        }
+
+        (way * index + normal * (index * cos - under.sqrt())).normalize()
+    }
+
     /// Spec 0047: and nothing outside the imaginarium knows about any of
     /// it.
     ///
