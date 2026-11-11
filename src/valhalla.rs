@@ -433,7 +433,26 @@ pub fn floor(reaches: f32) -> Aabb {
 /// through both walls.
 pub const FIRE_LONG: f32 = 16.0;
 pub const FIRE_WIDE: f32 = 1.3;
-pub const FIRE_KERB: f32 = 0.22;
+
+/// How high the kerb round it stands, which is **higher than a body walks
+/// over**.
+///
+/// It was 0.22, and you walked up onto the hearth and along the length of
+/// the fire through the flames. Jake, with a recording, 2026-11-11: in the
+/// hall i can walk on the candles.
+///
+/// **Not `reach::STEP`, which is the tempting number and is the wrong
+/// one.** A step is what `walk` climbs on purpose. What carries you over a
+/// low kerb is not that at all: `in_the_way` keeps a box out of the walls
+/// until it stands `rides` over your feet, and `rides` grows with distance,
+/// so a box this low is still ground when the body's own sphere is already
+/// touching it, and the sphere is then pushed up and over. Walked at,
+/// rather than worked out: 0.38 is walked over and 0.42 stops you, which is
+/// `RIDES` plus `RAMPS` across a body's radius, and a little.
+///
+/// So it is written as that sum. A number here would have been right until
+/// somebody moved `RADIUS`, and nothing would have said so.
+pub const FIRE_KERB: f32 = crate::walk::RIDES + crate::walk::RAMPS * crate::RADIUS + 0.05;
 
 /// The trench, which is what you cannot walk into.
 ///
@@ -540,10 +559,34 @@ pub fn flame_mesh() -> blitzkit::mesh::MeshData {
 /// three read as one fire and the falloff between them is the length of
 /// the hall rather than three lamps in a row.
 pub const FIRES: usize = 3;
-/// And how many flames stand in it, which is a different question: the
-/// lights are what the room is lit by and the flames are what you look
-/// at. Three flames in sixteen metres is a fire with gaps in it.
-pub const FLAMES: usize = 22;
+/// How wide a flame stands at its foot before its own size is applied, and
+/// the smallest it comes out and how much bigger the largest is.
+///
+/// Here rather than at the one call that draws them, because what the
+/// spacing below has to know is how wide they are.
+pub const FLAME_WIDE: f32 = 0.46;
+pub const FLAME_SMALL: f32 = 0.7;
+pub const FLAME_GROWS: f32 = 0.75;
+
+/// How far apart they stand: **closer than the narrowest of them is wide**,
+/// so that every flame runs into the ones beside it whatever size the two
+/// came out.
+///
+/// **This is the whole of what makes it a fire rather than candles.** At
+/// twenty-two over the length they stood 0.68 apart against a foot of 0.32
+/// to 0.67, so no two ever touched: a line of evenly spaced teardrops, each
+/// one whole and separate. The note over `flame_sits` had already written
+/// down what that would read as, and it read as exactly that. Jake, with a
+/// recording, 2026-11-11: make the flames closer together and overlapping.
+pub const FLAME_APART: f32 = FLAME_WIDE * FLAME_SMALL * 0.7;
+
+/// And so how many there are, which is the length divided by that.
+///
+/// **A count derived and not chosen.** Written down it was right until
+/// somebody moved the trench or the flame, and neither file would have
+/// said so. The lights are a different question and stay at three: those
+/// are what the room is lit by and these are what you look at.
+pub const FLAMES: usize = ((FIRE_LONG - 1.0) / FLAME_APART) as usize;
 
 /// Where a flame sits across the trench and how big it is, which is not
 /// the same for any two of them.
@@ -568,7 +611,7 @@ pub fn flame_sits(which: usize) -> (f32, f32) {
 
     (
         aside * (FIRE_WIDE - RAIL_WIDE * 2.0 - 0.3),
-        0.7 + size * 0.75,
+        FLAME_SMALL + size * FLAME_GROWS,
     )
 }
 /// **Up at the flames and not down on the coals.** At a hand above the
@@ -949,6 +992,74 @@ mod tests {
     }
 
     /// Spec 0056: and you can actually get across.
+    /// Spec 0060: the hearth stops you rather than carrying you.
+    ///
+    /// **Walked at and not measured.** The kerb was 0.22 against a step of
+    /// 0.25 and every number in that trench was right: it was the right
+    /// width, the right length, drawn as a rim with an open middle, and
+    /// solid all the way across so that nobody could get into the fire.
+    /// What it was not was taller than a stride, so you walked up onto it
+    /// and the whole length of the fire was a path. A test of the boxes
+    /// would have passed.
+    /// Spec 0060: the flames run into each other, whatever size they
+    /// come out.
+    ///
+    /// **Held at the worst pair and not at the average one.** Two
+    /// neighbours both drawn at their narrowest are the only pair that can
+    /// leave a gap along the trench, so that is the pair this asks about;
+    /// anything wider closes faster. It was 0.68 apart against a narrowest
+    /// foot of 0.32, which is the row of candles Jake saw.
+    #[test]
+    fn the_flames_run_into_each_other() {
+        let narrowest = FLAME_WIDE * FLAME_SMALL;
+
+        assert!(
+            FLAME_APART < narrowest,
+            "they stand {} apart with a foot of {}",
+            FLAME_APART,
+            narrowest
+        );
+        assert_eq!(
+            FLAMES,
+            ((FIRE_LONG - 1.0) / FLAME_APART) as usize,
+            "the count and the spacing disagree about the same trench"
+        );
+    }
+
+    #[test]
+    fn you_cannot_walk_up_onto_the_fire() {
+        let solid = everything();
+        let trench = fire(REACHES);
+        assert!(
+            FIRE_KERB > crate::walk::rides(crate::RADIUS),
+            "the kerb is {} against a body that rides {}",
+            FIRE_KERB,
+            crate::walk::rides(crate::RADIUS)
+        );
+
+        // from beside it, straight at it, from three places down its own
+        // length. Off the trench and not off the hall's middle, which is
+        // not the same point: the fire sits where `hall` puts it.
+        for along in [0.2, 0.5, 0.8] {
+            let x = trench.min.x + along * (trench.max.x - trench.min.x);
+            // dropped in beside it at floor height, not over the kerb
+            let start = vec3(x, trench.min.y + 0.4, trench.min.z - 1.6);
+            let want = vec3(x, trench.min.y, trench.max.z + 1.6);
+            let ended = crate::bridge::tests::walked(start, want, 6.0, &solid);
+
+            assert!(
+                ended.z < trench.min.z,
+                "walked to {:?}, which is in or past the fire",
+                ended
+            );
+            assert!(
+                ended.y < trench.max.y,
+                "ended {:.2} up, which is standing on the hearth",
+                ended.y
+            );
+        }
+    }
+
     #[test]
     fn walked_from_the_landing_into_valhalla() {
         let mut solid = crate::bridge::solid(REACHES, &done());

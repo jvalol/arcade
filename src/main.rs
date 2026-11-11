@@ -3274,7 +3274,11 @@ impl Arcade {
                     flame,
                     &Transform::at(at)
                         .with_rotation(glam::Quat::from_rotation_y(own * 2.1))
-                        .with_scale(vec3(0.46 * size, (0.26 + own * 0.2) * size, 0.46 * size)),
+                        .with_scale(vec3(
+                            valhalla::FLAME_WIDE * size,
+                            (0.26 + own * 0.2) * size,
+                            valhalla::FLAME_WIDE * size,
+                        )),
                     garden::gives_off(aim::HEARTH_FIRE * own, self.since).extend(1.0),
                 );
             }
