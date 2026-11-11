@@ -741,11 +741,6 @@ pub fn high_seat(reaches: f32) -> Aabb {
     )
 }
 
-/// The louvre in the ridge: how far it runs along the hall and how far
-/// down each pitch it reaches.
-pub const HOLE_LONG: f32 = 3.4;
-pub const HOLE_DOWN: f32 = 1.2;
-
 /// How far along the slope a pitch runs, which is the one number the
 /// roof's pieces are cut out of.
 pub fn slope_run(one: &Built) -> f32 {
@@ -756,52 +751,83 @@ pub fn slope_run(one: &Built) -> f32 {
 /// each runs, from the eaves at nought to the ridge at one, and the two
 /// ends of it along the building.
 ///
-/// **One piece unless there is a hole in it.** A plain roof is the slab
-/// it has always been. The hall's is three: the run below the hole, the
-/// whole length, and then the top of the slope in two runs either side of
-/// the opening. Split along the slope at one height everywhere rather
-/// than cut round a rectangle, because the first is three boxes and the
-/// second is a mesh.
-pub fn pitch_pieces(one: &Built, holed: bool) -> Vec<(f32, f32, f32, f32)> {
+/// **One piece, and the roof is whole again.** It was three, with a
+/// louvre cut out of the ridge and a painted night hung under the hole.
+/// Spec 0063's note on that room applies to a hole as well as to a room:
+/// a small rectangle of sky in a dark ceiling reads as a panel with
+/// something playing on it, whatever is painted on it. Jake, 2026-11-11,
+/// twice: it looks like a rectangle of swirling colour, and then a small
+/// rectangle doesn't land, just make it the whole ceiling.
+///
+/// So the night is the ceiling now, per [`night_pitches`], and the roof
+/// over it has nothing cut out of it.
+pub fn pitch_pieces(one: &Built) -> Vec<(f32, f32, f32, f32)> {
     // the gable overhang, which is what the length was being multiplied
     // by before any of this
     let over = one.long * 0.52;
 
-    if !holed {
-        return vec![(0.0, 1.0, -over, over)];
-    }
-
-    let under = (slope_run(one) - HOLE_DOWN) / slope_run(one);
-
-    vec![
-        (0.0, under, -over, over),
-        (under, 1.0, -over, -HOLE_LONG * 0.5),
-        (under, 1.0, HOLE_LONG * 0.5, over),
-    ]
+    vec![(0.0, 1.0, -over, over)]
 }
 
-/// How wide the hole in the ridge comes out, across the hall.
-pub fn hole_wide(one: &Built) -> f32 {
-    HOLE_DOWN * (one.wide * 0.5) / slope_run(one) * 2.0
-}
-
-/// How much wider than the hole the painted night is, and how far under
-/// the ridge it hangs.
+/// How far under the roof the night hangs.
 ///
-/// **Wider, so no edge of it is ever in shot.** What is wanted is a night
-/// seen through a hole, and a panel you can see the end of is a panel.
-pub const NIGHT_OVER: f32 = 1.5;
-pub const NIGHT_UNDER: f32 = 0.07;
+/// **Under it and not in it.** Two faces in one plane is the fault this
+/// building has hit eight times, and the roof's own boards are what the
+/// sky sees from outside. Clear of the pitch's own half thickness, which
+/// is 0.11.
+pub const NIGHT_UNDER: f32 = 0.12;
 
-/// The painted night: where its middle is and how big it is.
-pub fn night(reaches: f32) -> (Vec3, f32, f32) {
+/// How deep a rafter is, and how far under the night it hangs.
+///
+/// **Under the night and not through it**, which is what makes the
+/// rafters read as beams across a sky rather than as lines drawn on one.
+/// The night is a plane and a rafter is a box, and a plane that passes
+/// through a box leaves a seam along it: at 0.16 under the pitch the
+/// night at 0.12 cut every rafter in the hall lengthways.
+///
+/// Written as the sum so the two cannot drift back together.
+pub const RAFTER_DEEP: f32 = 0.13;
+pub const RAFTER_UNDER: f32 = NIGHT_UNDER + RAFTER_DEEP * 0.5 + 0.02;
+
+/// Said at build time rather than in a test, the way `back::GAUGE_UP`
+/// says its own: a rafter cut lengthways by the sky is a thing you see
+/// rather than a thing you measure, and this refuses to compile instead.
+const _: () = assert!(RAFTER_UNDER - RAFTER_DEEP * 0.5 > NIGHT_UNDER);
+
+/// The painted night, as the two slopes of the roof seen from inside:
+/// where each one's middle is, how big its quad is, and how far it is
+/// rolled.
+///
+/// **The whole ceiling and not a hole in it.** What a longhouse gives you
+/// when you lie on a bench is the whole underside of its roof, and if
+/// that is night then the room is open to it. A rectangle in the middle
+/// is a skylight, and a skylight is a thing in a ceiling rather than the
+/// ceiling being gone.
+///
+/// Drawn rather than opened, because from outside this has to stay a
+/// roof: the building reads from the top of the bridge by its roofline
+/// and one lantern.
+pub fn night_pitches(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
     let one = hall(reaches);
+    let rise = one.ridge - one.eaves;
+    let slope = (rise / (one.wide * 0.5)).atan();
+    let along = slope_run(&one);
 
-    (
-        vec3(one.at.x, one.at.y + one.ridge - NIGHT_UNDER, one.at.z),
-        hole_wide(&one) * NIGHT_OVER,
-        HOLE_LONG * NIGHT_OVER,
-    )
+    [-1.0f32, 1.0]
+        .iter()
+        .copied()
+        .map(|side| {
+            let eaves = vec3(
+                one.at.x + side * one.wide * 0.5,
+                one.at.y + one.eaves,
+                one.at.z,
+            );
+            let ridge = vec3(one.at.x, one.at.y + one.ridge, one.at.z);
+            let middle = (eaves + ridge) * 0.5 - Vec3::Y * NIGHT_UNDER;
+
+            (middle, vec3(along, 1.0, one.long), -side * slope)
+        })
+        .collect()
 }
 
 /// The triangle over each gable wall, between the eaves and the roof.
@@ -845,17 +871,49 @@ const EDDIES: [(f32, f32, f32, f32); 3] = [
     (0.52, 0.80, 2.0, 4.2),
 ];
 
-/// The stars: where each one is, how far its halo reaches, and how hard
-/// it burns.
-const STARS: [(f32, f32, f32, f32); 7] = [
-    (0.20, 0.26, 0.095, 1.00),
-    (0.74, 0.22, 0.062, 0.76),
-    (0.86, 0.54, 0.074, 0.88),
-    (0.44, 0.60, 0.050, 0.62),
-    (0.62, 0.82, 0.066, 0.78),
-    (0.14, 0.72, 0.046, 0.54),
-    (0.50, 0.12, 0.040, 0.48),
-];
+/// How many stars there are, how wide the widest one's halo is, how faint
+/// the faintest burns, and how steeply the bright ones thin out.
+///
+/// **Seven was the whole of the trouble.** Seven hand placed stars over a
+/// swirl leaves the swirl carrying the picture, and a swirl carrying a
+/// picture is a pattern rather than a sky: Jake, 2026-11-11, is it supposed
+/// to be the northern lights, it looks like a rectangle of swirling colour.
+/// What a night has is a great many faint ones and a few that catch you.
+///
+/// `STAR_FEW` is the exponent the pick is raised to, so most come out near
+/// the faint end and the bright ones are rare without being listed.
+pub const STARS: usize = 54;
+const STAR_HALO: f32 = 0.055;
+const STAR_FAINT: f32 = 0.18;
+const STAR_FEW: f32 = 3.0;
+
+/// Where one of them is, how far its halo reaches and how hard it burns.
+///
+/// Off a hash rather than a table, the way `flame_sits` is: fifty-four
+/// stars written out is fifty-four rows nobody can check, and the thing
+/// worth saying about them is the distribution and not the places.
+fn star_at(which: usize) -> (f32, f32, f32, f32) {
+    let mut hash = (which as u32).wrapping_mul(0x9e37_79b9);
+
+    hash ^= hash >> 15;
+    hash = hash.wrapping_mul(0x85eb_ca6b);
+    hash ^= hash >> 13;
+
+    let u = (hash & 0x3ff) as f32 / 1023.0;
+    let v = ((hash >> 10) & 0x3ff) as f32 / 1023.0;
+    let pick = ((hash >> 20) & 0x3ff) as f32 / 1023.0;
+    let hard = STAR_FAINT + pick.powf(STAR_FEW) * (1.0 - STAR_FAINT);
+
+    (u, v, STAR_HALO * (0.4 + hard * 0.8), hard)
+}
+
+/// How much of the swirl survives into the colour.
+///
+/// **It was the subject and it wants to be the ground.** At its full
+/// strength the bands are what you read, which is the whole of why the
+/// panel looked like a screen with something playing on it rather than a
+/// hole with a night behind it.
+const SWIRL: f32 = 0.42;
 
 /// A night painted rather than photographed, for the hole in the ridge.
 ///
@@ -880,8 +938,12 @@ pub fn night_sky() -> blitzkit::texture::TextureData {
     // **Deep, because the panel is multiplied past one.** At the colour
     // a night sky looks on paper, every band of it clipped and the
     // whole thing came out light blue with white blotches in it.
-    let deep = vec3(0.020, 0.045, 0.205);
-    let pale = vec3(0.085, 0.300, 0.720);
+    // **Far darker than it was.** It ran to a cobalt that clipped in blue
+    // once `NIGHT_BURNS` had multiplied it, so the hole in the ridge was a
+    // lit rectangle in a dark ceiling. A night sky is nearly black and what
+    // you see in it is the stars.
+    let deep = vec3(0.008, 0.016, 0.055);
+    let pale = vec3(0.030, 0.085, 0.210);
     let star = vec3(1.0, 0.74, 0.26);
 
     for down in 0..n {
@@ -899,9 +961,9 @@ pub fn night_sky() -> blitzkit::texture::TextureData {
                 band += (dv.atan2(du) * turn + away * 24.0).sin() * (-(away * reach)).exp();
             }
 
-            let mut colour = deep + (pale - deep) * (band * 0.5 + 0.5).clamp(0.0, 1.0);
+            let mut colour = deep + (pale - deep) * (band * SWIRL * 0.5 + 0.5).clamp(0.0, 1.0);
 
-            for (at_u, at_v, reach, hard) in STARS {
+            for (at_u, at_v, reach, hard) in (0..STARS).map(star_at) {
                 let away = (u - at_u).hypot(v - at_v);
                 let near = 1.0 - (away / reach).min(1.0);
                 // the halo, and a core inside it that goes white
@@ -1285,93 +1347,120 @@ mod tests {
         assert_eq!(fires(REACHES).len(), FIRES);
     }
 
-    /// Spec 0060: the hole in the ridge is over the fire.
-    #[test]
-    fn the_smoke_hole_is_over_the_fire() {
-        let one = hall(REACHES);
-        let kerb = fire(REACHES);
-        let across = hole_wide(&one) * 0.5;
-
-        assert!(
-            one.at.x - across > kerb.min.x && one.at.x + across < kerb.max.x,
-            "the hole runs {:.2} either side of {:.2} and the fire runs \
-             {:.2} to {:.2}",
-            across,
-            one.at.x,
-            kerb.min.x,
-            kerb.max.x
-        );
-    }
-
-    /// Spec 0060: and the roof still closes everywhere the hole is not.
+    /// Spec 0060: the night is the whole ceiling.
     ///
-    /// **Asked of the pieces and not of the picture.** A roof cut into
-    /// three boxes is three chances to leave a gap, and a gap in a roof
-    /// is a line of sky over a lit room that nobody notices until they
-    /// stand under it.
+    /// **Not a rectangle in it.** It was a louvre in the ridge with a
+    /// painted night hung under the hole, and a small lit rectangle in a
+    /// dark ceiling reads as a panel with something on it however it is
+    /// painted. Jake, 2026-11-11: a small rectangle doesn't land, just
+    /// make it the whole ceiling.
+    ///
+    /// Asked of the two quads against the room they are the ceiling of,
+    /// rather than of either on its own.
     #[test]
-    fn the_roof_closes_round_the_hole() {
+    fn the_night_is_the_whole_ceiling() {
         let one = hall(REACHES);
-        let pieces = pitch_pieces(&one, true);
-        let plain = pitch_pieces(&one, false)[0];
-        let under = pieces[0];
+        let pitches = night_pitches(REACHES);
+        let air = inside(REACHES);
 
-        assert_eq!(pieces.len(), 3, "a holed pitch is three pieces");
-        assert!(
-            (under.0 - plain.0).abs() < 1e-6 && (under.2 - plain.2).abs() < 1e-6,
-            "the piece under the hole does not start where a plain pitch does"
-        );
-        assert!(
-            (under.3 - plain.3).abs() < 1e-6,
-            "the piece under the hole does not run the whole length"
-        );
+        assert_eq!(pitches.len(), 2, "a roof has two slopes");
 
-        for top in &pieces[1..] {
+        for (at, size, roll) in pitches.iter().copied() {
             assert!(
-                (top.0 - under.1).abs() < 1e-6,
-                "the top of the slope starts at {:.4} and the piece under \
-                 it ends at {:.4}, which is a gap all the way along",
-                top.0,
-                under.1
+                (size.x - slope_run(&one)).abs() < 1e-3,
+                "a slope is {:.2} long and the quad on it is {:.2}",
+                slope_run(&one),
+                size.x
             );
             assert!(
-                (top.1 - 1.0).abs() < 1e-6,
-                "the top does not reach the ridge"
+                size.z >= air.max.z - air.min.z,
+                "the quad is {:.2} along the hall and the room is {:.2}",
+                size.z,
+                air.max.z - air.min.z
+            );
+            assert!(
+                roll.abs() > 0.05,
+                "the quad lies flat, so it is a lid and not a pitch"
+            );
+            assert!(
+                at.y < one.at.y + one.ridge && at.y > one.at.y + one.eaves,
+                "the night hangs at {:.2}, and the roof runs {:.2} to {:.2}",
+                at.y,
+                one.at.y + one.eaves,
+                one.at.y + one.ridge
             );
         }
 
+        // and the two of them lie either side of the ridge
         assert!(
-            (pieces[1].3 + HOLE_LONG * 0.5).abs() < 1e-6
-                && (pieces[2].2 - HOLE_LONG * 0.5).abs() < 1e-6,
-            "the two runs either side do not meet the hole"
+            pitches[0].0.x < one.at.x && pitches[1].0.x > one.at.x,
+            "both slopes are on the same side of the ridge"
         );
     }
 
-    /// Spec 0060: and the painted night is wider than the hole it is seen
-    /// through, so no edge of it is ever in shot.
+    /// Spec 0060: and the roof over it is whole.
+    ///
+    /// **Because the night is drawn and not opened.** From outside this
+    /// has to stay a roof: the building reads from the top of the bridge
+    /// by its roofline and one lantern, and a hole in the ridge with a
+    /// night under it was a hole in that too.
     #[test]
-    fn the_night_is_wider_than_the_hole() {
+    fn the_roof_is_one_piece_down_each_slope() {
         let one = hall(REACHES);
-        let (at, wide, long) = night(REACHES);
+        let pieces = pitch_pieces(&one);
+
+        assert_eq!(pieces.len(), 1, "a pitch is one piece");
+        assert!(
+            pieces[0].0 == 0.0 && pieces[0].1 == 1.0,
+            "the pitch runs {:.2} to {:.2} rather than eaves to ridge",
+            pieces[0].0,
+            pieces[0].1
+        );
+    }
+
+    /// Spec 0060: the painted night is dark, and the stars are the only
+    /// thing in it that burns.
+    ///
+    /// **Which is the whole of what it got wrong.** The sky ran to a cobalt
+    /// that clipped in blue once `NIGHT_BURNS` had multiplied it, so the
+    /// hole in the ridge was a lit rectangle in a dark ceiling with a
+    /// pattern moving on it. Jake, 2026-11-11: is it supposed to be the
+    /// northern lights, it looks like a rectangle of swirling colour.
+    ///
+    /// Asked of the picture and not of the two colours it is mixed from,
+    /// because what reads is what comes out: the swirl and the stars are
+    /// laid over that mix and either of them could put it back.
+    #[test]
+    fn the_night_is_dark_and_only_its_stars_burn() {
+        let sky = night_sky();
+        let level = sky.levels.first().expect("the full size picture");
+        let mut lit: Vec<f32> = Vec::new();
+
+        for texel in level.pixels.chunks_exact(4) {
+            let (r, g, b) = (texel[0] as f32, texel[1] as f32, texel[2] as f32);
+
+            lit.push((r * 0.2126 + g * 0.7152 + b * 0.0722) / 255.0);
+        }
+
+        lit.sort_by(f32::total_cmp);
+
+        let middle = lit[lit.len() / 2];
+        let burning = lit.iter().filter(|one| **one > 0.5).count() as f32 / lit.len() as f32;
 
         assert!(
-            wide > hole_wide(&one) + 0.2,
-            "the night is {:.2} across and the hole is {:.2}",
-            wide,
-            hole_wide(&one)
+            middle < 0.1,
+            "the middle of the sky is {:.3}, which is a lit panel",
+            middle
         );
         assert!(
-            long > HOLE_LONG + 0.2,
-            "the night is {:.2} along and the hole is {:.2}",
-            long,
-            HOLE_LONG
+            burning > 0.0005,
+            "{:.4} of it burns, so there is nothing to look at",
+            burning
         );
         assert!(
-            at.y < one.at.y + one.ridge && at.y > one.at.y + one.eaves,
-            "the night hangs at {:.2}, and the roof runs {:.2} to {:.2}",
-            at.y,
-            one.at.y + one.eaves,
-            one.at.y + one.ridge
+            burning < 0.05,
+            "{:.4} of it burns, which is not a night",
+            burning
         );
     }
 

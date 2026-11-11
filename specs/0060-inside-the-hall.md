@@ -117,6 +117,36 @@ below it is what is through the hole. From outside and above it is facing
 away and is culled, so the roof has a hole in it and a light inside, which is
 what a lit louvre looks like.
 
+### Which is the whole ceiling now, 2026-11-11
+
+**A small rectangle of sky does not land, whatever is painted on it.** Jake,
+twice in a morning: is it supposed to be the northern lights, it looks like
+a rectangle of swirling colour, and then a small rectangle doesn't land,
+just make it the whole ceiling. A hole in a ceiling is a thing in a ceiling.
+What a longhouse gives you when you lie back on a bench is the whole
+underside of its roof, and if that is night then the room is open to it.
+
+So the louvre is gone and the night is the two slopes of the roof, the full
+length of the hall, with the rafters crossing it. The pitches are one piece
+each again, `HOLE_LONG`, `HOLE_DOWN` and `hole_wide` with them.
+
+**Still drawn rather than opened.** From outside this has to stay a roof,
+because the building reads from the top of the bridge by its roofline and
+one lantern, and a hole in the ridge was a hole in that too.
+
+**And the rafters hang under it rather than in it.** A plane through a box
+leaves a seam along it, so at their old height the sky cut every rafter in
+the hall lengthways. `RAFTER_UNDER` is written as `NIGHT_UNDER` plus half a
+rafter and a margin, said at build time rather than in a test the way
+`back::GAUGE_UP` says its own.
+
+**The sky itself was the other half of the fault.** It ran to a cobalt that
+clipped in blue once `NIGHT_BURNS` had multiplied it, so the swirl was
+carrying the picture and a swirl carrying a picture is a pattern. It is
+darker now, the swirl survives at 0.42 of its old strength, and there are
+fifty-four stars off a hash rather than seven in a table: a night has a
+great many faint ones and a few that catch you.
+
 **Drawn rather than photographed.** Cobalt ground, swirl, and stars that are
 a bright core in a wide warm halo, which is the same construction as the
 runestone's glow because the reason is the same: this canvas clips at one, so
@@ -127,7 +157,7 @@ a star that is only bright is a white dot.
 - The hall's door is a way through. You walk in.
 - Inside: a fire down the middle, posts, benches, the roof overhead.
 - The fire is the only light in the room and it moves.
-- Above the fire, a hole in the ridge with a painted night in it.
+- Overhead, the whole underside of the roof painted as night.
 - Nothing is asked of you in here and nothing is counted.
 
 ## Acceptance criteria
@@ -138,9 +168,9 @@ a star that is only bright is a white dot.
 - Everything in here is inside the hall, which is what the axes being the wrong way round broke. — `valhalla::tests::everything_inside_is_inside`
 - Nothing drawn in here shares a plane with anything else drawn in here. — `valhalla::tests::nothing_inside_is_in_one_plane_with_anything`
 - The fire is the only light inside the hall. — `valhalla::tests::the_fire_is_the_only_light_in_here`
-- The hole is over the fire. — `valhalla::tests::the_smoke_hole_is_over_the_fire`
-- And the roof still closes everywhere the hole is not. — `valhalla::tests::the_roof_closes_round_the_hole`
-- The painted night covers the hole it is seen through. — `valhalla::tests::the_night_is_wider_than_the_hole`
+- The night is the whole ceiling: a quad down each slope, the length of the room, hung under the roof and rolled to the pitch. — `valhalla::tests::the_night_is_the_whole_ceiling`
+- And the roof over it is whole. — `valhalla::tests::the_roof_is_one_piece_down_each_slope`
+- The night is dark and its stars are the only thing in it that burns. — `valhalla::tests::the_night_is_dark_and_only_its_stars_burn`
 - And the room as a whole is drawn. — `tests::the_hall_inside_is_drawn`, which is the check for the three things a number cannot see: a fire that washes every surface to cream, a triangle of open sky at each gable, and a lit panel painted across a doorway you can walk through. All three were in the first build.
 
 ### Verified by hand

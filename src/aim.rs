@@ -1151,7 +1151,7 @@ pub const HEARTH_REACH: f32 = 9.5;
 /// panel is the same picture at every hour. Over one in every channel:
 /// the star cores in the picture are white and clip, the cobalt round
 /// them does not, so the stars burn and the sky stays blue.
-pub const NIGHT_BURNS: Vec3 = glam::vec3(1.18, 1.18, 1.40);
+pub const NIGHT_BURNS: Vec3 = glam::vec3(1.70, 1.85, 2.60);
 pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);
 pub const VALHALLA_SPILL_LIT: f32 = 3.1;
 pub const VALHALLA_SPILL_REACH: f32 = 14.0;

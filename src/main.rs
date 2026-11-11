@@ -2980,9 +2980,9 @@ impl Arcade {
             let along = valhalla::slope_run(&one);
 
             for side in [-1.0f32, 1.0] {
-                // and in pieces, because the hall's has a hole in it. The
-                // eaves end of the slope is nought and the ridge is one.
-                for (from, to, z_from, z_to) in valhalla::pitch_pieces(&one, one.hall) {
+                // in pieces, with the eaves end of the slope at nought and
+                // the ridge at one. One piece since the louvre went.
+                for (from, to, z_from, z_to) in valhalla::pitch_pieces(&one) {
                     let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
                     let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
                     let middle = eaves + (ridge - eaves) * (from + to) * 0.5;
@@ -3201,24 +3201,17 @@ impl Arcade {
             for n in 0..rafters {
                 let at_z = air.min.z + (n as f32 + 0.5) / rafters as f32 * (air.max.z - air.min.z);
 
-                // **Not across the hole.** A louvre with the roof's own
-                // rafters running over it is a grating, and what is
-                // wanted is a hole with a night in it.
-                if (at_z - one.at.z).abs() < valhalla::HOLE_LONG * 0.5 + 0.2 {
-                    continue;
-                }
-
                 let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
                 let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
-                // under the pitch rather than in it, so the two are not
-                // one surface
-                let middle = (eaves + ridge) * 0.5 - Vec3::Y * 0.16;
+                // under the night rather than in it, so the two are not
+                // one surface. See `valhalla::RAFTER_UNDER`.
+                let middle = (eaves + ridge) * 0.5 - Vec3::Y * valhalla::RAFTER_UNDER;
 
                 scene.push_material(
                     cube,
                     &Transform::at(vec3(middle.x, middle.y, at_z))
                         .with_rotation(glam::Quat::from_rotation_z(-side * slope))
-                        .with_scale(vec3(along * 0.96, 0.13, 0.16)),
+                        .with_scale(vec3(along * 0.96, valhalla::RAFTER_DEEP, 0.16)),
                     aim::HALL_TIMBER,
                     aim::MATTE,
                 );
@@ -3329,20 +3322,24 @@ impl Arcade {
             }
         }
 
-        // the painted night through the hole in the ridge, per spec 0060.
-        // Face down, because it is only ever looked up at.
+        // the painted night, which is the whole underside of the roof,
+        // per spec 0060. Face down, because it is only ever looked up at,
+        // and then rolled to the pitch it lies under.
         if let (Some(plane), Some(night)) = (self.ground, self.night) {
-            let (at, wide, long) = valhalla::night(reaches);
-
-            scene.push_textured(
-                plane,
-                night,
-                &Transform::at(at)
-                    .with_rotation(glam::Quat::from_rotation_x(std::f32::consts::PI))
-                    .with_scale(vec3(wide, 1.0, long)),
-                garden::gives_off(aim::NIGHT_BURNS, self.since).extend(1.0),
-                aim::MATTE,
-            );
+            for (at, size, roll) in valhalla::night_pitches(reaches) {
+                scene.push_textured(
+                    plane,
+                    night,
+                    &Transform::at(at)
+                        .with_rotation(
+                            glam::Quat::from_rotation_z(roll)
+                                * glam::Quat::from_rotation_x(std::f32::consts::PI),
+                        )
+                        .with_scale(size),
+                    garden::gives_off(aim::NIGHT_BURNS, self.since).extend(1.0),
+                    aim::MATTE,
+                );
+            }
         }
     }
 
