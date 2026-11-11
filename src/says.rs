@@ -37,8 +37,7 @@ pub const BIFROST: &str = "BIFROST";
 /// Four of his lines went with it: the question, the line after an answer,
 /// the line after a wrong one, and the four answers it took.
 ///
-/// Both sentences here are his own, out of those four, put together. He
-/// has not read them in this order, so they carry the marker until he
-/// does.
+/// What stands here is his own: he struck the line I drafted out of those
+/// four and wrote this one in its place.
 pub const WATCHMAN_LETS_YOU_BY: &str =
-    "I have stood at this end since it was built. Go on through. [COPY - Jake]";
+    "I have stood at this gate since the beginning of time. You may go on through.";
