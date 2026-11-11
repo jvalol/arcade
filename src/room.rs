@@ -1772,7 +1772,7 @@ impl Room {
     pub fn lids(&self) -> Vec<Aabb> {
         let mut out = self.ceiling();
 
-        out.push(crate::back::lid(self.reaches));
+        out.push(crate::back::roofs(self.reaches));
         out
     }
 

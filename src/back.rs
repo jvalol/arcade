@@ -122,20 +122,41 @@ pub fn floor(reaches: f32) -> Aabb {
 /// it: it is a thing in the way now, and nothing else.
 /// The lid over this room, which is low, and is what it shows the sky. Spec
 /// 0040 lays a roof on it, and two accounts of where it is would drift.
-/// **West to the near face of the wall it shares, not to its far one.**
-/// The same fault as `aleph::lid`, which carries the account of it: the strip
-/// the gallery's east wall stands on was roofed by neither room, so the
-/// doorway cut through it read as open sky and was plastered across.
+/// **It ends inside the wall it shares and not on the face of it.** Flush
+/// with that face it was a second drawn face in the gallery's own plane, and
+/// the two fought: Jake, 2026-11-11, with a picture of the gallery's east
+/// wall speckled in `BACK_CEILING` grey under the ceiling. Half a thickness
+/// in, the end is buried in the wall and the gallery never sees it.
 ///
-/// Taken off `GALLERY_WIDE`, where `gallery_east` puts that face.
+/// Flush is where `roofs` below put it, and that is the one job it was doing.
+/// The two are separate because they are separate questions: how far the slab
+/// is seen to run, and how far it has to cover for nothing above it to read
+/// as sky.
 pub fn lid(reaches: f32) -> Aabb {
     let (_, east) = span();
     let (far, near) = deep(reaches);
 
     Aabb::new(
-        vec3(GALLERY_WIDE * 0.5, TALL, far - THICK),
+        vec3(GALLERY_WIDE * 0.5 + THICK * 0.5, TALL, far - THICK),
         vec3(east + THICK, TALL + THICK, near + THICK),
     )
+}
+
+/// The same slab as a roof, which runs west to the near face of the wall it
+/// shares rather than stopping half way through it.
+///
+/// **The strip a shared wall stands on is roofed by neither room.** Along the
+/// solid run that matters to nothing, since the wall fills the strip itself.
+/// Where the doorway cuts it away, `Room::outside` probed it, found nothing
+/// over it and took the opening for a wall the sky could see: a face
+/// plastered across the way in. Jake walked into it on 2026-11-09 and the
+/// view flipped to flat plaster and back.
+///
+/// Taken off `GALLERY_WIDE`, where `gallery_east` puts that face.
+pub fn roofs(reaches: f32) -> Aabb {
+    let lid = lid(reaches);
+
+    Aabb::new(vec3(GALLERY_WIDE * 0.5, lid.min.y, lid.min.z), lid.max)
 }
 
 pub fn solid(reaches: f32) -> Vec<Aabb> {
@@ -813,6 +834,42 @@ mod tests {
 
     fn reaches() -> f32 {
         crate::room::Room::of(crate::games()).reaches
+    }
+
+    /// Spec 0026: the slab the gallery can see ends inside the wall, and the
+    /// one the sky is asked about reaches the face of it.
+    ///
+    /// **A face buried in a solid is hidden; a face on its plane fights.**
+    /// The two were one box until 2026-11-11, flush with the gallery's side
+    /// of the wall for the roofing's sake, and the gallery's east wall came
+    /// out speckled under its ceiling. This asks for the gap between them
+    /// rather than for either number, so moving the wall moves both.
+    #[test]
+    fn the_slab_ends_in_the_wall_and_the_roof_reaches_its_face() {
+        let reaches = reaches();
+        let seen = lid(reaches);
+        let roof = roofs(reaches);
+        let wall = gallery_east(reaches)
+            .into_iter()
+            .next()
+            .expect("the gallery's east wall");
+
+        assert!(
+            seen.min.x > wall.min.x && seen.min.x < wall.max.x,
+            "the drawn slab ends at {} and the wall runs {} to {}",
+            seen.min.x,
+            wall.min.x,
+            wall.max.x
+        );
+        assert_eq!(
+            roof.min.x, wall.min.x,
+            "the roof stops short of the strip the wall stands on"
+        );
+        assert_eq!(
+            (roof.min.y, roof.min.z, roof.max),
+            (seen.min.y, seen.min.z, seen.max),
+            "the roof and the slab disagree about anything but their west end"
+        );
     }
 
     /// Spec 0024: the room stands east of the gallery and nothing of the
