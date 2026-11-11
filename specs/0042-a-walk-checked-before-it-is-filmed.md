@@ -123,8 +123,11 @@ calling that, so the order inside a frame is unchanged.
   through. — `tests::a_walk_with_room_to_finish_is_let_through`
 - The eye goes up with the feet, so a replayed climb's sight is taken from
   the height it is at. — `tests::the_eye_sets_off_after_the_feet_in_one_frame_of_aiming`
-- And what that sight finds is what you would see standing
-  there. — `tests::the_sight_is_taken_from_the_floor_you_are_standing_on`
+- ~~And what that sight finds is what you would see standing there.~~
+  Struck 2026-11-10: the test drove this through the imaginarium's three
+  frames, where standing on a wall makes the question mean something, and
+  spec 0063 parked that room. With one way up the sight is taken from the
+  one floor there is.
 - A `pin:` may walk into a wall and the same walk as a `hold:` may
   not. — `tests::a_pin_may_walk_into_a_wall_and_a_hold_may_not`
 

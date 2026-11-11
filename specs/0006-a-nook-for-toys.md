@@ -642,7 +642,10 @@ nothing, because a pull is a press and not forty a second.
 - And every part of the open floor has a lamp on it, which the sconces alone
   could not say. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
 - A pendant hangs over your head and under the ceiling. — `room::tests::the_pendants_hang_clear_of_your_head_and_the_ceiling`
-- And none of them hangs in the way up. — `room::tests::nothing_hangs_in_the_way_up`
+- ~~And none of them hangs in the way up.~~ Struck 2026-11-10: spec 0063
+  parked the imaginarium and the stair up to it, so the nook's ceiling has
+  no hole in it for a pendant to hang in. The clipping that kept them clear
+  of it is still in `Room::ceiling`, given nothing to clip to.
 - Every repo is a cabinet in the hall or a bench in the nook. — `tests::it_knows_every_game_the_project_does`
 - cascada's dominoes stand on its bench and none hangs off it. — `cascada::tests::they_all_stand_on_the_bench`
 - And they are spaced the way cascada says to space them. — `cascada::tests::they_are_close_enough_to_knock_each_other_over`

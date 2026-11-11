@@ -78,8 +78,10 @@ different questions, so each says its own.
 - A room that answers twice answered
   once. — `trail::tests::a_room_that_answers_twice_answered_once`
 - The order they came in survives. — `trail::tests::it_keeps_the_order_they_came_in`
-- The register and the desk fill it, through the same calls a frame
-  makes. — `tests::the_rooms_give_up_what_they_ask`
+- ~~The register and the desk fill it, through the same calls a frame
+  makes.~~ Struck 2026-11-10: spec 0063 parked both, and the two stations
+  they answered went with them. What fills the record now is the three
+  below and the two rooms that answer by being reached.
 - A press fills it, and working the same thing twice does not fill it
   twice. — `tests::a_press_gives_its_room_up`
 - A ride ending at the sun fills it, and ending anywhere else does

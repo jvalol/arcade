@@ -1,6 +1,6 @@
 # 0030 The hotel is full again
 
-**Status:** cut on 2026-11-10 by spec 0062, which took the hotel's corridor and the long hall out of the building. What is written below is the record of a room that was built and stood for three weeks, and the tests it cites went with it.
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-20
 **Built:** 2026-10-20, the same day it was written, because Jake walked spec
 0029's corridor again and the four things he found were this spec: the lights
@@ -144,23 +144,23 @@ and its effect together. Six rooms a second rather than two and a bit.
 ## Acceptance criteria
 
 - A coach of `n` is housed by the move, and after it the hotel is as full as
-  it was. — `aleph::tests::the_hotel_is_full_again`
-- And it has `n` more people in it than before. — `aleph::tests::nobody_left_and_more_arrived`
+  it was. — `parked::aleph::tests::the_hotel_is_full_again`
+- And it has `n` more people in it than before. — `parked::aleph::tests::nobody_left_and_more_arrived`
 - One guest is housed without doubling anything, because a shuffle is enough
-  and the room should not say otherwise. — `aleph::tests::one_guest_does_not_need_the_doubling`
+  and the room should not say otherwise. — `parked::aleph::tests::one_guest_does_not_need_the_doubling`
 - A coach with a room for every counting number is housed, which is the case
-  only doubling answers. — `aleph::tests::an_endless_coach_is_housed`
+  only doubling answers. — `parked::aleph::tests::an_endless_coach_is_housed`
 - The arrivals walk in after the rule rather than with it, so the two waves
-  are two. — `aleph::tests::the_filling_follows_the_freeing`
+  are two. — `parked::aleph::tests::the_filling_follows_the_freeing`
 - A door the wave is passing stands open even though somebody is in that
   room, which is the whole of what makes the move
-  visible. — `aleph::tests::a_door_the_wave_is_passing_stands_open`
+  visible. — `parked::aleph::tests::a_door_the_wave_is_passing_stands_open`
 - And they are counted when they are in rather than when they are asked
-  for. — `aleph::tests::nobody_left_and_more_arrived`
+  for. — `parked::aleph::tests::nobody_left_and_more_arrived`
 - There is no last door: whatever room you stand outside, there are rooms
-  drawn past it. — `aleph::tests::there_is_always_another_door`
+  drawn past it. — `parked::aleph::tests::there_is_always_another_door`
 - And the numbers on them are right wherever you stand, not only near the
-  lobby. — `aleph::tests::the_numbers_are_right_far_from_the_desk`
+  lobby. — `parked::aleph::tests::the_numbers_are_right_far_from_the_desk`
 
 ### Verified by hand
 
@@ -179,19 +179,17 @@ enough for.
 **The corridor's fittings, lighting and shell**, which are spec 0029's and
 are built.
 
-## 2026-11-10: cut by spec 0062
+## 2026-11-10: parked by spec 0063
 
-**Jake, having played it: the hotel is arguably the least interesting room
-or feature, and worth dropping entirely.** The corridor, the forty drawn
-doors, the four arrivals, both waves, the people crossing and spec 0035's
-long hall all came out. What stayed is the lobby, the desk, the board, the
-sign and the register behind the one door left in the west wall.
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
 
-The reasons are in [0062](0062-the-hotel-comes-down-to-its-desk.md). The
-short of it is that this was the fourth round on one complaint, each fix
-correct and none of them changing what the room was: a desk you press and
-then watch.
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
 
-Everything above is left as written. What is wrong with it is not the
-arithmetic, which held up, and the arithmetic is the part worth keeping a
-record of.
+Everything above is left as written. The arithmetic in it held up and still
+runs.

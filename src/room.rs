@@ -187,6 +187,17 @@ pub fn minus(box_: Aabb, cut: Aabb) -> Vec<Aabb> {
     out
 }
 
+/// How big the lantern on the roof is, how deep its cap and how far that
+/// oversails. Specs 0057 and 0063.
+///
+/// Big enough to read as a thing at a hundred and thirty metres and small
+/// enough to be a lantern rather than a tower. Spec 0057 measured the
+/// distance: from the top of the bridge the building is a skyline at four
+/// degrees, where only an outline and a light read.
+pub const LANTERN: Vec3 = vec3(1.6, 1.9, 1.6);
+pub const LANTERN_CAP: f32 = 0.18;
+pub const LANTERN_OVER: f32 = 0.16;
+
 /// The grid over the hall: how big a ceiling tile is, how far the bar between
 /// two of them hangs below, and how wide that bar is. Spec 0012.
 pub const CEIL_TILE: f32 = 1.15;
@@ -809,39 +820,31 @@ pub fn nook_floor(reaches: f32) -> (Vec3, Vec3) {
     )
 }
 
-/// The nook's side of the wall it borrows from the hotel's lobby.
+/// The nook's south wall, which this room builds for itself.
 ///
-/// **Finish a shared wall on both sides.** The lobby's north wall is the
-/// nook's south wall. It belongs to `aleph`, and `standing` puts every box of
-/// the hotel into one run wearing the hotel's plaster, so the nook had a
-/// blank pale slab across its whole south end where every other wall in the
-/// room is grained. Jake read it off a screenshot on 2026-10-28. The baths
-/// had a mahogany wall down one side of a tiled room for the same reason and
-/// it was settled the same way.
+/// **It was the hotel lobby's and the nook borrowed it.** The lobby's north
+/// wall was the nook's south wall, it belonged to `aleph`, and `standing`
+/// put every box of the hotel into one run wearing the hotel's plaster, so
+/// the nook had a blank pale slab across its whole south end where every
+/// other wall in the room is grained. Jake read that off a screenshot on
+/// 2026-10-28 and it was fixed by lining it. The baths had a mahogany wall
+/// down one side of a tiled room for the same reason.
 ///
-/// One of the hall's own walls, drawn and collided like the rest of them.
-/// `standing::tests::the_shells_are_the_colliders` wants every drawn piece to
-/// be a thing that stops you, and a facing that is only a picture is exactly
-/// what that rule is against. A hair proud of the borrowed face so the two
-/// never share a plane, which is the fault this building has fought seven
-/// times, and a hair is all it moves the wall you walk into.
-pub fn nook_lining(reaches: f32) -> Vec<Aabb> {
-    let wall = crate::aleph::lobby_north(reaches);
+/// Spec 0063 parked the hotel, so there is nothing left to borrow or to
+/// line: the nook builds the wall, in the nook's run, wearing the nook's
+/// grain on the inside and the building's plaster outside, which is what
+/// `Room::outside` asks for of any wall the sky can see.
+///
+/// **In exactly the place the borrowed one stood**, so that nothing else in
+/// this room moves. It ran a thickness into the nook's own span and the
+/// furniture was fitted around it.
+pub fn nook_south(reaches: f32) -> Aabb {
     let (at, size) = nook_floor(reaches);
-    let proud = 0.01;
-    // only as far as the nook is wide: the lobby's wall runs on west past it,
-    // and the part past it is in the lobby alone
-    let west = (at.x - size.x * 0.5).max(wall.min.x);
-    let east = (at.x + size.x * 0.5).min(wall.max.x);
 
-    if east - west <= 1e-3 {
-        return Vec::new();
-    }
-
-    vec![Aabb::new(
-        vec3(west, 0.0, wall.max.z),
-        vec3(east, wall.max.y, wall.max.z + proud),
-    )]
+    Aabb::new(
+        vec3(at.x - size.x * 0.5 - THICK, 0.0, -reaches),
+        vec3(at.x + size.x * 0.5 + THICK, TALL, -reaches + THICK),
+    )
 }
 
 /// How much bare floor shows round the rug.
@@ -994,20 +997,8 @@ pub enum Seen {
     Sauna,
     /// The door between the cellar and the baths. Spec 0008.
     Baths,
-    /// The hotel's desk, which is where somebody is housed. Spec 0030.
-    Desk,
-    /// The register on the far wall behind the blank door. Spec 0031.
-    Book,
     /// The Mandelbrot panel at the end of the gallery's row. Spec 0039.
     Mandel,
-    /// One of the imaginarium's second doors, by the frame it belongs to.
-    /// Spec 0038.
-    ///
-    /// Every one of them is in another frame's floor, so working one is
-    /// the only thing in that room that asks you anything: a way through
-    /// for the people who use it, against a hole in the ground of
-    /// whoever's floor it is cut in. One of the three is in yours.
-    Hatch(u64),
     /// The watchman at the top of the bridge. Spec 0058.
     ///
     /// **The one person in this building you can look at and have
@@ -1051,8 +1042,6 @@ pub struct Room {
     /// to decide which walk somebody set out on, and a bare flag would
     /// change the walk under everybody already on one. Written by the
     /// game, which is the thing that knows what `since` is.
-    pub aloft_doors: [(bool, f32); crate::aloft::FRAMES as usize],
-    pub aloft_slid: [f32; crate::aloft::FRAMES as usize],
     /// How far it actually is, nought shut and one open, which follows `open`
     /// rather than being it. The box follows this too: a door drawn halfway
     /// open that stops you where it was shut is a worse thing than one that
@@ -1222,12 +1211,23 @@ impl Room {
                     vec3(to, TALL, -reaches + thick * 0.5),
                 )
             },
-            // the gallery's own three sides, per spec 0022. The west one is
-            // cut for the hotel's door and is built there, per spec 0029, the
-            // same way the east one is built in the back room: one account of
-            // where a wall is rather than two that drift.
-            crate::aleph::gallery_west(reaches)[0],
-            crate::aleph::gallery_west(reaches)[1],
+            // the gallery's own three sides, per spec 0022.
+            //
+            // **The west one is whole.** It was cut for the hotel's door and
+            // built over in `aleph`, per spec 0029, the same way the east one
+            // is built in the back room. Spec 0063 parked the hotel, and a
+            // doorway into a room that is not there is a hole the sky gets
+            // in through: spec 0029 has that exact fault recorded, at this
+            // exact doorway.
+            {
+                let far = gallery_wall(reaches);
+                let (from, _) = (-GALLERY_WIDE * 0.5 - THICK, 0.0);
+
+                Aabb::new(
+                    vec3(from, 0.0, far - THICK),
+                    vec3(-GALLERY_WIDE * 0.5, TALL, -reaches),
+                )
+            },
             // the east one is cut for the back room's door and is built
             // there, per spec 0024, so there is one account of where it is
             // rather than two that drift
@@ -1244,7 +1244,7 @@ impl Room {
         ];
 
         let mut walls = walls;
-        walls.extend(nook_lining(reaches));
+        walls.push(nook_south(reaches));
 
         let benches = benches(-reaches);
         let bookcases = bookcases(-reaches);
@@ -1257,8 +1257,6 @@ impl Room {
             walls,
             reaches,
             open: false,
-            aloft_doors: [(false, f32::MIN); crate::aloft::FRAMES as usize],
-            aloft_slid: [1.0; crate::aloft::FRAMES as usize],
             sauna_open: false,
             sauna_swing: 0.0,
             baths_open: false,
@@ -1458,16 +1456,6 @@ impl Room {
         let by = dt / crate::spa::SWINGS;
 
         self.baths_swing += (to - self.baths_swing).clamp(-by, by);
-
-        // and the imaginarium's three leaves, which slide rather than
-        // swing. Spec 0038.
-        let by = dt / crate::aloft::LEAF_DROPS;
-
-        for n in 0..crate::aloft::FRAMES as usize {
-            let to = if self.aloft_doors[n].0 { 0.0 } else { 1.0 };
-
-            self.aloft_slid[n] += (to - self.aloft_slid[n]).clamp(-by, by);
-        }
     }
 
     /// Where a leaf stands and how it is turned, part way through its swing.
@@ -1573,33 +1561,14 @@ impl Room {
     /// the building.
     #[cfg(test)]
     pub fn fillable(&self) -> Aabb {
-        // **Nothing is clamped out of it but the imaginarium now.** Spec
-        // 0029's corridor ran two kilometres west of the lobby and spec
-        // 0035's ran two more south of it, and this cut both: a fill given
-        // either one went over its cell budget, refused, and came back
-        // empty, and the tests that read it said so rather than passing on
-        // nothing. Spec 0062 took both corridors out, so what is left of
-        // the building fits without being trimmed.
-        //
-        // **Up is the one that is still here.** Spec 0037 put a room over
-        // the hall, and a fill that has to cover eight more metres of
-        // height spends its cells on air and refuses.
-        //
-        // By which boxes they are rather than by how high they reach. A
-        // clamp on `max.y` worked while the room was only a room, and then
-        // the way up to it was built: a stair from the nook's floor to that
-        // room's and a shaft round it, which is one thing spanning both
-        // heights and cannot be cut by either. Three tests came back empty
-        // at once and said so, which is the only reason this is not still a
-        // number.
-        let up = self.aloft();
-        let rest: Vec<Aabb> = self
-            .built(true)
-            .into_iter()
-            .filter(|box_| !up.iter().any(|b| b.min == box_.min && b.max == box_.max))
-            .collect();
-
-        Self::round(rest)
+        // **Nothing is clamped out of it any more.** Spec 0029's corridor
+        // ran two kilometres west of the lobby, spec 0035's ran two more
+        // south of it, and spec 0037 put a room eight metres over the hall:
+        // a fill given any of the three went over its cell budget, refused,
+        // and came back empty, and the tests that read it said so rather
+        // than passing on nothing. Spec 0063 parked all three, so what is
+        // left of the building fits without being trimmed.
+        Self::round(self.built(true))
     }
 
     /// The same, with the rooms the sun cannot reach left out when asked.
@@ -1647,8 +1616,6 @@ impl Room {
             ("the space behind the wall", crate::behind::floor(reaches)),
             ("the back room", crate::back::floor(reaches)),
             ("the hall of mirrors", crate::mirrors::floor()),
-            ("the hotel's lobby", crate::aleph::floor(reaches)),
-            ("the register", crate::register::floor(reaches)),
             ("the space beyond the door", crate::beyond::solid(reaches)),
         ];
 
@@ -1656,33 +1623,6 @@ impl Room {
             crate::spa::floors(reaches)
                 .into_iter()
                 .map(|slab| ("the baths", slab)),
-        );
-        out.extend(
-            crate::aloft::floors()
-                .into_iter()
-                .map(|slab| ("the imaginarium", slab)),
-        );
-
-        out
-    }
-
-    /// Everything the imaginarium is, its three leaves included.
-    ///
-    /// **One list, because two places need the same one and they need it
-    /// to be the same.** `built` puts it in and `fillable` takes it back
-    /// out, so the fill is not asked to cover eight metres of air over the
-    /// hall. The leaves went into the first and not the second, and three
-    /// fills came back empty: a leaf standing in a wall is nine metres up,
-    /// which is the whole height the filter exists to drop.
-    ///
-    /// A door that is drawn and not solid is a door you walk through,
-    /// which spec 0029's corridor shipped and Jake found by walking into
-    /// one. Here it would be a hole in a floor you cannot fall into.
-    fn aloft(&self) -> Vec<Aabb> {
-        let mut out = crate::aloft::solid();
-
-        out.extend(
-            (0..crate::aloft::FRAMES).map(|n| crate::aloft::leaf(n, self.aloft_slid[n as usize])),
         );
 
         out
@@ -1702,20 +1642,13 @@ impl Room {
 
         if lit_by_the_sun {
             out.extend(crate::behind::solid(self.reaches));
-            out.extend(crate::aleph::solid(self.reaches));
-            // and the register behind the blank door, per spec 0031
-            out.extend(crate::register::solid(self.reaches));
-            out.extend(self.aloft());
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
-        // and the register's door, which stands open and never moves. Spec
-        // 0029's forty one leaves were here too, written each frame as the
-        // drawn window followed you, and spec 0062 took them out. A door
-        // that is drawn and not solid is a door you walk through, which is
-        // what the first build of that room shipped and what Jake found by
+        // and every leaf in the hotel's corridor, per spec 0029. A door that
+        // is drawn and not solid is a door you walk through, which is what
+        // the first build of that room shipped and what Jake found by
         // walking into one.
-        out.push(crate::aleph::book_leaf(self.reaches));
         out.extend(
             self.stood
                 .iter()
@@ -1754,11 +1687,91 @@ impl Room {
     /// and the three rooms that adjoin at that level each have their own at
     /// their own height. Spec 0015's is not here: it is a hundred and fifty
     /// nine metres square and it is a secret.
+    /// The lantern on this building's roof, which is the one lit thing in
+    /// its skyline. Specs 0057 and 0063.
+    ///
+    /// **It stood on the imaginarium's roof.** Spec 0057 measured the view
+    /// back from the top of the bridge and found a dark block: the ground
+    /// storey is 10.6 degrees down from up there and the lid 3.8, so what
+    /// you see is a skyline rather than a roof, and at four degrees only an
+    /// outline and a light read at all. One lantern was the whole of what
+    /// made the building read as something. Spec 0063 parked that room and
+    /// the roof it stood on is still here, so the lantern stands on this
+    /// instead and belongs to the building rather than to a room.
+    ///
+    /// **A lamp standing on a roof, and not a hole into a lit room.** Spec
+    /// 0057 had it the other way round and was wrong: a shaft cut down into
+    /// the room below puts a blob on that room's ceiling with nothing above
+    /// it to explain it.
+    ///
+    /// Stood on the middle of the hall's own lid rather than at a chosen
+    /// spot, because the hall is the biggest thing under this roof and its
+    /// slab is the one `lattice` already finds by the way in.
+    pub fn lantern(&self) -> Aabb {
+        let door = self.doorway();
+        let slab = self
+            .floors()
+            .iter()
+            .copied()
+            .find(|slab| {
+                slab.min.x <= door.x && door.x <= slab.max.x && slab.max.z >= door.z - INSIDE
+            })
+            .unwrap_or_else(|| Aabb::from_center_size(door, Vec3::splat(1.0)));
+        let middle = slab.center();
+        // **Off the lid it stands on, not off a formula.** `TALL + THICK`
+        // is where a wall's lid would reach if the ceiling were a wall's
+        // thickness, and the ceiling slabs are a centimetre either side of
+        // `TALL` instead: the lantern floated 0.29 over the roof, which
+        // `the_roof_carries_one_lantern` caught the first time it ran.
+        let foot = self
+            .lids()
+            .into_iter()
+            .filter(|lid| {
+                lid.min.x <= middle.x
+                    && middle.x <= lid.max.x
+                    && lid.min.z <= middle.z
+                    && middle.z <= lid.max.z
+            })
+            .map(|lid| lid.max.y)
+            .fold(f32::MIN, f32::max);
+
+        Aabb::new(
+            vec3(middle.x - LANTERN.x * 0.5, foot, middle.z - LANTERN.z * 0.5),
+            vec3(
+                middle.x + LANTERN.x * 0.5,
+                foot + LANTERN.y,
+                middle.z + LANTERN.z * 0.5,
+            ),
+        )
+    }
+
+    /// The stone cap over it, oversailing on every side.
+    ///
+    /// **Stone and not glass, and glass was tried.** A lit pane over lit
+    /// sides is one tan mass at night: the colour clamps to the same value
+    /// on both and the box loses its top. What tells you there is a box up
+    /// there is the dark slab over it and the line of shadow under its
+    /// oversail.
+    pub fn lantern_cap(&self) -> Aabb {
+        let shaft = self.lantern();
+
+        Aabb::new(
+            vec3(
+                shaft.min.x - LANTERN_OVER,
+                shaft.max.y,
+                shaft.min.z - LANTERN_OVER,
+            ),
+            vec3(
+                shaft.max.x + LANTERN_OVER,
+                shaft.max.y + LANTERN_CAP,
+                shaft.max.z + LANTERN_OVER,
+            ),
+        )
+    }
+
     pub fn lids(&self) -> Vec<Aabb> {
         let mut out = self.ceiling();
 
-        out.push(crate::aleph::lid(self.reaches));
-        out.push(crate::register::lid(self.reaches));
         out.push(crate::back::lid(self.reaches));
         out
     }
@@ -2027,7 +2040,12 @@ impl Room {
     }
 
     pub fn ceiling(&self) -> Vec<Aabb> {
-        let well = crate::aloft::up_well_cut();
+        // **No hole in it any more.** Spec 0037 ran a stair up through this
+        // ceiling and spec 0063 parked the room it went to. The clipping
+        // below stays and is given nothing to clip to: a ceiling that knows
+        // how to have a hole in it is worth more than the lines it costs,
+        // and whoever brings the stair back will want it.
+        let well: Vec<Aabb> = Vec::new();
         let mut out = Vec::new();
 
         for slab in self.floors().iter() {
@@ -2150,7 +2168,12 @@ impl Room {
         // bar and each tile is clipped to the well rather than dropped: the
         // well is cut to the stair and a tile dropped whole leaves the hole
         // wider than the shaft wall that is meant to edge it.
-        let well = crate::aloft::up_well_cut();
+        // **No hole in it any more.** Spec 0037 ran a stair up through this
+        // ceiling and spec 0063 parked the room it went to. The clipping
+        // below stays and is given nothing to clip to: a ceiling that knows
+        // how to have a hole in it is worth more than the lines it costs,
+        // and whoever brings the stair back will want it.
+        let well: Vec<Aabb> = Vec::new();
         let clipped = |hung: &Vec<Hung>| {
             hung.iter()
                 .flat_map(|(at, size)| {
@@ -2257,18 +2280,15 @@ impl Room {
     /// bookcases: those are the things being looked at, and a bookcase that
     /// blocks the sight blocks the one book in it that is a handle.
     pub fn opaque(&self) -> Vec<Aabb> {
-        let mut out = self.walls.clone();
-
-        // **and the hotel's and the register's.** Those two rooms were built
-        // after this and their walls were never in the list, so the sight
-        // went straight through them: standing in the register you could
-        // point at the wall and the building named a corridor door behind
-        // it, "Room 8 has somebody in it". Jake walked it and found that.
-        out.extend(crate::aleph::solid(self.reaches));
-        out.extend(crate::register::solid(self.reaches));
-        out.extend(crate::aloft::solid());
-
-        out
+        // **It held four rooms' walls and holds one room's.** The hotel,
+        // the register and the long hall were built after this list and
+        // their walls were never added to it, so the sight went straight
+        // through them: standing in the register you could point at the
+        // wall and the building named a corridor door behind it, "Room 8
+        // has somebody in it". Jake walked it and found that. Spec 0063
+        // parked all three, and what is left is the walls this room has
+        // always had.
+        self.walls.clone()
     }
 
     /// What you are looking at: the nearest thing the line of sight meets, said
@@ -2355,45 +2375,6 @@ impl Room {
             slab(from, way, &leaf).map(|far| (Seen::Baths, far))
         };
 
-        // the desk, which is the one thing in the hotel you work. Spec 0030:
-        // Jake walked the corridor and said there is no obvious way to check
-        // a customer in, and there was not, because the only thing you could
-        // point at was a door.
-        let desk = slab(from, way, &crate::aleph::desk(self.reaches)).map(|far| (Seen::Desk, far));
-
-        // and the imaginarium's three second doors, per spec 0038. The
-        // hole rather than the leaf, because a leaf slid out of sight is
-        // nothing to point at and the one you most want to shut is the
-        // one that is open.
-        let hatches: Vec<(Seen, f32)> = (0..crate::aloft::FRAMES)
-            .filter_map(|n| {
-                slab(from, way, &crate::aloft::doorway(n, 1)).map(|far| (Seen::Hatch(n), far))
-            })
-            .collect();
-
-        // the book on the register's far wall, per spec 0031
-        let book = {
-            // **Only where the book is written**, not the whole wall. It was
-            // the wall, so pointing at a bare stretch of it still said "The
-            // register", which Jake found by looking at nothing and being
-            // told what it was.
-            let (back, _) = crate::register::across(self.reaches);
-            let left = crate::register::page_left(self.reaches);
-            let cell = crate::register::CELL;
-            let low = crate::register::cell_at(self.reaches, crate::register::ROWS - 1, 0);
-            let high = crate::register::cell_at(self.reaches, 0, 0);
-            let wall = Aabb::new(
-                vec3(left - cell * 2.0, low.y - cell, back),
-                vec3(
-                    left + crate::register::columns(self.reaches) as f32 * cell,
-                    high.y + cell * 2.5,
-                    back + THICK,
-                ),
-            );
-
-            slab(from, way, &wall).map(|far| (Seen::Book, far))
-        };
-
         // and, once it is moving, the leaves themselves. Hunting for the one
         // book again to shut the wall is the same needle in the same haystack,
         // and there is nothing secret left to keep: the hole is standing open.
@@ -2427,9 +2408,6 @@ impl Room {
             .chain(mirror_case)
             .chain(glass)
             .chain(baths)
-            .chain(desk)
-            .chain(book)
-            .chain(hatches)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
             .min_by(|one, other| one.1.total_cmp(&other.1))
@@ -2499,35 +2477,6 @@ mod tests {
             laid.is_disjoint(&lit),
             "a square of the grid is both a tile and a panel"
         );
-    }
-
-    /// Spec 0037: nothing hangs in the way up.
-    ///
-    /// The nook's ceiling is the one the stair to the imaginarium comes
-    /// through, so a row of lamps hung from it is a row of chances to put one
-    /// in the hole. The shade is the wide part and the rod is what reaches the
-    /// ceiling, so both are asked.
-    #[test]
-    fn nothing_hangs_in_the_way_up() {
-        let room = super::Room::of(crate::games());
-        let well = crate::aloft::up_well_cut();
-
-        for shade in super::pendant_shades(room.reaches) {
-            let wide = crate::study::PENDANT_SHADE * 0.5;
-
-            for open in well.iter() {
-                let clear = shade.x + wide.x < open.min.x
-                    || shade.x - wide.x > open.max.x
-                    || shade.z + wide.z < open.min.z
-                    || shade.z - wide.z > open.max.z;
-
-                assert!(
-                    clear,
-                    "a pendant at {:?} hangs in the way up, which is {:?} to {:?}",
-                    shade, open.min, open.max
-                );
-            }
-        }
     }
 
     /// Spec 0006: every part of the open floor has a lamp on it.
@@ -2696,15 +2645,12 @@ mod tests {
     fn the_field_is_drawn_from_anywhere_it_can_be_seen() {
         let room = Room::of(crate::games());
         let reaches = room.reaches;
-        let (far, _) = crate::register::across(reaches);
 
+        // **Two places and not three.** The third was the register, which
+        // spec 0063 parked: it was the indoor case furthest from any sky,
+        // and what it held is now held by the doorway below.
         let doorway = vec3(-2.00, crate::EYE, 7.53);
         let garden = vec3(-10.85, crate::EYE, 15.15);
-        let register = vec3(
-            crate::register::page_left(reaches) + 1.0,
-            crate::EYE,
-            far + 2.4,
-        );
 
         assert!(
             room.can_see_outdoors(garden, reaches),
@@ -2715,83 +2661,166 @@ mod tests {
             "the doorway Jake stood in on 2026-11-04, where the sky was over \
              bare nothing"
         );
-        assert!(
-            !room.can_see_outdoors(register, reaches),
-            "the register is buried in the building, and drawing the field \
-             there put its outside wall through the ceiling"
-        );
-    }
-
-    /// The control: to the old test the doorway and the register read the
-    /// same, which is why it could not be the gate.
-    #[test]
-    fn the_doorway_and_the_register_are_alike_to_the_old_test() {
-        let room = Room::of(crate::games());
-        let reaches = room.reaches;
-        let (far, _) = crate::register::across(reaches);
-
-        for at in [
-            vec3(-2.00, crate::EYE, 7.53),
-            vec3(
-                crate::register::page_left(reaches) + 1.0,
-                crate::EYE,
-                far + 2.4,
-            ),
-        ] {
-            assert!(!room.out_of_doors(at), "both read indoors to the old one");
-        }
     }
 
     /// Spec 0029: the gallery has a doorway either side, and they are a pair.
     ///
-    /// The back room's is spec 0024's and the hotel's is spec 0029's, and
-    /// the second takes its `z` from the first rather than keeping its own
-    /// account. Two lists of one thing drift, and a pair that drifts is two
-    /// doors in a room rather than a choice.
+    /// Spec 0063: nothing the building holds comes from a parked room.
+    ///
+    /// **This is the guard the parking needs.** The rooms under
+    /// `src/parked/` still compile and still answer for themselves, which
+    /// is the whole point of parking rather than deleting, and the one
+    /// thing that must stay true is that the building does not reach in
+    /// there. A stray box from a room nobody draws is a thing you walk
+    /// into in the middle of the field.
+    ///
+    /// Asked of every list the building keeps rather than of one of them,
+    /// because the rooms were in five: the colliders, the sight's opaque
+    /// walls, the floors, the lids, and `standing`'s runs.
     #[test]
-    fn the_gallery_has_a_doorway_either_side() {
-        let reaches = Room::of(crate::games()).reaches;
-        let east = crate::back::way(reaches);
-        let west = crate::aleph::way(reaches);
+    fn nothing_of_the_building_is_parked() {
+        let room = Room::of(crate::games());
+        let reaches = room.reaches;
+        let parked: Vec<Aabb> = crate::parked::aleph::solid(reaches)
+            .into_iter()
+            .chain(crate::parked::twine::solid(reaches))
+            .chain(crate::parked::register::solid(reaches))
+            .chain(crate::parked::aloft::solid())
+            .chain(crate::parked::aloft::way_up())
+            .collect();
 
-        assert_eq!(east, west, "the two doorways are at different z");
+        assert!(parked.len() > 20, "the parked rooms came back empty");
 
-        // and each wall is in two pieces with the gap between them
-        for (name, pieces) in [
-            ("east", crate::back::gallery_east(reaches)),
-            ("west", crate::aleph::gallery_west(reaches)),
+        let mut held: Vec<(&str, Aabb)> = Vec::new();
+
+        for (what, boxes) in [
+            ("solid", room.solid()),
+            ("opaque", room.opaque()),
+            ("lids", room.lids()),
+            ("floors", room.floors().to_vec()),
         ] {
-            assert_eq!(pieces.len(), 2, "the {} wall is not cut for a door", name);
+            held.extend(boxes.into_iter().map(|box_| (what, box_)));
+        }
 
-            let (from, to) = east;
-            let gap = pieces[0].max.z.max(pieces[1].min.z) - pieces[0].max.z.min(pieces[1].min.z);
+        for run in crate::standing::runs(reaches) {
+            held.extend(run.boxes.into_iter().map(|box_| ("a run", box_)));
+        }
 
+        for (what, box_) in held {
             assert!(
-                (gap - (to - from)).abs() < 1e-3,
-                "the {} wall's gap is {} and the doorway is {}",
-                name,
-                gap,
-                to - from
+                !parked.contains(&box_),
+                "the building's {} holds {:?}, which is a parked room's",
+                what,
+                box_
             );
         }
     }
 
-    /// Every doorway in a shared wall is roofed across the wall's whole
-    /// thickness.
+    /// Specs 0057 and 0063: the roof carries one lantern, standing on it.
     ///
-    /// **A strip roofed by neither room reads as open sky where the wall is
-    /// cut.** `outside` probes just past each lid's edge and plasters a face
-    /// wherever nothing is over the probe. Along a solid wall that never
-    /// fires. At a doorway it did: two faces, one at each side of the
-    /// opening, looking at each other. Both are culled from either room, so
-    /// the doorway looked open, and standing in it the view was plaster
-    /// whichever way you turned along the wall. Jake walked into the hotel
-    /// and found it, 2026-11-09.
+    /// **One, and the building's.** It was the imaginarium's, on the roof
+    /// that room stood on, and from the top of the bridge it is the only
+    /// thing that makes the building read as something rather than as a
+    /// dark block. Spec 0063 parked the room and the roof is still here.
+    #[test]
+    fn the_roof_carries_one_lantern() {
+        let room = Room::of(crate::games());
+        let shaft = room.lantern();
+        let cap = room.lantern_cap();
+        let lids = room.lids();
+
+        // it stands on a lid rather than in the air
+        let under = lids
+            .iter()
+            .find(|lid| {
+                lid.min.x <= shaft.center().x
+                    && shaft.center().x <= lid.max.x
+                    && lid.min.z <= shaft.center().z
+                    && shaft.center().z <= lid.max.z
+            })
+            .expect("the lantern stands over no lid at all");
+
+        assert!(
+            (shaft.min.y - under.max.y).abs() < 0.05,
+            "the lantern's foot is at {:.2} and the roof it stands on at {:.2}",
+            shaft.min.y,
+            under.max.y
+        );
+
+        // and its cap oversails it on every side, which is what reads as a
+        // box up there rather than as a lit patch
+        assert!(
+            cap.min.x < shaft.min.x
+                && cap.max.x > shaft.max.x
+                && cap.min.z < shaft.min.z
+                && cap.max.z > shaft.max.z,
+            "the cap does not oversail the lantern"
+        );
+        assert!(
+            cap.min.y >= shaft.max.y - 1e-3,
+            "the cap is sunk into the lantern rather than sitting on it"
+        );
+
+        // **and it has no lamp.** A lamp inside the box cannot light the
+        // box's outside faces, which point away, and it does light the
+        // hall through the lid: `the_hall_is_drawn` caught that as
+        // eighteen per cent of a picture that looks the same. The colour
+        // is far past one and does the work, per spec 0057.
+        assert!(
+            crate::aim::LANTERN.x > 1.0 && crate::aim::LANTERN.y > 1.0,
+            "the lantern's colour does not survive the clamp, and it has no lamp to fall back on"
+        );
+    }
+
+    /// Specs 0022 and 0063: the gallery has one doorway and its other
+    /// wall is whole.
     ///
-    /// Both lids stopped flush on the side they share with the gallery while
-    /// oversailing by a thickness on every other, so this walks the whole
-    /// strip rather than checking the two edges: it is the middle that was
-    /// bare.
+    /// **It had two, and the second one went with the hotel.** The back
+    /// room's is spec 0024's and the hotel's was spec 0029's, and the
+    /// second took its `z` from the first rather than keeping its own
+    /// account, so the two could not drift. Spec 0063 parked the hotel, and
+    /// a doorway into a room that is not there is a hole the sky gets in
+    /// through: spec 0029 has that exact fault recorded, at that exact
+    /// doorway, found by Jake walking into it.
+    #[test]
+    fn the_gallery_has_one_doorway_and_one_whole_wall() {
+        let reaches = Room::of(crate::games()).reaches;
+        let (from, to) = crate::back::way(reaches);
+        let pieces = crate::back::gallery_east(reaches);
+
+        assert_eq!(pieces.len(), 2, "the east wall is not cut for a door");
+
+        let gap = pieces[0].max.z.max(pieces[1].min.z) - pieces[0].max.z.min(pieces[1].min.z);
+
+        assert!(
+            (gap - (to - from)).abs() < 1e-3,
+            "the east wall's gap is {} and the doorway is {}",
+            gap,
+            to - from
+        );
+
+        // and nothing of the west wall is cut away, swept along it rather
+        // than checked at its ends
+        let west = -GALLERY_WIDE * 0.5 - THICK;
+        let solid = Room::of(crate::games()).opaque();
+
+        for step in 0..40 {
+            let z = gallery_wall(reaches)
+                + (-reaches - gallery_wall(reaches)) * (step as f32 + 0.5) / 40.0;
+
+            for up in [0.2f32, 1.4, TALL - 0.2] {
+                let at = vec3(west + THICK * 0.5, up, z);
+
+                assert!(
+                    solid.iter().any(|box_| box_.contains_point(at)),
+                    "the gallery's west wall is open at {:.2} along, {:.2} up",
+                    z,
+                    up
+                );
+            }
+        }
+    }
+
     #[test]
     fn a_doorway_is_roofed_across_the_whole_wall() {
         let room = Room::of(crate::games());
@@ -2804,18 +2833,13 @@ mod tests {
             })
         };
 
-        for (name, pieces, way) in [
-            (
-                "west",
-                crate::aleph::gallery_west(reaches),
-                crate::aleph::way(reaches),
-            ),
-            (
-                "east",
-                crate::back::gallery_east(reaches),
-                crate::back::way(reaches),
-            ),
-        ] {
+        // One doorway now. The west wall was cut for the hotel's and spec
+        // 0063 parked it, so there is nothing to roof over there.
+        for (name, pieces, way) in [(
+            "east",
+            crate::back::gallery_east(reaches),
+            crate::back::way(reaches),
+        )] {
             let (from, to) = way;
             let middle = (from + to) * 0.5;
             let (near, far) = (pieces[0].min.x, pieces[0].max.x);
@@ -3273,16 +3297,6 @@ mod tests {
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
                 + crate::mirrors::solid().len()
-                // and the hotel through the other wall, per spec 0029,
-                // with a leaf for every drawn room
-                + crate::aleph::solid(room.reaches).len()
-                + crate::register::solid(room.reaches).len()
-                // and the imaginarium over the hall, per spec 0037,
-                // with a leaf for each of its three second doors, per
-                // spec 0038
-                + room.aloft().len()
-                // and the blank door's leaf, per spec 0031
-                + 1
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -4160,16 +4174,6 @@ mod tests {
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
                 + crate::mirrors::solid().len()
-                // and the hotel through the other wall, per spec 0029,
-                // with a leaf for every drawn room
-                + crate::aleph::solid(room.reaches).len()
-                + crate::register::solid(room.reaches).len()
-                // and the imaginarium over the hall, per spec 0037,
-                // with a leaf for each of its three second doors, per
-                // spec 0038
-                + room.aloft().len()
-                // and the blank door's leaf, per spec 0031
-                + 1
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -4205,54 +4209,6 @@ mod tests {
         assert_eq!(room.looking_at(from, way), Some(Seen::Bench(0)));
     }
 
-    /// Spec 0006: crossing the nook does not quietly hand your arrows to a
-    /// toy you are walking past.
-    ///
-    /// The arrows work the toy the sight is on and turn you when it is on
-    /// nothing, so a toy that reaches across the room is a room you cannot
-    /// look around in. Jake found it from the way up, reporting that the
-    /// arrow keys stop working near the stairs; the stairs were not it.
-    /// Spec 0038: nothing of the grid is left hanging in the stairwell.
-    ///
-    /// **A hole in a ceiling goes through the ceiling.** `minus` cuts in
-    /// all three directions, and the well began inside the ceiling's own
-    /// thickness, so every bar crossing the opening kept its lowest two
-    /// centimetres. From up the stair they read as bars lying across the
-    /// nook's floor, which is how Jake found them.
-    #[test]
-    fn nothing_of_the_grid_hangs_in_the_stairwell() {
-        let room = Room::of(crate::games());
-        let (bars, mut tiles, panels) = room.lattice();
-        tiles.extend(panels);
-
-        // **Over the ceiling's own thickness, not over the well's.** Asked
-        // of the well's height this cannot fail: whatever height the well
-        // has, clipping to it removes exactly what is inside it, so the
-        // question answers itself. What is being asked is whether anything
-        // of the grid is left in the opening's footprint at any height the
-        // grid occupies, which is how the shaved bars went unnoticed.
-        for open in crate::aloft::up_well().iter() {
-            let inside = Aabb::new(
-                vec3(open.min.x + 1e-3, TALL - CEIL_DROP * 2.0, open.min.z + 1e-3),
-                vec3(open.max.x - 1e-3, TALL + CEIL_DROP, open.max.z - 1e-3),
-            );
-
-            for (what, pieces) in [("bar", &bars), ("tile", &tiles)] {
-                for (at, size) in pieces.iter() {
-                    let box_ = Aabb::from_center_size(*at, *size);
-
-                    assert!(
-                        !inside.intersects(&box_),
-                        "a {} is still in the stairwell at {:?}, {:.3} deep",
-                        what,
-                        at,
-                        inside.max.y.min(box_.max.y) - inside.min.y.max(box_.min.y)
-                    );
-                }
-            }
-        }
-    }
-
     /// Spec 0038: the ceiling is open where the way up comes through it.
     ///
     /// The grid hanging under it was clipped to the well from the day the
@@ -4274,14 +4230,7 @@ mod tests {
         for (at, what) in [
             (vec3(door.x, 40.0, door.z), "forty metres over the hall"),
             (vec3(door.x, 190.0, door.z), "a hundred and ninety over it"),
-            (
-                vec3(crate::aloft::MIDDLE_X, 30.0, crate::aloft::MIDDLE_Z),
-                "over the imaginarium",
-            ),
             (vec3(-40.0, 0.5, 0.0), "out in the field"),
-            // grass at the building's east wall with a storey hanging five
-            // metres over it, which is out of doors by every test but one
-            (vec3(3.0, 0.5, -8.0), "under the imaginarium's oversail"),
         ] {
             assert!(room.out_of_doors(at), "{} counts as indoors", what);
         }
@@ -4296,7 +4245,6 @@ mod tests {
                 ),
                 "down in the cellar",
             ),
-            (crate::aloft::middle(), "in the imaginarium"),
         ] {
             assert!(!room.out_of_doors(at), "{} counts as out of doors", what);
         }
@@ -4319,8 +4267,14 @@ mod tests {
         let mut solid = room.solid();
         solid.extend(lids.iter().copied());
 
+        // **Ten, where it was more than twelve.** The imaginarium stood
+        // above this roof and its four walls and their returns were most
+        // of what the sky could see; spec 0063 parked it, and what is left
+        // is the nook's own south wall, which that spec made an outside
+        // wall, and the returns round the gallery. The bound is here so a
+        // face finder that quietly returns nothing cannot pass.
         assert!(
-            faces.len() > 12,
+            faces.len() > 6,
             "only {} faces round a building",
             faces.len()
         );
@@ -4403,32 +4357,6 @@ mod tests {
         assert!(
             !high.is_empty(),
             "every face found starts at the ground, so no borrowed wall was topped"
-        );
-    }
-
-    #[test]
-    fn the_ceiling_is_open_over_the_stairwell() {
-        let room = Room::of(crate::games());
-        let ceiling = room.ceiling();
-
-        for (n, open) in crate::aloft::up_well().iter().enumerate() {
-            let middle = vec3(open.center().x, TALL, open.center().z);
-
-            assert!(
-                !ceiling.iter().any(|piece| piece.contains_point(middle)),
-                "piece {} of the stairwell still has a ceiling over it",
-                n
-            );
-        }
-
-        // and the rest of it is still there: the middle of the hall's aisle
-        // is nowhere near the well and must still be covered
-        let hall = room.floors()[0];
-        let over = vec3(hall.center().x, TALL, hall.center().z);
-
-        assert!(
-            ceiling.iter().any(|piece| piece.contains_point(over)),
-            "cutting the stairwell took the hall's ceiling with it"
         );
     }
 

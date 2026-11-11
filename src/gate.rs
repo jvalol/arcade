@@ -180,13 +180,37 @@ pub fn shows(trail: &Trail) -> bool {
     bridge::shows(trail)
 }
 
+/// How near you have to come before the watchman opens it.
+///
+/// **Spec 0063 took the riddle out.** Spec 0058 held this shut until you
+/// typed an answer, and what he asked could be had by turning round rather
+/// than by having walked anything: the bridge is already the gate, since it
+/// only comes up once every station has been given, so a riddle on top of
+/// that was a second lock on a door that was locked, and a one word lock at
+/// that. He keeps the threshold and lets you through.
+///
+/// Far enough out that the leaves are moving before you reach them, because
+/// a gate that opens in your face is a gate you have walked into.
+pub const OPENS_WITHIN: f32 = 7.0;
+
+/// Whether he has opened it, which is whether you have come near enough.
+pub fn opened(reaches: f32, trail: &Trail, from: Vec3) -> bool {
+    if !shows(trail) {
+        return false;
+    }
+
+    let (stands, _) = at(reaches);
+
+    vec3(from.x - stands.x, 0.0, from.z - stands.z).length() < OPENS_WITHIN
+}
+
 /// How far the gate has swung after `dt` more seconds, given where it was.
 ///
-/// **One number is the whole state.** Nought is shut and unanswered, one is
-/// open, and it only ever goes up, so there is no second flag saying the
-/// riddle is answered and no way for the two to disagree.
-pub fn swings(swung: f32, answered: bool, dt: f32) -> f32 {
-    if !answered && swung <= 0.0 {
+/// **One number is the whole state.** Nought is shut, one is open, and it
+/// only ever goes up, so there is no second flag saying he has let you
+/// through and no way for the two to disagree.
+pub fn swings(swung: f32, opened: bool, dt: f32) -> f32 {
+    if !opened && swung <= 0.0 {
         return 0.0;
     }
 
@@ -328,6 +352,73 @@ pub fn cope(reaches: f32, trail: &Trail) -> Vec<(Vec3, Vec3)> {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0063: the watchman lets you through, and he does it by
+    /// opening rather than by asking.
+    ///
+    /// **He asked a riddle until this spec.** What he asked could be had
+    /// by turning round rather than by having walked anything, and the
+    /// bridge he stands at the top of is already the gate: it only comes
+    /// up once every station has been given. A riddle on top of that was a
+    /// second lock on a door that was locked.
+    ///
+    /// Three things, and the first is the one that would be easy to lose:
+    /// the gate stays shut while the bridge is not there at all, so a
+    /// trail nobody has walked does not leave a gate standing open in an
+    /// empty field.
+    #[test]
+    fn the_watchman_lets_you_through() {
+        let reaches = crate::room::Room::of(crate::games()).reaches;
+        let (stands, _) = at(reaches);
+        let mut nothing = Trail::new();
+        let mut done = Trail::new();
+
+        for what in crate::trail::Asked::every() {
+            done.gave(*what);
+        }
+
+        assert!(
+            !shows(&nothing),
+            "the gate shows before the trail is walked"
+        );
+        assert!(
+            !opened(reaches, &nothing, stands),
+            "it opens for somebody standing where it is not"
+        );
+
+        nothing.gave(crate::trail::Asked::OpenedTheCase);
+
+        assert!(
+            !opened(reaches, &nothing, stands),
+            "one station out of five opened it"
+        );
+
+        // up to it, and it opens
+        assert!(
+            opened(reaches, &done, stands),
+            "it does not open for somebody standing at it"
+        );
+
+        // and from out of reach it does not, so the leaves are moving as
+        // you come up rather than standing open the whole climb
+        let away = stands + Vec3::X * (OPENS_WITHIN + 2.0);
+
+        assert!(
+            !opened(reaches, &done, away),
+            "it is open from {:.0} metres off",
+            OPENS_WITHIN + 2.0
+        );
+
+        // and once it is moving it goes on moving, which is what keeps one
+        // number the whole state
+        let swung = swings(0.0, true, 1.0);
+
+        assert!(swung > 0.0, "it did not start to swing");
+        assert!(
+            swings(swung, false, 1.0) > swung,
+            "it shut again when nobody was near it"
+        );
+    }
+
     use super::*;
     use crate::trail::Asked;
     use glam::vec3;

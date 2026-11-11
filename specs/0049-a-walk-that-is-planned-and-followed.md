@@ -149,7 +149,11 @@ something and reads the readout, run by the gate rather than by the camera.
   not. — `tour::tests::the_open_loop_does_not`
 - A path through the imaginarium's hatch comes out in the frame on the
   other side. — `tour::tests::a_portal_edge_changes_which_way_is_down`
-- The follower does not steer during a crossing. — `tests::a_passenger_does_not_steer`
+- ~~The follower does not steer during a crossing.~~ Struck 2026-11-10:
+  spec 0063 parked the imaginarium, and a crossing is the room turning you
+  over, which only that room ever did. The planner's own portal edge is
+  still held, by `tour::tests::a_portal_edge_changes_which_way_is_down`,
+  which hands it that room directly.
 - The region a journey lays its lattice over holds the way into a room
   whose only doorway is at the far end from the
   journey. — `tour::tests::the_region_holds_the_way_into_the_nook`

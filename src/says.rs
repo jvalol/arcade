@@ -22,45 +22,23 @@
 /// letters under the runes. Spec 0054.
 pub const BIFROST: &str = "BIFROST";
 
-/// What the watchman asks, and what he says once you have answered.
-/// Spec 0058.
+/// What the watchman says when you come up to him.
 ///
-/// **He has never seen the building.** He has stood at this end of the
-/// bridge the whole time, which is the one thing he can honestly want
-/// from somebody arriving over it. The answer is a word, and it is a
-/// word you can only get by turning round, so the line has to ask for
-/// that without saying "turn round", or the riddle is an instruction.
+/// **He asked a riddle until spec 0063.** It was "tell me what it looks
+/// like from here", and what it took for an answer was "a light": the
+/// building is a dark block with one lit lantern on it from up there, per
+/// spec 0057. Jake read that and said the riddle is very weak, and he is
+/// right. The answer comes from turning round rather than from having
+/// walked anything, and spec 0058 set its own test as "an answer you can
+/// only have from having walked the building", which it fails. The bridge
+/// is already the gate: it only comes up once every station has been
+/// given, so the riddle was a second lock on a door that was locked.
 ///
-/// **It was not a word once.** The first build read the answer off the
-/// camera, with nothing typed and no field: whether the lantern was in
-/// view was the whole of it. Jake took that for a proof you had walked
-/// the place rather than for a riddle, so it is written now and
-/// `WATCHMAN_ACCEPTS` below is what he takes. Spec 0058 has the rest.
+/// Four of his lines went with it: the question, the line after an answer,
+/// the line after a wrong one, and the four answers it took.
 ///
-/// The second line is said once, after the gate has started to move. It
-/// does not say well done and it does not say what is through the gate.
-pub const WATCHMAN_ASKS: &str =
-    "I have stood at this end since it was built. Tell me what it looks like from here.";
-pub const WATCHMAN_ANSWERED: &str = "So that is it. Go on through.";
-
-/// And what he says to an answer that is not one of his.
-///
-/// **It is not a wrong buzzer.** Spec 0058: a gate that can be failed is
-/// a score, and nothing in this building counts at you. He says this,
-/// the line clears, and the field stays open for as long as anybody
-/// wants to stand there.
-pub const WATCHMAN_AGAIN: &str = "That is not what I see from here either. Look again.";
-
-/// What he takes for an answer, folded the way `typed::Field::answer`
-/// folds what you write: trimmed, lower case, single spaces.
-///
-/// **Jake's, and placeholder until he writes it.** What the riddle is
-/// worth turns on these words and on nothing else in the file: too few
-/// and a right answer is refused, too many and the gate is a door. They
-/// are drafted off what spec 0057 measured you can actually see from up
-/// there, which is a dark block with one lit lantern on it.
-///
-/// Kept beside the question because a question and the answers it takes
-/// are one thing, and the two drifting apart is a riddle that cannot be
-/// solved.
-pub const WATCHMAN_ACCEPTS: &[&str] = &["a light", "a lantern", "a light in the dark", "one light"];
+/// Both sentences here are his own, out of those four, put together. He
+/// has not read them in this order, so they carry the marker until he
+/// does.
+pub const WATCHMAN_LETS_YOU_BY: &str =
+    "I have stood at this end since it was built. Go on through. [COPY - Jake]";

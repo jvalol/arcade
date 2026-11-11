@@ -76,7 +76,7 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
     let mut all: Vec<(&'static str, Aabb)> = grounds.to_vec();
 
     all.extend(
-        crate::aloft::standing_on_each()
+        crate::parked::aloft::standing_on_each()
             .into_iter()
             .filter(|(n, _)| *n != 0)
             .map(|(_, slab)| ("the imaginarium", slab)),
@@ -107,13 +107,13 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
     // threw the floor out and found no way across a room it was standing
     // in.
     let admits = |ground: &Aabb, region: &Aabb| {
-        let frame = crate::aloft::frame_of_floor(ground);
+        let frame = crate::parked::aloft::frame_of_floor(ground);
         let (flat, there) = if frame == 0 {
             (*ground, *region)
         } else {
             (
-                crate::aloft::box_out_of_frame(frame, ground),
-                crate::aloft::box_out_of_frame(frame, region),
+                crate::parked::aloft::box_out_of_frame(frame, ground),
+                crate::parked::aloft::box_out_of_frame(frame, region),
             )
         };
 
@@ -165,13 +165,13 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
 
         // **Laid out in the frame whose floor it is**, so the imaginarium's
         // three get a lattice apiece and everywhere else gets the world's.
-        let frame = crate::aloft::frame_of_floor(ground);
-        let turned = crate::aloft::box_out_of_frame(frame, ground);
+        let frame = crate::parked::aloft::frame_of_floor(ground);
+        let turned = crate::parked::aloft::box_out_of_frame(frame, ground);
         let put = |local: Vec3| {
             if frame == 0 {
                 local
             } else {
-                crate::aloft::in_frame(frame, local)
+                crate::parked::aloft::in_frame(frame, local)
             }
         };
         let flat = if frame == 0 { *ground } else { turned };
@@ -182,7 +182,7 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
         let bounds = if frame == 0 {
             within
         } else {
-            crate::aloft::box_out_of_frame(frame, &within)
+            crate::parked::aloft::box_out_of_frame(frame, &within)
         };
 
         // **Not inset by a body.** The first build held the lattice a
@@ -380,7 +380,7 @@ pub fn ways(grounds: &[(&'static str, Aabb)], solid: &[Aabb], within: Aabb) -> W
 /// a path reaches it like anywhere else.
 impl Ways {
     fn join_the_portals(&mut self, solid: &[Aabb]) {
-        use crate::aloft;
+        use crate::parked::aloft;
 
         let mut mouths: Vec<(Vec3, u64, Vec3, u64)> = Vec::new();
 
@@ -533,8 +533,15 @@ fn stood(frame: u64, at: Vec3, solid: &[Aabb]) -> bool {
     let (mut went, mut falling) = (at, 0.0);
 
     for _ in 0..8 {
-        let (next, fell) =
-            crate::aloft::walked_in_frame(frame, went, Vec3::ZERO, falling, step, solid, true);
+        let (next, fell) = crate::parked::aloft::walked_in_frame(
+            frame,
+            went,
+            Vec3::ZERO,
+            falling,
+            step,
+            solid,
+            true,
+        );
 
         went = next;
         falling = fell;
@@ -561,10 +568,10 @@ fn in_frame_terms(frame: u64, at: Vec3, solid: &[Aabb]) -> (Vec3, Vec<Aabb>) {
     }
 
     (
-        crate::aloft::out_of_frame(frame, at),
+        crate::parked::aloft::out_of_frame(frame, at),
         solid
             .iter()
-            .map(|box_| crate::aloft::box_out_of_frame(frame, box_))
+            .map(|box_| crate::parked::aloft::box_out_of_frame(frame, box_))
             .collect(),
     )
 }
@@ -634,7 +641,7 @@ fn walked_straight(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb]) -> bool {
 /// line between the two places before it does not count.
 fn walk_between(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb], stray: f32) -> bool {
     let step = 1.0 / 60.0;
-    let over = crate::aloft::frame(frame) * Vec3::Y;
+    let over = crate::parked::aloft::frame(frame) * Vec3::Y;
     let up = (to - from).dot(over).max(0.0);
     let line = to - from;
     let along = line.length();
@@ -665,8 +672,15 @@ fn walk_between(frame: u64, from: Vec3, to: Vec3, solid: &[Aabb], stray: f32) ->
         }
 
         let wish = flat.normalize_or_zero() * crate::SPEED;
-        let (went, fell) =
-            crate::aloft::walked_in_frame(frame, at, wish, falling, step, solid, climbs <= 0.0);
+        let (went, fell) = crate::parked::aloft::walked_in_frame(
+            frame,
+            at,
+            wish,
+            falling,
+            step,
+            solid,
+            climbs <= 0.0,
+        );
 
         climbs = (climbs - crate::walk::CLIMBS * step).max(0.0) + (went - at).dot(over).max(0.0);
         at = went;
@@ -1108,7 +1122,7 @@ fn thinned(way: Vec<Spot>, solid: &[Aabb]) -> Vec<Spot> {
 
         while out.len() >= 3 {
             let last = out.len() - 1;
-            let over = crate::aloft::frame(out[last].frame) * Vec3::Y;
+            let over = crate::parked::aloft::frame(out[last].frame) * Vec3::Y;
             let level = |one: Vec3, two: Vec3| (two - one).dot(over).abs() < SAME_HEIGHT;
 
             if out[last - 2].frame != out[last].frame
@@ -1191,7 +1205,7 @@ impl Follower {
             if frame == 0 {
                 at
             } else {
-                crate::aloft::out_of_frame(frame, at)
+                crate::parked::aloft::out_of_frame(frame, at)
             }
         };
         let from = out(from);
@@ -1435,7 +1449,7 @@ mod tests {
         reaches: f32,
     ) -> Vec3 {
         let step = 1.0 / 60.0;
-        let over = crate::aloft::frame(from.1) * Vec3::Y;
+        let over = crate::parked::aloft::frame(from.1) * Vec3::Y;
         let mut following = Follower::new(way);
         let (mut at, mut falling) = (from.0, 0.0);
         let mut yaw = facing;
@@ -1471,7 +1485,7 @@ mod tests {
             walking = left < crate::WALKS_WHEN;
 
             let wish = if walking {
-                crate::aloft::frame(from.1) * vec3(sin, 0.0, -cos) * crate::SPEED
+                crate::parked::aloft::frame(from.1) * vec3(sin, 0.0, -cos) * crate::SPEED
             } else {
                 Vec3::ZERO
             };
@@ -1483,7 +1497,7 @@ mod tests {
             // garden's trees, and the plan it is following was laid
             // against them.
             let standing_on = underfoot(solid, at, reaches);
-            let (went, fell) = crate::aloft::walked_in_frame(
+            let (went, fell) = crate::parked::aloft::walked_in_frame(
                 from.1,
                 at,
                 wish,
@@ -1690,10 +1704,10 @@ mod tests {
     /// `join_the_portals`, rather than a pair of invented points.
     #[test]
     fn a_mouth_you_have_crossed_is_not_aimed_at_again() {
-        let out = crate::aloft::round_the_other_way(1);
-        let mouth = crate::aloft::doorway(1, 0).center();
-        let lands = crate::aloft::foot_of_the_flight(out);
-        let on = lands + crate::aloft::frame(out) * vec3(1.0, 0.0, 0.0);
+        let out = crate::parked::aloft::round_the_other_way(1);
+        let mouth = crate::parked::aloft::doorway(1, 0).center();
+        let lands = crate::parked::aloft::foot_of_the_flight(out);
+        let on = lands + crate::parked::aloft::frame(out) * vec3(1.0, 0.0, 0.0);
         let way = vec![
             Spot {
                 at: mouth,
@@ -1710,7 +1724,7 @@ mod tests {
 
         // walking up to it in its own frame, it is what you are aiming at
         follower
-            .steer(crate::aloft::foot_of_the_flight(1), 1, true)
+            .steer(crate::parked::aloft::foot_of_the_flight(1), 1, true)
             .expect("a heading toward the mouth");
 
         assert_eq!(
@@ -1874,17 +1888,25 @@ mod tests {
     /// frame on the other side.
     #[test]
     fn a_portal_edge_changes_which_way_is_down() {
-        let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
-        let middle = crate::aloft::middle();
+        // **Its own floors and its own boxes.** Spec 0063 parked the
+        // imaginarium, so the building's grounds no longer hold the three
+        // frames and a planner given them would find nothing to cross.
+        // What is being tested is the planner's portal edge, which is
+        // `tour`'s and is not parked, so the room is handed to it directly.
+        let grounds: Vec<(&str, Aabb)> = crate::parked::aloft::floors()
+            .into_iter()
+            .map(|slab| ("the imaginarium", slab))
+            .collect();
+        let solid = crate::parked::aloft::solid();
+        let middle = crate::parked::aloft::middle();
         let whole = Aabb::new(
-            middle - Vec3::splat(crate::aloft::HALF + 1.0),
-            middle + Vec3::splat(crate::aloft::HALF + 1.0),
+            middle - Vec3::splat(crate::parked::aloft::HALF + 1.0),
+            middle + Vec3::splat(crate::parked::aloft::HALF + 1.0),
         );
-        let ways = ways(&room.grounds(), &solid, whole);
+        let ways = ways(&grounds, &solid, whole);
 
-        let from = crate::aloft::in_frame(0, vec3(0.0, -crate::aloft::HALF, 0.0));
-        let to = crate::aloft::arrive_through(1, 1);
+        let from = crate::parked::aloft::in_frame(0, vec3(0.0, -crate::parked::aloft::HALF, 0.0));
+        let to = crate::parked::aloft::arrive_through(1, 1);
         let way = ways
             .plan((from, 0), (to, 1), &solid)
             .expect("no way through the hatch");
@@ -1924,8 +1946,13 @@ mod tests {
         let room = crate::room::Room::of(crate::games());
         let solid = room.solid();
         let from = room.doorway();
-        // the top of the nook's stair, which is what sent this wrong
-        let to = vec3(-7.85, crate::aloft::UP_LANDING, 2.2);
+        // **The far end of the nook, which the stair used to stand at.**
+        // The journey that sent this wrong went to the top of the way up
+        // to the imaginarium, and spec 0063 parked that stair. What made
+        // the fault was the region, not the stair: a box from the front
+        // door to anything at the nook's far end stops short of the gap
+        // the nook opens through, and that is still true of this one.
+        let to = vec3(-7.85, 0.0, 2.2);
 
         let ways = ways(&room.grounds(), &solid, between(from, to));
 
@@ -1950,7 +1977,7 @@ mod tests {
 
         assert!(
             ways.plan((from, 0), (to, 0), &solid).is_some(),
-            "there is no way from the door to the top of the nook's stair"
+            "there is no way from the door to the far end of the nook"
         );
     }
 
@@ -2006,7 +2033,7 @@ mod tests {
                     // which is where the body is left pointing, worked
                     // out the way the film's own `Look` works it out
                     if let Some((here, frame)) = last {
-                        let way = crate::aloft::frame(frame).inverse() * (sight - here);
+                        let way = crate::parked::aloft::frame(frame).inverse() * (sight - here);
 
                         facing = way.x.atan2(-way.z);
                     }
@@ -2192,9 +2219,9 @@ mod tests {
     /// it was not a worse heading, it was no heading.
     #[test]
     fn a_heading_is_taken_in_the_frame_you_are_standing_in() {
-        let half = crate::aloft::HALF;
-        let here = crate::aloft::in_frame(1, vec3(0.0, -half, 0.0));
-        let there = crate::aloft::in_frame(1, vec3(0.0, -half, 2.0));
+        let half = crate::parked::aloft::HALF;
+        let here = crate::parked::aloft::in_frame(1, vec3(0.0, -half, 0.0));
+        let there = crate::parked::aloft::in_frame(1, vec3(0.0, -half, 2.0));
 
         let mut follower = Follower::new(vec![Spot {
             at: there,

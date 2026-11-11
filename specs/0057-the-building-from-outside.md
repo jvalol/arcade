@@ -34,7 +34,7 @@ whatever stands up off it, as a shape against the sky, and whatever is lit.
 before anybody counted. Spec 0038 puts a way out on each of the cube's six
 faces, so one comes out upward and one downward; the downward one is the
 hatch in the floor and stands outside nothing, which leaves a single box on
-the roof. `aloft::outside_tests::one_lantern_stands_on_the_roof` holds the
+the roof. `parked::aloft::outside_tests::one_lantern_stands_on_the_roof` holds the
 count.
 
 **It was blind, and it is not any more.** `door_recess` closes every one of
@@ -72,7 +72,7 @@ lime.
 **And a lamp hangs in the shaft**, `aloft::lantern_lamp`, white like the
 room's own six because it is the room's light and not the roof's. Blind,
 that lamp was impossible: it lit the imaginarium's ceiling straight through
-the slab, which `tests::the_imaginarium_is_drawn` caught at once as a blob
+the slab, which the imaginarium's own picture caught at once as a blob
 over the stair with nothing above it to explain it. A point light in this
 engine casts no shadow unless it takes one of the two slots that do, and
 those are ranked by how deep a lamp sits inside its own reach, so a lamp on
@@ -105,10 +105,10 @@ oversail.
 
 ## Acceptance criteria
 
-- There is one lantern on the roof and it stands on the roof. — `aloft::outside_tests::one_lantern_stands_on_the_roof`
-- The light in the room has a hole over it. — `tests::the_imaginarium_is_drawn`, the reference picture, which caught the lamp when there was no hole.
-- Cutting the back out leaves no hole in the shell. — `aloft::lantern_lid` is in `aloft::solid`, and `aloft::outside_tests::everything_outside_the_shell_is_dressed`, `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything` and `standing::tests::a_run_is_one_room` all read it.
-- Nothing stands on the roof that cannot be seen from the landing. — `tests::the_lantern_is_seen_from_the_landing`, which walks the sight line from the landing's eye to the top of the near glazing and finds no parapet in it. It clears by two centimetres.
+- There is one lantern on the roof and it stands on the roof. — `parked::aloft::outside_tests::one_lantern_stands_on_the_roof`
+- ~~The light in the room has a hole over it.~~ Struck 2026-11-10: spec 0063 parked the room and the picture went with it. — ~~the imaginarium's own picture~~, the reference picture, which caught the lamp when there was no hole.
+- Cutting the back out leaves no hole in the shell. — `aloft::lantern_lid` is in `aloft::solid`, and `parked::aloft::outside_tests::everything_outside_the_shell_is_dressed`, `parked::aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything` and `standing::tests::a_run_is_one_room` all read it.
+- ~~Nothing stands on the roof that cannot be seen from the landing.~~ Struck 2026-11-10: spec 0063 stood the lantern on the hall's roof instead, where `room::tests::the_roof_carries_one_lantern` holds it. — ~~the picture from the landing~~, which walks the sight line from the landing's eye to the top of the near glazing and finds no parapet in it. It clears by two centimetres.
 
 ### Verified by hand
 

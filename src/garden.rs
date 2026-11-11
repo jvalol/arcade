@@ -5755,7 +5755,9 @@ mod tests {
     fn no_part_of_the_sky_is_inside_the_building() {
         let middle = at(room().reaches);
         let by = sky_scale(vec3(middle.x, 1.55, middle.z));
-        let tallest = crate::aloft::BASE * 2.0;
+        // the tallest thing in the building, which the imaginarium was
+        // until spec 0063 parked it and is the hall's roof now
+        let tallest = crate::room::TALL + crate::room::THICK;
         // as far as anything of this building gets from anywhere you can
         // stand under the sky, which is the far corner of the far room
         let across = 60.0f32;

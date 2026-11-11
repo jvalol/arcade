@@ -1,6 +1,6 @@
 # 0059 A line somebody types
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took out the riddle this field was built to answer and left it with no other use. `src/parked/typed.rs` still compiles and still holds its own tests.
 **Date:** 2026-11-06, written after the fact
 
 ## Why this is late
@@ -76,11 +76,11 @@ the landing one character at a time.
 
 ## Acceptance criteria
 
-- What arrives is what was typed. — `typed::tests::it_takes_what_was_typed`
-- An answer is read the way it was meant, in all three ways it can be written. — `typed::tests::an_answer_is_read_the_way_it_was_meant`
-- A field with nothing in it says so, whatever the spacebar has been doing. — `typed::tests::a_field_of_spaces_is_empty`
-- Backspace takes a character and not a byte. — `typed::tests::it_rubs_out_a_character_and_not_a_byte`
-- It holds no more than a line, whether that arrives one character at a time or all at once. — `typed::tests::it_holds_no_more_than_a_line`
+- What arrives is what was typed. — `parked::typed::tests::it_takes_what_was_typed`
+- An answer is read the way it was meant, in all three ways it can be written. — `parked::typed::tests::an_answer_is_read_the_way_it_was_meant`
+- A field with nothing in it says so, whatever the spacebar has been doing. — `parked::typed::tests::a_field_of_spaces_is_empty`
+- Backspace takes a character and not a byte. — `parked::typed::tests::it_rubs_out_a_character_and_not_a_byte`
+- It holds no more than a line, whether that arrives one character at a time or all at once. — `parked::typed::tests::it_holds_no_more_than_a_line`
 - Looking at the watchman opens it, W does not walk you while it is open, a wrong line clears without moving the gate, and one of his answers opens it. — `tests::the_watchman_is_answered_in_writing`
 
 ### Verified by hand
@@ -98,3 +98,18 @@ move.
 doing and is the right answer for a Latin keyboard.
 
 **Clipboard.** Nothing here pastes.
+
+## 2026-11-10: parked by spec 0063
+
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
+
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
+
+Everything above is left as written. The arithmetic in it held up and still
+runs.

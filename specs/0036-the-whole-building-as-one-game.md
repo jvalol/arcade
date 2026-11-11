@@ -166,23 +166,3 @@ stop. What makes it not a room nobody wanted is the same test as everything
 else here: it has to use the whole building rather than add to it. For the
 riddle that means an answer you can only have from having walked the
 building. Spec 0055 carries the rest.
-
-## 2026-11-10: three of the rooms it counts are one room now
-
-**Spec 0062 took the hotel's corridor and the long hall out of the
-building.** What is left of that wing is the lobby, the desk and the
-register behind one door, which this spec counted as three of its eleven
-rooms and two of the four it said had state across them.
-
-The trail is unchanged. Both of its stations in that wing survive, because
-both were in the half that was something you do: walking the register's
-diagonal, and handing what it leaves you to the desk. The eight stations are
-still eight.
-
-Two sentences above are now false and are left standing because the argument
-round them is not. "Check somebody in and watch a corridor empty" and "walk
-the long hall until the counts come apart" were this spec's own examples of
-a room whose clue is the answer to the thing it already asks. The first was
-a room whose one thing to do was watching, which is why spec 0062 exists.
-The second was good and is the real loss, written up there.
-

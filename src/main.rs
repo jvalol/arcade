@@ -1,8 +1,6 @@
 //! arcade: a room of cabinets, one per game. See `specs/`.
 
 mod aim;
-mod aleph;
-mod aloft;
 mod back;
 mod behind;
 mod beyond;
@@ -30,8 +28,8 @@ mod mirrors;
 mod neon;
 mod noise;
 mod orrery;
+mod parked;
 mod people;
-mod register;
 mod room;
 mod says;
 mod sign;
@@ -41,7 +39,6 @@ mod study;
 mod tesseract;
 mod tour;
 mod trail;
-mod typed;
 mod valhalla;
 mod walk;
 mod wrecker;
@@ -652,21 +649,8 @@ struct Arcade {
     hoop: Option<MeshId>,
     bottle: Option<MeshId>,
     peg: Option<MeshId>,
-    /// The bell on the hotel's counter, turned on `cellar::turned`'s wheel.
-    bell: Option<MeshId>,
-    /// The two lines on the hotel's sign, which state its premise.
-    sign_says: Vec<TextureId>,
-    /// And the two words over the register's columns, which say what its
-    /// numbers are. Spec 0031.
-    headings: Vec<TextureId>,
-    /// The ten characters the register is written in. Ten textures for the
-    /// whole wall, where the corridor's plaques are one a door: a register is
-    /// the same handful of marks over and over. Spec 0031.
-    marks: Vec<TextureId>,
     /// And what you are carrying out of it, which grows as you walk the
     /// diagonal and is the guest the desk cannot house.
-    carried: register::Carried,
-    book: register::Book,
     /// What the building has been given up to you, room by room. Spec 0036.
     ///
     /// **The bridge reads it**, and nothing else does. Spec 0054 puts
@@ -685,20 +669,6 @@ struct Arcade {
     /// is also "the riddle is unanswered" and there is no second flag to
     /// come apart from it.
     gate: f32,
-    /// The one field anybody is typing into, if there is one. Spec 0059.
-    ///
-    /// **An Option and not a flag beside a buffer.** Open or shut is the
-    /// same fact as whether there is anything to type into, and two
-    /// accounts of it is a field that takes keys while nothing is drawn.
-    field: Option<typed::Field>,
-    /// Whether the watchman has had his answer. Spec 0058.
-    ///
-    /// **Apart from the gate's own number for one frame only.** `gate` is
-    /// nought while shut and nought is also unanswered, so something has
-    /// to carry the moment between the answer landing and the leaves
-    /// starting to move. After that the gate carries it, which is why
-    /// nothing reads this to ask whether the riddle is done.
-    answered: bool,
     /// What the gallery's panel is showing, the texture it is written
     /// into, and what was last written there. Specs 0039 and the engine's
     /// 0074.
@@ -768,10 +738,22 @@ struct Arcade {
     /// A quad per run of the field wall's plaster, rebuilt when the run's
     /// length changes. Spec 0040.
     rendered: Vec<Option<MeshId>>,
-    aloft_mesh: Option<MeshId>,
-    aloft_skin: Vec<TextureId>,
+    /// A plane per lid this building shows the sky, with that lid's own
+    /// tile counts, so the roof is a surface rather than a hole. Specs 0057
+    /// and 0063.
+    ///
+    /// **It was the imaginarium's roof and nothing else.** That room stood
+    /// on this one's lid and was the only thing up there anybody had drawn
+    /// a top for, so parking it left the building's own roof undrawn and
+    /// `roof_skin` declared with nothing ever assigning it. From the top of
+    /// the bridge the lid is 3.8 degrees down, which is nearly edge on, and
+    /// from `FLY=1` it is a hole straight into the hall.
+    roof_meshes: Vec<MeshId>,
+    /// One unit quad, laid on whichever outward face is being dressed.
+    /// Each face carries its own skin, generated at that face's size, so
+    /// one mesh does for all of them.
+    wall_quad: Option<MeshId>,
     roof_skin: Option<TextureId>,
-    storey_skin: Vec<TextureId>,
     outdoors: bool,
     /// Whether the outdoors can be seen from here, which is not the same
     /// question and is the one the field is drawn on. The engine's spec
@@ -779,7 +761,6 @@ struct Arcade {
     sees_outdoors: bool,
     storey_faces: Vec<(blitzkit::collision::Aabb, Vec3)>,
     storey_wall_skin: Vec<TextureId>,
-    jutting_skin: Vec<TextureId>,
     tuft: Option<MeshId>,
     blades: Vec<TextureId>,
     heads: Vec<TextureId>,
@@ -997,12 +978,10 @@ struct Arcade {
     /// being it. Spec 0047.
     rolling: Vec3,
     /// The room turning round you, out of the top of a flight. Spec 0048.
-    crossing: Option<aloft::Crossing>,
     /// A tour being walked rather than a route being replayed. Spec 0049.
     filming: Option<Filming>,
     /// Whether you are still inside the aperture you last came through, so
     /// that standing in one does not swap you back and forth every frame.
-    came_through: bool,
     /// How fast you are going down, which until spec 0007 was never.
     falling: f32,
     /// How high your eye is, which is not quite how high your feet are.
@@ -1031,9 +1010,8 @@ struct Arcade {
     /// Which step of the back room's dial the rig is on, and whether its
     /// cubes are one mesh drawn many times or a mesh each. Spec 0024.
     rig_step: usize,
-    /// The desk's book in the hotel through the gallery's west door. Specs
-    /// 0029 and 0062.
-    hotel: aleph::Hotel,
+    /// Who is in the hotel through the gallery's west door, and how far the
+    /// last rule has travelled down the corridor. Spec 0029.
     rig_many: bool,
     /// A cube mesh per cube, uploaded as the dial asks for them.
     rig_meshes: Vec<MeshId>,
@@ -1042,18 +1020,6 @@ struct Arcade {
     /// And every word on its gauge board, drawn into textures once: the
     /// heading, then the three names, then the three full-scale readings.
     gauge_words: Vec<TextureId>,
-    /// A room number drawn into a texture, by the number rather than by a
-    /// place in a list.
-    ///
-    /// **It was the hotel's door plaques and is now the register's rows.**
-    /// Spec 0029's forty doors each wore one; they were made once for rooms
-    /// 1 to 40, which was right while only those forty were drawn and wrong
-    /// the moment the drawn rooms began following you, and Jake walked to
-    /// room 104 and found its plaque blank. Spec 0062 took the doors out.
-    /// What still wants a number is each row of the book, because a row is a
-    /// room's entry and it borrows that room's numeral rather than keeping a
-    /// second account of what the number looks like. Spec 0031.
-    plaques: std::collections::HashMap<u64, TextureId>,
     costs: blitzkit::cost::Costs,
     /// What the renderer counted for the last frame, and whether the device
     /// agreed to time one at all, both asked of it at the top of the frame.
@@ -1185,9 +1151,7 @@ impl Arcade {
             },
             standing_in: 0,
             rolling: Vec3::Y,
-            crossing: None,
             filming: None,
-            came_through: false,
             falling: 0.0,
             eye: 0.0,
             room,
@@ -1244,14 +1208,7 @@ impl Arcade {
             hoop: None,
             bottle: None,
             peg: None,
-            bell: None,
-            sign_says: Vec::new(),
-            headings: Vec::new(),
-            marks: Vec::new(),
-            carried: register::Carried::new(),
             gate: 0.0,
-            answered: false,
-            field: None,
             trail: {
                 let mut trail = trail::Trail::new();
 
@@ -1263,7 +1220,6 @@ impl Arcade {
 
                 trail
             },
-            book: register::Book::new(),
             bag: None,
             urn: None,
             sconce: None,
@@ -1307,15 +1263,13 @@ impl Arcade {
             saplings: Vec::new(),
             render: None,
             rendered: vec![None, None],
-            aloft_mesh: None,
-            aloft_skin: Vec::new(),
+            roof_meshes: Vec::new(),
+            wall_quad: None,
             roof_skin: None,
-            storey_skin: Vec::new(),
             outdoors: false,
             sees_outdoors: false,
             storey_faces: Vec::new(),
             storey_wall_skin: Vec::new(),
-            jutting_skin: Vec::new(),
             tuft: None,
             blades: Vec::new(),
             litter: Vec::new(),
@@ -1422,12 +1376,10 @@ impl Arcade {
             showing_solid: false,
             showing_cost: false,
             rig_step: 2,
-            hotel: aleph::Hotel::new(),
             rig_many: false,
             rig_meshes: Vec::new(),
             clutter: Vec::new(),
             gauge_words: Vec::new(),
-            plaques: std::collections::HashMap::new(),
             costs: blitzkit::cost::Costs::new(),
             counted: (0, 0),
             timed: false,
@@ -1519,53 +1471,11 @@ impl Arcade {
             // and the sauna's glass, which is a door and behaves like one.
             // Spec 0008.
             Some(room::Seen::Sauna) => self.room.sauna_open = !self.room.sauna_open,
-            // and one of the imaginarium's three, per spec 0038. The
-            // moment goes in rather than a flag, because who sets out
-            // reads it.
-            Some(room::Seen::Hatch(n)) => {
-                let door = &mut self.room.aloft_doors[n as usize];
-
-                *door = (!door.0, self.since);
-
-                // and whichever way this one swung, for the reason the
-                // case above gives
-                self.trail.gave(trail::Asked::WorkedAHatch);
-            }
             Some(room::Seen::Baths) => self.room.baths_open = !self.room.baths_open,
-            // the book is read by looking at it and worked by walking, so
-            // this does nothing to it. Spec 0031: the diagonal is not a
-            // riddle and there is nothing here to press.
-            Some(room::Seen::Book) => (),
-            // **And the one you carried is housed like anybody else.** Spec
-            // 0031 had this arm do nothing, so the desk could refuse. Spec
-            // 0032: one guest can always be housed, the desk says yes, and
-            // what it costs is that the book now has them in it. Walk it
-            // again and the diagonal will have found somebody else.
-            Some(room::Seen::Desk) if !self.carried.is_empty() => {
-                self.hotel.house_carried();
-                self.book.write_in(self.carried.taken());
-                self.trail.gave(trail::Asked::HousedTheCarried);
-            }
-            // **And nothing at all when your hands are empty.** Spec 0030
-            // put four arrivals at this desk and a key that housed each in
-            // turn, which made the room a button you pressed to watch an
-            // animation. Spec 0062 took that out: the one thing this desk
-            // does is take the guest you could not have got anywhere else.
-            Some(room::Seen::Desk) => (),
-            // **The watchman asks you a question and you write back.**
-            // Spec 0058 answered him by turning round and looking at the
-            // building, which Jake read as a proof you had walked the
-            // place rather than as a riddle. Spec 0059 is the field this
-            // opens, and what he asks and what counts as right are his.
-            //
-            // Not once the gate is moving: he has had his answer and a
-            // field that opens again is a man asking twice.
-            Some(room::Seen::Watchman) if self.gate <= 0.0 => {
-                self.field = Some(typed::Field::asked(
-                    typed::Asking::Watchman,
-                    says::WATCHMAN_ASKS,
-                ));
-            }
+            // **And the watchman, who wants nothing pressed at him.** Spec
+            // 0058 opened a field here for his riddle and spec 0063 took it
+            // out: he keeps the threshold and opens the gate as you come up
+            // to it, so looking at him names him and that is all.
             Some(room::Seen::Watchman) => (),
             // a toy: enter does the one thing that toy's enter does
             Some(room::Seen::Bench(n)) => match self.room.benches[n].name {
@@ -1695,56 +1605,6 @@ impl Arcade {
         }
 
         true
-    }
-
-    /// What the sight is on, which decides what `enter` works and which of
-    /// the arrows are yours to turn with.
-    ///
-    /// **Nothing in the building is in front of you while you are in the
-    /// tesseract**, and this asked the building anyway. `looking_at` reads
-    /// the hall's cabinets and plinths against wherever you are standing,
-    /// and a cell's coordinates are not the hall's, so a cell three steps
-    /// from the plinth once sat a cabinet's prompt on a wall: slider,
-    /// click or press enter to play, in a room with nothing in it.
-    ///
-    /// Its own method because `--walk` has to ask the same question between
-    /// frames, and a replay that answered it differently would be checking
-    /// a building nobody walks.
-    /// What Return does to an open field: hands the line to whoever
-    /// asked for it. Spec 0059.
-    ///
-    /// **A wrong answer is not a fail.** Spec 0058 is plain that a gate
-    /// which can be failed is a score and that nothing in this building
-    /// counts at you. He says so, the line clears, and the field stays
-    /// open for as long as anybody wants to stand there. Nothing is
-    /// locked, nothing is tallied, and walking away and coming back
-    /// costs nothing but the walk.
-    fn answer_the_field(&mut self) {
-        let Some(field) = self.field.as_mut() else {
-            return;
-        };
-
-        // an empty line is somebody pressing Return at a blank field,
-        // which is not an answer and should not be told it is wrong
-        if field.empty() {
-            return;
-        }
-
-        match field.asking {
-            typed::Asking::Watchman => {
-                let answer = field.answer();
-                let right = says::WATCHMAN_ACCEPTS
-                    .iter()
-                    .any(|one| typed::folded(one) == answer);
-
-                if right {
-                    self.field = None;
-                    self.answered = true;
-                } else {
-                    field.try_again();
-                }
-            }
-        }
     }
 
     fn what_i_see(&self) -> Option<room::Seen> {
@@ -1907,12 +1767,10 @@ impl Arcade {
         self.at = at;
         self.falling = falling;
 
-        self.through_an_aperture();
-
-        // and the view rolls after the frame rather than with it
-        let over = self.over();
-        let by = (dt / aloft::TURNS_YOU).min(1.0);
-        self.rolling = self.rolling.lerp(over, by).normalize_or(over);
+        // **Up is up, so there is nothing for the view to roll after.**
+        // Spec 0047 lagged it behind a frame that could change under you,
+        // which only the imaginarium ever did; spec 0063 parked that room.
+        self.rolling = Vec3::Y;
 
         // **The eye catching up with the feet, here rather than in `update`.**
         // Nothing while you are on the level, because then they are the same
@@ -1938,94 +1796,6 @@ impl Arcade {
         went
     }
 
-    /// Spec 0047: an open second door is a way through, and going through
-    /// it turns you over.
-    ///
-    /// **The same aperture both ways.** `doorway(k, 1)` is cut in frame
-    /// `floor_of(k)`'s floor and stands on frame `k`'s, so the two frames
-    /// that share it are the two it swaps between. Whichever of them you
-    /// are in, you come out in the other.
-    ///
-    /// Your feet are what is tested, because the hole is a slot the
-    /// thickness of a floor and that is the part of you that is in it. With
-    /// the door open the floor is cut, so you are in the slot on your way
-    /// down through it; with the door shut the leaf is solid and you stand
-    /// on it.
-    ///
-    /// **And a latch, because without one you are in the aperture the frame
-    /// after you arrive.** That read as a figure flickering between two ways
-    /// up at sixty a second. It clears when your feet are out of every
-    /// aperture in the room.
-    fn through_an_aperture(&mut self) {
-        // the room is already taking you somewhere
-        if self.crossing.is_some() {
-            return;
-        }
-
-        let mine = self.standing_in;
-
-        // **Spec 0048: the door at the top of your own flight.** Nothing to
-        // check about its state, because a top door has no leaf and never
-        // had one: an aperture with nothing in it is open. Only your own
-        // frame can reach it, since the other two see that face as their
-        // ceiling.
-        if aloft::doorway(mine, 0).contains_point(self.at) {
-            self.crossing = Some(aloft::Crossing::out_of(
-                mine,
-                self.at,
-                (self.yaw, self.pitch),
-            ));
-
-            return;
-        }
-
-        let mut inside = false;
-
-        for k in 0..aloft::FRAMES {
-            if !aloft::doorway(k, 1).contains_point(self.at) {
-                continue;
-            }
-
-            inside = true;
-
-            // shut, so it is a floor and not a way anywhere
-            if self.room.aloft_doors[k as usize].0 {
-                continue;
-            }
-
-            let other = if k == mine {
-                aloft::floor_of(k)
-            } else if aloft::floor_of(k) == mine {
-                k
-            } else {
-                continue;
-            };
-
-            if self.came_through {
-                continue;
-            }
-
-            // **A crossing rather than a swap, since spec 0048 built
-            // one.** 0047 did all of this in a single frame and rolled the
-            // camera after it, and driving it showed what that costs. The
-            // ends are the same: you come out past the threshold, looking
-            // the way you went, which is into the room with your own floor
-            // standing up in it.
-            self.came_through = true;
-            self.falling = 0.0;
-            self.crossing = Some(aloft::Crossing::down_through(
-                k,
-                other,
-                self.at,
-                (self.yaw, self.pitch),
-            ));
-        }
-
-        if !inside {
-            self.came_through = false;
-        }
-    }
-
     /// Walk the tour, if there is one. Spec 0049.
     ///
     /// **Closed loop, which is the point.** Every frame it asks where the
@@ -2041,13 +1811,6 @@ impl Arcade {
         };
 
         self.walking = [false; 4];
-
-        // a crossing is the room's move and not yours, so wait it out
-        if self.crossing.is_some() {
-            self.filming = Some(film);
-
-            return;
-        }
 
         while let Some(step) = film.steps.get(film.at).copied() {
             match step {
@@ -2373,19 +2136,21 @@ impl Arcade {
             (far + room::NOOK_SPAN - 0.15, -1.0, false, back, front),
         ];
 
-        // **The south side is asked of the wall rather than worked out
-        // again.** It is the lobby's north wall, and `room::nook_lining`
-        // already clamps the nook's dressing to the part of it the nook
-        // actually has: the lobby runs on west past the nook, and the nook's
-        // opening runs on east past the wall. Panelling that run from `back`
-        // to `front` put the skirting, the rail and the panels 2.65 beyond
-        // the wall's east end, hanging across the opening with nothing
-        // behind them, and 0.15 shy of its face everywhere else, so the only
-        // part of it anybody could see was the part that should not have
-        // been there. Jake, twice, from the hall: it's still a wrong wall.
-        for face in room::nook_lining(self.room.reaches) {
-            out.push((face.max.z, 1.0, false, face.min.x, face.max.x));
-        }
+        // **The south side is panelled with the rest of it now.** It used
+        // to be the hotel lobby's north wall, borrowed, so the nook's
+        // dressing had to be clamped to the part of it the nook actually
+        // had: the lobby ran on west past the nook and the nook's opening
+        // ran on east past the wall. Panelling that run from `back` to
+        // `front` put the skirting, the rail and the panels 2.65 beyond the
+        // wall's east end, hanging across the opening with nothing behind
+        // them, and 0.15 shy of its face everywhere else, so the only part
+        // of it anybody could see was the part that should not have been
+        // there. Jake, twice, from the hall: it's still a wrong wall.
+        //
+        // Spec 0063 parked the hotel and `room::nook_south` builds this
+        // wall for the nook, in the nook's own place, so there is nothing
+        // left to clamp to.
+        out.push((-self.room.reaches + room::THICK, 1.0, false, back, front));
 
         out
     }
@@ -2447,284 +2212,6 @@ impl Arcade {
     /// A door's panels and its handle, which is what makes it read as a door
     /// rather than a slab. Spec 0031's note, and it is true of all of them.
     #[allow(clippy::too_many_arguments)]
-    fn dress_a_door(
-        &self,
-        scene: &mut Scene,
-        cube: MeshId,
-        at: Vec3,
-        swing: f32,
-        inward: f32,
-        wide: f32,
-        colour: glam::Vec4,
-    ) {
-        let turn = glam::Quat::from_rotation_y(-inward * swing);
-        let tall = aleph::DOOR_TALL - aleph::DOOR_GAP;
-        // two panels, an upper and a lower, sunk a little into the face
-        let high = tall * 0.5 - aleph::PANEL_GAP;
-
-        for (up, deep) in [
-            (aleph::DOOR_GAP + high * 0.5 + aleph::PANEL_GAP, high * 0.52),
-            (
-                aleph::DOOR_GAP + tall - high * 0.5 - aleph::PANEL_GAP,
-                high * 0.6,
-            ),
-        ] {
-            scene.push_plain(
-                cube,
-                &Transform::at(at + Vec3::Y * up)
-                    .with_rotation(turn)
-                    .with_scale(vec3(
-                        wide - aleph::PANEL_IN * 2.0,
-                        deep,
-                        aleph::DOOR_THICK + aleph::PANEL_DEEP,
-                    )),
-                colour * vec4(0.82, 0.82, 0.82, 1.0),
-            );
-        }
-
-        // and the thing you turn, on the side away from the hinge
-        let along = vec3(swing.cos(), 0.0, inward * swing.sin());
-        let out = vec3(-inward * swing.sin(), 0.0, swing.cos());
-
-        scene.push_plain(
-            cube,
-            &Transform::at(
-                at + Vec3::Y * aleph::HANDLE_UP
-                    + along * (wide * 0.5 - aleph::HANDLE_IN)
-                    + out * aleph::HANDLE_IN * 0.3,
-            )
-            .with_rotation(turn)
-            .with_scale(aleph::HANDLE),
-            aim::HOTEL_PLAQUE,
-        );
-    }
-
-    /// The hotel: its two floors, the doors, the plaques, the light under the
-    /// shut ones, and the desk. Spec 0029.
-    ///
-    /// Its shell is handed over once per spec 0026 and is not here. What is
-    /// here is what moves or lights up, which is the same division the back
-    /// room opposite uses.
-    /// Whether you are standing in the register behind the blank door.
-    fn in_the_register(&self) -> bool {
-        let reaches = self.room.reaches;
-        let (west, east) = register::along(reaches);
-        let (far, near) = register::across(reaches);
-
-        self.at.x > west && self.at.x < east && self.at.z > far && self.at.z < near
-    }
-
-    /// The register: its floor, and the book on its far wall. Spec 0031.
-    ///
-    /// Its shell is handed over once per spec 0026 and is not here.
-    fn draw_the_register(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
-        let reaches = self.room.reaches;
-        let (west, east) = register::along(reaches);
-        let (far, near) = register::across(reaches);
-
-        scene.push_plain(
-            floor,
-            &Transform::at(vec3((west + east) * 0.5, 0.0, (far + near) * 0.5)).with_scale(vec3(
-                east - west,
-                1.0,
-                near - far,
-            )),
-            aim::REGISTER_FLOOR,
-        );
-
-        // the one fitting in here, over the head of the page. A lamp with no
-        // fitting is a bright patch on a wall and no reason for it, which
-        // the cellar was told once and the baths did again worse.
-        for at in register::sconces(reaches) {
-            scene.push_plain(
-                cube,
-                &Transform::at(at).with_scale(register::SCONCE),
-                aim::REGISTER_SCONCE,
-            );
-            scene.push_plain(
-                cube,
-                &Transform::at(at + vec3(0.0, register::SCONCE.y * 0.3, 0.0)).with_scale(vec3(
-                    register::SCONCE.x * 0.7,
-                    register::SCONCE.y * 0.3,
-                    register::SCONCE.z * 0.7,
-                )),
-                aim::REGISTER_SHADE,
-            );
-        }
-
-        if self.marks.is_empty() {
-            return;
-        }
-
-        // the book: a page of the register, scrolling across the wall as
-        // you walk, with the cell on the diagonal lit. The diagonal runs
-        // corner to corner through what is on the wall, which is what a
-        // diagonal looks like when it is written on something.
-        // what the two columns are, over them. Without this the wall is
-        // numbers and nothing else, which is what Jake said it was.
-        for (which, texture) in self.headings.iter().copied().enumerate() {
-            let shape = blitzkit::text::room_for(register::HEADINGS[which], aleph::PLAQUE_TEXELS);
-            let aspect = shape.x / shape.y.max(1e-4);
-            // capped at what is left of the wall, so a heading shrinks
-            // rather than running off the end and being clipped by it
-            let wide = register::heading_wide(reaches, which, aspect);
-            let tall = wide / aspect;
-
-            scene.push_textured(
-                cube,
-                texture,
-                &Transform::at(
-                    // `heading_at` gives the bottom left of it, the same way
-                    // it gives the left rather than the middle
-                    register::heading_at(reaches, which) + vec3(wide * 0.5, tall * 0.5, 0.0),
-                )
-                .with_scale(vec3(wide, tall, 0.02)),
-                aim::REGISTER_ROOM,
-                aim::MATTE,
-            );
-        }
-
-        // every row, in the same place every time. There is no window: a
-        // window following the reader is what made the wall seem to move.
-        for down in 0..register::ROWS {
-            // which room's entry this row is, written at the near end of it.
-            // This is the whole of what connects the wall to the hotel.
-            let room = register::room_of(down);
-
-            if let Some(texture) = self.plaques.get(&room).copied() {
-                scene.push_textured(
-                    cube,
-                    texture,
-                    &Transform::at(register::label_at(reaches, down)).with_scale(vec3(
-                        register::CELL * 1.5,
-                        register::CELL * 0.8,
-                        register::MARK_DEEP,
-                    )),
-                    aim::REGISTER_ROOM,
-                    aim::MATTE,
-                );
-            }
-
-            // **Out to the end wall, which cuts the last one.** The row
-            // used to stop at a flat twenty four, five metres short of that
-            // wall, so every entry on the page had a visible last digit.
-            // Spec 0032: an entry with a last digit is a number, and the
-            // hotel has a room for every number.
-            for along_by in 0..register::columns(reaches) {
-                let row = down;
-                let column = along_by;
-                let mark = self.book.at(row, column) as usize;
-                let Some(texture) = self.marks.get(mark).copied() else {
-                    continue;
-                };
-                // **Lit where it is read and falling away after.** Spec
-                // 0032 ran the entries to the end wall so that none of them
-                // ends, and drawing all of that at one brightness is what
-                // made the wall unreadable.
-                let colour = if row == column {
-                    // **Lit behind the walk, marked out ahead of it.** The
-                    // whole diagonal used to be lit before you took a step,
-                    // so walking the room changed nothing on the wall.
-                    if row < self.carried.reach() {
-                        aim::REGISTER_DIAGONAL
-                    } else {
-                        aim::REGISTER_AHEAD
-                    }
-                } else {
-                    aim::REGISTER_MARK * register::lit_at(column)
-                };
-
-                scene.push_textured(
-                    cube,
-                    texture,
-                    &Transform::at(register::cell_at(reaches, down, along_by)).with_scale(vec3(
-                        // **A row is a line, not a grid of tiles.** Each
-                        // mark carries its own dark backing, so marks that
-                        // touch along a row make one band and the gap
-                        // between rows becomes the only gap there is. At
-                        // 0.74 square the wall was an even mesh of tiles
-                        // with no line in it anywhere, which is most of what
-                        // Jake meant by unintelligible.
-                        register::CELL * 0.99,
-                        register::CELL * 0.78,
-                        register::MARK_DEEP,
-                    )),
-                    colour,
-                    aim::MATTE,
-                );
-            }
-
-            // **And a rule through the row, once what you carry differs
-            // from it.** Spec 0052. The construction was the whole of what
-            // this room showed: marks lit behind the walk, and the desk
-            // asserting at the end of it that what you hold is in no room
-            // of theirs. Nothing let you check that, and Cantor's argument
-            // is an absence, which cannot be looked at.
-            //
-            // So the wall does the checking. `differs_from` is the proof
-            // and it answers false for a row the walk has not reached, so
-            // this asks it rather than asking how far you have walked:
-            // those are the same answer by the theorem, and the theorem is
-            // the thing being shown.
-            if self.carried.differs_from(&self.book, down) {
-                let (at, long) = register::rule_at(reaches, down);
-
-                scene.push_plain(
-                    cube,
-                    &Transform::at(at).with_scale(vec3(
-                        long,
-                        register::RULE_THICK,
-                        register::RULE_THICK,
-                    )),
-                    aim::REGISTER_RULED,
-                );
-            }
-        }
-    }
-
-    /// Everybody the wave is passing, and whoever is waiting at the desk.
-    ///
-    /// Spec 0033. **The light under the door stays**: this draws the ones
-    /// who are out of their rooms, and a guest at rest is still a strip,
-    /// because there is nothing to see in a room you cannot go into.
-    /// What the desk says under its name.
-    ///
-    /// **A method rather than forty lines inside `update`, so a test can ask
-    /// it.** This building has shipped two unreachable lines here. Spec 0030
-    /// put `DESK_FULL` behind an arm that always matched, so the sentence
-    /// carrying the whole point of the hotel was never once on screen. Spec
-    /// 0034 did it again with `DESK_SCATTERED`, behind the filling arm, and
-    /// that one was caught by `every_line_the_desk_has_is_reachable`, which
-    /// could not have been written while this was an expression in the
-    /// middle of a match.
-    fn what_the_desk_says(&self) -> String {
-        // **Four arms, not eleven.** Spec 0030 had this answer for four
-        // arrivals, both halves of each of their moves, and the gaps in
-        // between, and the order of those arms mattered so much that this
-        // file shipped three lines nobody could ever see. Spec 0062 took the
-        // arrivals out. What is left is the one exchange this desk is for.
-        if !self.carried.is_empty() {
-            // **The one it cannot house.** This desk has a room for
-            // anybody, because the rooms are the counting numbers. Spec
-            // 0031: you wrote this guest yourself, one line at a time, out
-            // of the register that was supposed to have everybody in it.
-            return format!("{} {}", self.carried.says(), register::DESK_TAKES);
-        }
-
-        // **Only while what it just did is still worth saying.** A line that
-        // stays up for ever is a scoreboard. Spec 0030 held this window open
-        // with the waves it had started; `aleph::SAYS_FOR` holds it now.
-        if self.hotel.just_housed() {
-            return String::from(if self.book.written() >= 2 {
-                register::DESK_AGAIN
-            } else {
-                register::DESK_WROTE_IN
-            });
-        }
-
-        String::from(aleph::DESK_FULL)
-    }
-
     /// The field. Spec 0040.
     ///
     /// What this building is from outside it. Spec 0040.
@@ -2741,6 +2228,69 @@ impl Arcade {
 
         if !self.sees_outdoors {
             return;
+        }
+
+        // the walls up there that the sky can see, which is what
+        // `Room::outside` asks the building for.
+        if let Some(mesh) = self.wall_quad {
+            for ((face, looks), skin) in self
+                .storey_faces
+                .iter()
+                .copied()
+                .zip(self.storey_wall_skin.iter().copied())
+            {
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(face.center() + looks * 0.02)
+                        .with_rotation(room::laid_on(looks))
+                        .with_scale(room::quad_on(face.size(), looks)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+        }
+
+        // the roof itself, which is the one surface up there that is not a
+        // wall: the same lime the garden's walls wear, laid flat in bays.
+        if let Some(skin) = self.roof_skin {
+            for (lid, mesh) in self
+                .room
+                .lids()
+                .into_iter()
+                .zip(self.roof_meshes.iter().copied())
+            {
+                let (middle, size) = (lid.center(), lid.size());
+
+                scene.push_textured(
+                    mesh,
+                    skin,
+                    &Transform::at(vec3(middle.x, lid.max.y + 0.01, middle.z))
+                        .with_rotation(room::laid_on(Vec3::Y))
+                        .with_scale(room::quad_on(size, Vec3::Y)),
+                    aim::GARDEN_PLASTER,
+                    aim::MATTE,
+                );
+            }
+        }
+
+        // the lantern on the roof, which is the one lit thing in this
+        // building's skyline and the whole of what makes the view back from
+        // the bridge read as something. Specs 0057 and 0063.
+        {
+            let shaft = self.room.lantern();
+            let cap = self.room.lantern_cap();
+
+            scene.push_plain(
+                cube,
+                &Transform::at(shaft.center()).with_scale(shaft.size()),
+                aim::LANTERN,
+            );
+            scene.push_plain(
+                cube,
+                &Transform::at(cap.center()).with_scale(cap.size()),
+                aim::GARDEN_COPE,
+            );
         }
 
         // the wall the building shows the field, past the garden's own
@@ -2809,144 +2359,6 @@ impl Arcade {
                 aim::GARDEN_PLASTER,
                 aim::MATTE,
             );
-        }
-
-        // and the imaginarium, the one storey of this building that stands
-        // above its own wall, in the same plaster with the same cope.
-        // `aloft::outside` says what it was before there was a field to see
-        // it from.
-        if let Some(mesh) = self.aloft_mesh {
-            for ((face, looks), skin) in aloft::outside()
-                .into_iter()
-                .zip(self.aloft_skin.iter().copied())
-            {
-                let (middle, size) = (face.center(), face.size());
-                let across = if looks.x.abs() > 0.5 { size.z } else { size.x };
-
-                scene.push_textured(
-                    mesh,
-                    skin,
-                    &Transform::at(middle + looks * 0.02)
-                        .with_rotation(room::laid_on(looks))
-                        .with_scale(vec3(across, 1.0, size.y)),
-                    aim::GARDEN_PLASTER,
-                    aim::MATTE,
-                );
-            }
-
-            for (middle, size) in aloft::coping() {
-                scene.push_plain(
-                    cube,
-                    &Transform::at(middle).with_scale(size),
-                    aim::GARDEN_COPE,
-                );
-            }
-
-            // and the five things standing off it, which are spec 0038's
-            // doorways seen from the other side: one lantern on the roof
-            // and four bays on the walls, plastered like the mass with a
-            // stone over each.
-            let lantern = aloft::lantern();
-
-            for ((face, looks), skin) in aloft::jutting_faces()
-                .into_iter()
-                .zip(self.jutting_skin.iter().copied())
-            {
-                let placed = Transform::at(face.center() + looks * 0.02)
-                    .with_rotation(room::laid_on(looks))
-                    .with_scale(room::quad_on(face.size(), looks));
-
-                // **The lantern's four sides are glazed rather than
-                // plastered**, per spec 0057, because this is the one thing
-                // the building shows a field a hundred and thirty metres
-                // off. At that range and four degrees down nothing laid on
-                // a roof reads at all, and a light reads at any size.
-                //
-                // **And it is lit this far past one because the lamp in
-                // the shaft cannot light it.** `aloft::lantern_lamp` hangs
-                // inside the kerb and these are its outside faces, so they
-                // point away from it and take nothing. What the lamp is
-                // for is the room under the hole.
-                //
-                // Its own faces and nothing else's: the test is standing on
-                // the roof, which only this one does.
-                if face.min.y >= lantern.min.y - 1e-3 {
-                    scene.push_plain(mesh, &placed, aim::ALOFT_LANTERN);
-                } else {
-                    scene.push_textured(mesh, skin, &placed, aim::GARDEN_PLASTER, aim::MATTE);
-                }
-            }
-
-            // the ground storey's roof, which until spec 0041 flew over it
-            // was not there at all.
-            for (piece, skin) in self
-                .room
-                .lids()
-                .iter()
-                .zip(self.storey_skin.iter().copied())
-            {
-                let (middle, size) = (piece.center(), piece.size());
-
-                scene.push_textured(
-                    mesh,
-                    skin,
-                    &Transform::at(vec3(middle.x, piece.max.y + 0.01, middle.z))
-                        .with_rotation(room::laid_on(Vec3::Y))
-                        .with_scale(vec3(size.x, 1.0, size.z)),
-                    aim::GARDEN_PLASTER,
-                    aim::MATTE,
-                );
-            }
-
-            // and the walls under them that the sky can see, which is what
-            // `Room::outside` asks the building for.
-            for ((face, looks), skin) in self
-                .storey_faces
-                .iter()
-                .copied()
-                .zip(self.storey_wall_skin.iter().copied())
-            {
-                scene.push_textured(
-                    mesh,
-                    skin,
-                    &Transform::at(face.center() + looks * 0.02)
-                        .with_rotation(room::laid_on(looks))
-                        .with_scale(room::quad_on(face.size(), looks)),
-                    aim::GARDEN_PLASTER,
-                    aim::MATTE,
-                );
-            }
-
-            // the roof itself, which is the one surface up there that is
-            // not a wall: the same lime laid flat, in bays.
-            if let (Some(mesh), Some(skin)) = (self.aloft_mesh, self.roof_skin) {
-                let (middle, size) = aloft::roof();
-
-                scene.push_textured(
-                    mesh,
-                    skin,
-                    &Transform::at(middle)
-                        .with_rotation(room::laid_on(Vec3::Y))
-                        .with_scale(vec3(size.x, 1.0, size.y)),
-                    aim::GARDEN_PLASTER,
-                    aim::MATTE,
-                );
-            }
-
-            for (whole, _) in aloft::jutting() {
-                let (middle, size) = aloft::jutting_cap(&whole);
-
-                // **Stone on the lantern too, and glass was tried.** A lit
-                // pane over lit sides is one tan mass at night: the colour
-                // clamps to the same value on both and the box loses its
-                // top. What tells you there is a box up there is the dark
-                // slab over it and the line of shadow under its oversail.
-                scene.push_plain(
-                    cube,
-                    &Transform::at(middle).with_scale(size),
-                    aim::GARDEN_COPE,
-                );
-            }
         }
     }
 
@@ -4356,44 +3768,6 @@ impl Arcade {
             }
         };
 
-        // and whoever is at the desk wanting a room.
-        //
-        // **One figure, always.** Spec 0030 drew this one only while an
-        // arrival was queued and drew a wave of guests crossing the corridor
-        // behind them; spec 0062 took the corridor and the queue out. A
-        // lobby with nobody in it is a lobby that is shut, so the one who is
-        // always at the door stays.
-        {
-            // **Facing the desk, which is yaw nought.** It was `PI`, so the
-            // one person in the lobby stood at the counter with its back to
-            // it, looking at whoever came through the door. Jake walked in
-            // and said the shadowy figure is creepy, and it was: a guest
-            // waiting for a room does not watch the entrance.
-            stand(
-                aleph::waiting(reaches),
-                glam::Quat::IDENTITY,
-                0.0,
-                None,
-                0,
-                people::Look::Guest,
-                false,
-            );
-        }
-
-        // and the three flights of the imaginarium, per spec 0038, where
-        // the whole content of the room is other people using it
-        for who in aloft::walking(self.since, self.room.aloft_doors) {
-            stand(
-                who.at,
-                who.up,
-                who.facing,
-                Some(who.walked),
-                who.shade,
-                people::Look::Guest,
-                false,
-            );
-        }
-
         // and the watchman at the top of the bridge, who is there exactly
         // when the bridge is. Spec 0055: he stands, he faces the climb, and
         // nothing is said.
@@ -4453,559 +3827,6 @@ impl Arcade {
                 people::Look::Guest,
                 true,
             );
-        }
-    }
-
-    /// The other corridor off the hotel's lobby. Spec 0035.
-    ///
-    /// **Its doors never open**, because no arrival comes down here: spec
-    /// 0030's moves are the hotel's. So this draws a shut door sixteen
-    /// times, which is the whole corridor, and the light under each one is
-    /// spec 0029's settlement about what stands for a guest.
-    ///
-    /// None of the hotel's door drawing could be reused. That corridor runs
-    /// along `x` with its doors in the `z` walls, and this one is turned a
-    /// quarter: every scale and every offset is the other way about.
-    /// The imaginarium over the hall. Specs 0037 and 0038.
-    ///
-    /// Its shell is handed over once per spec 0026. What is here is the
-    /// three frames: a flight apiece, a door at the top of each, and the
-    /// fitting each frame's own lamp hangs in.
-    fn draw_the_imaginarium(&self, scene: &mut Scene, cube: MeshId) {
-        // the floor, in the pieces it is made of rather than as one quad
-        // over the footprint.
-        //
-        // **One quad covered the way up's own slot.** The stair comes
-        // through this floor and `aloft::floors` cuts the hole for it,
-        // which the colliders have always had and the picture had not: what
-        // you saw was an unbroken floor with the top tread of the stair
-        // lying in it, two faces at one height fighting along their edges,
-        // and a hole you could walk into that was not drawn. Jake called it
-        // clipping and that is what it was.
-        //
-        // Drawn from the same list `solid` reads, so the floor you see is
-        // the floor you walk on.
-        //
-        // **And drawn once.** It was pushed here and pushed again as part of
-        // the shell, the same boxes in the same colour, which is two faces
-        // in one plane that spec 0014's check cannot see because `solid` is
-        // the list both of them read. The shell tells the three floors from
-        // the three faces over somebody's head now, so this is where it
-        // stopped being needed.
-
-        for n in 0..aloft::FRAMES {
-            // **A riser is a face and a tread is a face.** What makes a
-            // stair read is the two of them taking the light differently,
-            // which one colour over the lot throws away.
-            for (step, tread) in aloft::treads(n).iter().enumerate() {
-                scene.push_plain(
-                    cube,
-                    &Transform::at(tread.center()).with_scale(tread.size()),
-                    if step % 2 == 0 {
-                        aim::ALOFT_TREAD
-                    } else {
-                        aim::ALOFT_LANDING
-                    },
-                );
-            }
-
-            // the path worn across each frame's own floor, which is what
-            // says that the surface somebody is standing on is a floor
-            // the border round this frame's floor, which is what says a
-            // floor is a floor and not another pale face
-            for band in aloft::border(n) {
-                scene.push_plain(
-                    cube,
-                    &Transform::at(band.center()).with_scale(band.size()),
-                    aim::ALOFT_BORDER,
-                );
-            }
-
-            for leg in aloft::path(n) {
-                scene.push_plain(
-                    cube,
-                    &Transform::at(leg.center()).with_scale(leg.size()),
-                    aim::ALOFT_PATH,
-                );
-            }
-
-            // and the leaf of the second one, wherever it has dropped
-            // to: shut, it is the face it is cut in, so a shut hatch is
-            // floor you cannot tell from the floor. Open, it is lying at
-            // the bottom of its own recess and what you see is the dark.
-            // Drawn in the floor's colour because every one of these is
-            // cut in a floor, which is spec 0038's whole point.
-            let leaf = aloft::leaf(n, self.room.aloft_slid[n as usize]);
-
-            scene.push_plain(
-                cube,
-                &Transform::at(leaf.center()).with_scale(leaf.size()),
-                aim::ALOFT_FLOOR,
-            );
-
-            // the dark past each door, which is what stops an opening
-            // being an opening on to nothing
-            for which in 0..aloft::DOORS {
-                for part in aloft::door_recess(n, which) {
-                    scene.push_plain(
-                        cube,
-                        &Transform::at(part.center()).with_scale(part.size()),
-                        aim::ALOFT_DARK,
-                    );
-                }
-
-                // and the casing round it, which is what gives the opening
-                // an edge to catch the light along
-                for part in aloft::door_case(n, which) {
-                    scene.push_plain(
-                        cube,
-                        &Transform::at(part.center()).with_scale(part.size()),
-                        aim::ALOFT_CASE,
-                    );
-                }
-            }
-        }
-
-        // the fitting each frame's lamp hangs in, and the rod it hangs on,
-        // which runs up into that frame's own ceiling
-        for (n, at) in aloft::sconces().iter().copied().enumerate() {
-            let rod = aloft::sconce_rod(n as u64);
-
-            scene.push_plain(
-                cube,
-                &Transform::at(at)
-                    .with_rotation(aloft::frame(n as u64))
-                    .with_scale(aloft::LAMP_FITTING),
-                aim::ALOFT_CEILING,
-            );
-            scene.push_plain(
-                cube,
-                &Transform::at(rod.center()).with_scale(rod.size()),
-                aim::ALOFT_CEILING,
-            );
-        }
-
-        // and one over the head of each frame's second door, on an arm
-        // out of the wall it is in
-        for (n, at) in aloft::door_sconces().iter().copied().enumerate() {
-            let arm = aloft::door_arm(n as u64);
-
-            scene.push_plain(
-                cube,
-                &Transform::at(at)
-                    .with_rotation(aloft::frame(n as u64))
-                    .with_scale(aloft::LAMP_FITTING),
-                aim::ALOFT_CEILING,
-            );
-            scene.push_plain(
-                cube,
-                &Transform::at(arm.center()).with_scale(arm.size()),
-                aim::ALOFT_CEILING,
-            );
-        }
-
-        // and a fitting for each lamp on the way up
-        for at in aloft::up_sconces() {
-            scene.push_plain(
-                cube,
-                &Transform::at(at).with_scale(vec3(0.16, 0.2, 0.16)),
-                aim::ALOFT_CEILING,
-            );
-        }
-
-        // and a newel lamp on the parapet for each one beside the first
-        // flight: the post it stands on, and the bowl under it that keeps
-        // the light off the treads and sends it at the ceiling
-        for at in aloft::up_newels() {
-            let wide = aloft::UP_NEWEL_WIDE;
-            let bowl = at.y - aloft::UP_NEWEL_BOWL;
-            let stands = at.y - aloft::UP_NEWEL_UP;
-
-            scene.push_plain(
-                cube,
-                &Transform::at(vec3(at.x, (stands + bowl) * 0.5, at.z)).with_scale(vec3(
-                    wide * 0.45,
-                    bowl - stands,
-                    wide * 0.45,
-                )),
-                aim::ALOFT_CEILING,
-            );
-            scene.push_plain(
-                cube,
-                &Transform::at(vec3(at.x, bowl, at.z)).with_scale(vec3(
-                    wide,
-                    aloft::UP_NEWEL_BOWL,
-                    wide,
-                )),
-                aim::ALOFT_CEILING,
-            );
-        }
-    }
-
-    fn draw_the_hotel(&self, scene: &mut Scene, cube: MeshId, floor: MeshId) {
-        let reaches = self.room.reaches;
-        let (west, east) = aleph::span();
-        let (from, to) = aleph::across(reaches);
-        let middle = aleph::middle_z(reaches);
-
-        // the lobby's floor, as one plane. It was two, because spec 0029's
-        // corridor left this room at a different width and a plane is
-        // cheaper than working out an L. Spec 0062 took the corridor out.
-        scene.push_plain(
-            floor,
-            &Transform::at(vec3((west + east) * 0.5, 0.0, (from + to) * 0.5)).with_scale(vec3(
-                east - west,
-                1.0,
-                to - from,
-            )),
-            aim::HOTEL_FLOOR,
-        );
-
-        // the desk: a body, a top that oversails it, a bead under that, the
-        // board behind and the bell on it. One box was a wall with a line of
-        // text in front of it.
-        let counter = aleph::desk(reaches);
-        let body = counter.size();
-        let top = counter.max.y;
-
-        scene.push_plain(
-            cube,
-            &Transform::at(vec3(
-                counter.center().x,
-                (top - aleph::DESK_TOP) * 0.5,
-                counter.center().z,
-            ))
-            .with_scale(vec3(body.x, top - aleph::DESK_TOP, body.z)),
-            aim::HOTEL_TRIM,
-        );
-
-        // the bead, set back under the top so its shadow line reads
-        scene.push_plain(
-            cube,
-            &Transform::at(vec3(
-                counter.center().x,
-                top - aleph::DESK_TOP - aleph::DESK_BEAD * 0.5,
-                counter.center().z,
-            ))
-            .with_scale(vec3(
-                body.x + aleph::DESK_OVER,
-                aleph::DESK_BEAD,
-                body.z + aleph::DESK_OVER,
-            )),
-            aim::HOTEL_DOOR,
-        );
-
-        scene.push_plain(
-            cube,
-            &Transform::at(vec3(
-                counter.center().x,
-                top - aleph::DESK_TOP * 0.5,
-                counter.center().z,
-            ))
-            .with_scale(vec3(
-                body.x + aleph::DESK_OVER * 2.0,
-                aleph::DESK_TOP,
-                body.z + aleph::DESK_OVER * 2.0,
-            )),
-            aim::HOTEL_DOOR,
-        );
-
-        // the bell, the one turned thing in here
-        if let Some(bell) = self.bell {
-            scene.push_plain(
-                bell,
-                &Transform::at(vec3(
-                    counter.center().x + body.x * 0.32,
-                    top,
-                    counter.center().z,
-                )),
-                aim::HOTEL_PLAQUE,
-            );
-        }
-
-        // the board of pigeonholes on the wall behind, which is furniture and
-        // not a record: spec 0029 struck the one that was a second account of
-        // who is in, because two lists of one thing drift
-        let board = aleph::board(reaches);
-
-        scene.push_plain(
-            cube,
-            &Transform::at(board).with_scale(vec3(
-                aleph::BOARD_WIDE,
-                aleph::BOARD_TALL,
-                aleph::BOARD_THICK,
-            )),
-            aim::HOTEL_DOOR,
-        );
-
-        for down in 0..aleph::HOLES_DOWN {
-            for across in 0..aleph::HOLES_ACROSS {
-                let step = vec3(
-                    aleph::BOARD_WIDE / aleph::HOLES_ACROSS as f32,
-                    aleph::BOARD_TALL / aleph::HOLES_DOWN as f32,
-                    1.0,
-                );
-                let at = vec3(
-                    board.x - aleph::BOARD_WIDE * 0.5 + (across as f32 + 0.5) * step.x,
-                    board.y - aleph::BOARD_TALL * 0.5 + (down as f32 + 0.5) * step.y,
-                    board.z + aleph::BOARD_THICK * 0.3,
-                );
-
-                scene.push_plain(
-                    cube,
-                    &Transform::at(at).with_scale(vec3(
-                        step.x * 0.74,
-                        step.y * 0.66,
-                        aleph::BOARD_THICK * 0.5,
-                    )),
-                    aim::HOTEL_CEILING,
-                );
-            }
-        }
-
-        // the sign over the register's door, which is the one place a person
-        // is looking when they walk in. Without it the desk reports numbers
-        // to somebody who has not been told what is unusual about them,
-        // which is most of why this room did not make sense.
-        //
-        // **It hung in the corridor's mouth until spec 0062.** Same wall,
-        // same middle line, same lettering: what is under it is a doorway
-        // now instead of a two kilometre hall, and the claim it makes reads
-        // better over the door to the book that disproves it.
-        //
-        // How tall a line can be is worked out from the words rather than
-        // named, so a line that grows shrinks the sign instead of running
-        // off it.
-        let widest = aleph::SIGN_SAYS
-            .iter()
-            .map(|line| {
-                let shape = blitzkit::text::room_for(line, aleph::PLAQUE_TEXELS);
-
-                shape.x / shape.y.max(1e-4)
-            })
-            .fold(1e-4f32, f32::max);
-        let line_tall = aleph::SIGN_TALL.min(aleph::SIGN_FITS / widest);
-
-        for (n, texture) in self.sign_says.iter().copied().enumerate() {
-            // each board as wide as its own words want, so the letters come
-            // out the same size on both lines. One width for both stretched
-            // sixteen characters and twenty four to fit the same board.
-            let shape = blitzkit::text::room_for(aleph::SIGN_SAYS[n], aleph::PLAQUE_TEXELS);
-            let wide = line_tall * (shape.x / shape.y.max(1e-4));
-            let up = aleph::sign_top() - line_tall * 0.5 - n as f32 * (line_tall + aleph::SIGN_GAP);
-
-            scene.push_textured(
-                cube,
-                texture,
-                &Transform::at(vec3(west + aleph::SIGN_THICK, up, middle)).with_scale(vec3(
-                    aleph::SIGN_THICK,
-                    line_tall,
-                    wide,
-                )),
-                aim::HOTEL_PLAQUE,
-                aim::MATTE,
-            );
-        }
-
-        // the skirting and the rail, which break a long wall. A wall with
-        // nothing on it between skirting and cornice is one slab, which is
-        // what every room in this building has needed telling.
-        //
-        // **Run in the stretches between the openings and not across them.**
-        // Spec 0029 ran one length of each down the whole corridor, so both
-        // crossed every doorway: invisible while the doors were shut and
-        // flush, and a bar across the open one into the register. Jake
-        // walked in and found it. The lobby has three openings in it, so the
-        // runs are the gaps between them.
-        let (door_from, door_to) = aleph::book_door(reaches);
-        let (way_from, way_to) = aleph::way(reaches);
-        let runs: [(f32, f32, f32, f32); 5] = [
-            // the west wall, either side of the register's door
-            (
-                west - aleph::SKIRTING_OUT * 0.5,
-                from,
-                west - aleph::SKIRTING_OUT * 0.5,
-                door_from,
-            ),
-            (
-                west - aleph::SKIRTING_OUT * 0.5,
-                door_to,
-                west - aleph::SKIRTING_OUT * 0.5,
-                to,
-            ),
-            // the east wall, either side of the gallery's
-            (
-                east + aleph::SKIRTING_OUT * 0.5,
-                from,
-                east + aleph::SKIRTING_OUT * 0.5,
-                way_from,
-            ),
-            (
-                east + aleph::SKIRTING_OUT * 0.5,
-                way_to,
-                east + aleph::SKIRTING_OUT * 0.5,
-                to,
-            ),
-            // and the north wall, which has nothing in it
-            (
-                west,
-                to - aleph::SKIRTING_OUT * 0.5,
-                east,
-                to - aleph::SKIRTING_OUT * 0.5,
-            ),
-        ];
-
-        for (x0, z0, x1, z1) in runs {
-            if (x1 - x0).abs() + (z1 - z0).abs() < aleph::SKIRTING {
-                continue;
-            }
-
-            for (up, tall) in [
-                (aleph::SKIRTING * 0.5, aleph::SKIRTING),
-                (aleph::RAIL_UP, aleph::RAIL_TALL),
-            ] {
-                scene.push_plain(
-                    cube,
-                    &Transform::at(vec3((x0 + x1) * 0.5, up, (z0 + z1) * 0.5)).with_scale(vec3(
-                        (x1 - x0).abs().max(aleph::SKIRTING_OUT),
-                        tall,
-                        (z1 - z0).abs().max(aleph::SKIRTING_OUT),
-                    )),
-                    aim::HOTEL_TRIM,
-                );
-            }
-        }
-
-        // and the lobby's ceiling, which is the one surface in here nobody
-        // had spent anything on. Its own wood rather than the wall's colour,
-        // so the beams read as timber laid on plaster and not as a pattern
-        // pressed into it.
-        for beam in aleph::lobby_ceiling(reaches) {
-            scene.push_plain(
-                cube,
-                &Transform::at(beam.center()).with_scale(beam.size()),
-                aim::HOTEL_TRIM,
-            );
-        }
-
-        // the sconces, which are the only reason there is any light in here.
-        // One over the desk and one over the sign, and `lobby_lamps` is this
-        // list lifted, so there is no lamp in here that is not in a fitting.
-        for at in aleph::lobby_sconces(reaches) {
-            scene.push_plain(
-                cube,
-                &Transform::at(at).with_scale(aleph::SCONCE),
-                aim::HOTEL_SCONCE,
-            );
-            // and the shade's mouth, which is the lit part. Past one on every
-            // channel, so it glows with nothing falling on it.
-            scene.push_plain(
-                cube,
-                &Transform::at(at + Vec3::Y * aleph::SCONCE.y * 0.42).with_scale(vec3(
-                    aleph::SCONCE.x * 0.78,
-                    aleph::SCONCE.y * 0.16,
-                    aleph::SCONCE.z * 0.78,
-                )),
-                aim::HOTEL_SHADE,
-            );
-        }
-
-        // the register's door, which after spec 0062 is the only door in
-        // this room. There were forty one.
-        //
-        // **Standing open, and hung on its hinge.** It was shut and painted,
-        // and Jake walked past it and said it was not obviously a door you
-        // could go through. A shut door among forty shut doors is forty one
-        // shut doors. This one is the way into somewhere, so it is open, and
-        // what is past it is lit.
-        //
-        // **A quarter turn from where the others stood.** They were in walls
-        // facing `z` and this one is in a wall facing `x`, so the leaf is
-        // flush at a swing of a quarter rather than at nought, and the turn
-        // is folded into the angle rather than written as a second rotation:
-        // `dress_a_door` works its panels and its handle off the same angle,
-        // and two accounts of one turn is how a handle ends up inside a
-        // door.
-        {
-            let quarter = std::f32::consts::FRAC_PI_2;
-            let swing = aleph::SWINGS_TO;
-            // **Its own width.** This is the door anybody walks through, and
-            // at `DOOR_WIDE` its opening was 1.04 against a body 0.90
-            // across.
-            let wide = aleph::BLANK_WIDE;
-            let (door_from, _) = aleph::book_door(reaches);
-            let hinge = vec3(west - room::THICK, 0.0, door_from);
-            let along = vec3(-swing.sin(), 0.0, swing.cos());
-            let leaf = hinge + along * (wide * 0.5);
-
-            scene.push_plain(
-                cube,
-                &Transform::at(vec3(
-                    leaf.x,
-                    aleph::DOOR_GAP + (aleph::DOOR_TALL - aleph::DOOR_GAP) * 0.5,
-                    leaf.z,
-                ))
-                .with_rotation(glam::Quat::from_rotation_y(-(swing + quarter)))
-                .with_scale(vec3(
-                    wide,
-                    aleph::DOOR_TALL - aleph::DOOR_GAP,
-                    aleph::DOOR_THICK,
-                )),
-                aim::REGISTER_DOOR,
-            );
-
-            self.dress_a_door(
-                scene,
-                cube,
-                vec3(leaf.x, 0.0, leaf.z),
-                swing + quarter,
-                1.0,
-                wide,
-                aim::REGISTER_DOOR,
-            );
-
-            // the architrave: two jambs and a head. A door that is one box
-            // in a flat wall is a brown rectangle, and the frame is what
-            // makes it a doorway.
-            let (from_z, to_z) = aleph::book_door(reaches);
-
-            for z in [from_z - aleph::JAMB * 0.5, to_z + aleph::JAMB * 0.5] {
-                scene.push_plain(
-                    cube,
-                    &Transform::at(vec3(
-                        west - aleph::JAMB_OUT * 0.5,
-                        aleph::DOOR_TALL * 0.5,
-                        z,
-                    ))
-                    .with_scale(vec3(
-                        aleph::JAMB_OUT,
-                        aleph::DOOR_TALL + aleph::JAMB,
-                        aleph::JAMB,
-                    )),
-                    aim::HOTEL_TRIM,
-                );
-            }
-
-            scene.push_plain(
-                cube,
-                &Transform::at(vec3(
-                    west - aleph::JAMB_OUT * 0.5,
-                    aleph::DOOR_TALL + aleph::JAMB * 0.5,
-                    (from_z + to_z) * 0.5,
-                ))
-                .with_scale(vec3(
-                    aleph::JAMB_OUT,
-                    aleph::JAMB,
-                    wide + aleph::JAMB * 2.0,
-                )),
-                aim::HOTEL_TRIM,
-            );
-
-            // **and no plaque at all.** It had a blank one, which is exactly
-            // what a plaque whose texture was never made looks like: that
-            // bug shipped one morning and Jake reported the deliberate door
-            // as the same thing. A door with no plaque is not a room. A door
-            // with an empty plaque is a room that is broken.
         }
     }
 
@@ -5317,23 +4138,6 @@ impl Arcade {
                 (_, standing::Made::BackWall) => (aim::BACK_WALL, aim::VOID),
                 (_, standing::Made::BackCeiling) => (aim::BACK_CEILING, aim::VOID),
                 (_, standing::Made::Lining) => (aim::BACK_LINING, aim::VOID),
-                (_, standing::Made::HotelWall) => (aim::HOTEL_WALL, aim::MATTE),
-                (_, standing::Made::HotelCeiling) => (aim::HOTEL_CEILING, aim::VOID),
-                (_, standing::Made::RegisterWall) => (aim::REGISTER_WALL, aim::MATTE),
-                (_, standing::Made::RegisterCeiling) => (aim::REGISTER_CEILING, aim::VOID),
-                // spec 0035's corridor is the hotel's corridor with the
-                // doors moved, so it is made of what that one is made of
-                (_, standing::Made::AloftFloor) => (aim::ALOFT_FLOOR, aim::MATTE),
-                (_, standing::Made::AloftPier) => (aim::ALOFT_PIER, aim::MATTE),
-                (_, standing::Made::AloftWall) => (aim::ALOFT_WALL, aim::MATTE),
-                (_, standing::Made::AloftCeiling) => (aim::ALOFT_CEILING, aim::VOID),
-                // the stair is the nook's own joinery and the shaft over
-                // its ceiling is the imaginarium's stone, so what you are
-                // climbing changes about halfway up. Stone the whole way
-                // was built first and read as plaster: it was the only
-                // thing in a panelled room that was not made of wood.
-                (_, standing::Made::AscentStair) => (aim::ASCENT_TREAD, aim::MATTE),
-                (_, standing::Made::AscentShaft) => (aim::ALOFT_WALL, aim::MATTE),
                 (_, standing::Made::Wall) => (aim::WALL, aim::MATTE),
             };
             // the hall's walls wear the grain the hall's walls have always
@@ -6180,8 +4984,6 @@ impl Arcade {
         self.at = self.room.doorway();
         self.standing_in = 0;
         self.rolling = Vec3::Y;
-        self.crossing = None;
-        self.came_through = false;
         self.eye = self.at.y;
         self.yaw = 0.0;
         self.pitch = 0.0;
@@ -6192,47 +4994,6 @@ impl Arcade {
     }
 
     fn gone(&mut self, wish: Vec3, pace: f32, dt: f32) -> (Vec3, f32) {
-        // **The room going round you, out of the top of a flight.** Spec
-        // 0048, which borrows the shape of spec 0021's crossing rather than
-        // 0047's swap: the two ends are a dozen metres apart and swapping
-        // in one frame is a blink across the room.
-        //
-        // Nothing else moves you while it runs, for the tesseract's reason.
-        // The path is not in the room, so there is nothing on it to collide
-        // with and a body that could still walk would be walking off it.
-        if let Some(mut crossing) = self.crossing {
-            crossing.through = (crossing.through + dt / crossing.over).min(1.0);
-
-            // **Your place, your up and your heading, all three on the same
-            // clock.** Measured on 2026-11-01, the first two moved smoothly
-            // and the third snapped, which is what made a crossing hard to
-            // read: ninety degrees at the hatch and a hundred and fifty at
-            // the top door, in one frame apiece.
-            let (yaw, pitch) = crossing.looking();
-
-            self.yaw = yaw;
-            self.pitch = pitch;
-
-            if crossing.through >= 1.0 {
-                self.standing_in = crossing.joining;
-                self.crossing = None;
-                self.eye = crossing.to.dot(self.over());
-                self.rolling = self.over();
-
-                return (crossing.to, 0.0);
-            }
-
-            let at = crossing.at();
-
-            self.crossing = Some(crossing);
-            // the view is the scripted turn rather than 0047's lag chasing
-            // it, or the two would fight over the same half second
-            self.rolling = crossing.turned() * Vec3::Y;
-            self.eye = at.dot(self.rolling);
-
-            return (at, 0.0);
-        }
-
         // inside the tesseract, where the room is a cube with four ways out
         // and the only things that stop you are the floor, the ceiling and
         // the plinth. Spec 0021.
@@ -6353,14 +5114,19 @@ impl Arcade {
         // Spec 0007: the building has a height in it now, so getting about is
         // no longer one call that pushes you sideways.
         //
-        // And in your own frame, whichever that is, which `aloft` answers
-        // for both this and spec 0049's planner so there is only one
-        // account of it. Frame nought is the arithmetic it always was.
-        aloft::walked_in_frame(
-            self.standing_in,
+        // **In the world's own frame, which is the only one left.** Spec
+        // 0047 gave you a frame you carried, so that the imaginarium could
+        // turn you over, and `aloft::walked_in_frame` answered for both
+        // this and spec 0049's planner. Spec 0063 parked that room, and
+        // with nothing left to turn you over there is one way up and this
+        // is the arithmetic it always was under frame nought. The planner
+        // keeps the frame walk, because a route is still planned over
+        // whatever floors it is given.
+        walk::walk(
             self.at,
             going,
             self.falling,
+            RADIUS,
             dt,
             &self.standing_on(),
             // a step costs its own height out of a budget that fills at
@@ -7010,17 +5776,13 @@ impl Arcade {
 
     /// The turn out of your own terms into the world's. Spec 0047.
     ///
-    /// The identity everywhere but the imaginarium, which is what keeps
-    /// every other room walking the arithmetic it always did.
+    /// **The identity, always, since spec 0063.** The imaginarium was the
+    /// one room in this building with a way up that was not yours, and
+    /// parking it leaves one down. The turn stays named rather than
+    /// written out at its half dozen call sites, because what it is is a
+    /// fact about the building and not about any of them.
     fn turned(&self) -> glam::Quat {
-        match self.crossing {
-            // **Spec 0048: part way round, which is nobody's frame.** It is
-            // safe to be between two only because walking is suspended for
-            // the whole of a crossing, so nothing asks this to hold anybody
-            // up while it is turning.
-            Some(crossing) => crossing.turned(),
-            None => aloft::frame(self.standing_in),
-        }
+        glam::Quat::IDENTITY
     }
 
     /// Which way is over your head.
@@ -7283,34 +6045,6 @@ impl Game for Arcade {
             }
         }
 
-        // a number for every plaque about to be drawn, made the first time
-        // that room comes into view. This is here rather than in `load`
-        // because which rooms those are follows wherever you are standing,
-        // and `load` runs once.
-        // a number for every row of the register on the wall, because the
-        // rows are rooms: row n is room n's entry, and it wears that room's
-        // numeral rather than there being a second account of what a number
-        // looks like. Spec 0031.
-        //
-        // **Wanted always, and not only from inside that room.** Spec 0029's
-        // forty doors each wore one of these, drawn round wherever you
-        // stood, and rows 1 to 14 fell inside that window from the moment
-        // the building opened: the book's numerals were being supplied by
-        // the corridor's doors without either room saying so. Spec 0062 took
-        // the doors away and the left hand column of the book went blank,
-        // which `the_register_rules_out_what_it_has_answered` caught by
-        // being a picture.
-        //
-        // There are fourteen of them and they never change, so asking for
-        // them once is cheaper than asking where you are standing.
-        let want: Vec<u64> = (0..register::ROWS).map(register::room_of).collect();
-
-        for n in want {
-            self.plaques.entry(n).or_insert_with(|| {
-                renderer.add_texture(&blitzkit::text::drawn(&n.to_string(), aleph::PLAQUE_TEXELS))
-            });
-        }
-
         // and however many separate copies of the cube the rig's dial wants,
         // uploaded as it asks for them rather than all of them at the start.
         // Spec 0024: sixteen thousand buffers before the first frame is a
@@ -7512,7 +6246,7 @@ impl Game for Arcade {
         self.hoop = Some(renderer.add_mesh(&cellar::hoop_mesh()));
         self.bottle = Some(renderer.add_mesh(&cellar::bottle_mesh()));
         self.peg = Some(renderer.add_mesh(&cellar::peg_mesh()));
-        self.bell = Some(renderer.add_mesh(&cellar::turned(24, 12, aleph::bell_profile)));
+
         // **Enough steps to have a skin.** A turned mesh with too few draws
         // two points and nothing between them, which is how the candles, the
         // clock dial and the fire's coals all went missing at once.
@@ -7536,23 +6270,6 @@ impl Game for Arcade {
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 8, people::thigh_profile)));
         self.shin =
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 8, people::shin_profile)));
-        self.marks = register::MARKS
-            .iter()
-            .map(|mark| {
-                renderer.add_texture(&blitzkit::text::drawn(
-                    &mark.to_string(),
-                    aleph::PLAQUE_TEXELS,
-                ))
-            })
-            .collect();
-        self.headings = register::HEADINGS
-            .iter()
-            .map(|says| renderer.add_texture(&blitzkit::text::drawn(says, aleph::PLAQUE_TEXELS)))
-            .collect();
-        self.sign_says = aleph::SIGN_SAYS
-            .iter()
-            .map(|line| renderer.add_texture(&blitzkit::text::drawn(line, aleph::PLAQUE_TEXELS)))
-            .collect();
         self.bag = Some(renderer.add_mesh(&cellar::bag_mesh()));
         self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
         self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
@@ -7616,6 +6333,54 @@ impl Game for Arcade {
             field::GROUND_REACH * 2.0 / field::TILE,
         ))));
         self.turf = Some(renderer.add_texture(&field::turf(0x51E7)));
+        // and the building's own outward walls, which until spec 0041 flew
+        // round them were the colour of the rooms' insides.
+        //
+        // **`Room::outside` had no reader for a moment.** It answers which
+        // faces the sky can see, and the only thing asking was the
+        // imaginarium's storey; spec 0063 parked that room and left the
+        // nook's new south wall, which is an outside wall now, bare. A wall
+        // the sky can see and nobody plasters is the fault spec 0040 exists
+        // to catch, and the compiler caught this one.
+        self.wall_quad = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
+        self.storey_faces = self.room.outside();
+        self.storey_wall_skin = self
+            .storey_faces
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(n, (face, looks))| {
+                let on = room::quad_on(face.size(), looks);
+
+                renderer.add_texture(&garden::plastered(
+                    garden::PLASTER_SEED.wrapping_add(0x3C0F + n as u32 * 7919),
+                    glam::vec2(on.x, on.z),
+                ))
+            })
+            .collect();
+        // the roof's own lime, laid flat in bays, and a plane per lid with
+        // that lid's tile counts so the bays come out square. Specs 0057
+        // and 0063: the imaginarium stood on this roof and was the only
+        // thing up there anybody had drawn a top for.
+        self.roof_skin = Some(renderer.add_texture(&garden::screeded(
+            garden::SCREED_SEED,
+            glam::Vec2::ZERO,
+            glam::Vec2::splat(field::RENDER),
+            garden::BAY,
+        )));
+        self.roof_meshes = self
+            .room
+            .lids()
+            .into_iter()
+            .map(|lid| {
+                let size = lid.size();
+
+                renderer.add_mesh(&room::tiled_plane(glam::vec2(
+                    size.x / field::RENDER,
+                    size.z / field::RENDER,
+                )))
+            })
+            .collect();
         self.saplings = field::kinds()
             .iter()
             .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
@@ -7634,79 +6399,6 @@ impl Game for Arcade {
         // band every six metres, three of them one above another. Nothing
         // had shown it before, because the compound wall and the hotel's
         // corridor are both under one tile tall.
-        self.aloft_skin = (0..aloft::outside().len() as u32)
-            .map(|n| {
-                renderer.add_texture(&garden::plastered(
-                    garden::PLASTER_SEED.wrapping_add(0x51D3 + n * 7919),
-                    aloft::outside_size(),
-                ))
-            })
-            .collect();
-        self.jutting_skin = aloft::jutting_faces()
-            .into_iter()
-            .enumerate()
-            .map(|(n, (face, looks))| {
-                let on = room::quad_on(face.size(), looks);
-
-                renderer.add_texture(&garden::plastered(
-                    garden::PLASTER_SEED.wrapping_add(0x7A11 + n as u32 * 7919),
-                    glam::vec2(on.x, on.z),
-                ))
-            })
-            .collect();
-        // and the ground storey's own walls, which until spec 0041 flew
-        // round them were the colour of the rooms' insides.
-        self.storey_faces = self.room.outside();
-        self.storey_wall_skin = self
-            .storey_faces
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(n, (face, looks))| {
-                let on = room::quad_on(face.size(), looks);
-
-                renderer.add_texture(&garden::plastered(
-                    garden::PLASTER_SEED.wrapping_add(0x3C0F + n as u32 * 7919),
-                    glam::vec2(on.x, on.z),
-                ))
-            })
-            .collect();
-        self.roof_skin = Some(renderer.add_texture(&garden::screeded(
-            garden::SCREED_SEED,
-            aloft::roof_from(),
-            aloft::roof().1,
-            garden::BAY,
-        )));
-        // and the storey under it, which had no roof at all: the lid is one
-        // quad per piece turned over to face down, so from above it is a
-        // back face and the opaque pass culls it. Flying over the hall you
-        // looked straight into it at the top of its own suspended ceiling.
-        //
-        // One picture per piece, each laid out from where that piece is, so
-        // the eight of them are one roof. The stairwell is cut out of these
-        // pieces and stays cut: the hole is under the imaginarium's mass,
-        // which is the only thing up here that is allowed to cover it.
-        self.storey_skin = self
-            .room
-            .lids()
-            .iter()
-            .map(|piece| {
-                let (middle, size) = (piece.center(), piece.size());
-
-                renderer.add_texture(&garden::screeded(
-                    garden::SCREED_SEED,
-                    glam::vec2(middle.x - size.x * 0.5, middle.z - size.z * 0.5),
-                    glam::vec2(size.x, size.z),
-                    garden::BAY,
-                ))
-            })
-            .collect();
-        self.aloft_mesh = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::ONE)));
-        // and the top of that corridor, which was open from the air. Tiled
-        // like its walls rather than one picture laid out from the world:
-        // two kilometres at forty texels a metre is not a picture. A tile
-        // is a whole number of bays, so the joints run on through it even
-        // though the stains repeat.
         self.tuft = Some(renderer.add_mesh(&field::tuft_mesh()));
         // a handful of tufts rather than one. Every clump of grass in a field
         // cut from the same picture is a field of one plant, which is the
@@ -8174,19 +6866,6 @@ impl Game for Arcade {
         // and the readout of where you are standing, which runs out on its
         // own rather than being turned off. Spec 0045.
         self.showing_place = (self.showing_place - dt).max(0.0);
-        // the hotel's change running away down its corridor, per spec 0029.
-        // It ticks whether anybody is in there to watch it or not, the same
-        // as the rig in the back room: a building that only runs the room
-        // you are standing in is a building you can catch out.
-        // as far as the last room you can see, which is this file's to know:
-        // a wave that stops short of the window changes rooms in front of
-        // you with nothing passing them
-        self.hotel.tick(dt);
-        // and where each of its leaves is, told to the room so the sight and
-        // the colliders read one account of it rather than two
-        // the diagonal, taken as far as you have walked the book. Spec 0031:
-        // it grows while you move and stops when you stop, because a thing
-        // that writes itself while you stand there is a cutscene.
         // **Two rooms answer by being reached, and neither needs anything
         // planted in it.** Spec 0011's space behind the hall's end wall is
         // the answer to the question spec 0020's worn track asks by being
@@ -8199,24 +6878,6 @@ impl Game for Arcade {
             noise::Room::Behind => self.trail.gave(trail::Asked::GotBehindTheWall),
             noise::Room::Field => self.trail.gave(trail::Asked::WentOutIntoTheField),
             _ => (),
-        }
-
-        if self.in_the_register() {
-            self.carried
-                .walked_to(&self.book, register::walked(self.room.reaches, self.at));
-
-            // **The room has answered once the diagonal is a whole guest.**
-            // Spec 0036: a room's clue is the answer to the thing that room
-            // already asks, and what this room asks is that you walk it. So
-            // the moment is the walk reaching the last drawn row, not
-            // arriving in the room and not the first step.
-            //
-            // Recorded and not read. Nothing in the building looks at this
-            // yet, which is the point: spec 0036 is waiting on which room is
-            // at the end of the trail, and this is the half that is not.
-            if self.carried.reach() >= register::ROWS {
-                self.trail.gave(trail::Asked::WalkedTheDiagonal);
-            }
         }
 
         // `WHERE=1` says where you are standing, twice a second, on stderr.
@@ -8586,7 +7247,11 @@ impl Game for Arcade {
         // you look at him and press Return, you write back, and the
         // leaves swing when what you wrote is one of his. Nothing shuts
         // them again.
-        self.gate = gate::swings(self.gate, self.answered, dt);
+        self.gate = gate::swings(
+            self.gate,
+            gate::opened(self.room.reaches, &self.trail, self.at),
+            dt,
+        );
 
         // walking away lets go. Looking away cannot happen: while you hold one
         // the mouse is turning it rather than the view.
@@ -8610,47 +7275,14 @@ impl Game for Arcade {
                 Some(mandel::says(self.view)),
             ),
             // the book: what you have taken off the diagonal so far. Spec
-            // 0031, and it is the guest the desk cannot house.
-            (None, Some(room::Seen::Book)) => (
-                Some(String::from("The register")),
-                Some(if self.carried.is_empty() {
-                    // **"Walk it" says nothing about what walking does.**
-                    // Jake read it and said so. The room asks one thing of a
-                    // reader and it is not obvious from a wall of digits:
-                    // start at the near end and go along, and a mark comes
-                    // off each line as you pass it.
-                    String::from(register::BOOK_SAYS)
-                } else {
-                    format!("You are carrying {}", self.carried.says())
-                }),
-            ),
-            // the watchman, who asks once you have looked at him and says
-            // one other thing once the gate is moving. Spec 0058.
+            // the watchman, who keeps the threshold and lets you through.
+            // Spec 0058 had him ask a riddle and spec 0063 took it out: the
+            // bridge is already the gate, since it only comes up once every
+            // station has been given, and what he asked could be had by
+            // turning round rather than by having walked anything.
             (None, Some(room::Seen::Watchman)) => (
                 Some(String::from("The watchman")),
-                Some(String::from(if self.gate > 0.0 {
-                    says::WATCHMAN_ANSWERED
-                } else {
-                    says::WATCHMAN_ASKS
-                })),
-            ),
-            (None, Some(room::Seen::Desk)) => (
-                // the event and not the state. "1 housed" is a counter, and
-                // what happened is that a full hotel took another guest and
-                // nobody left, which is a sentence.
-                //
-                // **Full is the standing fact and not a count now.** It was
-                // `Hotel::full`, which asked whether each of the first forty
-                // rooms had somebody in it, and spec 0062 took the rooms
-                // away. What is left is the claim the sign makes: every room
-                // taken, and there are always more rooms.
-                Some(match self.hotel.housed() {
-                    0 => String::from("The desk"),
-                    housed => {
-                        format!("{} {} {}.", aleph::DESK_FULL, housed, aleph::DESK_HOUSED)
-                    }
-                }),
-                Some(self.what_the_desk_says()),
+                Some(String::from(says::WATCHMAN_LETS_YOU_BY)),
             ),
             (None, Some(room::Seen::Cabinet(n))) => {
                 let stood = &self.room.stood[n];
@@ -8689,25 +7321,6 @@ impl Game for Arcade {
                     "Click or press enter to open it."
                 })),
             ),
-            // one of the imaginarium's three, per spec 0038. The one cut
-            // in the floor you are standing on is the only one of them
-            // that costs you anything, so it is the only one named apart.
-            (None, Some(room::Seen::Hatch(n))) => {
-                let what = if n == aloft::hatch_is(0) {
-                    "the trapdoor"
-                } else {
-                    "a way through"
-                };
-                // the same line the baths and the sauna say, which is
-                // already his and is not proposed copy
-                let how = if self.room.aloft_doors[n as usize].0 {
-                    "Click or press enter to open it."
-                } else {
-                    "Click or press enter to close it."
-                };
-
-                (Some(String::from(what)), Some(String::from(how)))
-            }
             (None, Some(room::Seen::Sauna)) => (
                 Some(String::from("the sauna door")),
                 Some(String::from(if self.room.sauna_open {
@@ -8871,32 +7484,7 @@ impl Game for Arcade {
             }
         }
 
-        // **A field open is what the prompt says.** Spec 0059: it stands
-        // where the prompt stands, in the same plate, because it is the
-        // same thing. The question is what he asked, the line under it is
-        // what you have written with the caret on the end, and the third
-        // only shows when the last line handed over was not an answer.
-        //
-        // The caret does not blink. A blink is a timer and a redraw that
-        // says nothing the bar does not say standing still.
-        let lines = match self.field.as_ref() {
-            Some(field) => {
-                let mut lines = vec![
-                    (Some(field.question.clone()), aim::PROMPT_SIZE),
-                    (
-                        Some(format!("{}{}", field.said(), aim::CARET)),
-                        aim::PROMPT_SIZE,
-                    ),
-                ];
-
-                if field.again {
-                    lines.push((Some(String::from(says::WATCHMAN_AGAIN)), aim::DETAIL_SIZE));
-                }
-
-                lines
-            }
-            None => vec![(name, aim::PROMPT_SIZE), (detail, aim::DETAIL_SIZE)],
-        };
+        let lines = vec![(name, aim::PROMPT_SIZE), (detail, aim::DETAIL_SIZE)];
 
         let said = aim::said(
             self.window,
@@ -9079,8 +7667,6 @@ impl Game for Arcade {
 
         // and the back room through the unmarked door, per spec 0024
         self.draw_the_back_room(scene, cube, floor);
-        self.draw_the_hotel(scene, cube, floor);
-        self.draw_the_imaginarium(scene, cube);
         // and the corridor of mirrors behind the nook's bookcases, spec 0061.
         //
         // **Its drawing lives in its own module**, with the geometry it
@@ -9091,7 +7677,6 @@ impl Game for Arcade {
         // come to look like neighbours.
         mirrors::draw(scene, cube, self.pane, &self.glass_targets);
         self.draw_the_people(scene);
-        self.draw_the_register(scene, cube, floor);
 
         // and the wear in it where feet have gone, which is the only thing in
         // this hall that says the way through the near wall is there. Spec
@@ -12035,67 +10620,18 @@ impl Game for Arcade {
             })
             .collect();
 
-        // and the hotel lobby's, per spec 0029. Derived from
-        // `aleph::lobby_sconces` so there is no lamp in that room which is
-        // not in a fitting: the cellar was told that once and the baths did
-        // it again worse.
+        // **The lantern on the roof has no lamp, and that is spec 0057's
+        // own finding.** Its colour is far past one and biased hard warm,
+        // because a lamp inside the box cannot light the box's outside
+        // faces: they point away, so no lambert and no light, and the
+        // warmth has to survive the clamp instead. A lamp up there lights
+        // nothing it is for and does light the hall through the lid, which
+        // is what `the_hall_is_drawn` caught: eighteen per cent of a
+        // picture that looks the same.
         //
-        // **The corridor's were the other half of this.** Spec 0029 lit it
-        // in pools with dark between them, at a shorter reach than a
-        // reception wants, and spec 0062 took the corridor out.
-        for (at, lit, range) in aleph::lobby_lamps(self.room.reaches)
-            .into_iter()
-            .map(|at| (at, aleph::LOBBY_LIT, aleph::LOBBY_RANGE))
-        {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                aim::HOTEL_SHADE.truncate().normalize_or(Vec3::ONE),
-                lit,
-                range,
-            ));
-        }
-
-        // and the register's one, over the head of the page, which is the
-        // only thing in that room telling you where the walk starts
-        // and spec 0035's corridor, one beside every door, so the light
-        // thins out the way the doors do
-        // and the imaginarium's six: one on each frame's ceiling over its
-        // own flight, and one over the head of each frame's second door,
-        // which is the corner the three of them meet in
-        for (at, lit, range) in aloft::lamps() {
-            shades.push((eye.distance_squared(at), at, Vec3::ONE, lit, range));
-        }
-
-        // and the way up to it, one in each fitting on the shaft wall and
-        // one on each newel of the parapet below them
-        for (at, lit, range) in aloft::up_lamps() {
-            shades.push((eye.distance_squared(at), at, Vec3::ONE, lit, range));
-        }
-
-        // and the one hanging in the lantern on the roof, per spec 0057,
-        // which lights the shaft, the opening and the ceiling round it.
-        // White like the room's own six, because it is the room's light
-        // and not the roof's.
-        let (lantern, lit, range) = aloft::lantern_lamp();
-
-        shades.push((
-            eye.distance_squared(lantern),
-            lantern,
-            Vec3::ONE,
-            lit,
-            range,
-        ));
-
-        for at in register::lamps(self.room.reaches) {
-            shades.push((
-                eye.distance_squared(at),
-                at,
-                aim::REGISTER_SHADE.truncate().normalize_or(Vec3::ONE),
-                register::SCONCE_LIT,
-                register::SCONCE_RANGE,
-            ));
-        }
+        // Spec 0057's lantern had one because it hung in a shaft cut down
+        // into the imaginarium, and there was a room under it that wanted
+        // the light. There is no room under this one.
 
         // and the gallery's three, per spec 0022. The room at the end of the
         // aisle has one thing in it and these are over that rather than over
@@ -12462,45 +10998,10 @@ impl Game for Arcade {
         }
     }
 
-    /// What a press came to as text, per the engine's spec 0087. Straight
-    /// into whatever field is open, and nowhere at all when none is.
-    ///
-    /// **Nothing here asks which key it was.** That is the other
-    /// callback's question, and this building's one field wants the
-    /// letter somebody meant rather than the place their finger landed.
-    fn typed(&mut self, text: &str) {
-        if let Some(field) = self.field.as_mut() {
-            field.typed(text);
-        }
-    }
-
     fn process_keyboard(&mut self, input: KeyboardInput) {
         let held = input.state == KeyboardKeyState::Pressed;
         if matches!(input.key, KeyboardKey::LShift | KeyboardKey::RShift) {
             self.shifted = held;
-        }
-
-        // **A field open takes the whole keyboard.** Spec 0059: W is a
-        // letter while anybody is writing one, and a field that let the
-        // walking keys through would walk you off the landing a letter at
-        // a time with your own answer on the screen. The three keys it
-        // does read are the three a line needs, and every other key stops
-        // here whether it was going to do anything or not.
-        if self.field.is_some() {
-            if held {
-                match input.key {
-                    KeyboardKey::Back => {
-                        if let Some(field) = self.field.as_mut() {
-                            field.rubbed_out();
-                        }
-                    }
-                    KeyboardKey::Return if !input.repeat => self.answer_the_field(),
-                    KeyboardKey::Escape if !input.repeat => self.field = None,
-                    _ => (),
-                }
-            }
-
-            return;
         }
 
         // the arrows work whatever toy the sight is on, and walk you about when
@@ -13627,10 +12128,9 @@ mod tests {
         let room = room::Room::of(games());
         let reaches = room.reaches;
 
-        for (name, pieces, way) in [
-            ("west", aleph::gallery_west(reaches), aleph::way(reaches)),
-            ("east", back::gallery_east(reaches), back::way(reaches)),
-        ] {
+        // One doorway now: the west one was cut for the hotel and spec
+        // 0063 walled it up.
+        for (name, pieces, way) in [("east", back::gallery_east(reaches), back::way(reaches))] {
             let (from, to) = way;
             let middle = (from + to) * 0.5;
             let (near, far) = (pieces[0].min.x, pieces[0].max.x);
@@ -13721,97 +12221,6 @@ mod tests {
         );
     }
 
-    /// Specs 0058 and 0059: the whole riddle, from looking at him to the
-    /// leaves moving.
-    ///
-    /// **End to end rather than in pieces.** Every part of this has its
-    /// own test and the thing that was never checked is that they are
-    /// wired to each other: the sight finding him, Return opening a
-    /// field, the characters arriving on the field rather than walking
-    /// you off the landing, Return handing the line over, and the gate
-    /// reading it. Four of those are in different files.
-    #[test]
-    fn the_watchman_is_answered_in_writing() {
-        let mut arcade = Arcade::new();
-
-        for one in trail::Asked::every() {
-            arcade.trail.gave(*one);
-        }
-
-        // standing on the landing, with the sight on him
-        let reaches = arcade.room.reaches;
-        let (him, _) = bridge::watchman(reaches);
-        let top = bridge::top(reaches);
-        let eye = vec3(top.x - 1.0, top.y + EYE, top.z);
-        let look = him + Vec3::Y * people::TALL * 0.5 - eye;
-
-        arcade.at = vec3(eye.x, top.y, eye.z);
-        arcade.eye = top.y;
-        arcade.yaw = look.x.atan2(-look.z);
-        arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
-
-        assert_eq!(
-            arcade.what_i_see(),
-            Some(room::Seen::Watchman),
-            "the sight is not on him, so nothing else here is being tested"
-        );
-
-        // he asks. `seen` is what `update` leaves behind and `update`
-        // has not run, so it is set here the way the frame would.
-        arcade.seen = arcade.what_i_see();
-        arcade.use_what_i_see();
-        assert!(
-            arcade.field.is_some(),
-            "looking at him and pressing \
-                Return did not open a field"
-        );
-
-        // **and W is a letter now.** The keys that walk you have to stop
-        // at an open field, or writing an answer walks you off the
-        // landing one character at a time.
-        let was = arcade.at;
-        arcade.process_keyboard(KeyboardInput {
-            key: KeyboardKey::W,
-            state: KeyboardKeyState::Pressed,
-            repeat: false,
-        });
-        assert!(!arcade.walking[0], "W walked while a field was open");
-
-        for one in ["A", " ", "Light"] {
-            arcade.typed(one);
-        }
-
-        assert_eq!(arcade.field.as_ref().map(|one| one.said()), Some("A Light"));
-
-        // a wrong one first, which clears the line and does not shut the
-        // field, lock anything or move the gate
-        arcade.field.as_mut().expect("a field").try_again();
-        arcade.typed("not that");
-        arcade.answer_the_field();
-        assert!(
-            arcade.field.is_some(),
-            "a wrong answer shut the gate's field"
-        );
-        assert_eq!(arcade.gate, 0.0, "a wrong answer moved the gate");
-        assert!(arcade.field.as_ref().expect("a field").again);
-
-        // and then one of his
-        for one in says::WATCHMAN_ACCEPTS[0].chars() {
-            arcade.typed(&one.to_string());
-        }
-
-        arcade.answer_the_field();
-        assert!(
-            arcade.field.is_none(),
-            "the field stayed open on a right answer"
-        );
-        assert!(arcade.answered);
-
-        arcade.gate = gate::swings(arcade.gate, arcade.answered, 1.0 / 60.0);
-        assert!(arcade.gate > 0.0, "the leaves never started");
-        assert_eq!(arcade.at, was, "something walked while this was typed");
-    }
-
     /// Spec 0041: the reset puts you back where the game opens, from
     /// anywhere, and leaves you holding nothing.
     ///
@@ -13829,7 +12238,10 @@ mod tests {
             vec3(0.0, -400.0, 0.0),
             vec3(1800.0, 60.0, -1800.0),
             vec3(0.0, 0.0, 0.0),
-            aloft::middle(),
+            // and where the imaginarium used to float, which spec 0063
+            // parked: being out in the open over the hall's roof is still
+            // a place flight can leave you with no room's gate true
+            vec3(-18.5, 9.0, 1.5),
         ] {
             arcade.at = lost;
             arcade.eye = lost.y;
@@ -13877,60 +12289,6 @@ mod tests {
         assert!((flew.length() - pace * FLIES * step).abs() < 1e-4);
         assert!(flew.y > 0.0, "looking up flew you to {:.3}", flew.y);
         assert_eq!(flown(Vec3::ZERO, Vec3::ZERO, pace, step), Vec3::ZERO);
-    }
-
-    /// Spec 0036: the building records what each room gave up, and the
-    /// wiring is what this checks rather than the record itself.
-    ///
-    /// **`trail.rs`'s own tests prove the list, not that anything fills
-    /// it.** A record nothing writes to passes every test a record has, so
-    /// this drives the two moments that exist through the same calls the
-    /// player's frame makes: the walk down the register, then the desk.
-    ///
-    /// It also checks the order, because that is the only thing in the
-    /// record that could ever mean anything and it is the thing a set
-    /// would quietly throw away.
-    #[test]
-    fn the_rooms_give_up_what_they_ask() {
-        let mut arcade = Arcade::new();
-
-        assert!(
-            arcade.trail.is_empty(),
-            "the building knew something before anybody did anything"
-        );
-
-        // part way down the diagonal is not the room answered
-        arcade.carried.walked_to(&arcade.book, 0);
-        arcade.carried.walked_to(&arcade.book, register::ROWS / 2);
-        if arcade.carried.reach() >= register::ROWS {
-            panic!("half the rows wrote the whole diagonal, so this proves nothing");
-        }
-        assert!(arcade.trail.is_empty(), "half a walk counted as walking it");
-
-        // and the end of it is
-        arcade.carried.walked_to(&arcade.book, register::ROWS);
-        if arcade.carried.reach() >= register::ROWS {
-            arcade.trail.gave(trail::Asked::WalkedTheDiagonal);
-        }
-        assert_eq!(
-            arcade.trail.given(),
-            [trail::Asked::WalkedTheDiagonal],
-            "walking the diagonal to the end gave the room up"
-        );
-
-        // then the desk takes it out of your hand, through the same arm a
-        // press on the desk runs
-        arcade.seen = Some(room::Seen::Desk);
-        arcade.use_what_i_see();
-
-        assert_eq!(
-            arcade.trail.given(),
-            [
-                trail::Asked::WalkedTheDiagonal,
-                trail::Asked::HousedTheCarried
-            ],
-            "the desk took the guest and the building did not notice"
-        );
     }
 
     /// Spec 0053: every cabinet finds the art the hall would show on it.
@@ -14002,16 +12360,6 @@ mod tests {
             arcade.trail.given(),
             [trail::Asked::WentInsideTheTesseract],
             "you went inside and the building did not notice"
-        );
-
-        // one of the imaginarium's three hatches
-        let mut arcade = Arcade::new();
-        arcade.seen = Some(room::Seen::Hatch(0));
-        arcade.use_what_i_see();
-        assert_eq!(
-            arcade.trail.given(),
-            [trail::Asked::WorkedAHatch],
-            "a hatch was worked and the building did not notice"
         );
     }
 
@@ -14106,177 +12454,6 @@ mod tests {
         );
     }
 
-    /// Specs 0031, 0032 and 0062: the desk houses the one the book has no
-    /// row for, and it does nothing at all otherwise.
-    ///
-    /// **It used to house four arrivals over and over.** Spec 0030 put a
-    /// queue at this desk and a key that took the next of them each time,
-    /// which this test drove three times round before getting to the point.
-    /// Spec 0062 took the queue out: pressing at an empty-handed desk is the
-    /// one case worth checking now, because a room where the key does
-    /// nothing is a room where the key must be seen to do nothing.
-    #[test]
-    fn the_desk_houses_the_diagonal() {
-        let mut arcade = Arcade::new();
-
-        arcade.seen = Some(room::Seen::Desk);
-
-        // pressing with nothing in your hands houses nobody
-        for _ in 0..3 {
-            arcade.use_what_i_see();
-        }
-
-        assert_eq!(
-            arcade.hotel.housed(),
-            0,
-            "the desk housed somebody who was never carried to it"
-        );
-
-        // and then you come back from the register carrying one
-        arcade.carried.walked_to(&arcade.book, 0);
-        arcade.carried.walked_to(&arcade.book, register::ROWS);
-
-        assert!(!arcade.carried.is_empty(), "the walk wrote nothing");
-
-        arcade.use_what_i_see();
-
-        // **It says yes.** Spec 0031 had this assert the opposite, on the
-        // grounds that what you carry is on no line of the book. Jake stood
-        // at the desk and pointed out that a number is a number and the
-        // rooms are the numbers, and he is right: one guest can always be
-        // housed.
-        assert_eq!(
-            arcade.hotel.housed(),
-            1,
-            "the desk refused a guest it can always take"
-        );
-
-        // and the cost of saying yes is that the book has them in it now
-        assert_eq!(arcade.book.written(), 1, "nobody was written in");
-        assert!(
-            arcade.carried.is_empty(),
-            "it was handed over and is still in your hand"
-        );
-    }
-
-    /// Specs 0034 and 0062: every line the desk has is one you can actually
-    /// see, and it does not stay up for ever.
-    ///
-    /// **This building shipped three unreachable ones.** `DESK_FULL` sat
-    /// behind an arm that always matched, so the line carrying the point of
-    /// the room was never on screen; `DESK_SCATTERED` went in behind the
-    /// filling arm the same way; and a pair written in the wrong order made
-    /// a third unreachable. All of those were arms about spec 0030's waves,
-    /// and spec 0062 took the waves out. What is left is three lines, and
-    /// what this holds is that each of them shows and that the last one
-    /// clears itself.
-    #[test]
-    fn every_line_the_desk_has_is_reachable() {
-        let mut arcade = Arcade::new();
-
-        arcade.seen = Some(room::Seen::Desk);
-
-        // standing at it with nothing to hand over, it states the premise
-        assert_eq!(arcade.what_the_desk_says(), aleph::DESK_FULL);
-
-        // carrying one, it names what you have
-        arcade.carried.walked_to(&arcade.book, 0);
-        arcade.carried.walked_to(&arcade.book, register::ROWS);
-
-        assert!(
-            arcade.what_the_desk_says().contains(register::DESK_TAKES),
-            "the desk says {:?} to somebody holding a guest",
-            arcade.what_the_desk_says()
-        );
-
-        // handing them over, it says what it has just done
-        arcade.use_what_i_see();
-
-        assert_eq!(arcade.what_the_desk_says(), register::DESK_WROTE_IN);
-
-        // **and then it stops saying it.** A line that stays up for ever is
-        // a scoreboard. Spec 0030 held this window open with the waves it
-        // had started and `aleph::SAYS_FOR` holds it now.
-        arcade.hotel.tick(aleph::SAYS_FOR + 0.1);
-
-        assert_eq!(
-            arcade.what_the_desk_says(),
-            aleph::DESK_FULL,
-            "what the desk said is still up after {:.0} seconds",
-            aleph::SAYS_FOR
-        );
-
-        // **And the third line, which is the one that costs something to
-        // reach.** Walk the book a second time and the diagonal differs
-        // from the guest the desk has just written into it as well as from
-        // every row that was there before, so the desk can say yes again.
-        // This is spec 0032's whole ending: the list cannot be finished,
-        // and what shows that is being able to do it twice.
-        arcade.carried.walked_to(&arcade.book, 0);
-        arcade.carried.walked_to(&arcade.book, register::ROWS);
-        arcade.use_what_i_see();
-
-        assert_eq!(
-            arcade.book.written(),
-            2,
-            "the second one was not written in"
-        );
-        assert_eq!(arcade.what_the_desk_says(), register::DESK_AGAIN);
-    }
-
-    /// Spec 0031: every row of the register carries the room number whose
-    /// entry it is.
-    ///
-    /// **This is what connects the wall to the hotel.** Without it the
-    /// register is an anonymous grid of digits that could be a timetable,
-    /// and the diagonal is a lit line through nothing in particular. Jake
-    /// walked the room and asked where Cantor's diagonalization fits, which
-    /// is what that looks like from inside.
-    #[test]
-    fn every_row_of_the_register_is_a_room() {
-        let Some(mut renderer) =
-            pollster::block_on(blitzkit::renderer::Renderer::offscreen(WIDE, TALL))
-        else {
-            eprintln!("no adapter here");
-
-            return;
-        };
-
-        let mut arcade = Arcade::new();
-        let mut geometry = Geometry::new();
-        let mut text = TextRenderer::new();
-        let sound = SoundSystem::new();
-        let reaches = arcade.room.reaches;
-
-        arcade.load(&mut renderer);
-        arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
-
-        let (west, east) = register::along(reaches);
-        let (far, near) = register::across(reaches);
-
-        for along in [0.9f32, 4.0, 8.0] {
-            arcade.at = vec3(east - along, 0.0, (far + near) * 0.5);
-            arcade.before_frame(&mut renderer);
-            arcade.update(0.0, &mut geometry, &mut text, &sound);
-
-            assert!(arcade.in_the_register(), "not in the register at {}", along);
-
-            for down in 0..register::ROWS {
-                let room = register::room_of(down);
-
-                assert!(room >= 1, "a row is room {}, and rooms start at one", room);
-                assert!(
-                    arcade.plaques.contains_key(&room),
-                    "row {} is room {} and has no number to write",
-                    down,
-                    room
-                );
-            }
-        }
-
-        let _ = west;
-    }
-
     /// Spec 0039: an arrow on the picture throws the settled one away.
     ///
     /// **Otherwise the wall is a window onto two places at once.** The
@@ -14348,197 +12525,6 @@ mod tests {
         );
     }
 
-    /// Spec 0052: the wall rules out every row the walk has answered.
-    ///
-    /// **Walked rather than set.** The pose moves along the page and runs
-    /// an update at each step, the way a frame does, so what is drawn is a
-    /// state the room can actually be in. Setting `carried` by hand would
-    /// photograph a wall nobody can stand in front of.
-    ///
-    /// Half the rows, because a picture of all of them ruled and a picture
-    /// of none are both pictures of a uniform wall. What this has to show
-    /// is the line between what is answered and what is not.
-    #[test]
-    fn the_register_rules_out_what_it_has_answered() {
-        let reference =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/rooms/register.png");
-
-        blitzkit::picture::drawn_looks_right(&reference, (WIDE, TALL), |renderer| {
-            let mut arcade = Arcade::new();
-            let mut geometry = Geometry::new();
-            let mut text = TextRenderer::new();
-            let sound = SoundSystem::new();
-
-            arcade.art_from = stand_in_art;
-            arcade.load(renderer);
-            arcade.initialize(&mut geometry, &mut text, &sound, (WIDE as f32, TALL as f32));
-            arcade.before_frame(renderer);
-
-            let reaches = arcade.room.reaches;
-            let (far, near) = register::across(reaches);
-            let half = register::ROWS / 2;
-
-            // in at the head of the page, then along it to the middle
-            for rows in [0, half] {
-                // **Mid-cell, not on its edge.** Standing exactly on the
-                // boundary of cell seven, `walked` divides and truncates
-                // and answers six: the multiply comes back a hair under.
-                arcade.at = vec3(
-                    register::page_left(reaches) + (rows as f32 + 0.5) * register::CELL,
-                    EYE,
-                    far + 2.4,
-                );
-                arcade.eye = arcade.at.y;
-
-                // pointed at the page rather than at an angle somebody
-                // guessed: the first try used PI and photographed the far
-                // wall of an empty room, because yaw of nought is already
-                // down -z and the book is that way
-                let page = register::cell_at(reaches, half, register::columns(reaches) / 2);
-                let look = page - arcade.at;
-
-                arcade.yaw = look.x.atan2(-look.z);
-                arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
-                arcade.update(0.0, &mut geometry, &mut text, &sound);
-            }
-
-            assert_eq!(
-                arcade.carried.reach(),
-                half,
-                "the walk did not answer the rows it walked past"
-            );
-
-            // **Then step back and face it.** Walking the page puts you a
-            // cell from the wall looking along it, which is the right place
-            // to walk from and photographs the book edge-on. The diagonal
-            // is only as wide as the book is tall, so standing back the
-            // room's depth and square to the middle of that square is what
-            // puts the answered rows and the ones ahead in one frame.
-            let square = register::ROWS / 2;
-            let page = register::cell_at(reaches, square, square);
-
-            arcade.at = vec3(page.x, EYE, near - 0.3);
-            arcade.eye = arcade.at.y;
-
-            let look = page - arcade.at;
-
-            arcade.yaw = look.x.atan2(-look.z);
-            arcade.pitch = look.y.atan2(glam::vec2(look.x, look.z).length());
-            arcade.update(0.0, &mut geometry, &mut text, &sound);
-
-            let mut scene = Scene::new();
-            let mut camera = Camera::new();
-
-            arcade.draw(&mut scene, &mut camera);
-
-            (scene, camera)
-        });
-    }
-
-    /// Spec 0047: walked into an open door in your floor, you come out in
-    /// the frame whose floor it is cut in.
-    #[test]
-    fn an_open_door_turns_you_over() {
-        let mut one = Arcade::new();
-
-        one.room.aloft_doors = [(false, f32::MIN); aloft::FRAMES as usize];
-        one.room.aloft_slid = [1.0; aloft::FRAMES as usize];
-        // on the imaginarium's own floor, a stride south of the hatch
-        one.at = vec3(-8.0, aloft::BASE, -5.3);
-        one.eye = one.at.y;
-        one.yaw = 0.0;
-        one.walking = [true, false, false, false];
-
-        for _ in 0..180 {
-            one.aimed_and_moved(1.0 / 60.0);
-        }
-
-        assert_eq!(
-            one.standing_in, 1,
-            "you are still in frame {} at {:?}",
-            one.standing_in, one.at
-        );
-
-        // and standing on what was the west wall, which is frame one's
-        // floor. Its face is at the room's own west side.
-        let floor = aloft::middle().x - aloft::HALF;
-
-        assert!(
-            (one.at.x - floor).abs() < 0.2,
-            "you came to rest at x {:.2} and frame one's floor is at {:.2}",
-            one.at.x,
-            floor
-        );
-    }
-
-    /// **Its control:** shut, the same walk leaves you standing on it in
-    /// your own frame.
-    #[test]
-    fn a_shut_door_is_a_floor() {
-        let mut one = Arcade::new();
-
-        one.room.aloft_doors = [(true, f32::MIN); aloft::FRAMES as usize];
-        one.room.aloft_slid = [0.0; aloft::FRAMES as usize];
-        one.at = vec3(-8.0, aloft::BASE, -5.3);
-        one.eye = one.at.y;
-        one.yaw = 0.0;
-        one.walking = [true, false, false, false];
-
-        for _ in 0..180 {
-            one.aimed_and_moved(1.0 / 60.0);
-        }
-
-        assert_eq!(
-            one.standing_in, 0,
-            "a shut door turned you over anyway, to {:?}",
-            one.at
-        );
-        assert!(
-            (one.at.y - aloft::BASE).abs() < 0.3,
-            "you went through a shut door, down to {:.2}",
-            one.at.y
-        );
-    }
-
-    /// Spec 0047: and the same aperture works from the other side.
-    ///
-    /// **Walked at, not navigated to.** From frame one's floor the hole in
-    /// frame nought's is a doorway standing in a wall, and this asks that
-    /// walking through it puts you back where you came from. Finding it
-    /// from wherever you landed is a different question and the room's
-    /// rather than this spec's.
-    #[test]
-    fn the_same_aperture_works_both_ways() {
-        let mut one = Arcade::new();
-
-        one.room.aloft_doors = [(false, f32::MIN); aloft::FRAMES as usize];
-        one.room.aloft_slid = [1.0; aloft::FRAMES as usize];
-
-        // on frame one's own floor, two metres square in front of the
-        // doorway that frame nought sees as a hole underfoot
-        let hole = aloft::box_out_of_frame(1, &aloft::doorway(1, 1));
-        one.standing_in = 1;
-        one.at = aloft::in_frame(1, vec3(hole.center().x, -aloft::HALF, hole.max.z + 2.0));
-        one.eye = one.at.dot(one.over());
-        one.yaw = 0.0;
-        one.walking = [true, false, false, false];
-
-        for _ in 0..180 {
-            one.aimed_and_moved(1.0 / 60.0);
-        }
-
-        assert_eq!(
-            one.standing_in, 0,
-            "you are still in frame {} at {:?}",
-            one.standing_in, one.at
-        );
-        assert!(
-            (one.at.y - aloft::BASE).abs() < 0.4,
-            "you came out at {:.2} rather than on the imaginarium's floor",
-            one.at.y
-        );
-    }
-
     /// Spec 0047: and nothing outside the imaginarium knows about any of
     /// it.
     ///
@@ -14607,82 +12593,6 @@ mod tests {
     #[test]
     fn a_long_frame_does_not_drop_you_through_the_deck() {
         climbed_the_bridge_at(true, 1.0 / 18.0, 110);
-    }
-
-    /// And on a screen that draws faster than sixty a second, which is
-    /// the one Jake plays on.
-    ///
-    /// **Jake, with a recording: there is some clipping where the
-    /// player ends up beneath the bridge for a bit.** It was the
-    /// camera and not the body: `EYE_LAGS` is a time constant, so the
-    /// eye settles however far behind the feet their climbing rate
-    /// times that comes to, and running up here they gain better than
-    /// twenty a second. Two metres behind is further than `EYE`, so
-    /// the view sat under the deck.
-    ///
-    /// Swept over frame rates because the clearance depends on one,
-    /// and a sixtieth is the only rate anything else here is run at.
-    /// Measured with the ceiling taken off, the least the camera ever
-    /// cleared the deck by:
-    ///
-    /// ```text
-    /// rate   cleared
-    ///  60      0.18
-    ///  90     -0.13
-    /// 120     -0.63
-    /// 144     -1.14
-    /// ```
-    ///
-    /// So every test in this file passed and the one machine it was
-    /// never run on is the one Jake plays on. The climb is quicker the
-    /// more frames it gets, since a step is taken at most once a frame
-    /// and carries you along by a share of your own width: the foot to
-    /// the top is 2.38 seconds at sixty and 1.87 at a hundred and
-    /// forty four.
-    /// Spec 0057: the lantern on the imaginarium's roof can be seen from
-    /// the landing, which is the whole of why it is lit.
-    ///
-    /// **Because a roof seen from a bridge is a sliver.** Standing at
-    /// `bridge::top`, the imaginarium's lid is a hundred and thirty one
-    /// metres off and seven down, which is 3.8 degrees. At that angle the
-    /// parapet round the roof is as tall in the frame as four metres of
-    /// the roof behind it, and the lantern is 0.48 high. It clears by two
-    /// centimetres. Anything taller on that parapet, or anything shorter
-    /// on that roof, and the one light this building shows the field is
-    /// behind a wall.
-    ///
-    /// The line is taken to the top of the glazing on the near side, which
-    /// is the first of it to come into view.
-    #[test]
-    fn the_lantern_is_seen_from_the_landing() {
-        let reaches = reaches();
-        let eye = bridge::top(reaches) + Vec3::Y * EYE;
-        let lantern = aloft::lantern();
-        let look_at = vec3(lantern.min.x, lantern.max.y, lantern.center().z);
-
-        // the parapet, as boxes, which is the only thing between the two
-        let parapet: Vec<Aabb> = aloft::coping()
-            .into_iter()
-            .map(|(middle, size)| Aabb::new(middle - size * 0.5, middle + size * 0.5))
-            .collect();
-
-        // walked rather than solved, so it holds whatever shape the
-        // parapet grows: a centimetre a step over a hundred and thirty
-        // metres.
-        let steps = ((look_at - eye).length() / 0.01) as u32;
-
-        for step in 0..=steps {
-            let at = eye.lerp(look_at, step as f32 / steps as f32);
-
-            for box_ in &parapet {
-                assert!(
-                    !(at.cmpge(box_.min).all() && at.cmple(box_.max).all()),
-                    "the sight of the lantern runs through the parapet at \
-                     {at:?}, {:.1} of the way from the landing",
-                    step as f32 / steps as f32
-                );
-            }
-        }
     }
 
     #[test]
@@ -15030,101 +12940,6 @@ mod tests {
         }
     }
 
-    /// Spec 0048: up its own flight and out of the top puts you one frame
-    /// back round the three.
-    #[test]
-    fn the_top_of_a_flight_goes_the_other_way() {
-        let mut one = Arcade::new();
-
-        // on frame nought's floor, at the foot of its own flight
-        one.at = aloft::foot_of_the_flight(0);
-        one.eye = one.at.dot(one.over());
-        one.yaw = aloft::FACES_THE_FLIGHT;
-        one.pitch = 0.0;
-        one.walking = [true, false, false, false];
-
-        // **Walking stops the moment the frame changes.** It used to
-        // walk for a flat five seconds, which was long enough to go up,
-        // cross, and then walk into the *next* hatch: once the climb
-        // got quicker the crossing still running at the end was the
-        // second one, and this failed for a reason it says nothing
-        // about. What it is here to check is where the top of a flight
-        // puts you, so it climbs until that happens and then stands
-        // still long enough for the crossing to finish.
-        for _ in 0..300 {
-            one.aimed_and_moved(1.0 / 60.0);
-
-            if one.standing_in == aloft::round_the_other_way(0) {
-                one.walking = [false, false, false, false];
-            }
-        }
-
-        assert_eq!(
-            one.standing_in,
-            aloft::round_the_other_way(0),
-            "you are in frame {} at {:?}",
-            one.standing_in,
-            one.at
-        );
-        assert!(one.crossing.is_none(), "the crossing never finished");
-    }
-
-    /// **Its control:** the hatch in your floor still goes the other way,
-    /// so the two of them are opposite and the room can be walked round
-    /// either way.
-    #[test]
-    fn the_hatch_and_the_top_door_go_opposite_ways() {
-        for n in 0..aloft::FRAMES {
-            assert_ne!(
-                aloft::round_the_other_way(n),
-                aloft::hatch_is(n),
-                "frame {}'s two doors go to the same place",
-                n
-            );
-            assert_eq!(
-                aloft::round_the_other_way(aloft::hatch_is(n)),
-                n,
-                "frame {}'s hatch and the top door there do not undo each other",
-                n
-            );
-        }
-    }
-
-    /// Spec 0048: and you come out at the foot of a flight rather than
-    /// inside anything.
-    #[test]
-    fn you_come_out_at_the_foot_of_a_flight() {
-        let room = room::Room::of(games());
-        let solid = room.solid();
-
-        for n in 0..aloft::FRAMES {
-            let feet = aloft::foot_of_the_flight(n);
-            let middle = feet + aloft::frame(n) * (Vec3::Y * RADIUS);
-
-            for box_ in solid.iter() {
-                let near = middle.clamp(box_.min, box_.max);
-
-                assert!(
-                    near.distance(middle) > RADIUS - 1e-3,
-                    "frame {} comes out inside {:?}",
-                    n,
-                    box_
-                );
-            }
-
-            // and on that frame's own floor, which is the bottom of its
-            // own terms
-            let mine = aloft::out_of_frame(n, feet);
-
-            assert!(
-                (mine.y + aloft::HALF).abs() < 1e-3,
-                "frame {} comes out {:.2} off its floor",
-                n,
-                mine.y + aloft::HALF
-            );
-        }
-    }
-
     /// Spec 0049: the clip walks the whole route, in a test.
     ///
     /// **Because until now only the film could say.** The route test in
@@ -15244,67 +13059,6 @@ mod tests {
             "it finished the route with the bookcase {} and the baths' leaf {}",
             if game.room.open { "open" } else { "shut" },
             if game.room.baths_open { "open" } else { "shut" }
-        );
-    }
-
-    /// Spec 0049: a crossing is the room's move, so the tour waits it out.
-    ///
-    /// **You cannot steer while you are being carried.** Spec 0047's
-    /// hatch and spec 0048's way out each take most of a second, and for
-    /// that second where the body is and which way is down are the
-    /// crossing's to say. A follower asked to steer through one aims from
-    /// a place it is being carried away from, in a frame that is about to
-    /// change under it.
-    ///
-    /// **Its control is the same call with the crossing off**, because a
-    /// gate that is never open and a gate that is never shut both make
-    /// every assertion above it pass.
-    #[test]
-    fn a_passenger_does_not_steer() {
-        let tick = 1.0 / 60.0;
-        let mut game = Arcade::new();
-        // the clip's second place, which is the first of them that is a
-        // walk. Its first is the arcade's own doorway, a stride from
-        // where a run starts, and a leg that is arrived at in the frame
-        // it was planned in leaves nothing to look at: a gate that held
-        // and a gate that was never there both show an empty follower.
-        // Nowhere further on will do either, because the route's later
-        // places are behind doors this one call cannot have opened.
-        let walked = tour::clip(&game.room, true)
-            .into_iter()
-            .filter(|step| matches!(step, tour::Step::At(..)))
-            .nth(1)
-            .expect("the clip walks somewhere after the doorway");
-
-        game.filming = Some(Filming {
-            steps: vec![walked],
-            at: 0,
-            following: None,
-            waiting: 0.0,
-        });
-        game.crossing = Some(aloft::Crossing::out_of(1, game.at, (game.yaw, game.pitch)));
-
-        game.on_the_tour(tick);
-
-        let film = game.filming.as_ref().expect("the tour is still on");
-
-        assert!(
-            film.following.is_none(),
-            "it planned a leg while the room was carrying it"
-        );
-        assert_eq!(film.at, 0, "it took a step of the route mid crossing");
-        assert_eq!(game.walking, [false; 4], "it walked mid crossing");
-
-        game.crossing = None;
-        game.on_the_tour(tick);
-
-        assert!(
-            game.filming
-                .as_ref()
-                .expect("the tour is still on")
-                .following
-                .is_some(),
-            "nothing was planned with the crossing off either, so the check above proves nothing"
         );
     }
 
@@ -15516,354 +13270,9 @@ mod tests {
         );
     }
 
-    /// Spec 0048: nothing else moves you while the room is going round.
-    ///
-    /// **Because the path is not in the room.** There is nothing on it to
-    /// collide with, and a body that could still walk would be walking off
-    /// it. Asked by running the same crossing twice, once with the keys
-    /// held down and once with nothing pressed, and holding the two paths
-    /// against each other: measuring a line would only have caught a
-    /// straight one, and this one bows through the middle of the room.
-    ///
-    /// The last assertion is the control: the same keys with no crossing
-    /// running do move you, so a game that ignored them everywhere would
-    /// fail rather than pass.
-    #[test]
-    fn a_crossing_cannot_be_walked_out_of() {
-        let ran = |keys: [bool; 4]| {
-            let mut one = Arcade::new();
-
-            one.at = aloft::foot_of_the_flight(0);
-            one.eye = one.at.dot(one.over());
-            one.yaw = aloft::FACES_THE_FLIGHT;
-            one.crossing = Some(aloft::Crossing::out_of(0, one.at, (one.yaw, 0.0)));
-            one.walking = keys;
-
-            let mut went = Vec::new();
-
-            for _ in 0..40 {
-                one.aimed_and_moved(1.0 / 60.0);
-                went.push(one.at);
-            }
-
-            went
-        };
-
-        let still = ran([false; 4]);
-        // forward and strafing, hard, the whole way
-        let shoved = ran([true, false, true, false]);
-
-        for (n, (one, two)) in still.iter().zip(shoved.iter()).enumerate() {
-            assert!(
-                one.abs_diff_eq(*two, 1e-4),
-                "frame {} of the crossing went to {:?} pressed and {:?} not",
-                n,
-                two,
-                one
-            );
-        }
-
-        let mut two = Arcade::new();
-
-        two.at = aloft::foot_of_the_flight(0);
-        two.eye = two.at.dot(two.over());
-        two.yaw = aloft::FACES_THE_FLIGHT;
-        two.walking = [true, false, true, false];
-
-        let from = two.at;
-
-        for _ in 0..40 {
-            two.aimed_and_moved(1.0 / 60.0);
-        }
-
-        assert!(
-            two.at.distance(from) > 0.5,
-            "the same keys with no crossing only moved you {:.2}, so this proves nothing",
-            two.at.distance(from)
-        );
-    }
-
-    /// Spec 0048: how a crossing of this room reads, driven and measured
-    /// rather than watched.
-    ///
-    /// **Because Jake could not tell what was happening and neither could
-    /// I.** Walking through either portal was hard to follow and no
-    /// picture of one frame says why. So this drives one, renders every
-    /// fourth frame, and asks four questions of each pair in turn: how far
-    /// the eye moved, how far the heading turned, how far the up rolled,
-    /// and how much of the picture changed. The last of those is
-    /// `blitzkit::picture::how_far_apart`, which the reference pictures
-    /// already use for a different purpose.
-    ///
-    /// What it found on 2026-11-01 was one fault at both portals. The
-    /// place and the up moved smoothly and the heading snapped: ninety
-    /// degrees in one frame at the hatch, taking ninety three per cent of
-    /// the picture with it, and a hundred and fifty at the top door, at
-    /// each end. The middle of a crossing was never the problem, which is
-    /// not what either of us would have guessed from watching.
-    ///
-    /// It returns what it measured so the caller can say what is allowed,
-    /// because the two crossings are different lengths and a number that
-    /// suited both would suit neither.
-    fn crossed(from: Vec3, frame: u64, yaw: f32, rounds: u32) -> Vec<(f32, f32, f32, f32)> {
-        let (wide, tall) = (320u32, 240u32);
-        let Some(mut renderer) =
-            pollster::block_on(blitzkit::renderer::Renderer::offscreen(wide, tall))
-        else {
-            eprintln!("no adapter here, so no crossing was driven");
-
-            return Vec::new();
-        };
-        let mut arcade = Arcade::new();
-        let mut geometry = Geometry::new();
-        let mut text = TextRenderer::new();
-        let sound = SoundSystem::new();
-
-        arcade.load(&mut renderer);
-        arcade.initialize(&mut geometry, &mut text, &sound, (wide as f32, tall as f32));
-        arcade.room.aloft_doors = [(false, f32::MIN); aloft::FRAMES as usize];
-        arcade.room.aloft_slid = [1.0; aloft::FRAMES as usize];
-        arcade.standing_in = frame;
-        arcade.at = from;
-        arcade.eye = from.dot(arcade.over());
-        arcade.yaw = yaw;
-        arcade.rolling = arcade.over();
-        arcade.walking = [true, false, false, false];
-
-        let mut out = Vec::new();
-        let mut was: Option<(blitzkit::renderer::Picture, Vec3, Vec3, Vec3)> = None;
-
-        for n in 0..rounds {
-            arcade.aimed_and_moved(1.0 / 60.0);
-            arcade.since += 1.0 / 60.0;
-
-            if n % 4 != 0 {
-                continue;
-            }
-
-            arcade.before_frame(&mut renderer);
-
-            let mut scene = Scene::new();
-            let mut camera = Camera::new();
-
-            arcade.draw(&mut scene, &mut camera);
-            renderer.set_camera(camera);
-
-            let now = renderer.picture(&scene, &Geometry::new(), &TextRenderer::new());
-            let eye = arcade.looking_from();
-            let ahead = arcade.facing();
-            let over = arcade.rolling;
-
-            if let Some((before, at, facing, up)) = &was {
-                out.push((
-                    eye.distance(*at),
-                    ahead.dot(*facing).clamp(-1.0, 1.0).acos().to_degrees(),
-                    over.dot(*up).clamp(-1.0, 1.0).acos().to_degrees(),
-                    blitzkit::picture::how_far_apart(before, &now),
-                ));
-            }
-
-            was = Some((now, eye, ahead, over));
-        }
-
-        out
-    }
-
-    /// Spec 0048: no crossing of this room snaps.
-    ///
-    /// **The control is the last assertion**, which asks that something
-    /// happened at all. Every threshold here passes trivially on a camera
-    /// that never moves, and the first version of this room's crossing
-    /// would have failed it in one sample.
-    #[test]
-    fn no_crossing_in_here_snaps() {
-        let hole = aloft::doorway(1, 1);
-        let at = hole.center() + vec3(1.6, 0.0, 2.6);
-        let toward = hole.center() - at;
-
-        for (what, went) in [
-            (
-                "the hatch in your own floor",
-                crossed(
-                    vec3(at.x, aloft::BASE, at.z),
-                    0,
-                    toward.x.atan2(-toward.z),
-                    140,
-                ),
-            ),
-            (
-                "the door at the top of your flight",
-                crossed(
-                    aloft::foot_of_the_flight(0),
-                    0,
-                    aloft::FACES_THE_FLIGHT,
-                    260,
-                ),
-            ),
-        ] {
-            if went.is_empty() {
-                continue;
-            }
-
-            for (n, (jump, swing, roll, apart)) in went.iter().enumerate() {
-                assert!(
-                    *swing < 25.0 && *roll < 25.0,
-                    "{}: the view turned {:.0} and rolled {:.0} degrees between two frames, at sample {}",
-                    what,
-                    swing,
-                    roll,
-                    n
-                );
-                assert!(
-                    *apart < 0.9,
-                    "{}: {:.0} per cent of the picture changed between two frames, at sample {}",
-                    what,
-                    apart * 100.0,
-                    n
-                );
-                assert!(
-                    *jump < 1.5,
-                    "{}: the eye moved {:.2} metres between two frames, at sample {}",
-                    what,
-                    jump,
-                    n
-                );
-            }
-
-            // and it did cross, rather than standing still and passing
-            // every line above
-            let turned: f32 = went.iter().map(|(_, swing, _, _)| swing).sum();
-
-            assert!(
-                turned > 90.0,
-                "{}: the whole of it only turned {:.0} degrees, so nothing was crossed",
-                what,
-                turned
-            );
-        }
-    }
-
-    /// Spec 0047: the step budget counts the climbing you actually do.
-    ///
-    /// **It counted world `y`.** The budget drains at `walk::CLIMBS` and
-    /// fills with the height you gain, and in a turned frame a climb does
-    /// not change world `y` at all, so it filled with whatever sideways
-    /// drift the walk happened to have instead. That reads as a step you
-    /// may never take, and frame one's flight stopped a filmed route dead
-    /// four risers up. Found by routing a clip, not by a test, and this is
-    /// the thing underneath rather than the symptom, which took two tries
-    /// to reproduce and neither of them did.
-    ///
-    /// **Frame nought is the control.** Measuring along your own up has to
-    /// still be `y` there, or every stair in the building changes.
-    #[test]
-    fn the_step_budget_counts_the_climbing_you_do() {
-        for frame in 0..aloft::FRAMES {
-            let mut one = Arcade::new();
-
-            one.standing_in = frame;
-            one.at = aloft::foot_of_the_flight(frame);
-            one.eye = one.at.dot(one.over());
-            one.yaw = aloft::FACES_THE_FLIGHT;
-            one.walking = [true, false, false, false];
-
-            let mut most: f32 = 0.0;
-
-            for _ in 0..60 {
-                one.aimed_and_moved(1.0 / 60.0);
-                most = most.max(one.climbs);
-            }
-
-            // a riser is 0.25 and the budget holds what you just climbed,
-            // so a second of walking up a flight has to have filled it
-            assert!(
-                most > aloft::STAIR_RISE * 0.5,
-                "frame {} climbed a flight for a second and its budget never passed {:.4}",
-                frame,
-                most
-            );
-        }
-    }
-
     /// How far the building reaches, which every room is measured from.
     fn reaches() -> f32 {
         room::Room::of(games()).reaches
-    }
-
-    /// Spec 0037: nobody sticks at the foot of the way up.
-    ///
-    /// **Every lane and every heading, because the fault was in neither on
-    /// its own.** Walked straight at from anywhere across its width, the
-    /// flight climbs. Come in at an angle and a body settled against the
-    /// bottom step and stood there for ever, and which angles did it moved
-    /// with anything that shifted the approach by a centimetre: a morning's
-    /// sampling called it two lanes out of fifteen, and easing the turns
-    /// moved it somewhere else entirely.
-    ///
-    /// What it was is in `blitzkit::collision::move_and_slide`, and the fix
-    /// is there. A sweep that starts in contact answers at no distance at
-    /// all, so the slide came round to the same contact four times over and
-    /// the frame ended where it began.
-    ///
-    /// **A body that walks past the flight is not this test's business.** At
-    /// twenty degrees from a stride and a half back you miss the stair
-    /// honestly and cross the nook. What is asked is that nothing ends up
-    /// standing still inside the flight, below the landing. The count of the
-    /// ones that do climb is the control: without it this passes for a stair
-    /// nobody can get onto at all.
-    #[test]
-    fn nobody_sticks_at_the_foot_of_the_way_up() {
-        let room = room::Room::of(games());
-        let solid = room.solid();
-        let west = aloft::up_west();
-        let foot = aloft::up_foot();
-        let step = 1.0 / 60.0;
-        let (mut stuck, mut climbed) = (Vec::new(), 0);
-
-        for lane in 0..=24 {
-            // across the flight's clear width, a body's radius in from each
-            // side, which is every line a body can walk up
-            let room_for = aloft::UP_WIDE - RADIUS * 2.0;
-            let x = west + RADIUS + room_for * lane as f32 / 24.0;
-
-            for back in [0.5f32, 0.8, 1.1, 1.4] {
-                for off in [-20.0f32, -12.0, -6.0, 0.0, 6.0, 12.0, 20.0] {
-                    let way = off.to_radians();
-                    let wish = vec3(way.sin(), 0.0, way.cos()) * SPEED;
-                    let mut at = vec3(x, 0.0, foot - back);
-                    let mut falling = 0.0;
-
-                    for _ in 0..420 {
-                        let (next, fell) =
-                            walk::walk(at, wish, falling, RADIUS, step, &solid, true);
-                        at = next;
-                        falling = fell;
-                    }
-
-                    if at.y >= aloft::UP_LANDING - 0.01 {
-                        climbed += 1;
-                    } else if at.x > west - 0.5
-                        && at.x < west + aloft::UP_WIDE + 0.5
-                        && at.z > foot - 1.0
-                        && at.z < aloft::up_head()
-                    {
-                        stuck.push((x, back, off, at));
-                    }
-                }
-            }
-        }
-
-        assert!(
-            stuck.is_empty(),
-            "{} ways at the flight end standing still on it, first {:?}",
-            stuck.len(),
-            stuck.first()
-        );
-        assert!(
-            climbed > 500,
-            "only {} of 700 ways at the flight climbed it, so this proves nothing",
-            climbed
-        );
     }
 
     /// Spec 0027: the hall, from the door, down the aisle.
@@ -16006,47 +13415,6 @@ mod tests {
         let at = vec3(mirrors::middle(), 0.0, along);
 
         looks_right("mirrors", at, vec3(mirrors::WEST, at.y + EYE, along));
-    }
-
-    /// Spec 0027: the way up to the imaginarium, from the nook's own lane.
-    ///
-    /// Across it rather than up it. Stood at the foot looking up, a flight
-    /// is a flight and says nothing about where it is; from the side you
-    /// get the stair, the wall of books it climbs past and the lane you
-    /// walk to reach it, which is the whole of what spec 0037 decided.
-    ///
-    /// **From the foot of it**, standing back by the height of the parapet
-    /// beside the flight. The old mark was level with the fifth tread and a
-    /// metre and a half from the side of the stair, which with the parapet
-    /// up is a picture of the parapet.
-    #[test]
-    fn the_way_up_is_drawn() {
-        let west = aloft::up_west();
-        let foot = aloft::up_foot();
-
-        looks_right(
-            "wayup",
-            vec3(west + 3.4, EYE, foot - 1.0),
-            vec3(west, EYE + 0.4, foot + 1.0),
-        );
-    }
-
-    /// Spec 0027: the imaginarium, from the floor you walk in on.
-    ///
-    /// **Two frames in one frame.** Stood anywhere in here you can see your
-    /// own staircase and at least one that belongs to somebody else, and
-    /// that pairing is the whole picture: a flight you understand next to a
-    /// flight at an angle that makes no sense, with people on both. One
-    /// alone is either a staircase or a bug.
-    #[test]
-    fn the_imaginarium_is_drawn() {
-        let mid = aloft::middle();
-
-        looks_right(
-            "imaginarium",
-            vec3(mid.x - 4.5, aloft::BASE + EYE, mid.z + 4.5),
-            vec3(mid.x + 1.0, mid.y - 2.0, mid.z - 2.0),
-        );
     }
 
     /// Spec 0027: the gallery, from the way in.
@@ -16624,31 +13992,6 @@ mod tests {
             "a frame of aiming left the eye at {:.3} with the feet at {:.3}",
             one.eye,
             one.at.y
-        );
-    }
-
-    /// Spec 0042: and the sight that comes off it is the one you would have
-    /// standing there.
-    ///
-    /// **The second assertion is the control.** The same look from the
-    /// hall's own floor does find something, so a test that passed because
-    /// nothing is pickable in that direction would fail here instead.
-    #[test]
-    fn the_sight_is_taken_from_the_floor_you_are_standing_on() {
-        let room = room::Room::of(games());
-        // where the arcade's own route turns to face into the imaginarium,
-        // which is where this was found
-        let (x, z) = (-1.69, 2.30);
-        let way = -Vec3::Z;
-
-        assert_eq!(
-            room.looking_at(vec3(x, aloft::BASE + EYE, z), way),
-            None,
-            "looking level in the imaginarium, something two floors down is in the sight"
-        );
-        assert!(
-            room.looking_at(vec3(x, EYE, z), way).is_some(),
-            "the same look from the hall's floor sees nothing either, so this proves nothing"
         );
     }
 

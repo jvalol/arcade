@@ -1,6 +1,6 @@
 # 0062 The hotel comes down to its desk
 
-**Status:** implemented
+**Status:** superseded on 2026-11-10 by spec 0063, within the hour, which took the rest of this wing out as well and parked all of it. The tests cited below went out of the suite with the lobby they held up. Kept in the numbering because it happened and because its reasons are the ones 0063 builds on.
 **Date:** 2026-11-10
 
 ## Goal
@@ -142,14 +142,14 @@ than asking where you are.
 
 - The lobby is closed but for the gallery's doorway and the register's door, swept along each wall rather than checked at its corners. — `aleph::tests::one_way_out_of_the_lobby`
 - You can walk in from the gallery, cross the lobby, go through that door and reach the head of the page. — `aleph::tests::walked_from_the_gallery_into_the_register`
-- The door is wide enough to walk through with its leaf standing open. — `aleph::tests::the_one_door_you_walk_through_is_wide_enough`
+- The door is wide enough to walk through with its leaf standing open. — `parked::aleph::tests::the_one_door_you_walk_through_is_wide_enough`
 - And it is solid, so it is not a door you walk through. — `register::tests::the_book_door_is_solid`
-- The sign hangs clear of the door's head below it and the ceiling above it. — `aleph::tests::the_sign_hangs_in_the_band`
-- Every lamp in the room sits in a fitting, now that the corridor's set is gone. — `aleph::tests::every_lamp_is_in_a_fitting`
-- The lobby's ceiling still reaches its walls and still crosses no doorway. — `aleph::tests::the_lobbys_ceiling_reaches_its_walls`, `aleph::tests::no_beam_crosses_the_way_in`
-- The register and the lobby do not both build the wall between them. — `register::tests::the_wall_between_is_built_once`
-- And the strip over that wall, where the register stands taller, is closed. — `register::tests::the_strip_over_the_borrowed_wall_is_closed`
-- The diagonal still starts at the far end of the page rather than at the door. — `register::tests::the_walk_starts_at_the_head_of_the_page`
+- The sign hangs clear of the door's head below it and the ceiling above it. — `parked::aleph::tests::the_sign_hangs_in_the_band`
+- Every lamp in the room sits in a fitting, now that the corridor's set is gone. — `parked::aleph::tests::every_lamp_is_in_a_fitting`
+- The lobby's ceiling still reaches its walls and still crosses no doorway. — `parked::aleph::tests::the_lobbys_ceiling_reaches_its_walls`, `parked::aleph::tests::no_beam_crosses_the_way_in`
+- The register and the lobby do not both build the wall between them. — `parked::register::tests::the_wall_between_is_built_once`
+- And the strip over that wall, where the register stands taller, is closed. — `parked::register::tests::the_strip_over_the_borrowed_wall_is_closed`
+- The diagonal still starts at the far end of the page rather than at the door. — `parked::register::tests::the_walk_starts_at_the_head_of_the_page`
 - Pressing at the desk empty-handed does nothing, and handing the carried guest over houses them and writes them in. — `tests::the_desk_houses_the_diagonal`
 - Each of the desk's three remaining lines shows, and the last one clears itself. — `tests::every_line_the_desk_has_is_reachable`
 - The trail still has eight stations and this wing still answers two of them. — `trail::tests::every_one_of_them_is_in_every`

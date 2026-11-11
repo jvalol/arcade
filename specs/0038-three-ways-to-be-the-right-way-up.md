@@ -1,6 +1,6 @@
 # 0038 Three ways to be the right way up
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-24
 
 ## Goal
@@ -204,11 +204,11 @@ round. Cutting was tried and makes slivers, and slivers put two drawn faces in
 one plane. A missing pier reads as a gap in a rhythm, which is what a stair
 coming through a wall should look like.
 
-- No pier stands in anybody's way. — `aloft::tests::no_pier_stands_in_anybodys_way`
+- No pier stands in anybody's way. — `parked::aloft::tests::no_pier_stands_in_anybodys_way`
 - And the way up still arrives, which a pier walled off on the first
-  build. — `aloft::tests::you_can_walk_up_it`
+  build. — `parked::aloft::tests::you_can_walk_up_it`
 - And nothing in here shares a plane with anything, which the slivers
-  did. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
+  did. — `parked::aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 
 **And something holding the lamps up**, which went in on the 31st after four
 pictures from four places, because the picture is the thing this spec said to
@@ -228,9 +228,9 @@ now, and the control that proves it is looking is a rod as wide as its own
 fitting.
 
 - Every fitting hangs from its own frame's ceiling. —
-  `aloft::tests::every_fitting_in_here_hangs_from_its_own_ceiling`
+  `parked::aloft::tests::every_fitting_in_here_hangs_from_its_own_ceiling`
 - And the control, a fitting on a stub, which is what the room shipped
-  with. — `aloft::tests::a_fitting_on_a_stub_is_still_floating`
+  with. — `parked::aloft::tests::a_fitting_on_a_stub_is_still_floating`
 
 ## The doors, which is what the room asks
 
@@ -276,13 +276,13 @@ came to 0.65 against a `walk::STEP` of 0.42. You got down there and stayed.
 `DOOR_BACK` is set by that sum now and the leaf lies at the bottom of it.
 
 - Every second door is cut in another frame's floor. —
-  `aloft::tests::every_second_door_is_cut_in_another_frames_floor`
+  `parked::aloft::tests::every_second_door_is_cut_in_another_frames_floor`
 - And the control, which is the arrangement that did nothing. —
-  `aloft::tests::the_first_doors_are_all_in_ceilings`
+  `parked::aloft::tests::the_first_doors_are_all_in_ceilings`
 - You can step down into the hatch in your floor and get back out. —
-  `aloft::tests::you_can_get_out_of_the_hatch_in_your_floor`
+  `parked::aloft::tests::you_can_get_out_of_the_hatch_in_your_floor`
 - And the control, which is the pit this shipped with. —
-  `aloft::tests::a_deeper_pit_keeps_you`
+  `parked::aloft::tests::a_deeper_pit_keeps_you`
 
 ### What a shut door does, which was nothing you could see
 
@@ -316,9 +316,9 @@ the same either way and the pace is fitted to it, and which walk somebody
 is on is settled when they set out and never read again.
 
 - A shut door turns them back, and an open one puts them on somebody
-  else's floor. — `aloft::tests::a_shut_door_turns_them_back`
+  else's floor. — `parked::aloft::tests::a_shut_door_turns_them_back`
 - And working one moves nobody already walking. —
-  `aloft::tests::working_a_door_moves_nobody`
+  `parked::aloft::tests::working_a_door_moves_nobody`
 
 ### And the corner it is all in had no light in it
 
@@ -340,9 +340,9 @@ hatch and an open one were the same grey tray and the only thing that
 changed was what you could walk on.
 
 - Every second door has a light over its own head. —
-  `aloft::tests::every_second_door_has_a_light_over_its_head`
+  `parked::aloft::tests::every_second_door_has_a_light_over_its_head`
 - And the control: nothing this room already had was near enough to do
-  it. — `aloft::tests::the_ceiling_lamps_do_not_reach_the_second_doors`
+  it. — `parked::aloft::tests::the_ceiling_lamps_do_not_reach_the_second_doors`
 
 ## Acceptance criteria
 
@@ -350,4 +350,19 @@ The first build's are not written yet. This one is, and it is the only one
 that matters for the status:
 
 - There is something in this room to decide, and you can walk to it from
-  the way up. — `aloft::tests::you_can_shut_a_door_from_where_you_stand`
+  the way up. — `parked::aloft::tests::you_can_shut_a_door_from_where_you_stand`
+
+## 2026-11-10: parked by spec 0063
+
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
+
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
+
+Everything above is left as written. The arithmetic in it held up and still
+runs.

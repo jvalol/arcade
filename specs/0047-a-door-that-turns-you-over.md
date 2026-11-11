@@ -1,6 +1,6 @@
 # 0047 A door that turns you over
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-11-01
 **Built:** 2026-11-01, the same day it was written. Two things it had to
 take on that are not in the goal are named below: the leaf had to stop
@@ -135,7 +135,7 @@ rather than snapping.
   ground. — `tests::the_building_walks_as_it_did`
 - A box turned into a frame and back is the box it started as, and the
   same size rather than a bounding box of the
-  turn. — `aloft::tests::a_box_turned_into_a_frame_comes_back`
+  turn. — `parked::aloft::tests::a_box_turned_into_a_frame_comes_back`
 
 ### Verified by hand
 
@@ -167,3 +167,18 @@ that is a smaller thing than this.
 **Carrying it out of the room.** Leaving by the way up puts you back in
 frame nought. Walking out of an imaginarium sideways is not a thing this
 building needs to answer.
+
+## 2026-11-10: parked by spec 0063
+
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
+
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
+
+Everything above is left as written. The arithmetic in it held up and still
+runs.

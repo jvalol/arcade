@@ -1,6 +1,6 @@
 # 0035 The same rooms, further apart
 
-**Status:** cut on 2026-11-10 by spec 0062, which took the hotel's corridor and the long hall out of the building. What is written below is the record of a room that was built and stood for three weeks, and the tests it cites went with it.
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-22
 **Built:** 2026-10-22, the same day it was written.
 
@@ -161,21 +161,21 @@ walk past.
 ## Acceptance criteria
 
 - Door n stands at F(n) metres, and the gaps are the sequence
-  again. — `twine::tests::the_doors_are_where_the_sequence_says`
+  again. — `parked::twine::tests::the_doors_are_where_the_sequence_says`
 - Sixteen doors fit in the same two kilometres that hold two thousand six
-  hundred of the hotel's. — `twine::tests::the_same_corridor_holds_sixteen`
+  hundred of the hotel's. — `parked::twine::tests::the_same_corridor_holds_sixteen`
 - Each gap is about 1.618 times the one before, which is the thing you feel
-  rather than read. — `twine::tests::every_gap_is_the_golden_ratio_of_the_last`
+  rather than read. — `parked::twine::tests::every_gap_is_the_golden_ratio_of_the_last`
 - A door here is a door there: same size, same plaque, same light, same
-  side. — `twine::tests::nothing_about_a_door_says_which_corridor_it_is_in`
+  side. — `parked::twine::tests::nothing_about_a_door_says_which_corridor_it_is_in`
 - You can walk to door 11 and not to door 16, which is the room working. —
-  `twine::tests::you_can_reach_eleven_and_not_sixteen`
+  `parked::twine::tests::you_can_reach_eleven_and_not_sixteen`
 - It leaves the lobby and nothing of it is in another
-  room. — `twine::tests::nothing_of_it_is_in_another_room`
+  room. — `parked::twine::tests::nothing_of_it_is_in_another_room`
 - Every lamp sits in a fitting, and the lamps thin out the way the doors
-  do. — `twine::tests::every_lamp_is_in_a_fitting_and_they_thin_out`
+  do. — `parked::twine::tests::every_lamp_is_in_a_fitting_and_they_thin_out`
 - The hall says what the same walk buys next door, and the gap between the
-  two numbers widens. — `twine::tests::it_says_what_the_same_walk_buys_next_door`
+  two numbers widens. — `parked::twine::tests::it_says_what_the_same_walk_buys_next_door`
 - And it says it while you walk, without being pointed
   at. — `tests::the_long_hall_counts_while_you_walk`
 
@@ -192,19 +192,17 @@ no arrivals. Spec 0033's people stay next door.
 
 **Saying what phi is.** Not here.
 
-## 2026-11-10: cut by spec 0062
+## 2026-11-10: parked by spec 0063
 
-**Jake, having played it: the hotel is arguably the least interesting room
-or feature, and worth dropping entirely.** The corridor, the forty drawn
-doors, the four arrivals, both waves, the people crossing and spec 0035's
-long hall all came out. What stayed is the lobby, the desk, the board, the
-sign and the register behind the one door left in the west wall.
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
 
-The reasons are in [0062](0062-the-hotel-comes-down-to-its-desk.md). The
-short of it is that this was the fourth round on one complaint, each fix
-correct and none of them changing what the room was: a desk you press and
-then watch.
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
 
-Everything above is left as written. What is wrong with it is not the
-arithmetic, which held up, and the arithmetic is the part worth keeping a
-record of.
+Everything above is left as written. The arithmetic in it held up and still
+runs.

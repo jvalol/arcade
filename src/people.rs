@@ -1,17 +1,13 @@
-//! The people in this building. Specs 0033 and 0046.
+//! The first people in this building. Spec 0033.
 //!
-//! **They were built for spec 0029's corridor.** A guest there was the light
-//! under a shut door, which is right for a corridor at rest and wrong for
-//! one in motion: spec 0030's whole demonstration was a row of strips going
-//! out and coming back on, and Jake watched it and said it would make more
-//! sense if there were bodies actually moving rooms. So there were, crossing
-//! the floor behind the wave.
+//! **Because forty lamps blinking is not forty guests changing rooms.** Spec
+//! 0029 settled that a guest is the light under a shut door, which is right
+//! for a corridor at rest and wrong for one in motion: spec 0030's whole
+//! demonstration was a row of strips going out and coming back on, and Jake
+//! watched it and said it would make more sense if there were bodies
+//! actually moving rooms.
 //!
-//! Spec 0062 took that corridor out and the crossing with it. What is left
-//! is the figure itself and its gait, which is what every other room with
-//! somebody in it reads: the imaginarium's four in their three disagreeing
-//! frames, the one waiting at the hotel's desk, and the watchman at the top
-//! of the bridge.
+//! What is left is the figure and its gait.
 
 /// How tall somebody is, and where they come apart.
 ///

@@ -1,6 +1,6 @@
 # 0031 The one door with no number
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-20
 **Built:** 2026-10-20, the same day it was written.
 
@@ -216,37 +216,38 @@ other.
 
 ## Acceptance criteria
 
-- The door is in the lobby's west wall, wide enough to walk through with its
-  leaf standing open, and you can walk in from the gallery and reach the head
-  of the page. — `aleph::tests::the_one_door_you_walk_through_is_wide_enough`, `aleph::tests::walked_from_the_gallery_into_the_register`
+- The unnumbered door is in the drawn window wherever you stand near the
+  lobby, so it is passed rather than hunted. — `parked::aleph::tests::the_blank_door_is_passed`
+- Its plaque is blank and every other plaque in view is
+  not. — `tests::one_door_in_the_corridor_has_no_number`
 - The book answers for any row and any column, however far past what is
-  drawn. — `register::tests::there_is_always_another_row`
+  drawn. — `parked::register::tests::there_is_always_another_row`
 - And the strip over the corridor's wall is closed, since this room is nearly
-  twice its height and borrows it. — `register::tests::the_strip_over_the_borrowed_wall_is_closed`
+  twice its height and borrows it. — `parked::register::tests::the_strip_over_the_borrowed_wall_is_closed`
 - The diagonal takes the nth character of the nth row, wherever the walk
-  starts. — `register::tests::the_diagonal_climbs_as_it_recedes`
+  starts. — `parked::register::tests::the_diagonal_climbs_as_it_recedes`
 - What you carry differs from every row that has been walked past, in at
   least one place, which is the proof
-  itself. — `register::tests::what_you_hold_is_on_no_row`
+  itself. — `parked::register::tests::what_you_hold_is_on_no_row`
 - And it grows only while you move, so it is walked rather than
-  watched. — `register::tests::standing_still_writes_nothing`
+  watched. — `parked::register::tests::standing_still_writes_nothing`
 - And the wall shows it: the diagonal is lit behind the walk and marked out
-  ahead of it. — `register::tests::the_diagonal_fills_in_as_you_walk`
+  ahead of it. — `parked::register::tests::the_diagonal_fills_in_as_you_walk`
 - The room's one lamp is in a fitting, and the fitting is over the head of the
   page rather than the middle of the
-  floor. — `register::tests::every_lamp_is_in_a_fitting`
+  floor. — `parked::register::tests::every_lamp_is_in_a_fitting`
 - ~~The desk refuses this one and has refused no other.~~ Struck with the
   section above. It houses them, and spec 0032 holds what it costs
   it. — `tests::the_desk_houses_the_diagonal`
 - The sight does not reach through either room's walls, which it did until
   both were added to the list it
-  stops at. — `register::tests::the_sight_does_not_reach_through_these_walls`
+  stops at. — `parked::register::tests::the_sight_does_not_reach_through_these_walls`
 - Every row carries the room number whose entry it is, which is what connects
   the wall to the hotel. — `tests::every_row_of_the_register_is_a_room`
 - This room and the corridor it is off do not both build the wall between
   them, and neither does anything of this room's end in the plane of it,
   which is spec 0014's fault stated for a new
-  pair. — `register::tests::the_wall_between_is_built_once`
+  pair. — `parked::register::tests::the_wall_between_is_built_once`
 
 ### Verified by hand
 
@@ -265,26 +266,17 @@ entry and is written in aleph's own `rule.rs` already. Related and separate.
 
 **Explaining what ℵ₀ is.** The hotel does not and neither does this.
 
-## 2026-11-10: the way in moved
+## 2026-11-10: parked by spec 0063
 
-**Spec 0062 took the corridor out and the blank door with it.** The register
-is reached through a door in the hotel lobby's west wall now, on the same
-middle line as the gallery's doorway and the back room's, and the room runs
-west from it with the book on your left as you walk.
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
 
-What that cost is the joke this spec chose its siting for: the room proving
-not everything can be numbered stood behind the one door in forty with no
-number on it. With no numbered doors left there is nothing for a blank one
-to be blank against, so the sign over the door carries the claim instead and
-the door under it is the way to the book that disproves it.
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
 
-Nothing else here changed. The book is the same book, the diagonal is the
-same walk, and the desk still says yes.
-
-## 2026-11-10: two of these criteria went with the corridor
-
-The door being in the drawn window wherever you stand, so that it is passed
-rather than hunted, and its plaque being the only blank one in view, were
-both facts about standing in a corridor of numbered doors. Spec 0062 took
-that corridor out. What replaces them is the one thing that still has to be
-true of the way in: that you can walk it.
+Everything above is left as written. The arithmetic in it held up and still
+runs.

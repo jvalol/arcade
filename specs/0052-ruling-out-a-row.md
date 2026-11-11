@@ -51,8 +51,10 @@ a metre long.
 
 ## Acceptance criteria
 
-- The wall rules out what the walk has answered and nothing
-  further. — `tests::the_register_rules_out_what_it_has_answered`
+- ~~The wall rules out what the walk has answered and nothing further.~~
+  Struck 2026-11-10: spec 0063 parked this room. The arithmetic under it is
+  unchanged and still runs, in `parked::register`; what went is the picture
+  of the wall, which needed the room to be in the building to be taken.
 
 ### Verified by hand
 

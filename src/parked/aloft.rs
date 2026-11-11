@@ -3215,7 +3215,16 @@ mod tests {
     #[test]
     fn you_can_walk_up_your_own_frames_flight() {
         let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
+        // **The building no longer holds this room, so this hands it over.**
+        // Spec 0063 parked it: `room.solid()` is the rest of the building,
+        // which a walk still needs so it does not walk through the wall it
+        // shares, and the room's own boxes come from the room.
+        let solid: Vec<Aabb> = room
+            .solid()
+            .into_iter()
+            .chain(solid())
+            .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
+            .collect();
         let flight = treads(0);
         let foot = flight[0];
 
@@ -3253,15 +3262,17 @@ mod tests {
             vec3(MIDDLE_X + ROOM, BASE + TALL + THICK, MIDDLE_Z + ROOM),
         );
 
-        // the three leaves are this room's too, and they are not in
-        // `solid` because where each one is depends on whether you have
-        // shut it. Spec 0038.
-        let leaves: Vec<Aabb> = (0..FRAMES)
-            .map(|n| leaf(n, room.aloft_slid[n as usize]))
-            .collect();
-
+        // **Nothing of this room is in `room.solid()` at all now**, because
+        // spec 0063 parked it, so what this still says is that the space
+        // over the hall is empty and stays that way: whoever brings the
+        // imaginarium back gets the room it was built for rather than a
+        // room with something else already standing in it.
+        //
+        // The three leaves were excluded here because where each one is
+        // depends on whether you have shut it and the building held that
+        // state. It does not hold it any more.
         for one in room.solid() {
-            if solid().contains(&one) || leaves.contains(&one) {
+            if solid().contains(&one) {
                 continue;
             }
 
@@ -3894,7 +3905,16 @@ mod tests {
     #[test]
     fn you_can_walk_up_it() {
         let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
+        // **The building no longer holds this room, so this hands it over.**
+        // Spec 0063 parked it: `room.solid()` is the rest of the building,
+        // which a walk still needs so it does not walk through the wall it
+        // shares, and the room's own boxes come from the room.
+        let solid: Vec<Aabb> = room
+            .solid()
+            .into_iter()
+            .chain(solid())
+            .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
+            .collect();
 
         let start = vec3(up_west() + UP_WIDE * 0.5, 1.0, up_foot() - 0.6);
         let landed = climbed(&solid, start);
@@ -3956,7 +3976,16 @@ mod tests {
     #[test]
     fn nobody_sticks_on_the_seams_of_this_floor() {
         let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
+        // **The building no longer holds this room, so this hands it over.**
+        // Spec 0063 parked it: `room.solid()` is the rest of the building,
+        // which a walk still needs so it does not walk through the wall it
+        // shares, and the room's own boxes come from the room.
+        let solid: Vec<Aabb> = room
+            .solid()
+            .into_iter()
+            .chain(solid())
+            .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
+            .collect();
         let step = 1.0 / 60.0;
         let seam = up_hole().max.x;
         let (mut stuck, mut crossed) = (Vec::new(), 0);
@@ -4078,7 +4107,16 @@ mod tests {
     #[test]
     fn you_cannot_walk_off_the_side_of_the_way_up() {
         let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
+        // **The building no longer holds this room, so this hands it over.**
+        // Spec 0063 parked it: `room.solid()` is the rest of the building,
+        // which a walk still needs so it does not walk through the wall it
+        // shares, and the room's own boxes come from the room.
+        let solid: Vec<Aabb> = room
+            .solid()
+            .into_iter()
+            .chain(solid())
+            .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
+            .collect();
 
         let standing: Vec<Aabb> = up_treads()
             .into_iter()
@@ -4273,7 +4311,12 @@ mod tests {
     #[test]
     fn you_can_get_out_of_the_hatch_in_your_floor() {
         let hole = hatch(0);
-        let solid = crate::room::Room::of(crate::games()).solid();
+        let solid: Vec<Aabb> = crate::room::Room::of(crate::games())
+            .solid()
+            .into_iter()
+            .chain(solid())
+            .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
+            .collect();
         let over = vec3(hole.center().x, BASE + 1.0, hole.center().z);
 
         let down = pressed(&solid, over, Vec3::ZERO);
@@ -4332,7 +4375,16 @@ mod tests {
     #[test]
     fn you_can_shut_a_door_from_where_you_stand() {
         let room = crate::room::Room::of(crate::games());
-        let solid = room.solid();
+        // **The building no longer holds this room, so this hands it over.**
+        // Spec 0063 parked it: `room.solid()` is the rest of the building,
+        // which a walk still needs so it does not walk through the wall it
+        // shares, and the room's own boxes come from the room.
+        let solid: Vec<Aabb> = room
+            .solid()
+            .into_iter()
+            .chain(solid())
+            .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
+            .collect();
         let arrived = vec3(up_arrival(), BASE + 0.1, up_head() + UP_WIDE * 0.5);
 
         for n in 0..FRAMES {

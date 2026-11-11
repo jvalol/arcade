@@ -37,15 +37,6 @@ pub enum Where {
     Behind,
     /// The back room through the gallery's door, per spec 0024.
     Back,
-    /// The hotel through the gallery's other door, per spec 0029.
-    Hotel,
-    /// The register behind the hotel's one unnumbered door, per spec 0031.
-    Register,
-    /// The imaginarium over the hall, per spec 0037.
-    Aloft,
-    /// The way up to it, per spec 0037, which is in neither room it joins:
-    /// it starts on the nook's floor and ends on the imaginarium's.
-    Ascent,
 }
 
 /// What a piece is made of, which is the colour it is drawn in.
@@ -58,16 +49,6 @@ pub enum Made {
     BackWall,
     BackCeiling,
     Lining,
-    HotelWall,
-    HotelCeiling,
-    RegisterWall,
-    RegisterCeiling,
-    AloftFloor,
-    AloftPier,
-    AloftWall,
-    AloftCeiling,
-    AscentStair,
-    AscentShaft,
 }
 
 /// One run: where it is, what it is made of, and the boxes in it.
@@ -141,90 +122,6 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     put(Where::Back, Made::BackCeiling, ceiling);
     put(Where::Back, Made::Lining, crate::back::lining(reaches));
 
-    // and the hotel's lobby: its shell, and nothing of the door or the desk.
-    // A door swings, and spec 0026 keeps what stands still.
-    //
-    // **`Made::HotelEnd` was a third run here.** Spec 0029's corridor had a
-    // far end lit differently from its walls so the darkness at the end of
-    // it read as distance rather than as a wall, and it was the one piece in
-    // that room not the colour of a wall. Spec 0062 took the corridor out.
-    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::aleph::solid(reaches)
-        .into_iter()
-        // the floor is drawn as a plane and the desk and the door leaf are
-        // furniture, the same kinds of thing the back room's drawing skips
-        .filter(|box_| {
-            box_.max.y > 0.0
-                && *box_ != crate::aleph::desk(reaches)
-                && *box_ != crate::aleph::book_leaf(reaches)
-        })
-        .partition(|box_| box_.min.y < crate::aleph::LOBBY_TALL);
-
-    put(Where::Hotel, Made::HotelWall, walls);
-    put(Where::Hotel, Made::HotelCeiling, ceiling);
-
-    // and the register behind the blank door, per spec 0031. Its floor is
-    // drawn as a plane, the same as every other floor in this building.
-    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::register::solid(reaches)
-        .into_iter()
-        .filter(|box_| box_.max.y > 0.0)
-        .partition(|box_| box_.min.y < crate::register::TALL);
-
-    put(Where::Register, Made::RegisterWall, walls);
-    put(Where::Register, Made::RegisterCeiling, ceiling);
-
-    // and the imaginarium over the hall, per spec 0037. Its treads and
-    // landings are the room rather than its shell and are pushed, because
-    // what they are made of is what tells them apart.
-    //
-    // The way up comes out of the same list and is its own place. It runs
-    // from the nook's floor to this room's, so it is in neither of them,
-    // and the test that every run is one room is what said so.
-    let up = crate::aloft::way_up();
-    // **And the three faces that are somebody's floor are told apart from
-    // the three that are not.** All six were wall, which is one value from
-    // end to end in the one room whose whole subject is that three surfaces
-    // disagree about which way is down. It also drew this room's own floor
-    // twice, once here and once in `draw_the_imaginarium`, the same boxes in
-    // the same colour: two faces in one plane that `solid` cannot see,
-    // because it is the list both of them are reading.
-    let under = crate::aloft::under_each_floor();
-    let piers = crate::aloft::all_piers();
-    let (floors, shell): (Vec<Aabb>, Vec<Aabb>) = crate::aloft::solid()
-        .into_iter()
-        .filter(|box_| {
-            !(0..crate::aloft::FRAMES).any(|n| crate::aloft::treads(n).contains(box_))
-                && !up.contains(box_)
-                && !piers.contains(box_)
-        })
-        .partition(|box_| {
-            under
-                .iter()
-                .any(|at| at.cmpge(box_.min).all() && at.cmple(box_.max).all())
-                || crate::aloft::floors().contains(box_)
-        });
-    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = shell
-        .into_iter()
-        .partition(|box_| box_.min.y < crate::aloft::BASE + crate::aloft::TALL);
-
-    put(Where::Aloft, Made::AloftFloor, floors);
-    put(Where::Aloft, Made::AloftPier, piers);
-    put(Where::Aloft, Made::AloftWall, walls);
-    put(Where::Aloft, Made::AloftCeiling, ceiling);
-
-    // **Drawn without the lap.** `up_treads` reaches its landing a tread
-    // back under the flight so that no two walking surfaces meet in a
-    // plane, which `walk` wants; drawn, that leaves two faces in one plane,
-    // which speckles. Spec 0014's settlement is to keep the lap in the
-    // colliders and out of the picture.
-    let walked = crate::aloft::up_treads();
-    let shaft: Vec<Aabb> = up
-        .into_iter()
-        .filter(|box_| !walked.contains(box_))
-        .collect();
-
-    put(Where::Ascent, Made::AscentStair, crate::aloft::up_drawn());
-    put(Where::Ascent, Made::AscentShaft, shaft);
-
     out
 }
 
@@ -261,72 +158,6 @@ mod tests {
             ),
         );
 
-        // the hotel, which is a lobby and a corridor leaving it, so its box
-        // is both and runs west as far as the corridor's shell does
-        let hotel = Aabb::new(
-            glam::vec3(
-                crate::aleph::span().0 - crate::room::THICK * 2.0,
-                -1.0,
-                crate::aleph::across(reaches).0 - crate::room::THICK * 2.0,
-            ),
-            glam::vec3(
-                -crate::room::GALLERY_WIDE * 0.5 + crate::room::THICK * 2.0,
-                crate::aleph::LOBBY_TALL + crate::room::THICK * 2.0,
-                crate::aleph::across(reaches).1 + crate::room::THICK * 2.0,
-            ),
-        );
-
-        // and the register, which is its own room off that lobby
-        let register = {
-            let (west, east) = crate::register::along(reaches);
-            let (far, near) = crate::register::across(reaches);
-
-            Aabb::new(
-                glam::vec3(
-                    west - crate::room::THICK * 2.0,
-                    -1.0,
-                    far - crate::room::THICK * 2.0,
-                ),
-                glam::vec3(
-                    east + crate::room::THICK * 2.0,
-                    crate::register::TALL + crate::room::THICK * 2.0,
-                    near + crate::room::THICK * 2.0,
-                ),
-            )
-        };
-
-        // and the imaginarium, which is the only room above the rest
-        let aloft = {
-            // out as far as the dark behind the three doors, which stands
-            // past the shell on purpose: it is what stops each opening
-            // being an opening on to nothing. Spec 0038 put one of those
-            // doors in the ceiling, so the room reaches past its own lid as
-            // well as past its own walls, and it is the same distance every
-            // way because the three frames are one layout turned.
-            let out = crate::aloft::DOOR_BACK + crate::room::THICK * 2.0;
-            let middle = crate::aloft::middle();
-
-            Aabb::new(
-                middle - glam::Vec3::splat(crate::aloft::HALF + out),
-                middle + glam::Vec3::splat(crate::aloft::HALF + out),
-            )
-        };
-
-        // the way up, which is a box round the stair and its shaft and
-        // nothing else: it is in neither room it joins, so neither room's
-        // own box can hold it.
-        let ascent = {
-            let boxes = crate::aloft::way_up();
-            let (mut low, mut high) = (boxes[0].min, boxes[0].max);
-
-            for box_ in boxes.iter() {
-                low = low.min(box_.min);
-                high = high.max(box_.max);
-            }
-
-            Aabb::new(low, high)
-        };
-
         for run in runs(reaches) {
             for box_ in run.boxes.iter() {
                 let inside = match run.at {
@@ -336,10 +167,6 @@ mod tests {
                         .any(|wall| (wall.min - box_.min).length() < 1e-4),
                     Where::Behind => behind.iter().any(|room| room.intersects(box_)),
                     Where::Back => back.contains_point(box_.center()),
-                    Where::Hotel => hotel.contains_point(box_.center()),
-                    Where::Register => register.contains_point(box_.center()),
-                    Where::Aloft => aloft.contains_point(box_.center()),
-                    Where::Ascent => ascent.contains_point(box_.center()),
                 };
 
                 assert!(
@@ -421,19 +248,6 @@ mod tests {
             // one of them has to be inside a walked one: drawn short of
             // what stops you is a picture of a stair, drawn past it is a
             // stair you fall through.
-            if run.made == Made::AscentStair {
-                for box_ in run.boxes.iter() {
-                    assert!(
-                        solid.iter().any(|one| {
-                            one.min.cmple(box_.min + 1e-3).all()
-                                && one.max.cmpge(box_.max - 1e-3).all()
-                        }),
-                        "a drawn piece of the way up is outside everything that stops you"
-                    );
-                }
-
-                continue;
-            }
 
             for box_ in run.boxes.iter() {
                 assert!(

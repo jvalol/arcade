@@ -1,6 +1,6 @@
 # 0032 The desk says yes and it does not help
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-21
 **Built:** 2026-10-21, the same day it was written.
 
@@ -187,30 +187,30 @@ number would change under them. It is keyed on what they walked.
 ## Acceptance criteria
 
 - The part of a row that is read is lit and the run-on falls away without
-  going out. — `register::tests::the_run_on_falls_away_without_going_out`
+  going out. — `parked::register::tests::the_run_on_falls_away_without_going_out`
 - No entry in the register ever ends: the book answers for any row at any
   column, however far along, and nothing is drawn with a last
-  digit. — `register::tests::no_entry_ever_ends`
+  digit. — `parked::register::tests::no_entry_ever_ends`
 - The left column ends and the right one does not, which is the two columns'
   whole difference and the only thing the alphabet was ever standing in
-  for. — `register::tests::one_column_ends_and_the_other_does_not`
+  for. — `parked::register::tests::one_column_ends_and_the_other_does_not`
 - What you carry differs from every row you have walked past, at the place you
-  passed it. — `register::tests::what_you_hold_is_on_no_row`
+  passed it. — `parked::register::tests::what_you_hold_is_on_no_row`
 - The desk houses it, by the same one-guest move spec 0030
   built. — `tests::the_desk_houses_the_diagonal`
 - Housing it puts them on the register as room 1 and moves every other row down
-  one. — `register::tests::housing_them_writes_them_in`
+  one. — `parked::register::tests::housing_them_writes_them_in`
 - And the diagonal walked after that differs from them too, which is why
   housing them did not
-  help. — `register::tests::the_next_diagonal_differs_from_the_last_guest`
+  help. — `parked::register::tests::the_next_diagonal_differs_from_the_last_guest`
 - Walking it twice gives two different guests, so the loop is a loop and not
   the same entry over
-  again. — `register::tests::the_second_walk_is_a_different_guest`
+  again. — `parked::register::tests::the_second_walk_is_a_different_guest`
 - The page still does not move with the
-  reader. — `register::tests::the_page_is_fixed_to_the_wall`
+  reader. — `parked::register::tests::the_page_is_fixed_to_the_wall`
 - And nothing is taken until you have stood at the head of it, which is the
   fault found while building
-  this. — `register::tests::the_walk_starts_at_the_head_of_the_page`
+  this. — `parked::register::tests::the_walk_starts_at_the_head_of_the_page`
 
 ### Verified by hand
 
@@ -231,18 +231,17 @@ number would change under them. It is keyed on what they walked.
 cannot be finished. It does not name what it is a list of, and `aleph` next
 door does not either.
 
-## 2026-11-10: the way in moved
+## 2026-11-10: parked by spec 0063
 
-**Spec 0062 took the corridor out and the blank door with it.** The register
-is reached through a door in the hotel lobby's west wall now, on the same
-middle line as the gallery's doorway and the back room's, and the room runs
-west from it with the book on your left as you walk.
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
 
-What that cost is the joke this spec chose its siting for: the room proving
-not everything can be numbered stood behind the one door in forty with no
-number on it. With no numbered doors left there is nothing for a blank one
-to be blank against, so the sign over the door carries the claim instead and
-the door under it is the way to the book that disproves it.
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
 
-Nothing else here changed. The book is the same book, the diagonal is the
-same walk, and the desk still says yes.
+Everything above is left as written. The arithmetic in it held up and still
+runs.

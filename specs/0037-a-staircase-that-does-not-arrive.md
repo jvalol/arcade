@@ -1,6 +1,6 @@
 # 0037 A staircase that does not arrive
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-10-22
 **Built:** 2026-10-22, the same day it was written. The room, the loop, the
 four landings and the way up to it. Two things in here are not built and are
@@ -312,7 +312,7 @@ What survives of that list, because it is about the room rather than the
 loop:
 
 - Nothing else in the building is up
-  here. — `aloft::tests::nothing_in_the_building_is_up_here`
+  here. — `parked::aloft::tests::nothing_in_the_building_is_up_here`
 
 **Walking up it was not a thing anything asked.** `you_can_walk_up_it` walks
 one body up the middle, which is the easy case and the only one that was ever
@@ -332,40 +332,40 @@ after.
 The way up:
 
 - It runs from the nook's floor to this room's, and meets its own landing at
-  both ends of it. — `aloft::tests::the_stair_runs_from_one_floor_to_the_other`
+  both ends of it. — `parked::aloft::tests::the_stair_runs_from_one_floor_to_the_other`
 - The landing laps the flight rather than meeting it edge
-  on. — `aloft::tests::the_landing_laps_the_flight`
+  on. — `parked::aloft::tests::the_landing_laps_the_flight`
 - Every rise is one you can get
-  up. — `aloft::tests::every_rise_is_one_you_can_climb`
+  up. — `parked::aloft::tests::every_rise_is_one_you_can_climb`
 - It does not stand in the swing of spec 0007's door, and you can still
   reach the shelf that opens
-  it. — `aloft::tests::the_stair_is_not_in_the_swing_of_the_door`
+  it. — `parked::aloft::tests::the_stair_is_not_in_the_swing_of_the_door`
 - Nothing in the room stands where the way up
-  arrives. — `aloft::tests::nothing_stands_where_the_way_up_arrives`
+  arrives. — `parked::aloft::tests::nothing_stands_where_the_way_up_arrives`
 - The slot in the floor is filled by the stair, so there is nothing beside
-  it to fall down. — `aloft::tests::the_slot_is_filled_by_the_stair`
+  it to fall down. — `parked::aloft::tests::the_slot_is_filled_by_the_stair`
 - Where the floor is not open the flight passes under it with room over your
-  head. — `aloft::tests::the_second_flight_clears_the_floor_it_comes_up_through`
+  head. — `parked::aloft::tests::the_second_flight_clears_the_floor_it_comes_up_through`
 - All of it is under this room and none of it is
-  outside. — `aloft::tests::the_whole_stair_is_under_the_room`
+  outside. — `parked::aloft::tests::the_whole_stair_is_under_the_room`
 - Every lamp on it stands in a fitting, a sconce in a wall of the shaft or
   a newel on a parapet with air over it, and none of them is inside the
-  stair. — `aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
+  stair. — `parked::aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
 - And the first flight has a lamp of its
-  own. — `aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
+  own. — `parked::aloft::tests::every_lamp_on_the_way_up_is_in_a_fitting`
 - The hole the ceiling is cut to ends inside the wall round it rather than
   in that wall's own
-  face. — `aloft::tests::the_hole_the_ceiling_is_cut_to_ends_inside_the_wall`
+  face. — `parked::aloft::tests::the_hole_the_ceiling_is_cut_to_ends_inside_the_wall`
 - And somebody your size, walking, gets from the nook to the
-  room. — `aloft::tests::you_can_walk_up_it`
+  room. — `parked::aloft::tests::you_can_walk_up_it`
 - The hall's ceiling has nothing of the way up hanging under
-  it. — `aloft::tests::the_way_up_leaves_the_halls_ceiling_alone`
+  it. — `parked::aloft::tests::the_way_up_leaves_the_halls_ceiling_alone`
 - And a body pressed into either side of the first flight stays on the
-  stair. — `aloft::tests::you_cannot_walk_off_the_side_of_the_way_up`
+  stair. — `parked::aloft::tests::you_cannot_walk_off_the_side_of_the_way_up`
 - And nobody coming at the foot of it from any lane or any angle ends up
   standing still on it. — `tests::nobody_sticks_at_the_foot_of_the_way_up`
 - The landing is at the nook's
-  ceiling. — `aloft::tests::the_landing_is_at_the_nooks_ceiling`
+  ceiling. — `parked::aloft::tests::the_landing_is_at_the_nooks_ceiling`
 
 The ceiling one is the test that had to be aimed twice. The shaft has to
 begin inside the thickness of a ceiling tile: level with the bars it
@@ -458,7 +458,7 @@ above, is struck too.
 And the hole both of these were standing in for is filled. Spec 0038 holds
 its own status on one criterion, that there is something in this room to
 decide and you can walk to it from the way up, which is
-`aloft::tests::you_can_shut_a_door_from_where_you_stand`. Every door in there
+`parked::aloft::tests::you_can_shut_a_door_from_where_you_stand`. Every door in there
 is cut in somebody else's floor, so shutting one changes where another frame
 can walk. That is the decision this room needed, and a thing above it that
 nobody reaches would be a reward rather than a decision.
@@ -556,3 +556,18 @@ those are Jake's to judge rather than a test's.
 Not attempted, and the reason is written here rather than left for a third
 attempt at a one-line move. `aloft::up_head`'s own doc carries the short
 version beside the number.
+
+## 2026-11-10: parked by spec 0063
+
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
+
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
+
+Everything above is left as written. The arithmetic in it held up and still
+runs.

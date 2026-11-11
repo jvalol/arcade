@@ -344,7 +344,7 @@ in every one is seven by seven smudges on a grid, which is the fault
 `plastered`'s streaks had before they were made to pick their columns.
 
 **Both faults in the parapet came from the engine and not from looking at
-it.** `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
+it.** `parked::aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 already ran spec 0048's coplanar check over this room, and the outside is in
 its list now: it found the course flush with the inner face against the
 reveal of each ceiling doorway, 0.13 by 1.60 twice over, and then the four
@@ -544,23 +544,27 @@ field's planting is.
   world. — `field::tests::a_body_let_loose_outdoors_stays_in_the_world`
 - And the whole of it, from outside the building looking
   back. — `tests::the_field_is_drawn`
+- ~~The hotel's corridor, from out in the field, dressed and running to the
+  vanishing point.~~ Struck 2026-11-10: spec 0063 parked that corridor, so
+  there is nothing of it out here to photograph. What stands over the
+  garden wall now is the building's own roof with one lantern on it.
 - The imaginarium stands on the roof under it, with no daylight between
-  them. — `aloft::outside_tests::the_mass_reaches_the_roof_it_stands_on`
+  them. — `parked::aloft::outside_tests::the_mass_reaches_the_roof_it_stands_on`
 - And its faces run from that roof to the top of the
-  room. — `aloft::outside_tests::the_imaginarium_stands_on_the_roof_under_it`
+  room. — `parked::aloft::outside_tests::the_imaginarium_stands_on_the_roof_under_it`
 - The shaft the way up climbs is inside that
-  mass. — `aloft::outside_tests::the_way_up_is_inside_what_the_field_sees`
+  mass. — `parked::aloft::outside_tests::the_way_up_is_inside_what_the_field_sees`
 - Its cope sits on the top and nothing of it hangs
-  below. — `aloft::outside_tests::the_cope_sits_on_the_top`
+  below. — `parked::aloft::outside_tests::the_cope_sits_on_the_top`
 - And it stays out of the room's own plan, so the two doorways on the
   ceiling are
-  clear. — `aloft::outside_tests::the_cope_is_clear_of_what_stands_on_the_roof`
+  clear. — `parked::aloft::outside_tests::the_cope_is_clear_of_what_stands_on_the_roof`
 - Nothing drawn out there shares a plane with anything drawn in
-  here. — `aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
+  here. — `parked::aloft::tests::nothing_drawn_in_here_is_in_one_plane_with_anything`
 - And nothing of the room stands outside its own shell
-  undressed. — `aloft::outside_tests::everything_outside_the_shell_is_dressed`
+  undressed. — `parked::aloft::outside_tests::everything_outside_the_shell_is_dressed`
 - The roof reaches under the cope and is laid inside the course's own
-  thickness. — `aloft::outside_tests::the_roof_runs_under_the_cope`
+  thickness. — `parked::aloft::outside_tests::the_roof_runs_under_the_cope`
 - And what is laid on it has no dark edge, which a wall's plaster laid flat
   would have. — `garden::screed_tests::a_roof_is_not_darker_at_one_edge`
 - And two pieces of one roof agree where they
@@ -571,6 +575,8 @@ field's planting is.
   it. — `room::tests::the_plaster_sits_on_the_wall_and_not_on_the_lid`
 - And the strip over a borrowed wall is one of the faces
   found. — `room::tests::the_strip_over_a_shorter_room_is_dressed`
+- The hotel's corridor is roofed, all of it, a hair above its own
+  shell. — `parked::aleph::tests::the_corridors_roof_covers_its_shell`
 
 ### Verified by hand
 
@@ -588,17 +594,3 @@ field's planting is.
 - The ground has no lit path down the middle of it that turns with you.
   The first build had one: a broad specular highlight on a surface this
   size, which is the garden pond's note on a field.
-
-## 2026-11-10: the corridor is not out here any more
-
-Two of the criteria above were about spec 0029's corridor, which ran two
-kilometres through this field at ground level: that it was dressed in the
-garden's plaster rather than left a blank grey shell, and that it was roofed
-all of it, because from the air you otherwise looked along two kilometres of
-floor and door numbers. Spec 0062 took the corridor out, so both are struck
-and the kept picture that held the first of them has gone with it.
-
-What that leaves is a field with nothing of the building in it but the
-building, which is what this spec wanted in the first place. The one thing
-on the horizon is still nobody's, and is still the only part of this spec
-that is a question.

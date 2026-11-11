@@ -1,6 +1,6 @@
 # 0058 A gate and a riddle
 
-**Status:** implemented
+**Status:** cut on 2026-11-10 by spec 0063. The watchman and his gate stayed and the riddle went: the bridge is already the gate, since it only comes up once every station has been given, and what he asked could be had by turning round rather than by having walked anything.
 **Date:** 2026-11-06, amended 2026-11-07
 
 ## Goal
@@ -119,7 +119,7 @@ disagree.
 - It stays shut until the riddle is answered, and once it is moving it does not stop. — `gate::tests::it_stays_shut_until_the_riddle_is_answered`
 - No part of a leaf ever sweeps the landing you stand on to watch it. — `gate::tests::the_leaves_open_away_from_the_landing`, at every tenth of the swing.
 - Looking at the watchman is how he asks, and there is no watchman before there is a bridge. — `gate::tests::the_watchman_is_looked_at_from_where_you_arrive`
-- Looking at him opens a field, a wrong line clears it without moving the gate, and one of his words opens it. — `tests::the_watchman_is_answered_in_writing`, which types both in turn. How a line is read is spec 0059's, held by `typed::tests::an_answer_is_read_the_way_it_was_meant`.
+- Looking at him opens a field, a wrong line clears it without moving the gate, and one of his words opens it. — `tests::the_watchman_is_answered_in_writing`, which types both in turn. How a line is read is spec 0059's, held by `parked::typed::tests::an_answer_is_read_the_way_it_was_meant`.
 
 ### Verified by hand
 
@@ -161,3 +161,21 @@ already refused for a different reason.
 
 **Anything Heimdall does besides ask and answer.** He does not follow you,
 he does not repeat himself, and he does not comment on how long you took.
+
+## 2026-11-10: the riddle is cut, the watchman stays
+
+**Jake, reading it back: that riddle is very weak.** He is right, and the
+reason is in this spec's own words. It sets its test as "an answer you can
+only have from having walked the building", and the answer is a word you
+get by turning round. The bridge is already the gate, since it only comes up
+once every station has been given, so the riddle was a second lock on a door
+that was locked, and a one word lock.
+
+Spec 0063 took it out. The watchman keeps the threshold and the gate swings
+as you come up the last of the bridge, which is what a man keeping a gate
+does. Everything else here stands: the leaves, their swing, the collider
+that is a box round a leaf rather than the leaf, and the reason there is no
+fail state.
+
+Four of Jake's lines went with it: what the watchman asked, what he said to
+an answer, what he said to a wrong one, and the four answers he took.

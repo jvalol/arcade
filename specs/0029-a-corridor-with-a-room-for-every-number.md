@@ -1,6 +1,6 @@
 # 0029 A corridor with a room for every number
 
-**Status:** cut on 2026-11-10 by spec 0062, which took the hotel's corridor and the long hall out of the building. What is written below is the record of a room that was built and stood for three weeks, and the tests it cites went with it.
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Built:** 2026-10-20, the same day, and short of what this spec says in one way that matters. See "What this shipped short".
 **Date:** 2026-10-20
 **Amended:** 2026-10-20, twice, both on the day it was written, and 2026-11-09 for a doorway roofed by neither room.
@@ -272,46 +272,46 @@ on the wall behind it. What it must not be is a second record of occupancy.
 
 Arithmetic, which is what this building tests. None of it is written.
 
-- Odd rooms are on the left and even on the right, all the way along. — `aleph::tests::the_sides_alternate`
-- Doubling frees every room on the left side and no room on the right. — `aleph::tests::doubling_empties_the_odd_side`
+- Odd rooms are on the left and even on the right, all the way along. — `parked::aleph::tests::the_sides_alternate`
+- Doubling frees every room on the left side and no room on the right. — `parked::aleph::tests::doubling_empties_the_odd_side`
 - A body your size walks the corridor from the threshold with doors open on
   both sides, which is the case that fails: two facing doors at 1.75 rad leave
   1.13 m of a 3.2 m corridor, against a body of 0.9 and this building's usual
-  1.05 of clearance. — `aleph::tests::walked_with_every_door_open`
-- The wave moves away from room 1 rather than arriving everywhere at once. — `aleph::tests::the_change_travels`
+  1.05 of clearance. — `parked::aleph::tests::walked_with_every_door_open`
+- The wave moves away from room 1 rather than arriving everywhere at once. — `parked::aleph::tests::the_change_travels`
 - Every shut room is lit under its door and every open one is not, so the
-  light and the door never disagree. — `aleph::tests::the_light_says_what_the_door_says`
-- No strip is level with the floor it lies on. — `aleph::tests::no_strip_is_in_the_floor`
+  light and the door never disagree. — `parked::aleph::tests::the_light_says_what_the_door_says`
+- No strip is level with the floor it lies on. — `parked::aleph::tests::no_strip_is_in_the_floor`
 - Every drawn door has its number on it, wherever you are standing, which is
   not the same claim as the window being
   right. — `tests::every_drawn_door_has_its_number`
 - The light falls off rather than stopping, which is three quads over each
-  other and not one. — `aleph::tests::the_light_falls_off_rather_than_stopping`
+  other and not one. — `parked::aleph::tests::the_light_falls_off_rather_than_stopping`
 - A door is solid, so you cannot walk through one, and an open one takes up
-  more corridor than a shut one. — `aleph::tests::a_door_is_solid`
+  more corridor than a shut one. — `parked::aleph::tests::a_door_is_solid`
 - And it swings into the corridor rather than through the
-  wall. — `aleph::tests::an_open_door_swings_into_the_corridor`
+  wall. — `parked::aleph::tests::an_open_door_swings_into_the_corridor`
 - The corridor runs away from the lobby rather than doubling
-  back. — `aleph::tests::the_corridor_runs_away_from_the_lobby`
+  back. — `parked::aleph::tests::the_corridor_runs_away_from_the_lobby`
 - Every strip lies on the corridor's floor rather than through a
-  wall. — `aleph::tests::every_strip_is_on_the_corridors_floor`
-- Nothing travels unless a rule is applied. — `aleph::tests::nothing_travels_on_its_own`
+  wall. — `parked::aleph::tests::every_strip_is_on_the_corridors_floor`
+- Nothing travels unless a rule is applied. — `parked::aleph::tests::nothing_travels_on_its_own`
 - Room numbers are right at the far end as well as the near one, where a float
-  is at its worst. — `aleph::tests::the_last_room_is_numbered_correctly`
+  is at its worst. — `parked::aleph::tests::the_last_room_is_numbered_correctly`
 - The gallery has a doorway either side and the two are one account, so the
   pair cannot drift. — `room::tests::the_gallery_has_a_doorway_either_side`
 - Nothing of the corridor is drawn inside another room, which is the fault
-  this building has fought seven times. — `aleph::tests::nothing_of_the_corridor_is_in_another_room`
+  this building has fought seven times. — `parked::aleph::tests::nothing_of_the_corridor_is_in_another_room`
 - The corridor's floor clears the cellar's ceiling, which it does not at this
   building's usual slab: 0.15 m of headroom against 0.3 of slab, from ten
-  metres west. — `aleph::tests::the_corridor_clears_the_cellar`
+  metres west. — `parked::aleph::tests::the_corridor_clears_the_cellar`
 - You walk from the gallery into the corridor without your feet rising, which
   is what a ledge feels like and what no amount of looking
   finds. — `aleph::tests::walked_from_the_gallery_into_the_corridor`
 - You can stand at the desk and see room 1, which is what the camera in aleph
-  was placed for. — `aleph::tests::room_one_is_in_view_from_the_desk`
+  was placed for. — `parked::aleph::tests::room_one_is_in_view_from_the_desk`
 - The doorway here and the back room's are one account, so the pair cannot
-  drift. — `aleph::tests::the_two_doorways_are_one_account`
+  drift. — `parked::aleph::tests::the_two_doorways_are_one_account`
 
 ### Verified by hand
 
@@ -482,7 +482,7 @@ inside the first forty rooms, where the window was already 1 to 40.
 ## Acceptance criteria
 
 - Wherever you stand in the corridor, every drawn door has a lamp within
-  reach of it. — `aleph::tests::the_drawn_doors_are_lit_wherever_you_stand`
+  reach of it. — `parked::aleph::tests::the_drawn_doors_are_lit_wherever_you_stand`
 
 ## 2026-11-10: who is in, as a question rather than a list
 
@@ -563,29 +563,27 @@ nothing moves, which is why no kept picture changed.
 ## Acceptance criteria
 
 - A hotel nothing has been done to is full wherever you look, including past
-  the fortieth room. — `aleph::tests::a_full_hotel_is_full_wherever_you_look`
+  the fortieth room. — `parked::aleph::tests::a_full_hotel_is_full_wherever_you_look`
 - The prime powers rule reaches as far as the corridor does, so room 2187 is
-  taken and room 2190 is nobody's. — `aleph::tests::the_rule_reaches_past_the_fortieth`
+  taken and room 2190 is nobody's. — `parked::aleph::tests::the_rule_reaches_past_the_fortieth`
 - Reading a move backwards reads the same move, which is what lets the state
-  be a question. — `aleph::tests::every_move_can_be_read_backwards`
+  be a question. — `parked::aleph::tests::every_move_can_be_read_backwards`
 - What claims to fill everything fills everything, so the two accounts of it
-  cannot drift. — `aleph::tests::what_fills_everything_fills_everything`
+  cannot drift. — `parked::aleph::tests::what_fills_everything_fills_everything`
 - A wave passes every room you can see before it
-  ends. — `aleph::tests::the_wave_passes_everything_you_can_see`
+  ends. — `parked::aleph::tests::the_wave_passes_everything_you_can_see`
 
-## 2026-11-10: cut by spec 0062
+## 2026-11-10: parked by spec 0063
 
-**Jake, having played it: the hotel is arguably the least interesting room
-or feature, and worth dropping entirely.** The corridor, the forty drawn
-doors, the four arrivals, both waves, the people crossing and spec 0035's
-long hall all came out. What stayed is the lobby, the desk, the board, the
-sign and the register behind the one door left in the west wall.
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
 
-The reasons are in [0062](0062-the-hotel-comes-down-to-its-desk.md). The
-short of it is that this was the fourth round on one complaint, each fix
-correct and none of them changing what the room was: a desk you press and
-then watch.
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
 
-Everything above is left as written. What is wrong with it is not the
-arithmetic, which held up, and the arithmetic is the part worth keeping a
-record of.
+Everything above is left as written. The arithmetic in it held up and still
+runs.

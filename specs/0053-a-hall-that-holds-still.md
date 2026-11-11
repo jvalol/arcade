@@ -48,7 +48,7 @@ changes when this repo does.
 - Every cabinet finds the picture the hall would show on
   it. — `tests::every_cabinet_finds_its_art`
 - The rooms still look like themselves. — `tests::the_hall_is_drawn` and the
-  twelve beside it, `tests::the_register_rules_out_what_it_has_answered`
+  thirteen beside it
 
 ### Verified by hand
 

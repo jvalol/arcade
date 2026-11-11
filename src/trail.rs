@@ -34,22 +34,20 @@
 /// room the trail is wrong about, so nothing is listed here on the strength
 /// of a room being nice to visit. The rest arrive as their rooms grow a
 /// moment worth recording, and `Trail` does not care how many there are.
+///
+/// **Five, where there were eight.** Spec 0063 parked the hotel, the
+/// register and the imaginarium, which between them asked three of them:
+/// walking the diagonal, handing what it left you to the desk, and working
+/// one of the imaginarium's hatches. That makes the bridge easier to reach,
+/// which is a real change and is probably the right one: eight was a
+/// checklist of a length nobody had measured against how long this building
+/// takes to walk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Asked {
-    /// Walking the register's diagonal to the end of the wall, which leaves
-    /// you carrying a guest on no line of the book. Spec 0031.
-    WalkedTheDiagonal,
-    /// Handing that guest to the desk, which houses them and writes them
-    /// into the book. Spec 0032.
-    HousedTheCarried,
     /// Riding out to the sun, which is what the space behind the wall is
     /// for: the system at true scale, where the reading is the distance.
     /// Specs 0015 and 0018, and one of the four spec 0036 names itself.
     RodeToTheSun,
-    /// Working one of the imaginarium's second doors. Spec 0038, where
-    /// `room::Seen::Hatch` already says in as many words that this is the
-    /// only thing in that room that asks you anything.
-    WorkedAHatch,
     /// Turning the sixth display, which turns you instead. Spec 0021: five
     /// of them spin on their plinths while you watch, and the way into the
     /// hidden wing is a thing on a plinth rather than another wall.
@@ -80,10 +78,7 @@ impl Asked {
     /// then says this list is short.
     pub fn every() -> &'static [Asked] {
         &[
-            Asked::WalkedTheDiagonal,
-            Asked::HousedTheCarried,
             Asked::RodeToTheSun,
-            Asked::WorkedAHatch,
             Asked::WentInsideTheTesseract,
             Asked::OpenedTheCase,
             Asked::GotBehindTheWall,
@@ -156,14 +151,11 @@ mod tests {
     /// checked nothing.
     fn sits_at(what: Asked) -> usize {
         match what {
-            Asked::WalkedTheDiagonal => 0,
-            Asked::HousedTheCarried => 1,
-            Asked::RodeToTheSun => 2,
-            Asked::WorkedAHatch => 3,
-            Asked::WentInsideTheTesseract => 4,
-            Asked::OpenedTheCase => 5,
-            Asked::GotBehindTheWall => 6,
-            Asked::WentOutIntoTheField => 7,
+            Asked::RodeToTheSun => 0,
+            Asked::WentInsideTheTesseract => 1,
+            Asked::OpenedTheCase => 2,
+            Asked::GotBehindTheWall => 3,
+            Asked::WentOutIntoTheField => 4,
         }
     }
 
@@ -208,25 +200,25 @@ mod tests {
     fn a_room_that_answers_twice_answered_once() {
         let mut trail = Trail::new();
 
-        trail.gave(Asked::WalkedTheDiagonal);
-        trail.gave(Asked::WalkedTheDiagonal);
+        trail.gave(Asked::OpenedTheCase);
+        trail.gave(Asked::OpenedTheCase);
 
         assert_eq!(
             trail.given().len(),
             1,
-            "walking the diagonal again scored again"
+            "opening the bookcase again scored again"
         );
     }
 
     #[test]
     fn it_keeps_the_order_they_came_in() {
         let mut one = Trail::new();
-        one.gave(Asked::WalkedTheDiagonal);
-        one.gave(Asked::HousedTheCarried);
+        one.gave(Asked::OpenedTheCase);
+        one.gave(Asked::RodeToTheSun);
 
         let mut other = Trail::new();
-        other.gave(Asked::HousedTheCarried);
-        other.gave(Asked::WalkedTheDiagonal);
+        other.gave(Asked::RodeToTheSun);
+        other.gave(Asked::OpenedTheCase);
 
         assert_ne!(
             one.given(),

@@ -186,6 +186,10 @@ starts and this is where the spec stops.
 - The legs swap rather than hold still. — `people::tests::the_legs_swap`
 - Every part of a figure has a
   surface. — `people::tests::a_figure_is_not_nothing`
+- Somebody walking in the corridor paces off the ground they cover rather
+  than off the crossing, and the longest and shortest moves in one crowd are
+  far enough apart to tell the
+  difference. — `parked::aleph::tests::a_long_move_takes_the_same_step_as_a_short_one`
 
 ## What standing next to one found
 
@@ -238,22 +242,3 @@ different one.
 **Standing still well.** This is about the walk. A figure at rest is the same
 figure with the phase held, and whether that reads is a separate question
 nobody has asked yet.
-
-## 2026-11-10: the crowd that proved this is gone
-
-**The phase is a function of ground covered**, which this spec held with a
-test over the hotel's crossers: in one crowd the shortest move was three
-metres and the longest four hundred, and pacing the legs off the fraction of
-a crossing gave both of them the same seven paces. Spec 0062 took that
-corridor and its crowd out, so there is no longer a set of movers whose
-journeys differ by two orders of magnitude.
-
-The property itself is unchanged and is still held, by the four tests that
-take `walked` in metres and ask what the gait does with it:
-`people::tests::a_foot_lifts_only_on_the_way_forward`,
-`people::tests::a_planted_foot_does_not_slide`,
-`people::tests::a_slid_foot_does_not_stay_put` and
-`people::tests::the_hips_rise_twice_a_stride`. What is no longer held is the
-end to end check that a mover reports the ground it has actually covered,
-and the imaginarium's walkers are not a replacement for it: they all walk
-one journey at one pace, which is the case that never failed.

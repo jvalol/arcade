@@ -1196,17 +1196,6 @@ pub const PLATE: Vec4 = vec4(0.0, 0.0, 0.0, 0.62);
 /// How much wider and taller the plate is than the words on it.
 pub const PLATE_PAD: f32 = 7.0;
 
-/// Where the first line of help sits, how big it is drawn and how far apart
-/// the lines are.
-///
-/// One account of all three. They were three: a line at twenty, a line at
-/// forty-four, and nothing saying the second was the first plus a line.
-/// The bar on the end of a line somebody is typing. Spec 0059.
-///
-/// **It does not blink.** A blink is a timer, a redraw and a rule about
-/// how fast, and it says nothing the bar does not say standing still.
-pub const CARET: &str = "_";
-
 pub const SAYS_AT: Vec2 = vec2(20.0, 20.0);
 pub const SAYS_SIZE: f32 = 14.0;
 pub const SAYS_LINE: f32 = 24.0;
@@ -1293,93 +1282,6 @@ pub const BACK_WALL: Vec4 = vec4(0.42, 0.41, 0.39, 1.0);
 pub const BACK_FLOOR: Vec4 = vec4(0.30, 0.30, 0.31, 1.0);
 pub const BACK_CEILING: Vec4 = vec4(0.17, 0.17, 0.18, 1.0);
 
-/// The hotel, through the gallery's other door. Spec 0029.
-///
-/// Warmer and dimmer than the back room opposite, which is concrete and a
-/// working light. This is a corridor at night, and aleph's own spec is called
-/// "The night".
-pub const HOTEL_WALL: Vec4 = vec4(0.33, 0.29, 0.26, 1.0);
-pub const HOTEL_FLOOR: Vec4 = vec4(0.19, 0.16, 0.15, 1.0);
-pub const HOTEL_CEILING: Vec4 = vec4(0.13, 0.12, 0.12, 1.0);
-
-/// A door, which is the one warm thing in here with a light on it.
-pub const HOTEL_DOOR: Vec4 = vec4(0.46, 0.30, 0.20, 1.0);
-
-/// The plaque beside it: white numbers on black, because the engine draws
-/// text light on dark and a plaque is what that looks like anyway.
-pub const HOTEL_PLAQUE: Vec4 = vec4(0.85, 0.86, 0.92, 1.0);
-
-// The light under a shut door was `HOTEL_LIGHT`, and the runner down the
-// middle `HOTEL_RUNNER`. Spec 0062 took the corridor out and both with it.
-// Kept out rather than kept: a colour nothing draws is a colour the next
-// reader has to look up to find that nothing draws it.
-
-/// The skirting and the rail, and the sconces.
-pub const HOTEL_TRIM: Vec4 = vec4(0.24, 0.21, 0.19, 1.0);
-pub const HOTEL_SCONCE: Vec4 = vec4(0.30, 0.27, 0.22, 1.0);
-
-/// And the shade's mouth, which is the lit part and the one thing in this
-/// room that is past one.
-pub const HOTEL_SHADE: Vec4 = vec4(2.4, 1.9, 1.25, 1.0);
-
-/// The register behind the blank door. Spec 0031.
-///
-/// Paler and colder than the corridor it is off, because it is an office
-/// rather than somewhere anybody sleeps, and because what is on its far wall
-/// has to be read.
-pub const REGISTER_WALL: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
-pub const REGISTER_FLOOR: Vec4 = vec4(0.22, 0.21, 0.20, 1.0);
-pub const REGISTER_CEILING: Vec4 = vec4(0.16, 0.16, 0.17, 1.0);
-
-/// A character in the book, and the one on the diagonal, which is the only
-/// thing in that room past one.
-/// The one door with no number, which is not a bedroom door. Spec 0031.
-///
-/// **It had a blank plaque and read as a fault**, because that is exactly
-/// what a fault looked like: the morning this was built, room 104's plaque
-/// came out blank because its texture was never made. Jake walked the
-/// corridor and reported the deliberate one as a bug. The same pixels cannot
-/// mean "this is the register" and "the number failed to draw".
-///
-/// So it has no plaque at all now and is painted rather than veneered, which
-/// is what a door that is not a room looks like in a building like this.
-pub const REGISTER_DOOR: Vec4 = vec4(0.30, 0.33, 0.33, 1.0);
-
-/// The room number at the start of each row of the register, which is what
-/// says the rows are rooms. Spec 0031.
-pub const REGISTER_ROOM: Vec4 = vec4(0.58, 0.62, 0.70, 1.0);
-
-pub const REGISTER_MARK: Vec4 = vec4(0.72, 0.73, 0.78, 1.0);
-
-/// The cell on the diagonal that the walk has taken.
-pub const REGISTER_DIAGONAL: Vec4 = vec4(1.9, 1.42, 0.72, 1.0);
-
-/// And the part of it the walk has not reached yet.
-///
-/// **A path rather than a trail.** Spec 0031 lit the whole diagonal from the
-/// moment you walked in, so walking the room changed nothing on the wall and
-/// Jake said he could see no actions in it. Ahead of the walk a cell is only
-/// marked out, enough to show there is a way through the page. Behind it the
-/// cell is `REGISTER_DIAGONAL` and plainly taken.
-pub const REGISTER_AHEAD: Vec4 = vec4(0.62, 0.55, 0.40, 1.0);
-
-/// The rule drawn through a row the walk has ruled out. Spec 0052.
-///
-/// **The colour the diagonal is, and not the colour the marks are.** The
-/// rule is what the mark you took says about the row you took it from, so
-/// it reads as coming from the diagonal rather than as a change to the
-/// entry.
-///
-/// **And past one, which the first version was not.** It was 0.95 and
-/// unlit, on the reasoning that ink on a page is not a thing switched on.
-/// That reasoning was wrong about this room: it is dark, the marks around
-/// it carry their own brightness, and an unlit box standing proud of them
-/// came out as a shadow band across the rows rather than a line through
-/// them. Photographed and looked at, which is the only way that shows.
-/// Well under `REGISTER_DIAGONAL` at 1.9, because that is a lit figure a
-/// cell wide and this is a line a metre long.
-pub const REGISTER_RULED: Vec4 = vec4(1.25, 0.94, 0.48, 1.0);
-
 /// What the hotel's guests are: a coat, trousers and a head, four ways.
 ///
 /// **Three colours each, which is what says dressed.** They were one colour
@@ -1451,55 +1353,6 @@ pub const HEADS: [Vec4; 4] = [
     vec4(0.27, 0.185, 0.13, 1.0),
 ];
 
-/// What the imaginarium over the hall is made of. Spec 0037.
-///
-/// **Paler than anything below it**, because it is the only room in this
-/// building with nothing above it and the light should say so. Everything
-/// else here is a cellar, a corridor at night or a hall lit in pools.
-pub const ALOFT_WALL: Vec4 = vec4(0.56, 0.55, 0.52, 1.0);
-/// The three faces somebody is standing on, which are not the three over
-/// somebody's head.
-///
-/// **A floor you can tell from the walls**, which is the first thing this
-/// project's own note on furnishing a room asks for and the one this room
-/// never had: all six faces were `ALOFT_WALL` and the picture came out one
-/// value from end to end. Darker than the wall and lighter than the worn
-/// path on it, so the three planes step away from each other and the wear
-/// still reads as wear.
-pub const ALOFT_FLOOR: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
-pub const ALOFT_CEILING: Vec4 = vec4(0.70, 0.69, 0.66, 1.0);
-/// The piers over each frame's head, which are pilasters up a wall to the
-/// two frames that read that face as a wall.
-///
-/// A shade off the face they stand on rather than a colour of their own. A
-/// long wall with nothing breaking it is one slab, and what breaks it is the
-/// shadow down the side of each pier: the step in tone is there to keep them
-/// from disappearing where the light is flat, not to make them a feature.
-pub const ALOFT_PIER: Vec4 = vec4(0.63, 0.62, 0.59, 1.0);
-pub const ALOFT_TREAD: Vec4 = vec4(0.47, 0.45, 0.42, 1.0);
-pub const ALOFT_LANDING: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
-
-/// Past each of the three doors, per spec 0038.
-///
-/// **Not black.** Nothing in this engine is lit to nothing, so a true black
-/// panel reads as a hole in the picture rather than as a room with its light
-/// off. Dark enough to be somewhere else and light enough to be somewhere.
-pub const ALOFT_DARK: Vec4 = vec4(0.10, 0.10, 0.11, 1.0);
-
-/// The way worn across each frame's own floor, per spec 0038. Darker than
-/// the floor it is on, because what it has to do is say where the floor is.
-pub const ALOFT_PATH: Vec4 = vec4(0.33, 0.32, 0.31, 1.0);
-
-/// The border laid round each frame's floor, per spec 0038. A half step
-/// down from the floor it is laid on, and lighter than the way worn across
-/// it: the border is what the floor is, the path is what has happened to
-/// it.
-pub const ALOFT_BORDER: Vec4 = vec4(0.60, 0.59, 0.55, 1.0);
-
-/// The casing round each door, per spec 0038. Darker than the wall and
-/// lighter than what is behind the opening, so the three read as three.
-pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
-
 /// What the glazing of the lantern on the imaginarium's roof burns at, per
 /// spec 0057. The one light this building shows a field a hundred and
 /// thirty metres off.
@@ -1514,7 +1367,7 @@ pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
 /// **Far past one, and biased hard warm, because the lamp in the shaft
 /// cannot light it.** Colour here multiplies the lit result, so a panel
 /// with nothing shining on it goes out when the world does, which is
-/// backwards for a lamp. `aloft::lantern_lamp` hangs inside the kerb and
+/// backwards for a lamp. `Room::lantern_lamp` hangs inside the box and
 /// these are its outside faces, pointing away: no lambert, no light. So
 /// the warmth has to survive the clamp instead, and biased this hard it
 /// does. Shot from `bridge::top` it is amber at night, apricot at dusk and
@@ -1525,7 +1378,11 @@ pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
 /// lamp read up close is what it lands on, and the only thing the shaft's
 /// lamp lands on out there is a pencil of roof at the kerb's foot. The
 /// view this is for is the one at a hundred and thirty metres.
-pub const ALOFT_LANTERN: Vec4 = vec4(6.0, 2.8, 1.0, 1.0);
+///
+/// **It was the imaginarium's and is the building's.** Spec 0063 parked
+/// that room and stood the lantern on the hall's roof instead, which is
+/// the same roof it was standing on and the same view it is for.
+pub const LANTERN: Vec4 = vec4(6.0, 2.8, 1.0, 1.0);
 
 /// How much the gallery's panel lights itself, per spec 0039. Well short of
 /// the neon's 3.2: a window with something in it, not a sign.
@@ -1535,20 +1392,6 @@ pub const MANDEL_LIT: Vec4 = vec4(1.7, 1.7, 1.8, 1.0);
 /// opening reads as an opening and not as the edge of a poster.
 pub const MANDEL_FRAME: Vec4 = vec4(0.18, 0.16, 0.15, 1.0);
 
-/// The way up to it, per spec 0037. The stair is the nook's own joinery and
-/// the shaft above the ceiling is the imaginarium's stone, so the climb
-/// changes under you about halfway.
-///
-/// **Stone all the way was the first build and it read as plaster.** A pale
-/// flight standing in a panelled room full of books is the one thing in the
-/// nook that is not made of wood, and the spec asks for a way up that is
-/// ordinary. A library has a timber stair in it.
-pub const ASCENT_TREAD: Vec4 = vec4(0.30, 0.18, 0.11, 1.0);
-
-/// What the register's one sconce is made of, which is the same brass as the
-/// hotel's next door.
-pub const REGISTER_SCONCE: Vec4 = vec4(0.42, 0.33, 0.17, 1.0);
-pub const REGISTER_SHADE: Vec4 = vec4(1.85, 1.3, 0.7, 1.0);
 pub const BACK_SHADE: Vec4 = vec4(0.22, 0.21, 0.20, 1.0);
 pub const BACK_BULB: Vec4 = vec4(3.1, 2.9, 2.5, 1.0);
 /// The rig on the bench: the cubes under test, the jig holding them, and the
@@ -2881,4 +2724,200 @@ mod tests {
             );
         }
     }
+}
+
+/// The colours of the rooms spec 0063 parked.
+///
+/// **Here rather than deleted, and here rather than loose above.** Nothing
+/// in the building draws with any of these, so they would each be a
+/// warning, and a palette carrying colours for rooms that are not in the
+/// building reads like a palette with dead entries in it. These are tuned
+/// values that took rounds of looking to settle: the hotel's corridor is a
+/// hotel at night rather than an office, the register's wall is a page, and
+/// the imaginarium's three frames are told apart by what they are made of.
+/// Whoever brings those rooms back wants them.
+#[allow(dead_code)]
+pub mod parked {
+    use glam::{vec4, Vec4};
+
+    /// Where the first line of help sits, how big it is drawn and how far apart
+    /// the lines are.
+    ///
+    /// One account of all three. They were three: a line at twenty, a line at
+    /// forty-four, and nothing saying the second was the first plus a line.
+    /// The bar on the end of a line somebody is typing. Spec 0059.
+    ///
+    /// **It does not blink.** A blink is a timer, a redraw and a rule about
+    /// how fast, and it says nothing the bar does not say standing still.
+    pub const CARET: &str = "_";
+
+    /// The hotel, through the gallery's other door. Spec 0029.
+    ///
+    /// Warmer and dimmer than the back room opposite, which is concrete and a
+    /// working light. This is a corridor at night, and aleph's own spec is called
+    /// "The night".
+    pub const HOTEL_WALL: Vec4 = vec4(0.33, 0.29, 0.26, 1.0);
+
+    pub const HOTEL_FLOOR: Vec4 = vec4(0.19, 0.16, 0.15, 1.0);
+
+    pub const HOTEL_CEILING: Vec4 = vec4(0.13, 0.12, 0.12, 1.0);
+
+    /// A door, which is the one warm thing in the corridor with a light on it.
+    pub const HOTEL_DOOR: Vec4 = vec4(0.46, 0.30, 0.20, 1.0);
+
+    /// The plaque beside it: white numbers on black, because the engine draws
+    /// text light on dark and a plaque is what that looks like anyway.
+    pub const HOTEL_PLAQUE: Vec4 = vec4(0.85, 0.86, 0.92, 1.0);
+
+    /// And the light under a shut door.
+    ///
+    /// **Not past one on every channel.** It was (2.1, 1.72, 1.15), which is a
+    /// warm colour and came out white: every channel over one clips to white on
+    /// the way to the screen, so the warmth was in the numbers and nowhere else.
+    /// Only the red is well past one now, and the strip reads as a lamp in a room
+    /// rather than as a tile.
+    pub const HOTEL_LIGHT: Vec4 = vec4(1.85, 1.28, 0.62, 1.0);
+
+    /// The runner down the corridor, the skirting and the rail, and the sconces.
+    ///
+    /// A red carpet, dark enough to be a floor at night rather than a stripe.
+    pub const HOTEL_RUNNER: Vec4 = vec4(0.26, 0.11, 0.12, 1.0);
+
+    pub const HOTEL_TRIM: Vec4 = vec4(0.24, 0.21, 0.19, 1.0);
+
+    pub const HOTEL_SCONCE: Vec4 = vec4(0.30, 0.27, 0.22, 1.0);
+
+    /// And the shade's mouth, which is the lit part and the only thing in the
+    /// corridor besides the door strips that is past one.
+    pub const HOTEL_SHADE: Vec4 = vec4(2.4, 1.9, 1.25, 1.0);
+
+    /// The register behind the blank door. Spec 0031.
+    ///
+    /// Paler and colder than the corridor it is off, because it is an office
+    /// rather than somewhere anybody sleeps, and because what is on its far wall
+    /// has to be read.
+    pub const REGISTER_WALL: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
+
+    pub const REGISTER_FLOOR: Vec4 = vec4(0.22, 0.21, 0.20, 1.0);
+
+    pub const REGISTER_CEILING: Vec4 = vec4(0.16, 0.16, 0.17, 1.0);
+
+    /// A character in the book, and the one on the diagonal, which is the only
+    /// thing in that room past one.
+    /// The one door with no number, which is not a bedroom door. Spec 0031.
+    ///
+    /// **It had a blank plaque and read as a fault**, because that is exactly
+    /// what a fault looked like: the morning this was built, room 104's plaque
+    /// came out blank because its texture was never made. Jake walked the
+    /// corridor and reported the deliberate one as a bug. The same pixels cannot
+    /// mean "this is the register" and "the number failed to draw".
+    ///
+    /// So it has no plaque at all now and is painted rather than veneered, which
+    /// is what a door that is not a room looks like in a building like this.
+    pub const REGISTER_DOOR: Vec4 = vec4(0.30, 0.33, 0.33, 1.0);
+
+    /// The room number at the start of each row of the register, which is what
+    /// says the rows are rooms. Spec 0031.
+    pub const REGISTER_ROOM: Vec4 = vec4(0.58, 0.62, 0.70, 1.0);
+
+    pub const REGISTER_MARK: Vec4 = vec4(0.72, 0.73, 0.78, 1.0);
+
+    /// The cell on the diagonal that the walk has taken.
+    pub const REGISTER_DIAGONAL: Vec4 = vec4(1.9, 1.42, 0.72, 1.0);
+
+    /// And the part of it the walk has not reached yet.
+    ///
+    /// **A path rather than a trail.** Spec 0031 lit the whole diagonal from the
+    /// moment you walked in, so walking the room changed nothing on the wall and
+    /// Jake said he could see no actions in it. Ahead of the walk a cell is only
+    /// marked out, enough to show there is a way through the page. Behind it the
+    /// cell is `REGISTER_DIAGONAL` and plainly taken.
+    pub const REGISTER_AHEAD: Vec4 = vec4(0.62, 0.55, 0.40, 1.0);
+
+    /// The rule drawn through a row the walk has ruled out. Spec 0052.
+    ///
+    /// **The colour the diagonal is, and not the colour the marks are.** The
+    /// rule is what the mark you took says about the row you took it from, so
+    /// it reads as coming from the diagonal rather than as a change to the
+    /// entry.
+    ///
+    /// **And past one, which the first version was not.** It was 0.95 and
+    /// unlit, on the reasoning that ink on a page is not a thing switched on.
+    /// That reasoning was wrong about this room: it is dark, the marks around
+    /// it carry their own brightness, and an unlit box standing proud of them
+    /// came out as a shadow band across the rows rather than a line through
+    /// them. Photographed and looked at, which is the only way that shows.
+    /// Well under `REGISTER_DIAGONAL` at 1.9, because that is a lit figure a
+    /// cell wide and this is a line a metre long.
+    pub const REGISTER_RULED: Vec4 = vec4(1.25, 0.94, 0.48, 1.0);
+
+    /// What the imaginarium over the hall is made of. Spec 0037.
+    ///
+    /// **Paler than anything below it**, because it is the only room in this
+    /// building with nothing above it and the light should say so. Everything
+    /// else here is a cellar, a corridor at night or a hall lit in pools.
+    pub const ALOFT_WALL: Vec4 = vec4(0.56, 0.55, 0.52, 1.0);
+
+    /// The three faces somebody is standing on, which are not the three over
+    /// somebody's head.
+    ///
+    /// **A floor you can tell from the walls**, which is the first thing this
+    /// project's own note on furnishing a room asks for and the one this room
+    /// never had: all six faces were `ALOFT_WALL` and the picture came out one
+    /// value from end to end. Darker than the wall and lighter than the worn
+    /// path on it, so the three planes step away from each other and the wear
+    /// still reads as wear.
+    pub const ALOFT_FLOOR: Vec4 = vec4(0.44, 0.43, 0.40, 1.0);
+
+    pub const ALOFT_CEILING: Vec4 = vec4(0.70, 0.69, 0.66, 1.0);
+
+    /// The piers over each frame's head, which are pilasters up a wall to the
+    /// two frames that read that face as a wall.
+    ///
+    /// A shade off the face they stand on rather than a colour of their own. A
+    /// long wall with nothing breaking it is one slab, and what breaks it is the
+    /// shadow down the side of each pier: the step in tone is there to keep them
+    /// from disappearing where the light is flat, not to make them a feature.
+    pub const ALOFT_PIER: Vec4 = vec4(0.63, 0.62, 0.59, 1.0);
+
+    pub const ALOFT_TREAD: Vec4 = vec4(0.47, 0.45, 0.42, 1.0);
+
+    pub const ALOFT_LANDING: Vec4 = vec4(0.40, 0.39, 0.37, 1.0);
+
+    /// Past each of the three doors, per spec 0038.
+    ///
+    /// **Not black.** Nothing in this engine is lit to nothing, so a true black
+    /// panel reads as a hole in the picture rather than as a room with its light
+    /// off. Dark enough to be somewhere else and light enough to be somewhere.
+    pub const ALOFT_DARK: Vec4 = vec4(0.10, 0.10, 0.11, 1.0);
+
+    /// The way worn across each frame's own floor, per spec 0038. Darker than
+    /// the floor it is on, because what it has to do is say where the floor is.
+    pub const ALOFT_PATH: Vec4 = vec4(0.33, 0.32, 0.31, 1.0);
+
+    /// The border laid round each frame's floor, per spec 0038. A half step
+    /// down from the floor it is laid on, and lighter than the way worn across
+    /// it: the border is what the floor is, the path is what has happened to
+    /// it.
+    pub const ALOFT_BORDER: Vec4 = vec4(0.60, 0.59, 0.55, 1.0);
+
+    /// The casing round each door, per spec 0038. Darker than the wall and
+    /// lighter than what is behind the opening, so the three read as three.
+    pub const ALOFT_CASE: Vec4 = vec4(0.28, 0.26, 0.24, 1.0);
+
+    /// The way up to it, per spec 0037. The stair is the nook's own joinery and
+    /// the shaft above the ceiling is the imaginarium's stone, so the climb
+    /// changes under you about halfway.
+    ///
+    /// **Stone all the way was the first build and it read as plaster.** A pale
+    /// flight standing in a panelled room full of books is the one thing in the
+    /// nook that is not made of wood, and the spec asks for a way up that is
+    /// ordinary. A library has a timber stair in it.
+    pub const ASCENT_TREAD: Vec4 = vec4(0.30, 0.18, 0.11, 1.0);
+
+    /// What the register's one sconce is made of, which is the same brass as the
+    /// hotel's next door.
+    pub const REGISTER_SCONCE: Vec4 = vec4(0.42, 0.33, 0.17, 1.0);
+
+    pub const REGISTER_SHADE: Vec4 = vec4(1.85, 1.3, 0.7, 1.0);
 }

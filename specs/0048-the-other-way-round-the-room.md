@@ -1,6 +1,6 @@
 # 0048 The other way round the room
 
-**Status:** implemented
+**Status:** parked on 2026-11-10 by spec 0063, which took this room out of the building and kept every line of it compiling and tested under `src/parked/`. What is written below is the record of a room that was built and stood, and the tests it cites went out of the suite with it.
 **Date:** 2026-11-01
 **Built:** 2026-11-01, the same day it was written. Two things the filming
 found and the tests could not are at the end of the behaviour below.
@@ -148,7 +148,7 @@ the interaction.
 - The crossing takes `TURNS_ROUND` and moves you nowhere else while it
   runs. — `tests::a_crossing_cannot_be_walked_out_of`
 - Three top doors, three destinations, each frame reachable from each
-  other. — `aloft::tests::the_two_ways_round_cover_all_three_frames`
+  other. — `parked::aloft::tests::the_two_ways_round_cover_all_three_frames`
 - No crossing of this room turns, rolls or changes the picture faster than
   somebody can follow, measured frame against
   frame. — `tests::no_crossing_in_here_snaps`
@@ -169,3 +169,18 @@ door stays. Nothing is built out there and nothing is seen through it.
 
 **Getting out of the imaginarium.** The way down to the nook is still the
 dog-leg and still only reachable from frame nought.
+
+## 2026-11-10: parked by spec 0063
+
+**Jake, having played it: the code and logic are good, the composition in
+capriccio does not land.** This room is out of the building and under
+`src/parked/`, compiling and tested, until there is a way to make it feel
+right for a user.
+
+The reasons are in [0063](0063-the-rooms-that-ask-before-they-show.md). The
+short of it is that this room puts its idea in your head first and then
+shows you a room, where every room in this building that works puts its idea
+in the world and lets you meet it by doing something ordinary.
+
+Everything above is left as written. The arithmetic in it held up and still
+runs.
