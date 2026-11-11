@@ -551,7 +551,85 @@ pub fn holds(at: Vec3) -> bool {
 /// Eighteen thousand lines is how two functions eight thousand apart come to
 /// look like neighbours. The geometry was already here; this is the rest of
 /// the room coming to join it.
-pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[[TextureId; 2]]) {
+/// The ball that holds every pane in here, for the one question worth
+/// asking before a mirror is pushed: can any of them be seen at all.
+///
+/// **Off the panes and not off the room.** What costs is the glass and the
+/// target behind it, so the thing to test is where the glass is. The shell
+/// round it is ordinary geometry and the engine culls it like any other.
+pub fn glass_ball() -> (Vec3, f32) {
+    let mut least = Vec3::splat(f32::MAX);
+    let mut most = Vec3::splat(f32::MIN);
+
+    for side in SIDES.iter().copied() {
+        for at in along_wall(side) {
+            let (stands, size) = pane(side, at);
+            let half = size * 0.5;
+
+            least = least.min(stands - half);
+            most = most.max(stands + half);
+        }
+    }
+
+    ((least + most) * 0.5, (most - least).length() * 0.5)
+}
+
+/// How far from that ball anybody can be and still have a sight line to the
+/// glass.
+///
+/// **The far corner of the nook, which is the only room it opens off.** A
+/// frustum holds whatever is inside the view volume and knows nothing about
+/// the walls in the way, so from the top of Bifröst, a hundred and
+/// twenty-nine metres off and looking back at the building, it still says
+/// yes. What makes that view impossible is the building, and the cheapest
+/// honest stand-in for the building is how far away the furthest spot that
+/// can see in actually is.
+///
+/// Measured off the nook rather than written down, so it follows if the
+/// nook moves. Plus a stride, so a body standing a little behind that
+/// corner is not cut off by a centimetre.
+pub fn as_far_as_it_is_seen(reaches: f32) -> f32 {
+    let (ball, _) = glass_ball();
+    let (at, size) = crate::room::nook_floor(reaches);
+    let half = vec3(size.x, 0.0, size.z) * 0.5;
+    let mut most: f32 = 0.0;
+
+    for x in [-1.0, 1.0] {
+        for z in [-1.0, 1.0] {
+            let corner = vec3(at.x + x * half.x, ball.y, at.z + z * half.z);
+
+            most = most.max(ball.distance(corner));
+        }
+    }
+
+    most + 1.0
+}
+
+/// Draws the corridor. `seen` is whether any of its glass is in the eye's
+/// frustum, and it gates the two mirrors and every pane.
+///
+/// **Because a mirror is the world drawn again.** Engine spec 0091 fills
+/// each target by rendering the whole scene from behind the glass, so two
+/// mirrors are two more worlds a frame whether or not anybody can see
+/// them. Pushed unconditionally, as they were until 2026-11-11, that is
+/// paid on the bridge, out in the field and inside Valhalla, none of which
+/// can see a corridor behind the nook's bookcases: measured from the
+/// landing at the top of Bifröst, `target` and `glass` were about fifty
+/// milliseconds each against a whole hall of 2.9. Jake, with a recording:
+/// when the bridge is in view the framerate drops.
+///
+/// **A question about sight and not about where your feet are**, which is
+/// the fault this building has made four times. The corridor is visible
+/// from the nook through the open bookcase, so anything that asked which
+/// room you stand in would put the glass out while you are looking into
+/// it.
+pub fn draw(
+    scene: &mut Scene,
+    cube: MeshId,
+    quad: Option<MeshId>,
+    targets: &[[TextureId; 2]],
+    seen: bool,
+) {
     // **The shell is drawn whatever the glass is doing.** This used to sit
     // behind a `let ... else { return }` on the targets, so a frame
     // before `load` had run drew no room at all: the walls were solid
@@ -578,7 +656,7 @@ pub fn draw(scene: &mut Scene, cube: MeshId, quad: Option<MeshId>, targets: &[[T
     let Some(quad) = quad else {
         return;
     };
-    if targets.len() != SIDES.len() {
+    if targets.len() != SIDES.len() || !seen {
         return;
     }
 
@@ -744,6 +822,61 @@ mod tests {
 
     /// Spec 0061. The frames stand clear of the glass, so no two drawn faces
     /// share a plane.
+    /// Spec 0061: the glass is asked for where it can be seen and nowhere
+    /// else.
+    ///
+    /// **Because a mirror is the world drawn again.** Pushed every frame,
+    /// as they were until 2026-11-11, the two walls cost a whole second
+    /// render each from every spot in the building and every spot outside
+    /// it. From the top of Bifröst, where no corridor behind a bookcase can
+    /// possibly be in sight, a frame was 139 ms against 17.5 with this
+    /// rule in.
+    ///
+    /// Held from both sides: its own room and the nook that opens off it
+    /// are inside the reach and under a roof, and the landing at the top of
+    /// the bridge is outside both.
+    #[test]
+    fn the_glass_is_only_asked_for_where_it_can_be_seen() {
+        let room = crate::room::Room::of(crate::games());
+        let reaches = room.reaches;
+        let (ball, _) = glass_ball();
+        let far = as_far_as_it_is_seen(reaches);
+        let (nook, size) = crate::room::nook_floor(reaches);
+
+        // its own room, and the far corner of the nook it opens off
+        let corridor = vec3(middle(), 0.0, (SOUTH + NORTH) * 0.5);
+        let corner = vec3(nook.x - size.x * 0.5, 0.0, nook.z - size.z * 0.5);
+
+        for (called, at) in [("the corridor", corridor), ("the nook", corner)] {
+            assert!(
+                ball.distance(at) <= far,
+                "{} is {:.1} off, past a reach of {:.1}",
+                called,
+                ball.distance(at),
+                far
+            );
+            assert!(
+                !room.out_of_doors(at + Vec3::Y * crate::EYE),
+                "{} reads as out of doors, so the glass would go out in it",
+                called
+            );
+        }
+
+        // and the landing at the top of the bridge, which is neither
+        let (landing, _) = crate::gate::at(reaches);
+
+        assert!(
+            ball.distance(landing) > far,
+            "the landing is {:.1} off, inside a reach of {:.1}",
+            ball.distance(landing),
+            far
+        );
+        assert!(
+            room.out_of_doors(landing + Vec3::Y * crate::EYE),
+            "the landing reads as indoors"
+        );
+    }
+
     #[test]
     fn the_frames_stand_clear_of_the_glass() {
         // `const`s, so this is a compile-time truth stated where a reader

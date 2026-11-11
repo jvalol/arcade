@@ -7694,7 +7694,21 @@ impl Game for Arcade {
         // called at all and the corridor was solid and invisible. A file of
         // eighteen thousand lines is how two functions eight thousand apart
         // come to look like neighbours.
-        mirrors::draw(scene, cube, self.pane, &self.glass_targets);
+        // **Only when some of its glass is in shot.** See `mirrors::draw`:
+        // each mirror is another whole world rendered into a target.
+        {
+            let (middle, reach) = mirrors::glass_ball();
+            let eye = self.looking_from();
+            // **Three questions, because no one of them is enough.** The
+            // frustum knows nothing about the walls in the way, the
+            // distance knows nothing about which way you face, and neither
+            // knows that the corridor has no opening to the sky.
+            let seen = !self.room.out_of_doors(eye)
+                && eye.distance(middle) <= mirrors::as_far_as_it_is_seen(self.room.reaches)
+                && camera.frustum().holds_sphere(middle, reach);
+
+            mirrors::draw(scene, cube, self.pane, &self.glass_targets, seen);
+        }
         self.draw_the_people(scene);
 
         // and the wear in it where feet have gone, which is the only thing in
