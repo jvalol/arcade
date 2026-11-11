@@ -1621,6 +1621,55 @@ pub fn glow() -> Vec4 {
 /// shared across a corner: averaged round one, the top of a rainbow catches
 /// the same light as its edge and the whole thing reads as a hose.
 pub fn deck_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
+    ribbon(reaches, false)
+}
+
+/// How bright the underside is against the top, and how much of what is
+/// behind it comes through.
+///
+/// **You climb this looking at its belly.** Your eye is `EYE` over a deck
+/// rising at better than twenty degrees, so three and a half metres ahead
+/// the deck is above you and stays above you the rest of the way: from the
+/// middle of the climb almost the whole view is the underside, with a band
+/// of the top at the crest. Drawn at the same `glow` as the top, which is
+/// what it was until 2026-11-11, the two read as two ribbons lying on each
+/// other and the band at the crest reads as a ledge. Jake, with a picture:
+/// the bridge has a slight ledge, looks like a glitch.
+///
+/// **Dimmer and seen through, rather than either alone.** Dark alone makes
+/// the climb a black hump with a rainbow sliver on it, which throws away
+/// the thing worth walking up. Clear alone is an invisible bridge. Together
+/// the belly stays a rainbow, the top is plainly brighter, and the landing
+/// and its lit outbuildings come up through the deck while you are still
+/// climbing, which turns the arrival into something you watch rather than
+/// something that appears over a crest.
+///
+/// Jake picked these off four pairs rendered side by side.
+pub const SOFFIT_LIT: f32 = 0.34;
+pub const SOFFIT_SEE: f32 = 0.52;
+
+/// What the underside is multiplied by, which is [`glow`] dimmed and let
+/// through.
+///
+/// **Not `glow() * SOFFIT_LIT`.** That scales the alpha with the colour, so
+/// one number would be setting both and they are not the same question. The
+/// first build of this did exactly that and came out at 0.18 clear by
+/// accident, which is how the idea turned up at all.
+pub fn soffit_glow() -> Vec4 {
+    let lit = glow() * SOFFIT_LIT;
+
+    Vec4::new(lit.x, lit.y, lit.z, SOFFIT_SEE)
+}
+
+/// The underside of that ribbon, which is drawn by itself so it can be
+/// dimmer than the top. See [`SOFFIT_LIT`].
+pub fn soffit_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
+    ribbon(reaches, true)
+}
+
+/// The deck's strips: the underside when `soffit`, and the top and the two
+/// edges when not.
+fn ribbon(reaches: f32, soffit: bool) -> blitzkit::mesh::MeshData {
     use blitzkit::mesh::Vertex;
 
     let along = stations(reaches);
@@ -1632,8 +1681,17 @@ pub fn deck_mesh(reaches: f32) -> blitzkit::mesh::MeshData {
     // between and which way it looks. The corners are numbered round it:
     // 0 top south, 1 top north, 2 under north, 3 under south.
     let strips: [(usize, usize, i32); 4] = [(0, 1, 0), (1, 2, 1), (2, 3, 2), (3, 0, 3)];
+    // **Split by which way the strip looks and not by its place in the
+    // list.** `2` is the one whose normal is `-over`, which is the whole of
+    // what makes it the underside, and a strip reordered here would carry
+    // its own answer with it.
+    let want: Vec<(usize, usize, i32)> = strips
+        .iter()
+        .copied()
+        .filter(|(_, _, looks)| (*looks == 2) == soffit)
+        .collect();
 
-    for (near, far, looks) in strips {
+    for (near, far, looks) in want {
         let first = vertices.len() as u32;
 
         for (at, middle) in along.iter().enumerate() {
@@ -1834,6 +1892,67 @@ pub mod tests {
         }
 
         trail
+    }
+
+    /// Spec 0054: the deck's underside is its own strip, dimmer than the
+    /// top and seen through, and still a rainbow.
+    ///
+    /// **Asked as the gap between the two and not as either number.** The
+    /// fault was that the belly and the top were one value, so the two
+    /// could only ever agree; what matters is that they differ, which is
+    /// what this holds while leaving Jake free to move both. The bounds at
+    /// each end are his words: obviously a rainbow, and not an invisible
+    /// bridge.
+    #[test]
+    fn the_belly_is_dimmer_than_the_top_and_still_a_rainbow() {
+        let top = glow();
+        let belly = soffit_glow();
+
+        assert!(
+            belly.x < top.x * 0.75,
+            "the belly is {} against a top of {}",
+            belly.x,
+            top.x
+        );
+        assert!(
+            belly.x > top.x * 0.1,
+            "the belly is {}, which is a black hump",
+            belly.x
+        );
+        assert!(
+            belly.w < 0.8 && belly.w > 0.25,
+            "the belly is {} through, which is a pane or a hole",
+            belly.w
+        );
+        assert_eq!(top.w, 1.0, "the top is seen through");
+    }
+
+    /// And splitting it off lost no strip: the deck keeps three of the
+    /// four and the underside is the fourth.
+    ///
+    /// **A control the picture tests cannot be.** A strip dropped from both
+    /// meshes is a hole in the bridge that no reference of this building
+    /// looks at, and one left in both is the fight this change was made to
+    /// end, drawn twice.
+    #[test]
+    fn the_four_strips_are_split_three_and_one() {
+        let deck = deck_mesh(REACHES);
+        let belly = soffit_mesh(REACHES);
+
+        assert_eq!(
+            deck.indices.len(),
+            belly.indices.len() * 3,
+            "the deck has {} indices against the underside's {}",
+            deck.indices.len(),
+            belly.indices.len()
+        );
+        assert_eq!(
+            deck.vertices.len(),
+            belly.vertices.len() * 3,
+            "the deck has {} vertices against the underside's {}",
+            deck.vertices.len(),
+            belly.vertices.len()
+        );
     }
 
     /// One question short of done, which is what the bridge must not show

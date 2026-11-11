@@ -770,6 +770,7 @@ struct Arcade {
     /// The box one piece of the bridge's deck is drawn on, and the rainbow
     /// laid across its width. Specs 0054 and 0055.
     deck: Option<MeshId>,
+    soffit: Option<MeshId>,
     rainbow: Option<TextureId>,
     /// And what is cut into the stone at its foot: the carved face, the
     /// stone it is cut in, and the name in letters under it.
@@ -1275,6 +1276,7 @@ impl Arcade {
             litter: Vec::new(),
             heads: Vec::new(),
             deck: None,
+            soffit: None,
             rainbow: None,
             runes: None,
             carving: None,
@@ -2695,6 +2697,18 @@ impl Arcade {
         // `bridge::KERB_UP`.
         for kerb in self.kerbs.iter().flatten() {
             scene.push_material(*kerb, &Transform::at(Vec3::ZERO), aim::KERB, aim::DULL);
+        }
+
+        // the underside, dimmer and seen through, before the top: it is
+        // the face you spend the climb looking at. See `bridge::SOFFIT_LIT`.
+        if let Some(soffit) = self.soffit {
+            scene.push_textured(
+                soffit,
+                rainbow,
+                &Transform::at(Vec3::ZERO),
+                bridge::soffit_glow(),
+                aim::VOID,
+            );
         }
 
         scene.push_textured(
@@ -6444,6 +6458,7 @@ impl Game for Arcade {
             .map(|tree| renderer.add_mesh(&garden::trunk_mesh(tree)))
             .collect();
         self.deck = Some(renderer.add_mesh(&bridge::deck_mesh(self.room.reaches)));
+        self.soffit = Some(renderer.add_mesh(&bridge::soffit_mesh(self.room.reaches)));
         self.rainbow = Some(renderer.add_texture(&bridge::rainbow()));
         // **Stencilled and not drawn.** `drawn` keeps the ground opaque,
         // which is right for the nook's sign because a dark plate behind
