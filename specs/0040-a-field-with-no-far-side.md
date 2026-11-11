@@ -544,8 +544,6 @@ field's planting is.
   world. — `field::tests::a_body_let_loose_outdoors_stays_in_the_world`
 - And the whole of it, from outside the building looking
   back. — `tests::the_field_is_drawn`
-- The hotel's corridor, from out in the field, dressed and running to the
-  vanishing point. — `tests::the_corridor_from_the_field_is_drawn`
 - The imaginarium stands on the roof under it, with no daylight between
   them. — `aloft::outside_tests::the_mass_reaches_the_roof_it_stands_on`
 - And its faces run from that roof to the top of the
@@ -573,8 +571,6 @@ field's planting is.
   it. — `room::tests::the_plaster_sits_on_the_wall_and_not_on_the_lid`
 - And the strip over a borrowed wall is one of the faces
   found. — `room::tests::the_strip_over_a_shorter_room_is_dressed`
-- The hotel's corridor is roofed, all of it, a hair above its own
-  shell. — `aleph::tests::the_corridors_roof_covers_its_shell`
 
 ### Verified by hand
 
@@ -592,3 +588,17 @@ field's planting is.
 - The ground has no lit path down the middle of it that turns with you.
   The first build had one: a broad specular highlight on a surface this
   size, which is the garden pond's note on a field.
+
+## 2026-11-10: the corridor is not out here any more
+
+Two of the criteria above were about spec 0029's corridor, which ran two
+kilometres through this field at ground level: that it was dressed in the
+garden's plaster rather than left a blank grey shell, and that it was roofed
+all of it, because from the air you otherwise looked along two kilometres of
+floor and door numbers. Spec 0062 took the corridor out, so both are struck
+and the kept picture that held the first of them has gone with it.
+
+What that leaves is a field with nothing of the building in it but the
+building, which is what this spec wanted in the first place. The one thing
+on the horizon is still nobody's, and is still the only part of this spec
+that is a question.

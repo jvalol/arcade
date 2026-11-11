@@ -216,10 +216,9 @@ other.
 
 ## Acceptance criteria
 
-- The unnumbered door is in the drawn window wherever you stand near the
-  lobby, so it is passed rather than hunted. — `aleph::tests::the_blank_door_is_passed`
-- Its plaque is blank and every other plaque in view is
-  not. — `tests::one_door_in_the_corridor_has_no_number`
+- The door is in the lobby's west wall, wide enough to walk through with its
+  leaf standing open, and you can walk in from the gallery and reach the head
+  of the page. — `aleph::tests::the_one_door_you_walk_through_is_wide_enough`, `aleph::tests::walked_from_the_gallery_into_the_register`
 - The book answers for any row and any column, however far past what is
   drawn. — `register::tests::there_is_always_another_row`
 - And the strip over the corridor's wall is closed, since this room is nearly
@@ -265,3 +264,27 @@ this building has never drawn a person.
 entry and is written in aleph's own `rule.rs` already. Related and separate.
 
 **Explaining what ℵ₀ is.** The hotel does not and neither does this.
+
+## 2026-11-10: the way in moved
+
+**Spec 0062 took the corridor out and the blank door with it.** The register
+is reached through a door in the hotel lobby's west wall now, on the same
+middle line as the gallery's doorway and the back room's, and the room runs
+west from it with the book on your left as you walk.
+
+What that cost is the joke this spec chose its siting for: the room proving
+not everything can be numbered stood behind the one door in forty with no
+number on it. With no numbered doors left there is nothing for a blank one
+to be blank against, so the sign over the door carries the claim instead and
+the door under it is the way to the book that disproves it.
+
+Nothing else here changed. The book is the same book, the diagonal is the
+same walk, and the desk still says yes.
+
+## 2026-11-10: two of these criteria went with the corridor
+
+The door being in the drawn window wherever you stand, so that it is passed
+rather than hunted, and its plaque being the only blank one in view, were
+both facts about standing in a corridor of numbered doors. Spec 0062 took
+that corridor out. What replaces them is the one thing that still has to be
+true of the way in: that you can walk it.

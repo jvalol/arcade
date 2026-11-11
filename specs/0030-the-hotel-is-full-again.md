@@ -1,6 +1,6 @@
 # 0030 The hotel is full again
 
-**Status:** implemented
+**Status:** cut on 2026-11-10 by spec 0062, which took the hotel's corridor and the long hall out of the building. What is written below is the record of a room that was built and stood for three weeks, and the tests it cites went with it.
 **Date:** 2026-10-20
 **Built:** 2026-10-20, the same day it was written, because Jake walked spec
 0029's corridor again and the four things he found were this spec: the lights
@@ -178,3 +178,20 @@ enough for.
 
 **The corridor's fittings, lighting and shell**, which are spec 0029's and
 are built.
+
+## 2026-11-10: cut by spec 0062
+
+**Jake, having played it: the hotel is arguably the least interesting room
+or feature, and worth dropping entirely.** The corridor, the forty drawn
+doors, the four arrivals, both waves, the people crossing and spec 0035's
+long hall all came out. What stayed is the lobby, the desk, the board, the
+sign and the register behind the one door left in the west wall.
+
+The reasons are in [0062](0062-the-hotel-comes-down-to-its-desk.md). The
+short of it is that this was the fourth round on one complaint, each fix
+correct and none of them changing what the room was: a desk you press and
+then watch.
+
+Everything above is left as written. What is wrong with it is not the
+arithmetic, which held up, and the arithmetic is the part worth keeping a
+record of.

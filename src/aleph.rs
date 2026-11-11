@@ -1,35 +1,32 @@
-//! The hotel, through the doorway in the gallery's west wall. Spec 0029.
+//! The hotel, through the doorway in the gallery's west wall. Specs 0029
+//! and 0062.
 //!
-//! A desk you arrive at, and a corridor of numbered doors running west with
-//! no end to it. It is aleph's hotel, built as a game on 2026-10-04 and
-//! parked the same night, rebuilt here because what it is is architecture
-//! and this is a building.
+//! A lobby you arrive in, a desk, a board of keys with nothing in any hole,
+//! and a sign saying every room is taken and there are always more rooms.
+//! One door leaves it, west, and what is behind that door is the book the
+//! sign would have to be kept in: `register`, which is Cantor's diagonal.
 //!
-//! Rooms run 1, 2, 3 and on without end, odd on your left as you walk in and
-//! even on your right. A shut door with light under it is a room with
-//! somebody in it. A door standing open on a dark room is free. Nobody is
-//! drawn: the paradox is about people who are never shown, and this building
-//! has never drawn one.
+//! **Spec 0029 built a corridor of numbered doors here and spec 0062 took
+//! it out.** Two kilometres of it, forty doors drawn round wherever you
+//! stood, four arrivals and a wave of occupancy running away from you down
+//! the length of it. Jake played it and said it was the least interesting
+//! room in the building, which the repo had been telling him for three
+//! weeks in its own words: opening and closing doors does not demonstrate
+//! the point, and no number of doors is the number that matters.
 //!
-//! Where everything is, is arithmetic, and arithmetic can be checked without
-//! a window.
+//! What is left is the half that was always something you do. You walk the
+//! book, you come out carrying a guest who is on no line of it, and you
+//! hand them to the desk. The desk says yes, and it does not help.
+//!
+//! Where everything is, is arithmetic, and arithmetic can be checked
+//! without a window.
 
 use blitzkit::collision::Aabb;
 use glam::{vec3, Vec3};
 
 use crate::room::{gallery_wall, GALLERY_WIDE, THICK};
 
-/// How far apart the rooms are along the corridor, and how wide and high the
-/// corridor is inside.
-///
-/// aleph's own numbers rather than new ones. Two lists of one thing drift,
-/// and the game is the other list.
-pub const APART: f32 = 1.5;
-pub const ACROSS: f32 = 3.2;
-pub const TALL: f32 = 2.4;
-
-/// A door, and how far it swings into the corridor.
-pub const DOOR_WIDE: f32 = 1.05;
+/// A door, and how far it stands open.
 pub const DOOR_TALL: f32 = 1.9;
 pub const DOOR_THICK: f32 = 0.07;
 
@@ -43,35 +40,22 @@ pub const DOOR_THICK: f32 = 0.07;
 pub const DOOR_GAP: f32 = 0.012;
 pub const SWINGS_TO: f32 = 1.75;
 
-/// How wide the one door with no number is.
+/// How wide the register's door is.
 ///
 /// **Wider than a bedroom door, because it is the only one you walk
-/// through.** The other forty are scenery: they open and shut and nobody
-/// passes them. This one is the only way into the register, and at
-/// `DOOR_WIDE` its opening was 1.04 against a body 0.90 across, which is
+/// through.** Spec 0029's forty were scenery: they opened and shut and
+/// nobody passed them, and this was the one way into the register. At their
+/// width of 1.05 its opening was 1.04 against a body 0.90 across, which is
 /// 0.07 of room either side. Driving an approach into it a frame at a time,
 /// 65, 66 and 67 got through, 68 and 69 did not, and 70 did. A player who
 /// bounces off it twice concludes the room is not there.
 ///
+/// Spec 0062 took the forty away, so this is the only door width this room
+/// has and the number it beat is written out above rather than named.
+///
 /// It is a hall of records through there, and an archway to one has no
 /// reason to be the size of a bedroom door.
 pub const BLANK_WIDE: f32 = 1.4;
-
-/// How wide door `n` is, which is the one above for the blank and
-/// `DOOR_WIDE` for every room.
-pub fn door_wide(n: u64) -> f32 {
-    if n == BLANK {
-        BLANK_WIDE
-    } else {
-        DOOR_WIDE
-    }
-}
-
-/// The plaque beside each doorway, and where it sits.
-pub const PLAQUE_WIDE: f32 = 0.3;
-pub const PLAQUE_TALL: f32 = 0.22;
-pub const PLAQUE_BESIDE: f32 = 0.72;
-pub const PLAQUE_UP: f32 = 1.35;
 
 /// How finely a room's number is drawn into its plaque.
 ///
@@ -79,114 +63,26 @@ pub const PLAQUE_UP: f32 = 1.35;
 /// forty small textures, which is less than one cabinet's screenshot.
 pub const PLAQUE_TEXELS: f32 = 64.0;
 
-/// How many rooms are drawn at once.
-///
-/// **A window and not a count.** The first build drew rooms 1 to 40 at fixed
-/// places and walled off what was past them, and Jake walked to room 36 and
-/// found the doors stop while the hallway goes on. In a hotel whose premise
-/// is that there is always more of it than you can see, reaching the last
-/// door is the one thing that must not happen.
-///
-/// So this is how many are drawn around wherever you are standing. Which
-/// forty they are is [`window`] below. The arithmetic for where room `n`
-/// stands always took any `n`; all that was ever fixed was the range.
-pub const DRAWN: u64 = 40;
-
-/// Which rooms are drawn from where you are standing.
-///
-/// Centred on the nearest room, so the corridor is always the same depth of
-/// doors ahead of you and behind you, and never runs out in either
-/// direction. Room numbers start at 1, so near the lobby the window simply
-/// starts there.
-pub fn window(at: Vec3) -> std::ops::RangeInclusive<u64> {
-    let near = nearest(at);
-    let half = DRAWN / 2;
-    let from = near.saturating_sub(half).max(1);
-
-    from..=(from + DRAWN - 1)
-}
-
-/// Which room you are nearest, by where you are along the corridor.
-///
-/// The other half of [`at`], which puts room `n` at an `x`. This takes an `x`
-/// back to an `n`, and the two have to agree or the corridor is numbered one
-/// way and drawn another.
-pub fn nearest(at: Vec3) -> u64 {
-    let (west, _) = span();
-    let along = (west - at.x) / APART;
-
-    // two rooms share each step along, one either side, and `at` puts room n
-    // at n / 2 steps, half a step in from the lobby. So a step along is two
-    // rooms, and the half step is the one the blank door of spec 0031 took.
-    //
-    // **The inverse of `at` and nothing else.** When `at` was shifted a slot
-    // to make room for that door, this went one out and the corridor was
-    // numbered one way and drawn another, which its own test caught.
-    let n = (along * 2.0).round() - 1.0;
-
-    if n < 1.0 {
-        1
-    } else if n > MOST as f32 {
-        MOST
-    } else {
-        n as u64
-    }
-}
-
-/// The highest room this corridor can number.
-///
-/// Where a float stops resolving a metre is 16,777,216, which at 1.5 metres a
-/// room is this. Spec 0029 says eleven million is not infinity and to say so
-/// on the plaque rather than hide it.
-pub const MOST: u64 = 11_184_810;
-
-/// Where the light under a shut door lies, as a strip on the floor.
-///
-/// **On the floor and not in it.** A quad level with the floor is two faces
-/// in one plane, which is the fault this building has fought seven times. It
-/// stands a millimetre and a half proud, which is under a tenth of what the
-/// eye resolves at this distance and is enough to settle the depth test.
-pub const STRIP_UP: f32 = 0.0015;
-
-/// How far the light reaches out from under the door, and how wide it is.
-///
-/// Narrower than the door, because a door sits in a frame and the gap is
-/// under the leaf rather than under the opening.
-///
-/// **In steps rather than one slab.** The first build was a single quad
-/// sixteen centimetres out at one brightness, and Jake walked it and called
-/// it a block, which it was: light under a door is brightest at the threshold
-/// and gone a hand's width away, and a rectangle of even white is a tile.
-/// These are the reaches of three quads laid over each other, each dimmer and
-/// further out than the last, which is a falloff drawn in three steps and
-/// wants no texture and no guess about which way a quad's uvs run.
-pub const STRIP_STEPS: [(f32, f32); 3] = [(0.045, 1.0), (0.10, 0.45), (0.17, 0.16)];
-pub const STRIP_WIDE: f32 = DOOR_WIDE - 0.06;
-
-// How far the furthest of them reaches was a `STRIP_OUT` of its own saying
-// 0.17 beside a step that also said 0.17. Two lists of one thing, and clippy
-// found it by noticing nothing outside a test ever read the constant.
-// Whatever wants the furthest reach takes it off the steps.
-
-// How bright the strip is, is `aim::HOTEL_LIGHT` and is not named twice
-// here. This file had a `STRIP_GLOW` of 2.1 beside a colour in `aim` that
-// already said the same thing, which is two lists of one thing and is the
-// fault under most of the others in this building.
-
 /// How deep the lobby is, west from the gallery's wall, and how wide.
 ///
 /// **Not the size of the back room opposite.** That one is a maintenance
 /// room and is the space that was left over. This is what a hotel is for:
-/// you arrive in it, you stand at a desk, and a corridor leaves it. Every
-/// room in this building has been too small on its first build, so the
-/// walkways were laid out first and the furniture fitted to them.
+/// you arrive in it and you stand at a desk. Every room in this building has
+/// been too small on its first build, so the walkways were laid out first
+/// and the furniture fitted to them.
+///
+/// It was laid out as the mouth of a corridor, with the desk set aside so as
+/// not to stand across the way down it. Spec 0062 took the corridor out and
+/// left the room its size, because what the size was for was standing room
+/// and that has not changed.
 pub const DEEP: f32 = 8.0;
 
-/// And how high, which is the gallery's rather than the corridor's.
+/// And how high, which is the gallery's.
 ///
-/// A lobby is a room you arrive in and the corridor is a thing you go down,
-/// so the corridor being lower than the room it leaves is what says which is
-/// which. The corridor is [`TALL`], a little over two and a half.
+/// A lobby is a room you arrive in, and spec 0029 made the corridor leaving
+/// it lower so that the difference said which was which. There is no
+/// corridor now and this room keeps the gallery's height, which is what a
+/// room you arrive in wants anyway.
 pub const LOBBY_TALL: f32 = crate::room::TALL;
 
 /// Where the lobby's inside begins, which is the far face of the gallery's
@@ -271,233 +167,7 @@ pub fn floor(reaches: f32) -> Aabb {
     )
 }
 
-/// How far west the corridor's shell is built.
-///
-/// Spec 0029 says the corridor has no end and that where it actually stops is
-/// where a float stops resolving a metre. Nothing is built that far: this is
-/// the shell for what is drawn, and it runs four rooms past [`DRAWN`].
-///
-/// **Running it past the camera's far plane was tried and taken back out.**
-/// A hundred and ten metres of corridor is a hundred and ten metres of
-/// building, and this one is already 72 kilometres across because spec 0018
-/// puts the planets out at true scale. Two things broke at once. The sun gets
-/// one shadow map over what it is given, so the garden's shadows went coarse
-/// in half a per cent of its pixels, which `the_garden_is_drawn` caught. And
-/// the reach fill has a cell budget, which the wider world put it over, so it
-/// refused and came back empty: two of this building's own tests said "the
-/// fill reached nothing at all".
-///
-/// The sun's half of that is fixed and stays fixed, because an indoor room
-/// does not belong in the sun's map whatever its length. The fill's half is
-/// what sets this number. What the far end looks like is a lighting question
-/// rather than a length one, and it is [`END`] below.
-pub fn corridor_west() -> f32 {
-    let (west, _) = span();
-
-    west - RUNS
-}
-
-/// How long the corridor's shell actually is.
-///
-/// Long enough that nobody walks to the end of it: two thousand metres is
-/// eight minutes at this building's 4.2 m/s, and the drawn rooms follow you
-/// the whole way.
-///
-/// It is not eleven million rooms of shell and it does not pretend to be.
-/// What stops it being longer is written in `room::building`: the reach fill
-/// has a cell budget and the hotel is left out of the box it is given, which
-/// is the price of this length and is named there.
-pub const RUNS: f32 = 2000.0;
-
-/// The two long faces the corridor shows the field, and the cope along the
-/// top of each. Spec 0040.
-///
-/// **Two kilometres of shell at ground level, running straight through a
-/// field.** It was never meant to be seen from outside, because until spec
-/// 0040 there was no outside: from the grass it was a blank grey wall
-/// going to the horizon. Dressed in the garden's own plaster with the
-/// garden's own cope, what it is instead is the one view in this building
-/// of how long spec 0029's corridor actually is. The endlessness is a
-/// thing you look at rather than a thing you are told.
-///
-/// Spec 0035's corridor is the same shape and is not dressed; it is not
-/// drawn from outside at all. Two of these on one skyline is the same
-/// sentence said twice. See `twine::inside`.
-/// And the top of it, which from the air was open: the shell's ceiling is a
-/// collider and the drawing of it faces down into the corridor, so from
-/// forty metres up you looked along two kilometres of floor, doors and door
-/// numbers. Spec 0040.
-///
-/// It runs the whole length of that shell. The lobby's lid is eighty
-/// centimetres higher and covers this end of it in plan, so the two never
-/// meet in a plane and there is nothing to butt: the corridor is the lower
-/// of the two roofs and the junction is a step rather than a join.
-pub fn corridor_roof(reaches: f32) -> (Vec3, glam::Vec2) {
-    let (west, _) = span();
-    let middle = middle_z(reaches);
-    let (from, to) = (middle - ACROSS * 0.5 - THICK, middle + ACROSS * 0.5 + THICK);
-    let (near, far) = (corridor_west(), west + THICK);
-
-    (
-        vec3((near + far) * 0.5, TALL + THICK + 0.01, middle),
-        glam::vec2(far - near, to - from),
-    )
-}
-
-pub fn corridor_faces(reaches: f32) -> Vec<(Aabb, Vec3)> {
-    let (west, _) = span();
-    let middle = middle_z(reaches);
-    let out = ACROSS * 0.5 + THICK;
-
-    [-1.0f32, 1.0]
-        .iter()
-        .map(|side| {
-            let on = middle + side * out;
-
-            (
-                Aabb::new(
-                    vec3(corridor_west(), 0.0, on - 0.01),
-                    vec3(west, TALL + THICK, on + 0.01),
-                ),
-                vec3(0.0, 0.0, *side),
-            )
-        })
-        .collect()
-}
-
-/// The corridor's floor, which laps into the lobby's for the same reason the
-/// lobby's laps into the gallery's.
-pub fn corridor_floor(reaches: f32) -> Aabb {
-    let (west, _) = span();
-    let middle = middle_z(reaches);
-
-    Aabb::new(
-        vec3(corridor_west(), -THICK, middle - ACROSS * 0.5 - THICK),
-        vec3(west + THICK, 0.0, middle + ACROSS * 0.5 + THICK),
-    )
-}
-
-/// Where room `n` stands: which side of the corridor, and how far down it.
-///
-/// Odd on the left as you walk in and even on the right, which is not
-/// decoration. The rule that doubles everyone sends every guest into an even
-/// room, so the entire left wall opens in one move, and that is the clearest
-/// picture this thing has of freeing infinitely many rooms.
-///
-/// Walking west, left is `+z`. Room 1 is the first on that side and room 2
-/// the first on the other, so the two sides alternate as you look along it.
-pub fn at(reaches: f32, n: u64) -> Vec3 {
-    let (west, _) = span();
-    let middle = middle_z(reaches);
-    // **Counted from nought and not from one.** The place room 1 used to
-    // stand in is the one door in this corridor with no number on it, per
-    // spec 0031, which is where room 0 would be if nought were a counting
-    // number. Everything moved one slot along to make space, and the blank
-    // drops into the alternating pattern exactly: on the even side and 1.5
-    // from room 2, which is the spacing every other same-side pair has.
-    let along = n as f32 * 0.5;
-    let side = if n % 2 == 1 { 1.0 } else { -1.0 };
-
-    vec3(
-        west - APART * 0.5 - along * APART,
-        0.0,
-        middle + side * ACROSS * 0.5,
-    )
-}
-
-/// Whether room `n` is on the left as you walk in.
-pub fn on_the_left(n: u64) -> bool {
-    n % 2 == 1
-}
-
-/// Where the one door with no number stands. Spec 0031.
-///
-/// Room nought's place, on the even side, and the first door you pass. It is
-/// not a room: its plaque is blank, which is the whole of the signposting and
-/// is also the joke, since the room that proves not everything can be
-/// numbered is behind the one door that is not.
-pub const BLANK: u64 = 0;
-
-pub fn blank_door(reaches: f32) -> Vec3 {
-    at(reaches, BLANK)
-}
-
-/// The strip of light under room `n`'s door, when somebody is in it.
-///
-/// It lies on the corridor's floor at the threshold, reaching [`STRIP_OUT`]
-/// into the corridor. Spec 0029: this is what carries once a door is smaller
-/// than a pixel, because what reads at distance is contrast and not size.
-pub fn strip(reaches: f32, n: u64, out: f32) -> Aabb {
-    let stands = at(reaches, n);
-    let inward = if on_the_left(n) { -1.0 } else { 1.0 };
-    let (near, far) = {
-        // the leaf's outer face and not its middle. A strip measured from the
-        // middle has half its length inside the door.
-        let face = stands.z + inward * DOOR_THICK * 0.5;
-        let reaches = face + inward * out;
-
-        (face.min(reaches), face.max(reaches))
-    };
-
-    Aabb::new(
-        vec3(stands.x - STRIP_WIDE * 0.5, STRIP_UP, near),
-        vec3(stands.x + STRIP_WIDE * 0.5, STRIP_UP, far),
-    )
-}
-
-/// What closes the corridor's far end.
-///
-/// There has to be something there, because a shell that simply stops leaves
-/// the floor, the walls and the ceiling ending on an edge against the clear
-/// colour, and an edge is a thing you can see. So it is closed, and what
-/// closes it is drawn in the near black this building keeps for the space
-/// behind the wall.
-///
-/// **Whether that reads as darkness or as a wall is Jake's to say.** It is
-/// four rooms past the last drawn one and the corridor is unlit at that
-/// distance, so the arithmetic says it cannot be told from the dark. The
-/// arithmetic has been wrong about how a thing reads before.
-pub fn end(reaches: f32) -> Aabb {
-    let far = corridor_west();
-    let middle = middle_z(reaches);
-
-    Aabb::new(
-        vec3(far - THICK, 0.0, middle - ACROSS * 0.5 - THICK),
-        vec3(far, TALL, middle + ACROSS * 0.5 + THICK),
-    )
-}
-
-/// The leaf of room `n`'s door where it stands, as a box.
-///
-/// Axis aligned, because everything solid in this building is, so a door
-/// swung half way is the box its two ends fit in. The baths' door is built
-/// the same way and for the same reason.
-///
-/// This is what you point at and what stops you. A door that is drawn and
-/// not solid is a door you walk through, which is what the first build of
-/// this room shipped.
-pub fn leaf_box(reaches: f32, n: u64, open: f32) -> Aabb {
-    let stands = at(reaches, n);
-    let inward = if on_the_left(n) { -1.0 } else { 1.0 };
-    let wide = door_wide(n);
-    let swing = open.clamp(0.0, 1.0) * SWINGS_TO;
-    let hinge = vec3(stands.x - wide * 0.5, 0.0, stands.z);
-    let tip = hinge + vec3(swing.cos(), 0.0, inward * swing.sin()) * wide;
-
-    // **Across the leaf, not around the whole box.** This inflated the
-    // hinge-to-tip box by `DOOR_THICK` on every side, which is right for the
-    // two faces of a thin leaf and wrong for its ends: it put 0.07 of solid
-    // past the hinge, inside the opening the door had just cleared. A leaf
-    // is a rectangle and its corners are where its corners are.
-    let across = vec3(-swing.sin(), 0.0, inward * swing.cos()) * DOOR_THICK * 0.5;
-    let corners = [hinge + across, hinge - across, tip + across, tip - across];
-    let low = corners.iter().fold(corners[0], |was, is| was.min(*is));
-    let high = corners.iter().fold(corners[0], |was, is| was.max(*is));
-
-    Aabb::new(vec3(low.x, 0.0, low.z), vec3(high.x, DOOR_TALL, high.z))
-}
-
-/// Everything solid in here: the lobby's shell, the corridor's, and the desk.
+/// Everything solid in here: the lobby's shell, the desk and the door.
 ///
 /// The gallery's wall is not in this list. It stands already and is cut for
 /// the doorway by [`gallery_west`], which `room.rs` asks for.
@@ -548,99 +218,88 @@ pub fn lobby_north(reaches: f32) -> Aabb {
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = span();
     let (from, to) = across(reaches);
-    let middle = middle_z(reaches);
-    let corridor_from = middle - ACROSS * 0.5;
-    let corridor_to = middle + ACROSS * 0.5;
+    let (door_from, door_to) = book_door(reaches);
 
     vec![
         floor(reaches),
-        corridor_floor(reaches),
         desk(reaches),
-        // the lobby's far wall, in two pieces with the other corridor's
-        // mouth between them. Spec 0035: a second hall leaves this room,
-        // east of the desk, so the desk stands between the two of them.
+        // the lobby's far wall, whole. Spec 0035 put a second two kilometre
+        // hall through it, east of the desk, and spec 0062 took that hall
+        // out: a comparison between two corridors is worth nothing once
+        // there are no corridors.
         Aabb::new(
             vec3(west - THICK, 0.0, from - THICK),
-            vec3(
-                crate::twine::middle_x() - crate::twine::ACROSS * 0.5,
-                LOBBY_TALL,
-                from,
-            ),
-        ),
-        Aabb::new(
-            vec3(
-                crate::twine::middle_x() + crate::twine::ACROSS * 0.5,
-                0.0,
-                from - THICK,
-            ),
             vec3(east, LOBBY_TALL, from),
         ),
-        // and the head over that mouth, since the hall through it is the
-        // corridor's height and this room is taller
-        Aabb::new(
-            vec3(
-                crate::twine::middle_x() - crate::twine::ACROSS * 0.5,
-                TALL,
-                from - THICK,
-            ),
-            vec3(
-                crate::twine::middle_x() + crate::twine::ACROSS * 0.5,
-                LOBBY_TALL,
-                from,
-            ),
-        ),
         lobby_north(reaches),
-        // and its west wall, in two pieces with the corridor's mouth between
-        // them
+        // and its west wall, in two pieces with the register's door between
+        // them.
+        //
+        // **One opening in it rather than two.** Spec 0029's corridor left
+        // through the whole middle of this wall, and the register's own door
+        // stood a stride inside that corridor. Spec 0062 took the corridor
+        // out and moved the door here, so this wall is cut once, for the one
+        // way out of this room there is.
         Aabb::new(
             vec3(west - THICK, 0.0, from - THICK),
-            vec3(west, LOBBY_TALL, corridor_from),
+            vec3(west, LOBBY_TALL, door_from),
         ),
         Aabb::new(
-            vec3(west - THICK, 0.0, corridor_to),
+            vec3(west - THICK, 0.0, door_to),
             vec3(west, LOBBY_TALL, to + THICK),
         ),
-        // the head over the corridor's mouth, since the corridor is lower
-        // than the room it leaves
+        // and the head over it, which starts at the door's own head rather
+        // than at a corridor's ceiling, because what is through it now is a
+        // room nearly twice this one's height and the opening is a doorway.
         Aabb::new(
-            vec3(west - THICK, TALL, corridor_from),
-            vec3(west, LOBBY_TALL, corridor_to),
+            vec3(west - THICK, DOOR_TALL, door_from),
+            vec3(west, LOBBY_TALL, door_to),
         ),
         lid(reaches),
-        end(reaches),
-        // the corridor's two walls and its ceiling, run past the drawn rooms.
-        //
-        // **The even side is in two pieces with the blank doorway between
-        // them**, per spec 0031, the same way the gallery's walls are cut for
-        // the hotel and the back room. The register built its own near wall
-        // first, in exactly this plane, which is two faces in one plane and
-        // is the fault this building has fought seven times. Jake walked the
-        // corridor and saw the speckle.
-        Aabb::new(
-            vec3(corridor_west(), 0.0, corridor_from - THICK),
-            vec3(
-                blank_door(reaches).x - BLANK_WIDE * 0.5,
-                TALL,
-                corridor_from,
-            ),
-        ),
-        Aabb::new(
-            vec3(
-                blank_door(reaches).x + BLANK_WIDE * 0.5,
-                0.0,
-                corridor_from - THICK,
-            ),
-            vec3(west + THICK, TALL, corridor_from),
-        ),
-        Aabb::new(
-            vec3(corridor_west(), 0.0, corridor_to),
-            vec3(west + THICK, TALL, corridor_to + THICK),
-        ),
-        Aabb::new(
-            vec3(corridor_west(), TALL, corridor_from - THICK),
-            vec3(west + THICK, TALL + THICK, corridor_to + THICK),
-        ),
+        book_leaf(reaches),
     ]
+}
+
+/// Where the register's door stands in the lobby's west wall, as the two `z`
+/// it runs between. Spec 0062.
+///
+/// On the lobby's own doorway line, so the gallery's door, this one and the
+/// back room's are all on one axis: stand in any of them and you look
+/// through the others.
+///
+/// **Its own width, wider than a numbered room's door was.** This is the one
+/// door in this room anybody walks through, and at `DOOR_WIDE` its opening
+/// was 1.04 against a body 0.90 across.
+pub fn book_door(reaches: f32) -> (f32, f32) {
+    let middle = middle_z(reaches);
+
+    (middle - BLANK_WIDE * 0.5, middle + BLANK_WIDE * 0.5)
+}
+
+/// Its leaf where it stands, as a box: what you point at and what stops you.
+///
+/// **Standing open, hung on its hinge, and it does not shut.** It was a shut
+/// painted door among forty shut painted doors, and Jake walked past it and
+/// said it was not obviously a door you could go through. A door that is
+/// drawn and not solid is a door you walk through, which is what the first
+/// build of this room shipped.
+///
+/// Axis aligned, because everything solid in this building is, so the leaf
+/// is the box its two ends fit in. Across the leaf and not around the whole
+/// box: inflating the hinge-to-tip box on every side put `DOOR_THICK` of
+/// solid past the hinge, inside the opening the door had just cleared.
+pub fn book_leaf(reaches: f32) -> Aabb {
+    let (west, _) = span();
+    let (from, _) = book_door(reaches);
+    let swing = SWINGS_TO;
+    let hinge = vec3(west - THICK, 0.0, from);
+    let tip = hinge + vec3(-swing.sin(), 0.0, swing.cos()) * BLANK_WIDE;
+    let across = vec3(swing.cos(), 0.0, swing.sin()) * DOOR_THICK * 0.5;
+    let corners = [hinge + across, hinge - across, tip + across, tip - across];
+    let low = corners.iter().fold(corners[0], |was, is| was.min(*is));
+    let high = corners.iter().fold(corners[0], |was, is| was.max(*is));
+
+    Aabb::new(vec3(low.x, 0.0, low.z), vec3(high.x, DOOR_TALL, high.z))
 }
 
 /// How big the desk is and where it stands.
@@ -703,7 +362,7 @@ pub fn bell_profile(v: f32) -> (f32, f32) {
     (along, BELL_WIDE * round.max(0.04))
 }
 
-/// Where the sign hangs, which is over the corridor's mouth.
+/// Where the sign hangs, which is over the register's door.
 ///
 /// It is the one place a person is looking when they walk in, and what it
 /// says is the premise: without it the desk's numbers are reported to
@@ -711,8 +370,9 @@ pub fn bell_profile(v: f32) -> (f32, f32) {
 /// How tall a line of it is, how thick the board is, and the gap between the
 /// two lines.
 ///
-/// **No width.** The first build gave both lines one width of 2.4, which is
-/// three quarters of the corridor, and stretched each line's texture to fill
+/// **No width.** The first build gave both lines one width of 2.4, which was
+/// three quarters of the corridor it then hung in, and stretched each line's
+/// texture to fill
 /// it: sixteen characters and twenty four at the same width means two sizes
 /// of letter, and Jake's picture has the top line half again as large as the
 /// bottom. Each board takes its width from its own text now, through
@@ -727,33 +387,41 @@ pub fn bell_profile(v: f32) -> (f32, f32) {
 /// sign bigger by changing it. Held by `the_sign_hangs_in_the_band`.
 pub const SIGN_TALL: f32 = 0.17;
 
-/// How much of the corridor's mouth the longest line may take.
+/// How wide the longest line may be.
 ///
-/// The board hangs in the opening, so a line wider than the opening has its
-/// ends behind the wall: the second line came out as "E ROOMS DO NOT RUN O T"
-/// with THE and OUT lost behind the jambs. The letters are sized down from
-/// here rather than up from a height, so a longer line shrinks the sign
-/// instead of running off it.
-pub const SIGN_FITS: f32 = ACROSS - 0.55;
+/// Spec 0029 hung the board in the corridor's mouth and took this off that
+/// opening less its jambs, because a line wider than the opening had its
+/// ends behind the wall: the second came out as "E ROOMS DO NOT RUN O T"
+/// with THE and OUT lost. The letters are sized down from here rather than
+/// up from a height, so a longer line shrinks the sign instead of running
+/// off it.
+///
+/// Spec 0062 hangs it on the lobby's west wall over the register's door
+/// instead, where there is no opening to lose a word behind and the wall is
+/// six metres across. **The number is the one it was**, written out rather
+/// than derived, so the lettering is the size it has always been and no kept
+/// picture of this room moves for a change of siting.
+pub const SIGN_FITS: f32 = 2.65;
 pub const SIGN_THICK: f32 = 0.05;
 pub const SIGN_GAP: f32 = 0.05;
 
-/// How far under the corridor's head the board hangs.
+/// How far over the door's head the board hangs.
 ///
-/// Tucked up against it rather than hung in the opening. At 2.02 it was below
-/// the door heads and across the middle of the view from the lobby, which is
-/// what made it read as filling the room.
+/// Spec 0029 measured this down from the corridor's head and took three
+/// tries. At 2.02 the board was below the door heads and across the middle
+/// of the view from the lobby, which is what made it read as filling the
+/// room. At six centimetres of clearance it read as touching from any angle
+/// but square on, and Jake said the text runs into the ceiling.
 ///
-/// Then at 0.06 it cleared the head by six centimetres, which is clear in the
-/// arithmetic and reads as touching from any angle but square on: Jake said
-/// the text runs into the ceiling. Twenty centimetres is a gap you can see,
-/// and the board still stops at 1.95, above the door heads, because the
-/// lines are sized from the width of the mouth rather than from a height.
-pub const SIGN_UNDER: f32 = 0.2;
+/// Spec 0062 measures it up from the register door's head instead, since
+/// there is no corridor to hang under, and the number is chosen so the
+/// board's top lands exactly where it did: a gap you can see, well clear of
+/// the head below and of the lobby's own ceiling above.
+pub const SIGN_UNDER: f32 = 0.3;
 
-/// Where the top of the sign is, which is the head over the corridor's mouth.
+/// Where the top of the sign is, which is over the register's door.
 pub fn sign_top() -> f32 {
-    TALL - SIGN_UNDER
+    DOOR_TALL + SIGN_UNDER
 }
 
 /// What the sign says, which is the premise.
@@ -780,27 +448,15 @@ pub const SIGN_SAYS: [&str; 2] = ["EVERY ROOM TAKEN", "THERE ARE ALWAYS MORE ROO
 /// what happened was that a full hotel took another guest and nobody left,
 /// which is a sentence.
 pub const DESK_FULL: &str = "Full, and nobody has left.";
-pub const DESK_FREEING: &str = "Everybody is moving up a room.";
-
-/// And what it says while the prime powers run, which is not that.
-///
-/// **"Everybody is moving up a room" is false under this move.** Spec 0034:
-/// room 3 goes to room 8 and room 10 to room 1024, and most of the corridor
-/// is leaving rather than shuffling along. A line that describes a shuffle
-/// over a scatter is the desk telling you the wrong thing while you watch
-/// the right one.
-pub const DESK_SCATTERING: &str = "Everybody to a prime power. Nobody shares.";
-pub const DESK_SCATTERED: &str = "All of them in, and the hotel is emptier than it was.";
-pub const DESK_FILLING: &str = "The new ones are taking the rooms that opened.";
 pub const DESK_HOUSED: &str = "housed since you came in";
 
 /// The counter you stand at.
 ///
-/// **Not across the way out.** The corridor leaves the lobby's west wall on
-/// the middle line, so a desk on that line is a desk you walk round to get
-/// anywhere. It stands against the north side instead, square to the way in,
-/// so you come through the door and it is on your right with the corridor
-/// straight ahead.
+/// **Not across the way out.** The way out of this room is on the middle
+/// line, so a desk on that line is a desk you walk round to get anywhere. It
+/// stands against the far side instead, square to the way in, so you come
+/// through the gallery's door and it is on your right with the register's
+/// door straight ahead.
 pub fn desk(reaches: f32) -> Aabb {
     let (west, east) = span();
     let (from, _) = across(reaches);
@@ -823,373 +479,39 @@ pub fn waiting(reaches: f32) -> Vec3 {
     vec3((desk.min.x + desk.max.x) * 0.5, 0.0, desk.max.z + 0.62)
 }
 
-/// Who is in, and how far the last rule has travelled.
+/// The desk's book: how many it has housed, and how long it has left to say
+/// so.
 ///
-/// The corridor itself is arithmetic. This is the one thing about it that is
-/// a state, and it is kept apart from the drawing so a rule can be applied
-/// without a window.
-/// Who is at the desk wanting a room.
+/// **What is left of it after spec 0062.** This held who was in every room
+/// of an endless corridor, as a predicate walked backwards through the moves
+/// applied to it, plus a front running away from you at six rooms a second,
+/// a second wave behind that one, and a queue of four arrivals at the door.
+/// All of it was machinery for a thing you watched happen.
 ///
-/// **The arrival sets the difficulty rather than the dials setting the
-/// answer.** aleph asked the player to find a rule that works, and its own
-/// parked note says that fails because every rule works: three right answers
-/// and a player has them in two minutes. Here the move is the same key every
-/// time and what changes is whether it is enough.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Arrival {
-    /// One guest. A shuffle of one along is enough, and the room should not
-    /// pretend otherwise by doubling the whole hotel to seat one person.
-    One,
-    /// A coach of this many. A shuffle of that many along.
-    Coach(u64),
-    /// A coach with a room for every counting number, which is the one that
-    /// cannot be done by shuffling at all and is what doubling is for.
-    Endless,
-    /// Endlessly many coaches, each of them endless. Spec 0034.
-    ///
-    /// **The one no stride does.** The three above are all shuffles, which is
-    /// why every move in this building draws as a wave running west. This one
-    /// sends everybody to a prime power, so it is a scatter: room 1 to room 2,
-    /// room 3 to room 8, room 10 to room 1024. Most of them go somewhere too
-    /// far to walk to and the corridor in front of you empties.
-    Coaches,
-}
-
-impl Arrival {
-    /// Who wants a room, said to the person standing at the desk.
-    ///
-    /// **Not "at the door".** There is no door in that room: you come in
-    /// through the gallery and nothing in the fiction is a front door, so
-    /// "at the door" points at nothing. And the player is the clerk, so the
-    /// line is the situation in front of them rather than a narration of it.
-    /// Jake read the first draft and said the language does not land.
-    pub fn says(&self) -> String {
-        match self {
-            // Jake's, so no marker. It is the guest speaking rather than
-            // the room narrating them, which is what the other two had to
-            // follow.
-            Arrival::One => String::from("I would like a room."),
-            Arrival::Coach(n) => format!("We would like {} rooms.", n),
-            Arrival::Endless => String::from("We would like a room for every number."),
-            // and the fourth, which is the guest speaking too and follows
-            // the shape of the three above
-            Arrival::Coaches => {
-                String::from("There is a coach for every number, and we fill them.")
-            }
-        }
-    }
-
-    /// The move that houses them: room n becomes room a*n + b.
-    ///
-    /// Shuffling along frees as many rooms as you shuffle, and no shuffle
-    /// frees infinitely many. Doubling frees every odd room, which is
-    /// endlessly many, and is the only answer to the last of these.
-    /// Where the guest in room `n` goes, or nowhere that can be drawn.
-    ///
-    /// **A function rather than a stride and a shift.** Every move here used
-    /// to be `n * stride + shift`, which is the shape a shuffle has and the
-    /// shape a scatter has not. Spec 0034: if the prime powers had been bent
-    /// into a `(stride, shift)` pair, something would have been fudged.
-    ///
-    /// Nothing is an answer. Room 64 doubling is room 128 and room 64 to
-    /// 2⁶⁴ is not a number anybody can be in, so that guest has left the
-    /// part of the corridor you can see, which is what actually happens to
-    /// them.
-    pub fn sends(&self, n: u64) -> Option<u64> {
-        match self {
-            Arrival::One => n.checked_add(1),
-            Arrival::Coach(many) => n.checked_add(*many),
-            Arrival::Endless => n.checked_mul(2),
-            // 2ⁿ, which runs out of u64 at n = 64 and out of corridor long
-            // before that
-            // 2ⁿ. Past 63 there is no such room in a u64, which is a
-            // long way past the end of anything drawn.
-            Arrival::Coaches if n < 64 => 2u64.checked_pow(n as u32),
-            Arrival::Coaches => None,
-        }
-    }
-
-    /// And the room somebody in room `m` was in before this move, which is
-    /// the only part of a move an endless corridor can afford to ask.
-    ///
-    /// **A move is read backwards out here.** Pushing every taken room
-    /// forward means knowing which rooms are taken, which is a list, and a
-    /// list is forty rooms of a corridor two thousand metres long. Asked the
-    /// other way it is one division: room `m` has somebody in it if the room
-    /// this move sends here had somebody in it. Nothing is an answer, and
-    /// means nobody was sent to `m` at all.
-    ///
-    /// The inverse of [`sends`](Arrival::sends), which
-    /// `every_move_can_be_read_backwards` holds the two to.
-    pub fn came_from(&self, m: u64) -> Option<u64> {
-        let from = match self {
-            Arrival::One => m.checked_sub(1),
-            Arrival::Coach(many) => m.checked_sub(*many),
-            Arrival::Endless => m.is_multiple_of(2).then_some(m / 2),
-            // 2ⁿ backwards is which power of two it is, and a room that is
-            // not one came from nobody
-            Arrival::Coaches => m.is_power_of_two().then(|| m.trailing_zeros() as u64),
-        };
-
-        from.filter(|from| *from >= 1)
-    }
-
-    /// Whether this move's arrivals take every room it frees.
-    ///
-    /// **The second half of what a move does.** Three of these four seat
-    /// their guests in everything they open up, so the hotel is full again
-    /// however it started. The coaches do not: seat s of coach c goes to
-    /// room pˢ, so the rooms that fill are the odd prime powers and room 6
-    /// stays empty for ever.
-    ///
-    /// This is a second account of [`fills`](Arrival::fills) and two lists of
-    /// one thing drift, so `what_fills_everything_fills_everything` holds
-    /// them together rather than a comment asking the next person to.
-    pub fn fills_everything(&self) -> bool {
-        match self {
-            Arrival::Coaches => false,
-            Arrival::One | Arrival::Coach(_) | Arrival::Endless => true,
-        }
-    }
-
-    /// Whether an arrival takes room `n`, once the move has freed it.
-    ///
-    /// **The coaches do not take everything that is free.** A shuffle frees
-    /// as many rooms as it has arrivals and they all fill, which is why this
-    /// used to be every empty room without asking. Under the prime powers,
-    /// seat s of coach c goes to room pˢ for an odd prime p, so the rooms
-    /// that fill are the odd prime powers and the rest stay empty for ever:
-    /// room 6 is 2 times 3 and belongs to nobody.
-    pub fn fills(&self, n: u64) -> bool {
-        match self {
-            Arrival::Coaches => odd_prime_power(n),
-            _ => true,
-        }
-    }
-}
-
-/// The `which`th odd prime, counted from one: 3, 5, 7, 11 and so on.
-///
-/// `#[cfg(test)]`, because the corridor never needs to know which coach
-/// somebody came off: `fills` asks only whether a room is an odd prime
-/// power, and that is answered by dividing rather than by counting primes.
-/// This is here so the no-collisions claim can be stated in the terms the
-/// rule is written in.
-///
-/// Spec 0034. The same arithmetic as `rule::primes::odd` in aleph, which is
-/// the repo this room came out of and is not a dependency of this one.
-#[cfg(test)]
-pub fn odd_prime(which: u64) -> u64 {
-    let mut found = 0;
-    let mut at = 1u64;
-
-    while found < which {
-        at += 2;
-
-        if (3..)
-            .step_by(2)
-            .take_while(|by| by * by <= at)
-            .all(|by| !at.is_multiple_of(by))
-        {
-            found += 1;
-        }
-    }
-
-    at
-}
-
-/// Whether `n` is a power of a single odd prime, which is where seat s of
-/// coach c goes.
-///
-/// Spec 0034. Room 1 is nobody's, because a seat is counted from one and p⁰
-/// would be every coach's at once.
-pub fn odd_prime_power(n: u64) -> bool {
-    if n < 3 {
-        return false;
-    }
-
-    let mut left = n;
-    let mut by = 3;
-
-    // the one prime it is allowed to be made of, found by dividing out the
-    // smallest odd factor it has
-    while by * by <= left && !left.is_multiple_of(by) {
-        by += 2;
-    }
-
-    if !left.is_multiple_of(by) {
-        // a prime itself, and odd because two was ruled out above
-        return !left.is_multiple_of(2);
-    }
-
-    while left.is_multiple_of(by) {
-        left /= by;
-    }
-
-    left == 1
-}
-
-/// Which half of a move is running.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Doing {
-    /// Everybody already housed moving up, which frees rooms.
-    Freeing,
-    /// And the arrivals walking into them, which is the half that makes this
-    /// a paradox rather than a subtraction.
-    Filling,
-}
-
-/// Who is in, as a question you can ask of any room.
-///
-/// **Not a list of forty.** It was `Vec<bool>`, one entry a drawn room, and
-/// that was right while the drawn rooms were rooms 1 to 40 for ever. `window`
-/// made the drawn rooms follow you and this did not follow them: past the
-/// fortieth every room answered empty, so every door out there stood wide
-/// open and dark, for two kilometres. A hotel whose whole premise is that it
-/// is full showed an empty one everywhere except the first sixty metres, and
-/// the rank of open leaves is what Jake saw and called blocky.
-///
-/// A list cannot be the answer, because there is no end to index to. So the
-/// state is what it has always been in the argument itself: a full hotel with
-/// some moves applied to it. Asking room `m` walks those moves backwards,
-/// which is a division apiece.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Who {
-    /// Everybody, which is where this starts and is the whole premise.
-    Everybody,
-    /// Whoever a move sent here, which is the freeing wave.
-    Moved { was: Box<Who>, by: Arrival },
-    /// And the arrivals in the rooms it freed, which is the filling wave.
-    Filled { was: Box<Who>, by: Arrival },
-}
-
-impl Who {
-    /// Whether room `n` has somebody in it.
-    ///
-    /// Room 0 is not a room. Rooms are counted from one, here and in `at`.
-    pub fn has(&self, n: u64) -> bool {
-        if n == 0 {
-            return false;
-        }
-
-        match self {
-            Who::Everybody => true,
-            Who::Moved { was, by } => by.came_from(n).is_some_and(|from| was.has(from)),
-            Who::Filled { was, by } => was.has(n) || by.fills(n),
-        }
-    }
-
-    /// What a move leaves: whoever it sent here.
-    fn moved(self, by: Arrival) -> Who {
-        Who::Moved {
-            was: Box::new(self),
-            by,
-        }
-    }
-
-    /// And what the arrivals leave, once they are in.
-    ///
-    /// **A move that fills everything it frees is a full hotel**, whatever it
-    /// was before, so that is what it is called. Said here rather than left
-    /// to the reader, because otherwise every key press adds two links to a
-    /// chain that is walked once per door per frame and never gets shorter.
-    fn filled(self, by: Arrival) -> Who {
-        if by.fills_everything() {
-            return Who::Everybody;
-        }
-
-        Who::Filled {
-            was: Box::new(self),
-            by,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+/// What the room asks of the desk now is what spec 0032 always asked: that
+/// it take the one guest the register has just proved it has no row for, and
+/// say yes.
+#[derive(Debug, Default)]
 pub struct Hotel {
-    /// Who is in, as it stands.
-    taken: Who,
-    /// What the rule is moving everybody to, while the change is travelling,
-    /// and nothing when it has arrived.
-    going: Option<Who>,
-    /// How far down the corridor the change has got, in rooms.
-    ///
-    /// **The change does not arrive everywhere at once.** Spec 0029: it
-    /// starts at room 1 and runs away from you at a speed you can watch, so
-    /// what you see is a wave going somewhere you cannot see the end of.
-    front: f32,
-    /// Which half of the move is running.
-    doing: Doing,
-    /// And what the rooms look like once the arrivals are in, held until the
-    /// freeing wave has finished so the two run one after the other.
-    then_filled: Option<Who>,
-    /// Who is at the desk.
-    at_the_door: Option<Arrival>,
-    /// And which move is running, so the people crossing know where they are
-    /// walking to. Spec 0034: under the prime powers that is not next door.
-    moving_by: Option<Arrival>,
     /// How many have been housed since the building opened, which is the
     /// number that says nobody left.
     housed: u64,
-    /// And how many are on their way in, which join the count when the
-    /// filling wave has run rather than when the key was pressed.
-    arriving: u64,
+    /// And how long the desk has left to say so.
+    said_for: f32,
 }
 
-/// How fast the change runs down the corridor, in rooms a second.
+/// How long what the desk has just done stays on the board.
 ///
-/// Slow enough to watch and fast enough that the near end is not a wait: a
-/// body walks at 4.2 and the rooms are 1.5 apart, so this is a little under
-/// walking pace and the wave pulls away from you only if you stand still.
-pub const TRAVELS_AT: f32 = 6.0;
-
-/// How many rooms either side of the front have their doors open.
-///
-/// **This is what makes the move visible at all.** Spec 0029's wave moved
-/// which rooms were taken, and for the move that houses one guest that is
-/// nearly nothing to look at: everybody shifts up a room, every room is full
-/// before and full after, and a shut door that stays shut shows none of it.
-/// Jake pressed Enter and said the doors all looked closed. They were.
-///
-/// aleph's own parked note is the same sentence: the guests do not travel, so
-/// the transformation is invisible and only its result shows. A wave of
-/// occupancy is a wave of re-evaluation. This is a wave of people: a door
-/// stands open while the front is passing it, because somebody is going
-/// through it, and shuts behind them.
-pub const RIPPLE: f32 = 2.0;
-
-impl Default for Hotel {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// **A line that stays up for ever is a scoreboard.** Spec 0030 held this
+/// window open with the waves it had started, so the desk got itself back
+/// when they finished. There are no waves to hold it open now, so it is a
+/// number, and it is about as long as somebody stands at a counter reading
+/// one line.
+pub const SAYS_FOR: f32 = 4.0;
 
 impl Hotel {
-    /// A full hotel, which is where this starts and is the whole premise.
     pub fn new() -> Self {
-        Self {
-            taken: Who::Everybody,
-            going: None,
-            front: 0.0,
-            doing: Doing::Freeing,
-            then_filled: None,
-            // somebody is always at the door, because a hotel with nobody
-            // wanting a room has nothing to demonstrate and this is the
-            // resting state rather than a thing you set up
-            at_the_door: Some(Arrival::One),
-            moving_by: None,
-            housed: 0,
-            arriving: 0,
-        }
-    }
-
-    /// Who is at the desk, and nothing while a move is running.
-    pub fn at_the_door(&self) -> Option<Arrival> {
-        if self.going.is_some() {
-            return None;
-        }
-
-        self.at_the_door
+        Self::default()
     }
 
     /// How many have been housed since the building opened.
@@ -1197,213 +519,27 @@ impl Hotel {
         self.housed
     }
 
-    /// Whether every drawn room has somebody in it.
-    pub fn full(&self) -> bool {
-        (1..=DRAWN).all(|n| self.taken(n))
-    }
-
-    /// House whoever is at the door.
+    /// House whoever you are carrying, which is the guest the register's
+    /// diagonal built and no row of the book has. Specs 0032 and 0062.
     ///
-    /// Two waves, one after the other. The first moves everybody already
-    /// housed up by the move the arrival needs, which frees rooms. The second
-    /// is the arrivals walking into them.
-    ///
-    /// **The second is the point.** A hotel that frees rooms and leaves them
-    /// free has done a subtraction. A hotel that frees them and fills them
-    /// and is full again, with more people in it and nobody gone, has done
-    /// the thing this room is about.
-    pub fn house(&mut self) {
-        let Some(arrival) = self.at_the_door() else {
-            return;
-        };
-
-        self.take(arrival);
-
-        // the building's argument in order: a shuffle of one, a shuffle of
-        // many, a doubling, and the thing none of those can do
-        self.at_the_door = Some(match arrival {
-            Arrival::One => Arrival::Coach(42),
-            Arrival::Coach(_) => Arrival::Endless,
-            Arrival::Endless => Arrival::Coaches,
-            Arrival::Coaches => Arrival::One,
-        });
-    }
-
-    /// House the one you walked out of the register with.
-    ///
-    /// **The desk says yes, and that is spec 0032.** Spec 0031 had it refuse,
-    /// on the grounds that what you were holding was on no line of the book.
-    /// Jake walked up to the desk and said that if he is holding a number and
-    /// there is no limit to how many rooms there are, he should be able to
-    /// get a room. He is right, and Cantor's argument never said otherwise:
-    /// one guest can always be housed, by this same move. What cannot be done
-    /// is finish the list, and the way to show that is to house them and let
-    /// whoever did it walk the book again.
-    ///
-    /// One guest, so one shuffle, which is `Arrival::One`'s move. The queue
-    /// at the door is left alone: this one did not come off a coach and does
-    /// not take a turn in the cycle.
+    /// **The desk says yes, and it does not help.** It has a room for them,
+    /// because it has a room for anybody: the rooms are the counting numbers
+    /// and it is never out of those. What it cannot do is finish the list,
+    /// which is the thing that was being asked, and the way to show that is
+    /// to house this one and let whoever did it walk the book again.
     pub fn house_carried(&mut self) {
-        if self.going.is_some() {
-            return;
-        }
-
-        self.take(Arrival::One);
+        self.housed += 1;
+        self.said_for = SAYS_FOR;
     }
 
-    /// The two waves, for whoever it is.
-    fn take(&mut self, arrival: Arrival) {
-        self.moving_by = Some(arrival);
-        self.apply(arrival);
-
-        // and who is in once the arrivals are in: whatever the move leaves,
-        // plus the rooms they take
-        let freed = self.going.clone().unwrap_or(Who::Everybody);
-
-        // **How many came in is counted over the forty by the desk.** The
-        // corridor has no end, so how many rooms a move fills is not a
-        // number for three of these four, and the desk is at this end of it.
-        let came = (1..=DRAWN)
-            .filter(|n| !freed.has(*n) && arrival.fills(*n))
-            .count() as u64;
-
-        self.then_filled = Some(freed.filled(arrival));
-        // **Counted when they are in, not when they are asked for.** This
-        // said `housed += came` here, so the desk read "1 housed" the instant
-        // you pressed, before either wave had moved a door. Jake pressed and
-        // read the outcome of something he had not watched happen.
-        self.arriving = came;
+    /// Whether the desk is still saying what it has just done.
+    pub fn just_housed(&self) -> bool {
+        self.said_for > 0.0
     }
 
-    /// Which move is running, so the people crossing know where they are
-    /// going. Spec 0034: under the prime powers that is not next door.
-    pub fn moving_by(&self) -> Option<Arrival> {
-        self.moving_by
-    }
-
-    /// Whether either wave is running, which is the window a thing the desk
-    /// says about what just happened is worth showing in.
-    pub fn moving(&self) -> bool {
-        self.travelling().is_some() || self.filling()
-    }
-
-    /// Whether room `n` has somebody in it, as it stands this instant.
-    ///
-    /// While a change is travelling, a room the front has passed is already
-    /// at what it is going to be and a room beyond it is still as it was.
-    /// That is the whole of the wave.
-    pub fn taken(&self, n: u64) -> bool {
-        let Some(going) = self.going.as_ref() else {
-            return self.taken.has(n);
-        };
-
-        if (n as f32) <= self.front {
-            going.has(n)
-        } else {
-            self.taken.has(n)
-        }
-    }
-
-    /// Move everybody: room n becomes room `by.sends(n)`.
-    ///
-    /// **Every room, rather than the forty that used to be drawn.** This
-    /// walked rooms 1 to 40 and wrote where each of them landed, which can
-    /// only answer for a corridor with an end. `Who` reads the move
-    /// backwards instead, so a room eleven thousand along answers in the
-    /// same division as room 2.
-    ///
-    /// A move rather than a closure, because reading one backwards is the
-    /// move's own arithmetic and `Arrival` is where that arithmetic lives.
-    pub fn apply(&mut self, by: Arrival) {
-        self.going = Some(self.taken.clone().moved(by));
-        self.front = 0.0;
-    }
-
-    /// Let the change travel, as far as `seen_to`.
-    ///
-    /// **It ran forty rooms and stopped, which is a number and not a
-    /// reason.** Forty is `DRAWN`, and while the drawn rooms were rooms 1 to
-    /// 40 for ever that was the far edge of what anybody could see, so the
-    /// wave ending there ended out of sight. `window` made the drawn rooms
-    /// follow you and this did not follow them. You can outwalk it: the
-    /// front travels at 6 rooms a second and a body at 4.2 m/s covers 2.8,
-    /// so pressing the key at the desk and running west puts you at about
-    /// room 38 when the second wave ends, looking at rooms up to 57, and the
-    /// sixteen past the front change with nothing passing them.
-    ///
-    /// So it runs until it has passed the last room you can see, which is
-    /// what the caller knows and this does not. Standing at the desk that is
-    /// room 40 and nothing moves, because that is where the window ends
-    /// there too.
-    pub fn tick(&mut self, dt: f32, seen_to: u64) {
-        if self.going.is_none() {
-            return;
-        }
-
-        self.front += dt * TRAVELS_AT;
-
-        if self.front < seen_to as f32 {
-            return;
-        }
-
-        self.taken = self.going.take().unwrap();
-        self.front = 0.0;
-
-        // the freeing wave has reached the end, so the arrivals set off
-        if self.doing == Doing::Freeing {
-            if let Some(filled) = self.then_filled.take() {
-                self.going = Some(filled);
-                self.doing = Doing::Filling;
-
-                return;
-            }
-        }
-
-        // and they are in, which is when they count
-        self.housed += std::mem::take(&mut self.arriving);
-        self.doing = Doing::Freeing;
-    }
-
-    /// Which half of a move is running, for what the desk says while it does.
-    pub fn filling(&self) -> bool {
-        self.going.is_some() && self.doing == Doing::Filling
-    }
-
-    /// How far the change has got, in rooms, and nothing when none is
-    /// travelling.
-    pub fn travelling(&self) -> Option<f32> {
-        self.going.as_ref().map(|_| self.front)
-    }
-
-    /// How far open room `n`'s door stands, nought shut and one wide.
-    ///
-    /// A taken room is shut. A free one stands open and dark.
-    pub fn open_by(&self, n: u64) -> f32 {
-        // a door the wave is passing stands open, because somebody is going
-        // through it. Eased, so it swings rather than snapping.
-        if let Some(front) = self.travelling() {
-            let near = (n as f32 - front).abs();
-
-            if near < RIPPLE {
-                return (1.0 - near / RIPPLE).clamp(0.0, 1.0);
-            }
-        }
-
-        if self.taken(n) {
-            0.0
-        } else {
-            1.0
-        }
-    }
-
-    /// Whether there is light under room `n`'s door.
-    ///
-    /// The same fact as the door, asked the other way, which is why it is
-    /// derived here rather than stored: two accounts of who is in would
-    /// drift, and that is the fault under most of the others in this
-    /// building.
-    pub fn lit_under(&self, n: u64) -> bool {
-        self.taken(n)
+    /// Count that window down.
+    pub fn tick(&mut self, dt: f32) {
+        self.said_for = (self.said_for - dt).max(0.0);
     }
 }
 
@@ -1420,71 +556,14 @@ pub const SCONCE: Vec3 = vec3(0.12, 0.26, 0.09);
 pub const SCONCE_UP: f32 = 1.72;
 pub const SCONCE_OUT: f32 = 0.07;
 
-/// How far one reaches, and how hard it burns.
-///
-/// Short. A hotel corridor at night is lit in pools with dark between them,
-/// which is the opposite of a room lit evenly, and the pools are what say
-/// how long the corridor is.
-/// First build was 3.4 and 2.6, which lit the whole corridor evenly and put
-/// a wash on the ceiling. A corridor you can read end to end is a corridor
-/// in an office. This is a hotel at night, so a sconce reaches about as far
-/// as the next one and no further, and what is between them is dark.
-///
-/// It matters for more than mood. Spec 0029's whole answer to what stands
-/// for a guest is the light under a shut door, and a light under a door in a
-/// brightly lit corridor is a grey line.
-pub const SCONCE_RANGE: f32 = 2.5;
-pub const SCONCE_LIT: f32 = 0.85;
-
-/// Where the sconces are: one on each side, in the wall between each pair of
-/// doors on that side.
-///
-/// Derived from where the doors are rather than laid out again. Two lists of
-/// one thing drift, and this building has paid for that more than once.
-///
-/// **Over the rooms that are drawn, which is the half of that this missed.**
-/// It took the doors' positions from `at` and their range from `DRAWN`, so
-/// the geometry followed you and the range did not: the sconces sat over
-/// rooms 1 to 40 for ever, which is the first sixty metres. `window` moves
-/// the doors down the corridor with you and nothing moved the lamps after
-/// them, so past about room 40 there were doors, numbers, skirting and a
-/// runner and no light anywhere to show them. At room 250 the corridor was
-/// black, the ceiling with it, and the walls read as flat slabs because the
-/// only light on them was the ambient fill. Jake, from down the corridor:
-/// the ceiling is missing.
-pub fn sconces(reaches: f32, standing: Vec3) -> Vec<Vec3> {
-    let drawn = window(standing);
-    let mut out = Vec::new();
-
-    for n in drawn.clone() {
-        // the gap between room n and the next on the same side, which is two
-        // along
-        if n + 2 > *drawn.end() {
-            continue;
-        }
-
-        let one = at(reaches, n);
-        let next = at(reaches, n + 2);
-        let inward = if on_the_left(n) { -1.0 } else { 1.0 };
-
-        out.push(vec3(
-            (one.x + next.x) * 0.5,
-            SCONCE_UP,
-            one.z + inward * SCONCE_OUT,
-        ));
-    }
-
-    out
-}
-
 /// The lobby's ceiling: a grid of beams across it.
 ///
-/// **The one surface in this room nobody had spent anything on.** The lobby
-/// is `LOBBY_TALL` where the corridor is `TALL`, and that difference is the
-/// whole of what says which is which, per the note on `LOBBY_TALL`. A room
-/// that says it by being taller and then shows you a flat grey lid is making
-/// the argument and dropping it. Jake asked for this after a sweep found the
-/// lid bare.
+/// **The one surface in this room nobody had spent anything on.** It was
+/// the taller of the two rooms the hotel had, and height was the whole of
+/// what said which was which. A room that says it by being taller and then
+/// shows you a flat grey lid is making the argument and dropping it. Jake
+/// asked for this after a sweep found the lid bare, and it matters more now
+/// that this room is the hotel rather than the half of it you pass through.
 ///
 /// **A hotel's and not the cellar's.** `cellar::ceiling` is a library's:
 /// coffers of 2.1 on beams of 0.2, which is close work for a room lined with
@@ -1582,25 +661,11 @@ pub fn lobby_sconces(reaches: f32) -> Vec<Vec3> {
     ]
 }
 
-/// And the lamps, which are those lifted a little into the shade's mouth.
-/// Both sets together, which is what the rule is stated over.
-///
-/// `#[cfg(test)]` because the drawing wants them apart now that the lobby
-/// burns differently from the corridor. The rule is still about all of them,
-/// so this is where it is said.
-#[cfg(test)]
-pub fn lamps(reaches: f32, standing: Vec3) -> Vec<Vec3> {
-    corridor_lamps(reaches, standing)
-        .into_iter()
-        .chain(lobby_lamps(reaches))
-        .collect()
-}
-
 /// How far the lobby's two reach, and how hard they burn.
 ///
-/// **A lobby is not a corridor at night.** The corridor's `SCONCE_RANGE` of
-/// 2.5 is short on purpose: pools with dark between them are what say how
-/// long it is. Giving the lobby the same number left a room eight metres by
+/// **A lobby is not a corridor at night.** Spec 0029 lit the corridor at a
+/// reach of 2.5, short on purpose: pools with dark between them are what say
+/// how long it is. Giving the lobby the same number left a room eight metres by
 /// six with two lamps that reached a quarter of the way across it, and the
 /// one place anybody stands in it, where somebody waits at the desk, was 2.91
 /// from the nearest and so lit by nothing at all.
@@ -1611,14 +676,6 @@ pub fn lamps(reaches: f32, standing: Vec3) -> Vec<Vec3> {
 pub const LOBBY_RANGE: f32 = 4.6;
 pub const LOBBY_LIT: f32 = 0.95;
 
-/// The corridor's lamps and the lobby's, which burn differently.
-pub fn corridor_lamps(reaches: f32, standing: Vec3) -> Vec<Vec3> {
-    sconces(reaches, standing)
-        .into_iter()
-        .map(|at| at + Vec3::Y * SCONCE.y * 0.3)
-        .collect()
-}
-
 pub fn lobby_lamps(reaches: f32) -> Vec<Vec3> {
     lobby_sconces(reaches)
         .into_iter()
@@ -1626,38 +683,11 @@ pub fn lobby_lamps(reaches: f32) -> Vec<Vec3> {
         .collect()
 }
 
-/// The runner down the middle of the corridor.
-///
-/// A floor you can tell from the walls, which every room in this building has
-/// needed. It is also what a hotel corridor actually has, and it is narrower
-/// than the corridor so the floor shows either side of it and the light
-/// strips under the doors lie on the floor rather than on the carpet.
-pub const RUNNER_WIDE: f32 = 1.7;
-
-/// How far it stands proud, for the same reason the strips do: a border laid
-/// *in* a floor is two faces in one plane, which is the fault this building
-/// has fought seven times.
-pub const RUNNER_UP: f32 = 0.004;
-
-pub fn runner(reaches: f32) -> Aabb {
-    let (west, _) = span();
-    let middle = middle_z(reaches);
-
-    Aabb::new(
-        vec3(
-            corridor_west() + THICK,
-            RUNNER_UP,
-            middle - RUNNER_WIDE * 0.5,
-        ),
-        vec3(west, RUNNER_UP, middle + RUNNER_WIDE * 0.5),
-    )
-}
-
 /// The skirting along the foot of each wall, and the rail along the top.
 ///
 /// A long wall with nothing breaking it is one slab. These are what break it,
-/// and they are the cheapest thing in the building that does: two runs a side
-/// and they carry the corridor's length rather than fighting it.
+/// and they are the cheapest thing in the building that does: two runs a
+/// side, carried round the room between its openings.
 pub const SKIRTING: f32 = 0.14;
 pub const SKIRTING_OUT: f32 = 0.025;
 pub const RAIL_UP: f32 = 1.02;
@@ -1685,58 +715,6 @@ pub const HANDLE_IN: f32 = 0.12;
 
 #[cfg(test)]
 mod tests {
-    /// Spec 0040: the corridor's roof covers its own shell, all of it, and
-    /// sits a hair above it.
-    ///
-    /// **Not level with the lobby's lid**, which was the first guess and is
-    /// eighty centimetres out: this corridor is `aleph::TALL` and the lobby
-    /// is the hall's. Worked from the wrong one the roof lay inside the
-    /// corridor with the shell over it, and the test that caught it was
-    /// this one.
-    #[test]
-    fn the_corridors_roof_covers_its_shell() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let (middle, size) = corridor_roof(reaches);
-        let shell = solid(reaches)
-            .into_iter()
-            .find(|box_| box_.min.y >= TALL - 1e-3 && box_.min.x <= corridor_west() + 1e-3)
-            .expect("the corridor's own ceiling");
-
-        assert!(
-            middle.y > shell.max.y && middle.y < shell.max.y + 0.05,
-            "the roof is laid at {} over a shell whose top is {}",
-            middle.y,
-            shell.max.y
-        );
-
-        for (one, two, low, high, way) in [
-            (
-                middle.x - size.x * 0.5,
-                middle.x + size.x * 0.5,
-                shell.min.x,
-                shell.max.x,
-                "along",
-            ),
-            (
-                middle.z - size.y * 0.5,
-                middle.z + size.y * 0.5,
-                shell.min.z,
-                shell.max.z,
-                "across",
-            ),
-        ] {
-            assert!(
-                one <= low + 1e-3 && two >= high - 1e-3,
-                "{} the roof spans {}..{} over a shell of {}..{}",
-                way,
-                one,
-                two,
-                low,
-                high
-            );
-        }
-    }
-
     /// The lobby's ceiling is dressed, and dressed all the way to its walls.
     ///
     /// **The baths' lesson, applied before it could happen again.** That
@@ -1837,18 +815,18 @@ mod tests {
     /// **Derived rather than placed twice.** The cellar lit a wall with
     /// nothing on it and the baths ran the lamps along a ceiling while the
     /// sconces stood on a wall, so every sconce was dark and the ceiling
-    /// glowed at nothing. `lamps` is the sconces lifted, which is why there
-    /// cannot be one without the other, and this is what keeps the split
-    /// into corridor and lobby from quietly dropping a set.
+    /// glowed at nothing. `lobby_lamps` is `lobby_sconces` lifted, which is
+    /// why there cannot be one without the other.
+    ///
+    /// **It used to be stated over two sets.** Spec 0029's corridor had its
+    /// own sconces and its own reach, and this held the split from quietly
+    /// dropping one of them; spec 0062 took the corridor out, so the lobby's
+    /// is the whole set and there is no split left to drop.
     #[test]
     fn every_lamp_is_in_a_fitting() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let standing = at(reaches, 1);
-        let fittings: Vec<_> = sconces(reaches, standing)
-            .into_iter()
-            .chain(lobby_sconces(reaches))
-            .collect();
-        let lamps = lamps(reaches, standing);
+        let reaches = reaches();
+        let fittings = lobby_sconces(reaches);
+        let lamps = lobby_lamps(reaches);
 
         assert_eq!(
             lamps.len(),
@@ -1856,11 +834,6 @@ mod tests {
             "there are {} lamps and {} fittings",
             lamps.len(),
             fittings.len()
-        );
-        assert_eq!(
-            lamps.len(),
-            corridor_lamps(reaches, standing).len() + lobby_lamps(reaches).len(),
-            "the two sets do not add up to the whole"
         );
 
         for lamp in lamps.iter() {
@@ -1871,233 +844,19 @@ mod tests {
             );
         }
 
-        // and the lobby reaches the one place anybody stands in it, which it
-        // did not: 2.91 away with a reach of 2.5, so whoever waits at the
-        // desk was lit by nothing at all
+        // and it reaches the one place anybody stands in it, which it did
+        // not: 2.91 away with a reach of 2.5, so whoever waits at the desk
+        // was lit by nothing at all
         let stands = waiting(reaches);
 
         assert!(
-            lobby_lamps(reaches)
-                .iter()
-                .any(|at| (*at - stands).length() < LOBBY_RANGE),
+            lamps.iter().any(|at| (*at - stands).length() < LOBBY_RANGE),
             "nothing in the lobby reaches where somebody waits"
         );
     }
 
-    /// Wherever you stand in this corridor, the doors around you are lit.
-    ///
-    /// **The doors follow you down it and the sconces did not.** `window`
-    /// moves the drawn rooms with you and `sconces` took its range from
-    /// `DRAWN` instead, so the lamps stayed over rooms 1 to 40 while the
-    /// doors walked off west without them. Sixty metres in there was nothing
-    /// lighting anything: the doors, the numbers, the runner and the ceiling
-    /// were all still drawn and all of them were black, which from inside
-    /// reads as a corridor with no ceiling on it. Jake found it walking.
-    ///
-    /// Stated over the drawn doors rather than over a count of lamps,
-    /// because what went wrong was not how many there were.
-    #[test]
-    fn the_drawn_doors_are_lit_wherever_you_stand() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let middle = middle_z(reaches);
-
-        // the lobby end, a little way in, and far enough down that nothing
-        // of the lobby's own light can reach
-        for room in [1u64, 40, 250, 10_000] {
-            let standing = vec3(at(reaches, room).x, 0.0, middle);
-            let lamps = corridor_lamps(reaches, standing);
-
-            for n in window(standing) {
-                let door = at(reaches, n);
-
-                assert!(
-                    lamps
-                        .iter()
-                        .any(|lamp| (*lamp - door).length() < SCONCE_RANGE * 2.0),
-                    "standing at room {room}, door {n} at {:.1} has no lamp within {:.1}",
-                    door.x,
-                    SCONCE_RANGE * 2.0
-                );
-            }
-        }
-    }
-
-    /// Whether `n` is a power of a single prime, which is where everybody
-    /// ends up under spec 0034.
-    #[cfg(test)]
-    fn prime_power(n: u64) -> bool {
-        if n < 2 {
-            return false;
-        }
-
-        let mut left = n;
-        let mut by = 2;
-
-        while by * by <= left {
-            if left.is_multiple_of(by) {
-                while left.is_multiple_of(by) {
-                    left /= by;
-                }
-
-                return left == 1;
-            }
-
-            by += 1;
-        }
-
-        true
-    }
-
-    /// Spec 0034: no two guests are sent to the same room, which is the
-    /// whole rule.
-    ///
-    /// A number factors one way only, so 2ⁿ is only ever 2ⁿ and 3ˢ is only
-    /// ever 3ˢ. That is why every coach gets endlessly many rooms of its own
-    /// rather than queueing behind the one before it.
-    #[test]
-    fn a_prime_power_is_nobodys_but_its_own() {
-        let mut taken = std::collections::HashSet::new();
-
-        // the residents, to 2ⁿ
-        for n in 1..=40u64 {
-            let to = Arrival::Coaches.sends(n).expect("room {n} goes nowhere");
-
-            assert!(taken.insert(to), "room {} was sent somewhere taken", n);
-        }
-
-        // and seat s of coach c, to pˢ for the c-th odd prime
-        for coach in 1..=12u64 {
-            let p = odd_prime(coach);
-
-            for seat in 1..=10u32 {
-                let Some(to) = p.checked_pow(seat) else {
-                    continue;
-                };
-
-                assert!(
-                    taken.insert(to),
-                    "seat {} of coach {} was sent to room {}, which is taken",
-                    seat,
-                    coach,
-                    to
-                );
-            }
-        }
-    }
-
-    /// Spec 0034: the ones who go too far leave, rather than piling up at
-    /// the end of what is drawn.
-    #[test]
-    fn the_ones_who_go_too_far_leave() {
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Coaches);
-        hotel.house();
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-        // after the freeing wave only the powers of two that still fit are
-        // standing, and everybody else has gone somewhere this corridor does
-        // not reach
-        for n in 1..=DRAWN {
-            let stayed = (1..=63)
-                .filter_map(|k| 2u64.checked_pow(k))
-                .any(|to| to == n);
-
-            assert_eq!(
-                hotel.taken(n),
-                stayed,
-                "room {} is {} after the move and should not be",
-                n,
-                if hotel.taken(n) { "taken" } else { "empty" }
-            );
-        }
-    }
-
-    /// Spec 0034: what is lit afterwards is exactly the prime powers, and
-    /// what is dark is every number with two different primes in it.
-    ///
-    /// **This is the ending.** The desk takes endlessly many endless coaches
-    /// and the corridor has more dark doors than lit ones, which is better
-    /// than a full hotel and is true. Room 6 is 2 times 3 and belongs to
-    /// nobody.
-    #[test]
-    fn what_is_left_is_every_number_with_two_primes_in_it() {
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Coaches);
-        hotel.house();
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-        let mut lit = 0;
-
-        for n in 1..=DRAWN {
-            assert_eq!(
-                hotel.taken(n),
-                prime_power(n),
-                "room {} is {} and is {}a prime power",
-                n,
-                if hotel.taken(n) { "taken" } else { "empty" },
-                if prime_power(n) { "" } else { "not " }
-            );
-
-            if hotel.taken(n) {
-                lit += 1;
-            }
-        }
-
-        assert!(
-            lit * 2 < DRAWN,
-            "{} of {} doors are lit, which is not more dark than lit",
-            lit,
-            DRAWN
-        );
-    }
-
-    /// Spec 0034: the three older arrivals are the moves they always were.
-    ///
-    /// A move became a function so that the prime powers would fit. Nothing
-    /// about a shuffle changed, and this is what says so.
-    #[test]
-    fn the_older_moves_are_the_moves_they_were() {
-        for n in [1u64, 2, 7, 40] {
-            assert_eq!(Arrival::One.sends(n), Some(n + 1));
-            assert_eq!(Arrival::Coach(42).sends(n), Some(n + 42));
-            assert_eq!(Arrival::Endless.sends(n), Some(n * 2));
-        }
-
-        // and they still take every room their move frees, where the coaches
-        // take only the ones that are theirs
-        for n in [1u64, 6, 10, 12] {
-            assert!(Arrival::One.fills(n));
-            assert!(Arrival::Coach(42).fills(n));
-            assert!(Arrival::Endless.fills(n));
-            assert!(!Arrival::Coaches.fills(n), "room {} is nobody's", n);
-        }
-    }
-
-    /// Spec 0034: four arrivals, and it comes round.
-    #[test]
-    fn the_cycle_comes_round() {
-        let mut hotel = Hotel::new();
-        let mut seen = Vec::new();
-
-        for _ in 0..5 {
-            seen.push(hotel.at_the_door().expect("nobody at the desk"));
-            hotel.house();
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-        }
-
-        assert_eq!(seen[0], Arrival::One);
-        assert_eq!(seen[1], Arrival::Coach(42));
-        assert_eq!(seen[2], Arrival::Endless);
-        assert_eq!(seen[3], Arrival::Coaches);
-        assert_eq!(seen[4], Arrival::One, "the cycle did not come round");
-    }
-
-    /// Spec 0031: the one door you walk through is wide enough to walk
-    /// through.
+    /// Specs 0031 and 0062: the one door you walk through is wide enough to
+    /// walk through.
     ///
     /// **It was a hit and miss passage.** At `DOOR_WIDE` the opening was
     /// 1.04 against a body 0.90 across, and the open leaf's collider ate
@@ -2107,17 +866,20 @@ mod tests {
     /// frame at a time, 65, 66 and 67 got through, 68 and 69 did not, and 70
     /// did. The register is behind this door and nothing else leads there,
     /// so a player who bounces off it twice concludes the room is not there.
+    ///
+    /// The door is in the lobby's west wall now rather than in a corridor's
+    /// south wall, so the opening runs in `z` and the leaf swings in `x`.
+    /// The arithmetic is the same arithmetic with the axes swapped, which is
+    /// the one thing worth checking after a move like that.
     #[test]
     fn the_one_door_you_walk_through_is_wide_enough() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let blank = blank_door(reaches);
-        let leaf = leaf_box(reaches, BLANK, 1.0);
+        let reaches = reaches();
+        let (south, north) = book_door(reaches);
+        let leaf = book_leaf(reaches);
         let body = crate::RADIUS * 2.0;
 
         // the opening, and what the leaf standing open takes out of it
-        let west = blank.x - BLANK_WIDE * 0.5;
-        let east = blank.x + BLANK_WIDE * 0.5;
-        let clear = east - leaf.max.x.max(west);
+        let clear = north - leaf.max.z.max(south);
 
         assert!(
             clear > body + 0.3,
@@ -2127,21 +889,16 @@ mod tests {
         );
 
         // and the leaf is a leaf rather than the box it sweeps: it reaches
-        // past the hinge into the opening by a thickness at most
-        // half a thickness, which is what a leaf hinged on the jamb reaches
-        // back by. A whole one is the old box inflated on every side, and a
-        // bound of exactly `DOOR_THICK` lands on that to within a rounding
-        // error, so it is not a bound at all.
+        // back past its hinge by half a thickness, which is what a leaf
+        // hinged on a jamb reaches back by. A whole one is the old box
+        // inflated on every side, and a bound of exactly `DOOR_THICK` lands
+        // on that to within a rounding error, so it is not a bound at all.
         assert!(
-            leaf.max.x - west < DOOR_THICK * 0.6,
+            leaf.max.z - south < DOOR_THICK * 0.6,
             "the open leaf stands {:.3} inside its own doorway, which is {:.3} thick",
-            leaf.max.x - west,
+            leaf.max.z - south,
             DOOR_THICK
         );
-
-        // every other door is scenery and stays the size it was
-        assert_eq!(door_wide(1), DOOR_WIDE);
-        assert_eq!(door_wide(BLANK), BLANK_WIDE);
     }
 
     /// Spec 0033: whoever is waiting at the desk is facing the desk.
@@ -2175,51 +932,21 @@ mod tests {
         );
     }
 
-    /// Spec 0033: a guest at rest is still a light under a shut door.
-    ///
-    /// **The settlement that stays.** Spec 0029 decided a guest is a lit
-    /// strip and spec 0033 only overturns it for the ones the wave has
-    /// reached: there is nothing to see in a room you cannot go into, and a
-    /// corridor at rest has to look exactly as it did before anybody was
-    /// drawn in it.
-    #[test]
-    fn a_room_at_rest_is_still_a_light_under_a_door() {
-        let hotel = Hotel::new();
-
-        assert!(hotel.travelling().is_none(), "it is not at rest");
-        assert!(
-            crate::people::crossing(
-                crate::room::Room::of(crate::games()).reaches,
-                hotel.travelling(),
-                1,
-                DRAWN,
-                |n| Arrival::One.sends(n),
-            )
-            .is_empty(),
-            "somebody is out of their room in a corridor at rest"
-        );
-
-        for n in 1..=DRAWN {
-            assert!(hotel.taken(n), "room {} is empty in a full hotel", n);
-            assert_eq!(
-                hotel.open_by(n),
-                0.0,
-                "room {}'s door is open with nobody going anywhere",
-                n
-            );
-        }
-    }
-
-    /// Spec 0029: the sign hangs in the band between the door heads and the
-    /// corridor's head, clear of both.
+    /// Specs 0029 and 0062: the sign hangs in the band between the register
+    /// door's head and the lobby's ceiling, clear of both.
     ///
     /// **Both edges have been wrong.** The first build hung the top at 2.02,
     /// below the door heads and across the middle of the view in from the
-    /// lobby. The fix put the top 0.06 under the head, which is a gap in the
-    /// arithmetic and none at all on screen: Jake said the text runs into the
-    /// ceiling. The band is what is left between the two, and the lines and
-    /// the gap are sized to sit inside it rather than either one being
-    /// chosen on its own.
+    /// lobby. The fix put the top 0.06 under the corridor's head, which is a
+    /// gap in the arithmetic and none at all on screen: Jake said the text
+    /// runs into the ceiling. The band is what is left between the two, and
+    /// the lines and the gap are sized to sit inside it rather than either
+    /// one being chosen on its own.
+    ///
+    /// The band it has to sit in is a different band now. The corridor's
+    /// head was at 2.4 and the lobby's ceiling is at 3.2, so there is more
+    /// room over the sign than there was, and the edge that still bites is
+    /// the door head under it.
     #[test]
     fn the_sign_hangs_in_the_band() {
         let wide = super::SIGN_SAYS
@@ -2234,14 +961,14 @@ mod tests {
         let foot = top - line * 2.0 - super::SIGN_GAP;
 
         assert!(
-            super::TALL - top >= 0.15,
-            "the sign is {:.3} under the head, which reads as touching it",
-            super::TALL - top
+            super::LOBBY_TALL - top >= 0.15,
+            "the sign is {:.3} under the ceiling, which reads as touching it",
+            super::LOBBY_TALL - top
         );
 
         assert!(
             foot >= super::DOOR_TALL,
-            "the sign reaches to {:.3}, below the door heads at {:.3}",
+            "the sign reaches to {:.3}, below the door head at {:.3}",
             foot,
             super::DOOR_TALL
         );
@@ -2255,581 +982,6 @@ mod tests {
         Room::of(crate::games()).reaches
     }
 
-    /// Spec 0029: odd on the left as you walk in, even on the right.
-    ///
-    /// Not decoration. Doubling sends every guest into an even room, so the
-    /// whole left wall opens in one move, and that only reads because the
-    /// sides are split odd and even.
-    #[test]
-    fn the_sides_alternate() {
-        let reaches = reaches();
-        let middle = middle_z(reaches);
-
-        for n in 1..=DRAWN {
-            let stands = at(reaches, n);
-
-            if n % 2 == 1 {
-                assert!(
-                    stands.z > middle,
-                    "room {} is odd and stands on the right at z {}",
-                    n,
-                    stands.z
-                );
-            } else {
-                assert!(
-                    stands.z < middle,
-                    "room {} is even and stands on the left at z {}",
-                    n,
-                    stands.z
-                );
-            }
-        }
-    }
-
-    /// And they run away from the desk rather than toward it.
-    #[test]
-    fn the_corridor_runs_away_from_the_lobby() {
-        let reaches = reaches();
-        let (west, _) = span();
-
-        let mut last = west;
-
-        for n in 1..=DRAWN {
-            let x = at(reaches, n).x;
-
-            assert!(x < west, "room {} is not west of the lobby", n);
-            assert!(x <= last, "room {} doubles back", n);
-
-            last = x;
-        }
-    }
-
-    /// Spec 0029: doubling frees every room on the left and none on the
-    /// right.
-    #[test]
-    fn doubling_empties_the_odd_side() {
-        let mut hotel = Hotel::new();
-
-        for n in 1..=DRAWN {
-            assert!(hotel.taken(n), "room {} started empty", n);
-        }
-
-        hotel.apply(Arrival::Endless);
-        // let the whole wave through
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-        for n in 1..=DRAWN {
-            if on_the_left(n) {
-                assert!(!hotel.taken(n), "room {} is odd and still taken", n);
-            } else {
-                assert!(hotel.taken(n), "room {} is even and stands empty", n);
-            }
-        }
-    }
-
-    /// Spec 0029: the change travels rather than arriving everywhere at once.
-    ///
-    /// This is the half aleph could not have. Its own parked note calls the
-    /// result the lesser half, because the guests never travel and only the
-    /// outcome shows.
-    #[test]
-    fn the_change_travels() {
-        let mut hotel = Hotel::new();
-
-        hotel.apply(Arrival::Endless);
-
-        // one room's worth of travel, and nothing beyond it has moved
-        hotel.tick(1.0 / TRAVELS_AT, DRAWN);
-
-        let front = hotel.travelling().expect("nothing is travelling");
-
-        assert!((1.0..2.0).contains(&front), "the front is at {}", front);
-        assert!(
-            !hotel.taken(1),
-            "room 1 is behind the front and did not move"
-        );
-        assert!(
-            hotel.taken(3),
-            "room 3 is beyond the front and should be as it was"
-        );
-        assert!(
-            hotel.taken(DRAWN),
-            "the far end moved before the wave reached it"
-        );
-    }
-
-    /// And a control: with no rule applied, nothing is travelling and nothing
-    /// moves however long it is ticked.
-    #[test]
-    fn nothing_travels_on_its_own() {
-        let mut hotel = Hotel::new();
-
-        hotel.tick(60.0, DRAWN);
-
-        assert!(hotel.travelling().is_none());
-
-        for n in 1..=DRAWN {
-            assert!(hotel.taken(n), "room {} emptied with no rule applied", n);
-        }
-    }
-
-    /// Spec 0029: the light and the door never disagree, once nothing is
-    /// moving.
-    ///
-    /// **While a wave is passing they do, and that is the point.** A door
-    /// the front is going through stands open because somebody is going
-    /// through it, and the room behind it is still somebody's. The light
-    /// says who is in and the door says who is moving, so they only have to
-    /// agree when nobody is.
-    /// A hotel that has had nothing done to it is full the whole way.
-    ///
-    /// **It was full for sixty metres and empty for two kilometres.** Who was
-    /// in was a list of forty, indexed by the absolute room number, and
-    /// `window` made the drawn rooms follow you without it. Past the
-    /// fortieth every room answered empty, so `open_by` swung every door out
-    /// there wide and `lit_under` put a light under none of them. Jake walked
-    /// west and called it blocky, which is the rank of open leaves cutting
-    /// into the corridor.
-    #[test]
-    fn a_full_hotel_is_full_wherever_you_look() {
-        let hotel = Hotel::new();
-
-        // the fortieth, the first one past it, one a player actually reaches
-        // on foot, and one far enough out that only arithmetic gets there
-        for n in [1, DRAWN, DRAWN + 1, 250, 10_000, MOST] {
-            assert!(hotel.taken(n), "room {} is empty in a full hotel", n);
-            assert_eq!(hotel.open_by(n), 0.0, "room {}'s door stands open", n);
-            assert!(hotel.lit_under(n), "room {} has no light under its door", n);
-        }
-    }
-
-    /// And the rule reaches as far as the corridor does.
-    ///
-    /// Under spec 0034 the coaches fill the odd prime powers and nothing
-    /// else, so room 6 is nobody's. That has to be as true at 2187 as at 9,
-    /// or the argument stops where the old list did.
-    #[test]
-    fn the_rule_reaches_past_the_fortieth() {
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Coaches);
-        hotel.house();
-
-        // both waves, so the arrivals are in
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-        for n in [9u64, 2048, 2187, 14_641] {
-            assert!(
-                hotel.taken(n),
-                "room {} is a prime power and stands empty",
-                n
-            );
-        }
-
-        // 6 is 2·3 and belongs to nobody, and so does every multiple of two
-        // primes however far out
-        for n in [6u64, 2190, 9999] {
-            assert!(!hotel.taken(n), "room {} belongs to nobody and is taken", n);
-        }
-    }
-
-    /// A wave passes every room you can see before it ends.
-    ///
-    /// **It ran forty rooms, because forty was once the far edge of the
-    /// window.** `window` moved that edge and the wave kept its number, and
-    /// the front travels faster than a body walks, so you can press the key
-    /// at the desk, run west, and watch rooms ahead of you change with
-    /// nothing passing them.
-    ///
-    /// Stated over the coaches, which is the one move that leaves rooms
-    /// empty, so there is something to see at room 57.
-    #[test]
-    fn the_wave_passes_everything_you_can_see() {
-        const SEEN_TO: u64 = 57;
-
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Coaches);
-        hotel.house();
-
-        // 57 is 3 times 19, so the coaches leave it empty and it is taken
-        // until the front gets there
-        assert!(odd_prime_power(9), "9 is a prime power");
-        assert!(!odd_prime_power(SEEN_TO), "57 is nobody's");
-
-        while hotel
-            .travelling()
-            .is_some_and(|front| front < SEEN_TO as f32 - 1.0)
-        {
-            hotel.tick(0.05, SEEN_TO);
-        }
-
-        assert!(
-            hotel.taken(SEEN_TO),
-            "room {} changed before the wave reached it",
-            SEEN_TO
-        );
-
-        // and once it has passed, it has
-        for _ in 0..200 {
-            hotel.tick(0.05, SEEN_TO);
-        }
-
-        assert!(
-            !hotel.taken(SEEN_TO),
-            "room {} never changed at all",
-            SEEN_TO
-        );
-    }
-
-    /// Reading a move backwards is reading the same move.
-    ///
-    /// `Who` asks `came_from` where `apply` used to push with `sends`, so the
-    /// two are one account of a move seen from either end. They are written
-    /// separately, which is what this holds together.
-    #[test]
-    fn every_move_can_be_read_backwards() {
-        for by in [
-            Arrival::One,
-            Arrival::Coach(42),
-            Arrival::Endless,
-            Arrival::Coaches,
-        ] {
-            for n in 1..=200u64 {
-                let Some(to) = by.sends(n) else { continue };
-
-                assert_eq!(
-                    by.came_from(to),
-                    Some(n),
-                    "{:?} sends {} to {} and reads it back as somebody else",
-                    by,
-                    n,
-                    to
-                );
-            }
-
-            // and a room nobody was sent to says so, rather than naming
-            // whoever is nearest
-            for m in 1..=200u64 {
-                if let Some(from) = by.came_from(m) {
-                    assert_eq!(
-                        by.sends(from),
-                        Some(m),
-                        "{:?} reads {} back as {}, who is sent elsewhere",
-                        by,
-                        m,
-                        from
-                    );
-                }
-            }
-        }
-    }
-
-    /// And what fills everything fills everything.
-    ///
-    /// `fills_everything` is a second account of `fills`, which is how this
-    /// building keeps breaking itself, so the two are held together rather
-    /// than left to whoever edits one of them.
-    #[test]
-    fn what_fills_everything_fills_everything() {
-        for by in [
-            Arrival::One,
-            Arrival::Coach(42),
-            Arrival::Endless,
-            Arrival::Coaches,
-        ] {
-            assert_eq!(
-                by.fills_everything(),
-                (1..=200u64).all(|n| by.fills(n)),
-                "{:?} disagrees with itself about what it fills",
-                by
-            );
-        }
-    }
-
-    #[test]
-    fn the_light_says_what_the_door_says() {
-        let mut hotel = Hotel::new();
-
-        // the one move that does not fill everything it frees, so the hotel
-        // this is stated over has empty rooms in it to be wrong about
-        hotel.apply(Arrival::Coaches);
-
-        for _ in 0..400 {
-            hotel.tick(0.05, DRAWN);
-
-            if hotel.travelling().is_some() {
-                continue;
-            }
-
-            // past the fortieth as well as inside it, which is where the
-            // two used to agree only by both being wrong
-            for n in (1..=DRAWN).chain([250, 10_000]) {
-                assert_eq!(
-                    hotel.lit_under(n),
-                    hotel.open_by(n) == 0.0,
-                    "room {} has a door and a light that disagree at rest",
-                    n
-                );
-            }
-        }
-    }
-
-    /// And while a wave is passing, a door it is going through stands open
-    /// even though somebody is in that room.
-    ///
-    /// Without this the move that houses one guest shows nothing at all:
-    /// everybody shifts up a room, every room is full before and after, and a
-    /// shut door that stays shut says none of it. Jake pressed Enter and said
-    /// the doors all looked closed. They were.
-    #[test]
-    fn a_door_the_wave_is_passing_stands_open() {
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::One);
-        hotel.house();
-
-        let mut ever_open = 0;
-
-        for _ in 0..600 {
-            hotel.tick(0.02, DRAWN);
-
-            let Some(front) = hotel.travelling() else {
-                continue;
-            };
-
-            let at = front.round().max(1.0) as u64;
-
-            if at <= DRAWN && hotel.taken(at) && hotel.open_by(at) > 0.4 {
-                ever_open += 1;
-            }
-        }
-
-        assert!(
-            ever_open > 0,
-            "no taken room ever opened, so the guests never looked like they moved"
-        );
-    }
-
-    /// Spec 0029: no strip is level with the floor it lies on.
-    ///
-    /// A glowing quad coplanar with the floor is two faces in one plane,
-    /// which is the fault this building has fought seven times.
-    #[test]
-    fn no_strip_is_in_the_floor() {
-        let reaches = reaches();
-        let floor = corridor_floor(reaches).max.y;
-
-        for n in 1..=DRAWN {
-            let lies = strip(reaches, n, STRIP_STEPS[STRIP_STEPS.len() - 1].0);
-
-            assert!(
-                lies.min.y > floor,
-                "room {}'s strip is at {} and the floor is at {}",
-                n,
-                lies.min.y,
-                floor
-            );
-        }
-    }
-
-    /// And it lies in the corridor rather than through a wall.
-    #[test]
-    fn every_strip_is_on_the_corridors_floor() {
-        let reaches = reaches();
-        let middle = middle_z(reaches);
-        let (from, to) = (middle - ACROSS * 0.5, middle + ACROSS * 0.5);
-
-        for n in 1..=DRAWN {
-            let lies = strip(reaches, n, STRIP_STEPS[STRIP_STEPS.len() - 1].0);
-
-            assert!(
-                lies.min.z >= from - 1e-4 && lies.max.z <= to + 1e-4,
-                "room {}'s strip runs z {} to {} and the corridor is {} to {}",
-                n,
-                lies.min.z,
-                lies.max.z,
-                from,
-                to
-            );
-        }
-    }
-
-    /// Spec 0029: room numbers are right at the far end as well as the near
-    /// one, where a float is at its worst.
-    #[test]
-    fn the_last_room_is_numbered_correctly() {
-        let reaches = reaches();
-        let (west, _) = span();
-
-        for n in [1u64, 2, DRAWN - 1, DRAWN] {
-            let x = at(reaches, n).x;
-            let along = n as f32 * 0.5;
-            let want = west - APART * 0.5 - along * APART;
-
-            assert!(
-                (x - want).abs() < 1e-3,
-                "room {} stands at {} and should at {}",
-                n,
-                x,
-                want
-            );
-        }
-
-        // and no two rooms stand in the same place
-        for n in 1..DRAWN {
-            let one = at(reaches, n);
-            let next = at(reaches, n + 2);
-
-            assert!(
-                (one.x - next.x).abs() > APART * 0.5,
-                "rooms {} and {} are on top of each other",
-                n,
-                n + 2
-            );
-        }
-    }
-
-    /// Spec 0029: nothing of the corridor is drawn inside another room.
-    #[test]
-    fn nothing_of_the_corridor_is_in_another_room() {
-        let reaches = reaches();
-        let mine = solid(reaches);
-
-        let theirs: Vec<(&str, Vec<Aabb>)> = vec![
-            ("the garden", crate::garden::solid(reaches)),
-            ("the baths", crate::spa::solid(reaches)),
-            ("the back room", crate::back::solid(reaches)),
-            ("behind the wall", crate::behind::solid(reaches)),
-            ("the tesseract", crate::tesseract::solid()),
-        ];
-
-        for (name, boxes) in theirs {
-            for one in &mine {
-                for other in &boxes {
-                    let over = one.min.x < other.max.x - 1e-4
-                        && other.min.x < one.max.x - 1e-4
-                        && one.min.y < other.max.y - 1e-4
-                        && other.min.y < one.max.y - 1e-4
-                        && one.min.z < other.max.z - 1e-4
-                        && other.min.z < one.max.z - 1e-4;
-
-                    assert!(!over, "the hotel runs into {} at {:?}", name, other);
-                }
-            }
-        }
-    }
-
-    /// Spec 0029: the corridor's floor clears the cellar's ceiling.
-    ///
-    /// **It does not have to miss it.** A face buried inside another solid is
-    /// hidden rather than fighting, and the hall's own floor already overlaps
-    /// a cellar box. What may not happen is the cellar reaching up to or past
-    /// the surface you walk on, because a face at the walking surface stops
-    /// you dead and `walk` reports it as nothing at all.
-    #[test]
-    fn the_corridor_clears_the_cellar() {
-        let reaches = reaches();
-        let floor = corridor_floor(reaches);
-        let walk_on = floor.max.y;
-
-        for b in crate::cellar::solid(reaches) {
-            let under = b.min.x < floor.max.x
-                && floor.min.x < b.max.x
-                && b.min.z < floor.max.z
-                && floor.min.z < b.max.z;
-
-            if !under {
-                continue;
-            }
-
-            assert!(
-                b.max.y < walk_on - 1e-4,
-                "the cellar reaches y {} under a corridor you walk at {}",
-                b.max.y,
-                walk_on
-            );
-        }
-    }
-
-    /// Spec 0029: you walk from the gallery into the corridor without your
-    /// feet rising.
-    ///
-    /// Walked rather than measured. The pool's steps had four legal rises and
-    /// were one solid block, and every rise passed.
-    #[test]
-    fn walked_from_the_gallery_into_the_corridor() {
-        let reaches = reaches();
-        let room = Room::of(crate::games());
-        let solid = room.solid();
-        let middle = middle_z(reaches);
-
-        // dropped in from above rather than placed, because a point on the
-        // floor can be inside the furniture
-        let from = vec3(-crate::room::GALLERY_WIDE * 0.5 + 1.0, 0.6, middle);
-        let to = vec3(at(reaches, DRAWN).x, 0.0, middle);
-
-        let got = walked(&solid, from, to, 30.0);
-
-        assert!(
-            got.x < at(reaches, 6).x,
-            "walked from the gallery only as far as {} and room 6 is at {}",
-            got.x,
-            at(reaches, 6).x
-        );
-        assert!(
-            got.y < 0.2,
-            "feet rose to {} on the way down the corridor",
-            got.y
-        );
-    }
-
-    /// Spec 0029: a body walks the corridor with doors open on both sides.
-    ///
-    /// The case that fails: two facing doors at [`SWINGS_TO`] leave 1.13 m of
-    /// a 3.2 m corridor, against a body of 0.9 and this building's usual 1.05
-    /// of clearance.
-    #[test]
-    fn walked_with_every_door_open() {
-        let leaf = DOOR_WIDE * SWINGS_TO.sin();
-        let clear = ACROSS - leaf * 2.0;
-
-        assert!(
-            clear > 1.05,
-            "two facing doors leave {} and a body wants 1.05",
-            clear
-        );
-        assert!(
-            clear > 0.9,
-            "two facing doors leave {} and a body is 0.9 across",
-            clear
-        );
-    }
-
-    /// Spec 0029: you can stand at the desk and see room 1.
-    #[test]
-    fn room_one_is_in_view_from_the_desk() {
-        let reaches = reaches();
-        let counter = desk(reaches);
-        let stands = vec3(
-            (counter.min.x + counter.max.x) * 0.5,
-            0.0,
-            counter.max.z + 1.0,
-        );
-        let one = at(reaches, 1);
-
-        assert!(
-            one.x < stands.x,
-            "room 1 is not west of where you stand at the desk"
-        );
-        assert!(
-            (one.x - stands.x).abs() < DEEP + APART * 3.0,
-            "room 1 is {} from the desk",
-            (one.x - stands.x).abs()
-        );
-    }
-
     /// Spec 0029: the doorway here and the back room's are one account.
     #[test]
     fn the_two_doorways_are_one_account() {
@@ -2838,280 +990,131 @@ mod tests {
         assert_eq!(way(reaches), crate::back::way(reaches));
     }
 
-    /// Spec 0029: a door is solid, so you cannot walk through one.
+    /// Spec 0062: the lobby is closed but for the two doorways it has.
     ///
-    /// Drawn and not solid is what the first build shipped, and Jake found it
-    /// by walking into a door.
+    /// **This is the guard the cut needed.** Spec 0029's corridor left
+    /// through the whole middle of the west wall and spec 0035's long hall
+    /// through the far one, so taking both out meant closing two openings
+    /// and cutting one new one. A wall left part open is a hole you find by
+    /// walking into it, and the lid over this room is what the sky sees
+    /// through such a hole: spec 0029 has that fault recorded twice
+    /// already, once at this very doorway.
+    ///
+    /// Swept along each wall rather than checked at its corners, which is
+    /// the building's own note on borrowed walls and is how both of those
+    /// were missed the first time.
     #[test]
-    fn a_door_is_solid() {
+    fn one_way_out_of_the_lobby() {
         let reaches = reaches();
+        let (west, east) = span();
+        let (from, to) = across(reaches);
+        let (door_from, door_to) = book_door(reaches);
+        let (way_from, way_to) = way(reaches);
+        let boxes: Vec<Aabb> = solid(reaches)
+            .into_iter()
+            .chain(gallery_west(reaches))
+            .collect();
+        let inside = |at: Vec3| boxes.iter().any(|box_| box_.contains_point(at));
 
-        for n in [1u64, 2, 9, DRAWN] {
-            let shut = leaf_box(reaches, n, 0.0);
-            let open = leaf_box(reaches, n, 1.0);
+        for step in 0..40 {
+            let along = (step as f32 + 0.5) / 40.0;
+            let z = from + (to - from) * along;
+            let x = west + (east - west) * along;
 
-            assert!(shut.size().x > 0.0 && shut.size().y > 0.0);
-            assert!(
-                open.size().z > shut.size().z,
-                "room {}'s door takes up no more corridor open than shut",
-                n
-            );
-            assert!(
-                open.max.y > DOOR_TALL * 0.9,
-                "room {}'s leaf is not door height",
-                n
-            );
+            for up in [0.2f32, 1.0, LOBBY_TALL * 0.5, LOBBY_TALL - 0.1] {
+                // the west wall, which the register's door is cut into
+                let in_the_door = z > door_from && z < door_to && up < DOOR_TALL;
+
+                if !in_the_door {
+                    assert!(
+                        inside(vec3(west - THICK * 0.5, up, z)),
+                        "the lobby's west wall is open at {:.2} along, {:.2} up",
+                        z,
+                        up
+                    );
+                }
+
+                // the east wall, which the gallery's doorway is cut into and
+                // which runs the full height of the room
+                if !(z > way_from && z < way_to) {
+                    assert!(
+                        inside(vec3(east + THICK * 0.5, up, z)),
+                        "the lobby's east wall is open at {:.2} along, {:.2} up",
+                        z,
+                        up
+                    );
+                }
+
+                // and the two with nothing in them at all
+                assert!(
+                    inside(vec3(x, up, from - THICK * 0.5)),
+                    "the lobby's far wall is open at {:.2} along, {:.2} up",
+                    x,
+                    up
+                );
+                assert!(
+                    inside(vec3(x, up, to + THICK * 0.5)),
+                    "the lobby's north wall is open at {:.2} along, {:.2} up",
+                    x,
+                    up
+                );
+            }
         }
     }
 
-    /// And an open one reaches into the corridor rather than through the wall.
+    /// Spec 0062: you can walk in from the gallery and reach the head of the
+    /// page.
+    ///
+    /// **Three legs, because one straight line is not the walk.** Spec 0029
+    /// had you turn out of the corridor through a door in its side wall;
+    /// this goes through the gallery's doorway, across the lobby, through
+    /// the register's door and west along the book, which is the route the
+    /// room is now for. The diagonal starts at the far end of the page, so a
+    /// walk that stops at the threshold is a room with nothing in it.
+    ///
+    /// The whole building's boxes, not this room's: a walk that only knows
+    /// its own room walks through the wall it shares.
     #[test]
-    fn an_open_door_swings_into_the_corridor() {
-        let reaches = reaches();
+    fn walked_from_the_gallery_into_the_register() {
+        let room = Room::of(crate::games());
+        let reaches = room.reaches;
+        let solid = room.solid();
+        let (_, east) = span();
+        let middle = middle_z(reaches);
+        let (page_west, page_east) = crate::register::along(reaches);
+        let legs = [
+            // out of the gallery's doorway into the lobby
+            vec3(east - 1.0, 0.0, middle),
+            // across it to the register's door
+            vec3(span().0 + 0.5, 0.0, middle),
+            // through the door
+            vec3(page_east - 1.0, 0.0, middle),
+            // and west to the head of the page
+            vec3(page_west + 0.6, 0.0, middle),
+        ];
+        let mut at = vec3(east + 0.6, 0.0, middle);
 
-        for n in 1..=DRAWN {
-            let open = leaf_box(reaches, n, 1.0);
-            let inward = if on_the_left(n) { -1.0 } else { 1.0 };
-            let reached = if inward < 0.0 { open.min.z } else { open.max.z };
-            let from_the_wall = (reached - at(reaches, n).z) * inward;
+        for (n, leg) in legs.iter().copied().enumerate() {
+            at = walked(&solid, at, leg, 12.0);
+
+            let short = vec3(leg.x - at.x, 0.0, leg.z - at.z).length();
 
             assert!(
-                from_the_wall > DOOR_WIDE * 0.5,
-                "room {}'s open door reaches {} into the corridor",
+                short < 0.6,
+                "leg {} of the walk in stopped {:.2} short of {:?}, at {:?}",
                 n,
-                from_the_wall
+                short,
+                leg,
+                at
             );
         }
-    }
 
-    /// Spec 0029: the light under a door is three quads and not one.
-    #[test]
-    fn the_light_falls_off_rather_than_stopping() {
-        let mut last_out = 0.0;
-        let mut last_strength = f32::MAX;
-
-        for (out, strength) in STRIP_STEPS {
-            assert!(out > last_out, "the steps do not reach further each time");
-            assert!(strength < last_strength, "the steps do not dim");
-
-            last_out = out;
-            last_strength = strength;
-        }
-
-        assert!(
-            last_out > STRIP_STEPS[0].0 * 2.0,
-            "the furthest step reaches {}, which is barely past the first",
-            last_out
-        );
-    }
-
-    /// Spec 0030: after a move the hotel is full again.
-    ///
-    /// This is the whole point and the thing both earlier builds missed.
-    /// Freeing rooms and leaving them free is a subtraction. Freeing them,
-    /// filling them, and being full again with more people in it is the
-    /// paradox.
-    #[test]
-    fn the_hotel_is_full_again() {
-        for arrival in [Arrival::One, Arrival::Coach(9), Arrival::Endless] {
-            let mut hotel = Hotel::new();
-
-            hotel.at_the_door = Some(arrival);
-            assert!(hotel.full(), "{:?}: it did not start full", arrival);
-
-            hotel.house();
-            // both waves all the way through
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-            hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-            assert!(hotel.full(), "{:?}: it is not full again", arrival);
-        }
-    }
-
-    /// And more people are in it, with nobody having left.
-    #[test]
-    fn nobody_left_and_more_arrived() {
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Coach(9));
-        hotel.house();
-
-        // **Not yet.** They are counted when they are in, not when they are
-        // asked for: the desk used to read the outcome the instant you
-        // pressed, before either wave had moved a door.
-        assert_eq!(hotel.housed(), 0, "they were counted before they walked in");
-
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
+        // and from there the diagonal has a full page to be read off
         assert_eq!(
-            hotel.housed(),
-            9,
-            "nine arrived and {} were housed",
-            hotel.housed()
+            crate::register::walked(reaches, at),
+            0,
+            "the walk ends somewhere other than the head of the page"
         );
-    }
-
-    /// One guest does not need the doubling, because a shuffle of one is
-    /// enough and the room should not say otherwise.
-    #[test]
-    fn one_guest_does_not_need_the_doubling() {
-        // a shuffle of one, and of forty two, which is what those two are
-        assert_eq!(Arrival::One.sends(7), Some(8));
-        assert_eq!(Arrival::Coach(42).sends(7), Some(49));
-    }
-
-    /// And a coach with a room for every number is the one that cannot be
-    /// shuffled and has to be doubled.
-    #[test]
-    fn an_endless_coach_is_housed() {
-        assert_eq!(Arrival::Endless.sends(7), Some(14));
-
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Endless);
-        hotel.house();
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-        // the freeing wave is through: every odd room stands open
-        for n in 1..=DRAWN {
-            if on_the_left(n) {
-                assert!(!hotel.taken(n), "room {} is odd and still taken", n);
-            }
-        }
-
-        hotel.tick(DRAWN as f32 / TRAVELS_AT + 1.0, DRAWN);
-
-        assert!(hotel.full(), "the endless coach did not fill the odd side");
-        assert!(
-            hotel.housed() >= DRAWN / 2,
-            "only {} were housed",
-            hotel.housed()
-        );
-    }
-
-    /// Spec 0030: the filling follows the freeing rather than happening with
-    /// it, so the two waves are two.
-    #[test]
-    fn the_filling_follows_the_freeing() {
-        let mut hotel = Hotel::new();
-
-        hotel.at_the_door = Some(Arrival::Endless);
-        hotel.house();
-
-        assert!(
-            !hotel.filling(),
-            "it is filling before it has freed anything"
-        );
-
-        hotel.tick(2.0 / TRAVELS_AT, DRAWN);
-        assert!(!hotel.filling(), "it is filling while still freeing");
-        assert!(
-            !hotel.taken(1),
-            "room 1 did not empty behind the first wave"
-        );
-
-        hotel.tick(DRAWN as f32 / TRAVELS_AT, DRAWN);
-        assert!(hotel.filling(), "the second wave never set off");
-    }
-
-    /// Spec 0031: the blank door is passed rather than hunted.
-    ///
-    /// It stands where room nought would be, so it is the first door you
-    /// come to walking in, and it slots into the alternating pattern: on the
-    /// even side, 1.5 from room 2, which is the spacing every other same-side
-    /// pair has.
-    #[test]
-    fn the_blank_door_is_passed() {
-        let reaches = reaches();
-        let (west, _) = span();
-        let blank = blank_door(reaches);
-
-        assert!(
-            !on_the_left(BLANK),
-            "the blank door is not on the even side"
-        );
-        assert!(blank.x < west, "the blank door is not in the corridor");
-
-        // nothing else stands in its place
-        for n in 1..=DRAWN {
-            let room = at(reaches, n);
-
-            if (room.z - blank.z).abs() > 0.1 {
-                continue;
-            }
-
-            assert!(
-                (room.x - blank.x).abs() > DOOR_WIDE,
-                "room {} overlaps the blank door",
-                n
-            );
-        }
-
-        // and room 2 is exactly a same-side step past it
-        let two = at(reaches, 2);
-
-        assert!(
-            ((blank.x - two.x).abs() - APART).abs() < 1e-3,
-            "the blank door is {} from room 2 and a same-side step is {}",
-            (blank.x - two.x).abs(),
-            APART
-        );
-
-        // you pass it before any room
-        assert!(
-            blank.x > at(reaches, 1).x,
-            "room 1 comes before the blank door"
-        );
-    }
-
-    /// Spec 0030: there is no last door. Wherever you stand, there are rooms
-    /// drawn past you.
-    ///
-    /// Jake found the first build's last door by walking to room 36. In a
-    /// hotel whose premise is that there is always more of it than you can
-    /// see, reaching the end is the one thing that must not happen.
-    #[test]
-    fn there_is_always_another_door() {
-        let reaches = reaches();
-
-        for n in [1u64, 2, 40, 41, 500, 10_000, 1_000_000] {
-            let stood = at(reaches, n);
-            let drawn = window(stood);
-
-            assert!(
-                drawn.contains(&n),
-                "standing at room {} and it is not among the drawn",
-                n
-            );
-
-            let past = drawn.clone().filter(|m| *m > n).count();
-
-            assert!(
-                past >= (DRAWN / 2) as usize - 1,
-                "standing at room {} there are only {} doors past it",
-                n,
-                past
-            );
-        }
-    }
-
-    /// And the numbers are right wherever you stand, not only near the lobby.
-    #[test]
-    fn the_numbers_are_right_far_from_the_desk() {
-        let reaches = reaches();
-
-        for n in [1u64, 2, 39, 40, 41, 999, 100_000] {
-            let stood = at(reaches, n);
-
-            assert_eq!(
-                nearest(stood),
-                n,
-                "room {} stands where the corridor calls room {}",
-                n,
-                nearest(stood)
-            );
-        }
     }
 
     /// Drives a body your size from one place to another with the game's own

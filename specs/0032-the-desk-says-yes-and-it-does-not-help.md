@@ -230,3 +230,19 @@ number would change under them. It is keyed on what they walked.
 **Any claim about how many names there are.** The room shows that the list
 cannot be finished. It does not name what it is a list of, and `aleph` next
 door does not either.
+
+## 2026-11-10: the way in moved
+
+**Spec 0062 took the corridor out and the blank door with it.** The register
+is reached through a door in the hotel lobby's west wall now, on the same
+middle line as the gallery's doorway and the back room's, and the room runs
+west from it with the book on your left as you walk.
+
+What that cost is the joke this spec chose its siting for: the room proving
+not everything can be numbered stood behind the one door in forty with no
+number on it. With no numbered doors left there is nothing for a blank one
+to be blank against, so the sign over the door carries the claim instead and
+the door under it is the way to the book that disproves it.
+
+Nothing else here changed. The book is the same book, the diagonal is the
+same walk, and the desk still says yes.

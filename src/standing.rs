@@ -41,8 +41,6 @@ pub enum Where {
     Hotel,
     /// The register behind the hotel's one unnumbered door, per spec 0031.
     Register,
-    /// The other corridor off the hotel's lobby, per spec 0035.
-    Twine,
     /// The imaginarium over the hall, per spec 0037.
     Aloft,
     /// The way up to it, per spec 0037, which is in neither room it joins:
@@ -62,11 +60,8 @@ pub enum Made {
     Lining,
     HotelWall,
     HotelCeiling,
-    HotelEnd,
     RegisterWall,
     RegisterCeiling,
-    TwineWall,
-    TwineCeiling,
     AloftFloor,
     AloftPier,
     AloftWall,
@@ -146,29 +141,26 @@ pub fn runs(reaches: f32) -> Vec<Run> {
     put(Where::Back, Made::BackCeiling, ceiling);
     put(Where::Back, Made::Lining, crate::back::lining(reaches));
 
-    // and the hotel: its shell, and nothing of the doors, the plaques, the
-    // strips or the desk. A door swings and a strip goes out, and spec 0026
-    // keeps what stands still.
+    // and the hotel's lobby: its shell, and nothing of the door or the desk.
+    // A door swings, and spec 0026 keeps what stands still.
+    //
+    // **`Made::HotelEnd` was a third run here.** Spec 0029's corridor had a
+    // far end lit differently from its walls so the darkness at the end of
+    // it read as distance rather than as a wall, and it was the one piece in
+    // that room not the colour of a wall. Spec 0062 took the corridor out.
     let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::aleph::solid(reaches)
         .into_iter()
-        // the floors are drawn as planes and the desk is furniture, the same
-        // two kinds of thing the back room's drawing skips. The far end is
-        // its own run, because it is the one piece in here that is not the
-        // colour of a wall.
+        // the floor is drawn as a plane and the desk and the door leaf are
+        // furniture, the same kinds of thing the back room's drawing skips
         .filter(|box_| {
             box_.max.y > 0.0
                 && *box_ != crate::aleph::desk(reaches)
-                && *box_ != crate::aleph::end(reaches)
+                && *box_ != crate::aleph::book_leaf(reaches)
         })
-        .partition(|box_| box_.min.y < crate::aleph::TALL);
+        .partition(|box_| box_.min.y < crate::aleph::LOBBY_TALL);
 
     put(Where::Hotel, Made::HotelWall, walls);
     put(Where::Hotel, Made::HotelCeiling, ceiling);
-    put(
-        Where::Hotel,
-        Made::HotelEnd,
-        vec![crate::aleph::end(reaches)],
-    );
 
     // and the register behind the blank door, per spec 0031. Its floor is
     // drawn as a plane, the same as every other floor in this building.
@@ -179,16 +171,6 @@ pub fn runs(reaches: f32) -> Vec<Run> {
 
     put(Where::Register, Made::RegisterWall, walls);
     put(Where::Register, Made::RegisterCeiling, ceiling);
-
-    // and the other corridor off the hotel's lobby, per spec 0035. Its
-    // floor is drawn as a plane like every other floor in this building.
-    let (walls, ceiling): (Vec<Aabb>, Vec<Aabb>) = crate::twine::solid(reaches)
-        .into_iter()
-        .filter(|box_| box_.max.y > 0.0)
-        .partition(|box_| box_.min.y < crate::aleph::TALL);
-
-    put(Where::Twine, Made::TwineWall, walls);
-    put(Where::Twine, Made::TwineCeiling, ceiling);
 
     // and the imaginarium over the hall, per spec 0037. Its treads and
     // landings are the room rather than its shell and are pushed, because
@@ -283,7 +265,7 @@ mod tests {
         // is both and runs west as far as the corridor's shell does
         let hotel = Aabb::new(
             glam::vec3(
-                crate::aleph::corridor_west() - crate::room::THICK * 2.0,
+                crate::aleph::span().0 - crate::room::THICK * 2.0,
                 -1.0,
                 crate::aleph::across(reaches).0 - crate::room::THICK * 2.0,
             ),
@@ -294,7 +276,7 @@ mod tests {
             ),
         );
 
-        // and the register, which is its own room off that corridor
+        // and the register, which is its own room off that lobby
         let register = {
             let (west, east) = crate::register::along(reaches);
             let (far, near) = crate::register::across(reaches);
@@ -309,26 +291,6 @@ mod tests {
                     east + crate::room::THICK * 2.0,
                     crate::register::TALL + crate::room::THICK * 2.0,
                     near + crate::room::THICK * 2.0,
-                ),
-            )
-        };
-
-        // and spec 0035's corridor, which leaves the hotel's lobby and runs
-        // two kilometres away from it
-        let twine = {
-            let middle = crate::twine::middle_x();
-            let half = crate::twine::ACROSS * 0.5 + crate::room::THICK * 2.0;
-
-            Aabb::new(
-                glam::vec3(
-                    middle - half,
-                    -1.0,
-                    crate::twine::end(reaches) - crate::room::THICK * 2.0,
-                ),
-                glam::vec3(
-                    middle + half,
-                    crate::aleph::TALL + crate::room::THICK * 2.0,
-                    crate::twine::mouth(reaches) + crate::room::THICK * 2.0,
                 ),
             )
         };
@@ -376,7 +338,6 @@ mod tests {
                     Where::Back => back.contains_point(box_.center()),
                     Where::Hotel => hotel.contains_point(box_.center()),
                     Where::Register => register.contains_point(box_.center()),
-                    Where::Twine => twine.contains_point(box_.center()),
                     Where::Aloft => aloft.contains_point(box_.center()),
                     Where::Ascent => ascent.contains_point(box_.center()),
                 };

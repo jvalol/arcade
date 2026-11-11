@@ -275,12 +275,6 @@ pub const INSIDE: f32 = 1.0;
 /// side, so you walk out of the gap between the last two cabinets and into
 /// something broader. A gap the full width of the room would be the end wall
 /// simply stopping, which is what this is replacing.
-/// How much of the hotel's corridor the reach fill is asked to cover.
-///
-/// Not two kilometres of it. See [`Room::fillable`].
-#[cfg(test)]
-pub const CORRIDOR_FILLED: f32 = 24.0;
-
 /// Wide enough for the row with the picture's hole in the middle of it,
 /// and `display::CLEAR` of bare wall past each end.
 ///
@@ -1014,11 +1008,6 @@ pub enum Seen {
     /// for the people who use it, against a hole in the ground of
     /// whoever's floor it is cut in. One of the three is in yours.
     Hatch(u64),
-    /// One of the hotel's doors, by its room number. Spec 0029.
-    ///
-    /// The one thing in that corridor you can work, and the only way there is
-    /// to put somebody in a room or take them out of one.
-    Hotel(u64),
     /// The watchman at the top of the bridge. Spec 0058.
     ///
     /// **The one person in this building you can look at and have
@@ -1064,19 +1053,6 @@ pub struct Room {
     /// game, which is the thing that knows what `since` is.
     pub aloft_doors: [(bool, f32); crate::aloft::FRAMES as usize],
     pub aloft_slid: [f32; crate::aloft::FRAMES as usize],
-    /// Which of the hotel's doors are drawn and how far each stands open.
-    /// Spec 0029.
-    ///
-    /// The room number as well as the swing, because which forty are drawn
-    /// follows wherever you are standing: the corridor has no last door, so
-    /// a list that started at room 1 would be a list of the wrong doors the
-    /// moment you walked past the fortieth.
-    ///
-    /// Held here rather than worked out from the hotel's own state, because
-    /// what the sight and the colliders need is where a leaf *is*, and the
-    /// game owns who is in which room. The game writes this each frame, the
-    /// way it does the baths' swing.
-    pub hotel_doors: Vec<(u64, f32)>,
     /// How far it actually is, nought shut and one open, which follows `open`
     /// rather than being it. The box follows this too: a door drawn halfway
     /// open that stops you where it was shut is a worse thing than one that
@@ -1287,7 +1263,6 @@ impl Room {
             sauna_swing: 0.0,
             baths_open: false,
             baths_swing: 0.0,
-            hotel_doors: Vec::new(),
             swing: 0.0,
             mirror_open: false,
             mirror_swing: 0.0,
@@ -1598,22 +1573,16 @@ impl Room {
     /// the building.
     #[cfg(test)]
     pub fn fillable(&self) -> Aabb {
-        let lobby = crate::aleph::span().0;
-        // **Both corridors, not one.** The long boxes and nothing else.
-        // Nothing real in this building reaches fifty metres west of the
-        // lobby: the furthest is the cellar at -23.7, and the hotel's
-        // corridor starts two kilometres out. An `x` clamp alone cut the
-        // cellar with it, which is how that was found.
+        // **Nothing is clamped out of it but the imaginarium now.** Spec
+        // 0029's corridor ran two kilometres west of the lobby and spec
+        // 0035's ran two more south of it, and this cut both: a fill given
+        // either one went over its cell budget, refused, and came back
+        // empty, and the tests that read it said so rather than passing on
+        // nothing. Spec 0062 took both corridors out, so what is left of
+        // the building fits without being trimmed.
         //
-        // Spec 0035 then put a second two kilometre hall off the same lobby
-        // running in `z` instead, which an `x` clamp does not see at all:
-        // the fill went over its cell budget, refused, and came back empty,
-        // and the test that reads it says so rather than passing on nothing.
-        let along = crate::twine::mouth(self.reaches);
-        let reaching = lobby - 50.0;
-        let reaching_z = along - 50.0;
-        // **And up, which is the third of these.** Spec 0037 put a room
-        // over the hall, and a fill that has to cover eight more metres of
+        // **Up is the one that is still here.** Spec 0037 put a room over
+        // the hall, and a fill that has to cover eight more metres of
         // height spends its cells on air and refuses.
         //
         // By which boxes they are rather than by how high they reach. A
@@ -1627,24 +1596,10 @@ impl Room {
         let rest: Vec<Aabb> = self
             .built(true)
             .into_iter()
-            .filter(|box_| {
-                box_.min.x > reaching
-                    && box_.min.z > reaching_z
-                    && !up.iter().any(|b| b.min == box_.min && b.max == box_.max)
-            })
+            .filter(|box_| !up.iter().any(|b| b.min == box_.min && b.max == box_.max))
             .collect();
-        let whole = Self::round(rest);
 
-        // and a stub of each, so the fill still covers the part anybody
-        // stands in on the way down
-        Aabb::new(
-            vec3(
-                whole.min.x.min(lobby - CORRIDOR_FILLED),
-                whole.min.y,
-                whole.min.z.min(along - CORRIDOR_FILLED),
-            ),
-            whole.max,
-        )
+        Self::round(rest)
     }
 
     /// The same, with the rooms the sun cannot reach left out when asked.
@@ -1693,11 +1648,6 @@ impl Room {
             ("the back room", crate::back::floor(reaches)),
             ("the hall of mirrors", crate::mirrors::floor()),
             ("the hotel's lobby", crate::aleph::floor(reaches)),
-            (
-                "the hotel's corridor",
-                crate::aleph::corridor_floor(reaches),
-            ),
-            ("the other corridor", crate::twine::floor(reaches)),
             ("the register", crate::register::floor(reaches)),
             ("the space beyond the door", crate::beyond::solid(reaches)),
         ];
@@ -1755,30 +1705,17 @@ impl Room {
             out.extend(crate::aleph::solid(self.reaches));
             // and the register behind the blank door, per spec 0031
             out.extend(crate::register::solid(self.reaches));
-            out.extend(crate::twine::solid(self.reaches));
             out.extend(self.aloft());
         }
         out.push(crate::spa::sauna_leaf_box(self.reaches, self.sauna_swing));
         out.push(crate::spa::leaf_box(self.reaches, self.baths_swing));
-        // and every leaf in the hotel's corridor, per spec 0029. A door that
-        // is drawn and not solid is a door you walk through, which is what
-        // the first build of that room shipped and what Jake found by
+        // and the register's door, which stands open and never moves. Spec
+        // 0029's forty one leaves were here too, written each frame as the
+        // drawn window followed you, and spec 0062 took them out. A door
+        // that is drawn and not solid is a door you walk through, which is
+        // what the first build of that room shipped and what Jake found by
         // walking into one.
-        out.extend(
-            self.hotel_doors
-                .iter()
-                .map(|(n, open)| crate::aleph::leaf_box(self.reaches, *n, *open))
-                .collect::<Vec<_>>(),
-        );
-        // **and the blank one**, which is not in that list because it is not
-        // a room, so it had no collider at all and you walked straight
-        // through it. Spec 0031, and Jake found it by doing exactly that. It
-        // stands open and never moves.
-        out.push(crate::aleph::leaf_box(
-            self.reaches,
-            crate::aleph::BLANK,
-            1.0,
-        ));
+        out.push(crate::aleph::book_leaf(self.reaches));
         out.extend(
             self.stood
                 .iter()
@@ -2329,8 +2266,6 @@ impl Room {
         // it, "Room 8 has somebody in it". Jake walked it and found that.
         out.extend(crate::aleph::solid(self.reaches));
         out.extend(crate::register::solid(self.reaches));
-        // and spec 0035's, the other corridor off that lobby
-        out.extend(crate::twine::solid(self.reaches));
         out.extend(crate::aloft::solid());
 
         out
@@ -2459,19 +2394,6 @@ impl Room {
             slab(from, way, &wall).map(|far| (Seen::Book, far))
         };
 
-        // and the hotel's doors, per spec 0029. Every drawn one, because a
-        // corridor where only the near few can be worked is a corridor with
-        // an invisible edge in it.
-        let hotel: Vec<(Seen, f32)> = self
-            .hotel_doors
-            .iter()
-            .filter_map(|(n, open)| {
-                let leaf = crate::aleph::leaf_box(self.reaches, *n, *open);
-
-                slab(from, way, &leaf).map(|far| (Seen::Hotel(*n), far))
-            })
-            .collect();
-
         // and, once it is moving, the leaves themselves. Hunting for the one
         // book again to shut the wall is the same needle in the same haystack,
         // and there is nothing secret left to keep: the hole is standing open.
@@ -2507,7 +2429,6 @@ impl Room {
             .chain(baths)
             .chain(desk)
             .chain(book)
-            .chain(hotel)
             .chain(hatches)
             .chain(swung)
             .filter(|(_, far)| *far <= REACH && *far <= through + 1e-3)
@@ -3356,13 +3277,10 @@ mod tests {
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
                 + crate::register::solid(room.reaches).len()
-                // and the other corridor off that lobby, per spec 0035
-                + crate::twine::solid(room.reaches).len()
                 // and the imaginarium over the hall, per spec 0037,
                 // with a leaf for each of its three second doors, per
                 // spec 0038
                 + room.aloft().len()
-                + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
                 // and the one slab beyond the door, per spec 0018
@@ -4246,13 +4164,10 @@ mod tests {
                 // with a leaf for every drawn room
                 + crate::aleph::solid(room.reaches).len()
                 + crate::register::solid(room.reaches).len()
-                // and the other corridor off that lobby, per spec 0035
-                + crate::twine::solid(room.reaches).len()
                 // and the imaginarium over the hall, per spec 0037,
                 // with a leaf for each of its three second doors, per
                 // spec 0038
                 + room.aloft().len()
-                + room.hotel_doors.len()
                 // and the blank door's leaf, per spec 0031
                 + 1
                 // and the one slab beyond the door, per spec 0018

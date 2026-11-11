@@ -1302,31 +1302,24 @@ pub const HOTEL_WALL: Vec4 = vec4(0.33, 0.29, 0.26, 1.0);
 pub const HOTEL_FLOOR: Vec4 = vec4(0.19, 0.16, 0.15, 1.0);
 pub const HOTEL_CEILING: Vec4 = vec4(0.13, 0.12, 0.12, 1.0);
 
-/// A door, which is the one warm thing in the corridor with a light on it.
+/// A door, which is the one warm thing in here with a light on it.
 pub const HOTEL_DOOR: Vec4 = vec4(0.46, 0.30, 0.20, 1.0);
 
 /// The plaque beside it: white numbers on black, because the engine draws
 /// text light on dark and a plaque is what that looks like anyway.
 pub const HOTEL_PLAQUE: Vec4 = vec4(0.85, 0.86, 0.92, 1.0);
 
-/// And the light under a shut door.
-///
-/// **Not past one on every channel.** It was (2.1, 1.72, 1.15), which is a
-/// warm colour and came out white: every channel over one clips to white on
-/// the way to the screen, so the warmth was in the numbers and nowhere else.
-/// Only the red is well past one now, and the strip reads as a lamp in a room
-/// rather than as a tile.
-pub const HOTEL_LIGHT: Vec4 = vec4(1.85, 1.28, 0.62, 1.0);
+// The light under a shut door was `HOTEL_LIGHT`, and the runner down the
+// middle `HOTEL_RUNNER`. Spec 0062 took the corridor out and both with it.
+// Kept out rather than kept: a colour nothing draws is a colour the next
+// reader has to look up to find that nothing draws it.
 
-/// The runner down the corridor, the skirting and the rail, and the sconces.
-///
-/// A red carpet, dark enough to be a floor at night rather than a stripe.
-pub const HOTEL_RUNNER: Vec4 = vec4(0.26, 0.11, 0.12, 1.0);
+/// The skirting and the rail, and the sconces.
 pub const HOTEL_TRIM: Vec4 = vec4(0.24, 0.21, 0.19, 1.0);
 pub const HOTEL_SCONCE: Vec4 = vec4(0.30, 0.27, 0.22, 1.0);
 
-/// And the shade's mouth, which is the lit part and the only thing in the
-/// corridor besides the door strips that is past one.
+/// And the shade's mouth, which is the lit part and the one thing in this
+/// room that is past one.
 pub const HOTEL_SHADE: Vec4 = vec4(2.4, 1.9, 1.25, 1.0);
 
 /// The register behind the blank door. Spec 0031.

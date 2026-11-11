@@ -1,17 +1,17 @@
-//! The first people in this building. Spec 0033.
+//! The people in this building. Specs 0033 and 0046.
 //!
-//! **Because forty lamps blinking is not forty guests changing rooms.** Spec
-//! 0029 settled that a guest is the light under a shut door, which is right
-//! for a corridor at rest and wrong for one in motion: spec 0030's whole
-//! demonstration was a row of strips going out and coming back on, and Jake
-//! watched it and said it would make more sense if there were bodies
-//! actually moving rooms.
+//! **They were built for spec 0029's corridor.** A guest there was the light
+//! under a shut door, which is right for a corridor at rest and wrong for
+//! one in motion: spec 0030's whole demonstration was a row of strips going
+//! out and coming back on, and Jake watched it and said it would make more
+//! sense if there were bodies actually moving rooms. So there were, crossing
+//! the floor behind the wave.
 //!
-//! The light stays. A guest at rest is still a strip under a door, because
-//! there is nothing to see in a room you cannot go into. What this adds is
-//! the ones the wave has reached.
-
-use glam::{vec3, Vec3};
+//! Spec 0062 took that corridor out and the crossing with it. What is left
+//! is the figure itself and its gait, which is what every other room with
+//! somebody in it reads: the imaginarium's four in their three disagreeing
+//! frames, the one waiting at the hotel's desk, and the watchman at the top
+//! of the bridge.
 
 /// How tall somebody is, and where they come apart.
 ///
@@ -499,108 +499,6 @@ pub fn shin_profile(v: f32) -> (f32, f32) {
     ((v - 1.0) * SHIN_TALL, limb_wide(v * (1.0 - KNEE_AT)))
 }
 
-/// How many rooms of the wave's travel somebody takes to cross.
-///
-/// **The crowd is this number and not the corridor's length.** The front
-/// moves at `aleph::TRAVELS_AT`, so however long the hotel is, the only
-/// people out are the ones it has passed within this many rooms. The hotel
-/// stays endless and nobody is counting it.
-///
-/// At six rooms a second this is a second and a half on the floor, which over
-/// a corridor 3.2 wide is a brisk walk rather than a sprint.
-pub const CROSSES_IN: f32 = 9.0;
-
-/// How fast somebody walks, which is the speed you do.
-///
-/// A crossing to the next number is about three metres and a crossing takes
-/// a second and a half, so nobody going next door ever reaches this cap. It
-/// is for the ones spec 0034 sends to room 1024.
-pub const WALKS: f32 = crate::SPEED;
-
-/// Somebody on the floor of the corridor.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Walking {
-    /// Which room they came out of.
-    pub from: u64,
-    /// Where they are, on the floor.
-    pub at: Vec3,
-    /// Which way they are facing, as a yaw.
-    pub facing: f32,
-    /// How far through the crossing, nought to one.
-    pub along: f32,
-    /// And how far they have actually walked, in metres, which is what
-    /// swings the legs. Spec 0046.
-    ///
-    /// **Not the same number.** A crossing is a crossing whether the move
-    /// sends somebody next door or to room 1024, and pacing the legs off it
-    /// gave a three metre walk and a four hundred metre walk the same seven
-    /// paces. Under a slid foot that was a skate. Under a hip angle derived
-    /// from the stride it is simply wrong.
-    pub walked: f32,
-}
-
-/// Everybody the wave has reached and who has not got there yet.
-///
-/// `front` is the hotel's own wave front, in rooms. Somebody comes out when
-/// it passes their door and is in by the time it is `CROSSES_IN` past them.
-pub fn crossing(
-    reaches: f32,
-    front: Option<f32>,
-    first: u64,
-    last: u64,
-    sends: impl Fn(u64) -> Option<u64>,
-) -> Vec<Walking> {
-    let Some(front) = front else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-
-    // **The band behind the front, and only that, in one place.** It was
-    // bounded twice, once here and once by throwing away anybody whose
-    // crossing had finished, and two guards that each do the whole job mean
-    // neither of them is tested: break one and the other covers for it.
-    let from = (front - CROSSES_IN).ceil().max(first as f32).max(1.0);
-    let to = front.floor().min(last as f32);
-
-    if to < from {
-        return out;
-    }
-
-    for n in (from as u64)..=(to as u64) {
-        let along = (front - n as f32) / CROSSES_IN;
-
-        let leaves = crate::aleph::at(reaches, n);
-        // **Where the move sends them, not next door.** Every move was a
-        // shuffle of one when this was written, so this said `n + 1`. Spec
-        // 0034's prime powers send room 3 to room 8 and room 10 to room
-        // 1024, and a corridor emptying westward is the point of it.
-        let Some(to) = sends(n) else {
-            continue;
-        };
-        let arrives = crate::aleph::at(reaches, to);
-        let way = arrives - leaves;
-        // **At a walk, however far they are going.** Somebody bound for room
-        // 1024 is four hundred metres west, and lerping them there over a
-        // crossing is a streak rather than a person. They walk, and when the
-        // crossing is over they are wherever that got them, which for most
-        // of them is out of the window.
-        let whole = way.length();
-        let gone = along * whole.min(WALKS * CROSSES_IN / crate::aleph::TRAVELS_AT);
-        let at = leaves + way.normalize_or_zero() * gone;
-
-        out.push(Walking {
-            from: n,
-            at: vec3(at.x, 0.0, at.z),
-            facing: way.x.atan2(-way.z),
-            along,
-            walked: gone,
-        });
-    }
-
-    out
-}
-
 /// How far one step carries somebody. Spec 0046.
 ///
 /// **Here rather than in the room that happens to walk people.** It was
@@ -767,7 +665,6 @@ mod tests {
     }
 
     use super::*;
-    use crate::aleph::Arrival;
 
     /// Spec 0033: a figure has a surface.
     ///
@@ -910,236 +807,6 @@ mod tests {
                 crate::aim::COATS[which],
                 crate::aim::COATS[0],
                 "two guests are wearing the same coat"
-            );
-        }
-    }
-
-    /// Spec 0046: the legs are paced off the ground somebody covers, not
-    /// off the crossing they are in the middle of.
-    ///
-    /// **Because a crossing is a crossing however far it goes.** Spec
-    /// 0034's moves send room 3 to room 8 and room 10 to room 1024, and
-    /// `STEPS` paces fitted into either of them gave a four hundred metre
-    /// walk the same seven steps as a three metre one.
-    ///
-    /// The second assertion is the control: the moves this asks about have
-    /// to be far enough apart for the old pacing to have been visibly
-    /// wrong, or a gait that still ignored the ground would pass.
-    ///
-    /// They are not as far apart as the hotel's arithmetic suggests.
-    /// Nobody walks four hundred metres on camera: a crossing caps what it
-    /// covers at `WALKS * CROSSES_IN / TRAVELS_AT`, which is 6.3 metres,
-    /// and whoever is bound for room 1024 goes the rest of the way out of
-    /// the window. So the spread here is about one to one and a half, and
-    /// that is still one and a half times the paces.
-    #[test]
-    fn a_long_move_takes_the_same_step_as_a_short_one() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let out = crossing(reaches, Some(12.0), 1, 40, |n| Arrival::Coaches.sends(n));
-
-        let mut legs: Vec<(u64, f32, f32)> = Vec::new();
-
-        for who in out.iter().filter(|who| who.along > 0.5) {
-            let went = who.at.distance(crate::aleph::at(reaches, who.from));
-
-            assert!(
-                (who.walked - went).abs() < 0.05,
-                "room {}'s guest has walked {:.2} metres and is {:.2} from their door",
-                who.from,
-                who.walked,
-                went
-            );
-
-            legs.push((who.from, went, who.walked / STEP));
-        }
-
-        assert!(legs.len() > 1, "nobody is halfway across");
-
-        let (_, short, _) = *legs
-            .iter()
-            .min_by(|one, two| one.1.total_cmp(&two.1))
-            .expect("somebody is crossing");
-        let (_, long, _) = *legs
-            .iter()
-            .max_by(|one, two| one.1.total_cmp(&two.1))
-            .expect("somebody is crossing");
-
-        assert!(
-            long > short * 1.4,
-            "the longest move is {:.1} metres and the shortest {:.1}, which is not far enough apart to tell",
-            long,
-            short
-        );
-    }
-
-    /// Spec 0033: nobody is out before the wave reaches them, and everybody
-    /// it is passing is.
-    #[test]
-    fn only_the_ones_the_wave_has_reached_are_out() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-
-        assert!(
-            crossing(reaches, None, 1, 40, |n| Arrival::One.sends(n)).is_empty(),
-            "somebody is crossing a corridor with no wave in it"
-        );
-
-        let out = crossing(reaches, Some(12.0), 1, 40, |n| Arrival::One.sends(n));
-
-        assert!(
-            !out.is_empty(),
-            "the wave passed twelve doors and nobody came out"
-        );
-
-        for who in out.iter() {
-            assert!(
-                who.from <= 12,
-                "room {} is out and the wave has not reached it",
-                who.from
-            );
-            assert!(
-                who.from as f32 >= 12.0 - CROSSES_IN,
-                "room {} is still out long after the wave passed",
-                who.from
-            );
-        }
-
-        // the one the front is on this instant has just stepped out
-        assert!(
-            out.iter().any(|who| who.from == 12 && who.along < 0.05),
-            "nobody stepped out of the room the front is passing"
-        );
-    }
-
-    /// Spec 0033: they cross to the next number, which is the other side.
-    ///
-    /// **The first version of this tested `aleph::at` and not the walk.** It
-    /// worked out both doors itself and then checked they were on opposite
-    /// sides, which is true of the corridor however wrong the crossing is:
-    /// sending everybody to room n+2 instead left it passing.
-    #[test]
-    fn they_cross_to_the_next_number() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-
-        // somebody at the very start of a crossing is in their own doorway,
-        // and somebody at the end of one is in the next room's
-        let starting = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::One.sends(n))
-            .into_iter()
-            .min_by(|one, two| one.along.total_cmp(&two.along))
-            .expect("nobody is crossing");
-        let ending = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::One.sends(n))
-            .into_iter()
-            .max_by(|one, two| one.along.total_cmp(&two.along))
-            .expect("nobody is crossing");
-
-        let out_of = crate::aleph::at(reaches, starting.from);
-
-        assert!(
-            (starting.at.x - out_of.x).abs() < 0.2 && (starting.at.z - out_of.z).abs() < 0.2,
-            "room {}'s guest did not start at their own door",
-            starting.from
-        );
-
-        // and the one furthest through is nearly at the next number's door,
-        // which is across the corridor
-        let into = crate::aleph::at(reaches, ending.from + 1);
-        let left = crate::aleph::at(reaches, ending.from);
-
-        assert!(
-            (left.z - into.z).abs() > crate::aleph::ACROSS * 0.5,
-            "the next number is not across the corridor"
-        );
-        assert!(
-            (ending.at.z - into.z).abs() < (ending.at.z - left.z).abs(),
-            "room {}'s guest is {:.2} through and still nearer the door they left",
-            ending.from,
-            ending.along
-        );
-        assert!(
-            ending.along > 0.8,
-            "nobody in the band is near the end of a crossing"
-        );
-    }
-
-    /// Spec 0034: a crossing walks to where the move sends somebody, not to
-    /// the next number.
-    ///
-    /// **This said `n + 1`**, because every move was a shuffle of one when
-    /// it was written. The prime powers send room 3 to room 8 and room 10 to
-    /// room 1024, and a corridor emptying westward is the point of them.
-    #[test]
-    fn they_cross_to_where_the_move_sends_them() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let near = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::One.sends(n));
-        let far = crossing(reaches, Some(20.0), 1, 40, |n| Arrival::Coaches.sends(n));
-
-        assert_eq!(near.len(), far.len(), "a different crowd is out");
-
-        let mut further = 0;
-
-        for (one, two) in near.iter().zip(far.iter()) {
-            assert_eq!(one.from, two.from);
-
-            // room 1 goes to room 2 either way, and room 2 to room 4 is two
-            // doors rather than one: past that they part company
-            if one.from < 3 || one.along < 0.2 {
-                continue;
-            }
-
-            let went = (two.at - crate::aleph::at(reaches, two.from)).length();
-            let next = (one.at - crate::aleph::at(reaches, one.from)).length();
-
-            assert!(
-                went > next,
-                "room {} walks {:.2} to a prime power and {:.2} to next door",
-                one.from,
-                went,
-                next
-            );
-
-            // west, which is where the bigger numbers are
-            assert!(
-                two.at.x < crate::aleph::at(reaches, two.from).x,
-                "room {} is not heading west",
-                two.from
-            );
-
-            further += 1;
-        }
-
-        assert!(further > 0, "nobody was sent further than next door");
-
-        // and nobody streaks: a crossing is a walk however far away the room
-        // they are going to is
-        for who in far.iter() {
-            let went = (who.at - crate::aleph::at(reaches, who.from)).length();
-
-            assert!(
-                went <= WALKS * CROSSES_IN / crate::aleph::TRAVELS_AT + 0.01,
-                "room {} covered {:.1} in one crossing",
-                who.from,
-                went
-            );
-        }
-    }
-
-    /// Spec 0033: a longer corridor is not a bigger crowd.
-    ///
-    /// The hotel is endless. What is on screen is the band the wave is
-    /// passing, and it is the same band whether the corridor is forty doors
-    /// or forty thousand.
-    #[test]
-    fn a_longer_corridor_is_not_a_bigger_crowd() {
-        let reaches = crate::room::Room::of(crate::games()).reaches;
-        let most = (CROSSES_IN as usize) + 1;
-
-        for (front, last) in [(30.0, 40u64), (3_000.0, 40_000), (300_000.0, 4_000_000)] {
-            let out = crossing(reaches, Some(front), 1, last, |n| Arrival::One.sends(n));
-
-            assert!(
-                out.len() <= most,
-                "{} people are out of a corridor {} long",
-                out.len(),
-                last
             );
         }
     }
@@ -1339,67 +1006,6 @@ mod tests {
                 hips(walked) <= high + 1e-5 && hips(walked) >= low - 1e-5,
                 "the hips went outside their own swing"
             );
-        }
-    }
-
-    /// Spec 0033: nobody is solid.
-    ///
-    /// **A deliberate exception to spec 0013**, which says a collider that
-    /// disagrees with what is drawn is this building's commonest fault. A
-    /// corridor where the demonstration can pin you against a wall is worse
-    /// than one you can walk through, and the people are the demonstration.
-    #[test]
-    fn nobody_is_solid() {
-        let mut room = crate::room::Room::of(crate::games());
-        let reaches = room.reaches;
-        let mut hotel = crate::aleph::Hotel::new();
-
-        room.hotel_doors = crate::aleph::window(crate::aleph::at(reaches, 8))
-            .map(|n| (n, hotel.open_by(n)))
-            .collect();
-
-        let at_rest = room.solid().len();
-
-        hotel.house();
-
-        // and again partway through a wave, with a corridor full of people
-        for _ in 0..120 {
-            hotel.tick(1.0 / 60.0, crate::aleph::DRAWN);
-        }
-
-        room.hotel_doors = crate::aleph::window(crate::aleph::at(reaches, 8))
-            .map(|n| (n, hotel.open_by(n)))
-            .collect();
-
-        let out = crossing(reaches, hotel.travelling(), 1, 40, |n| {
-            Arrival::One.sends(n)
-        });
-
-        assert!(
-            !out.is_empty(),
-            "nobody was crossing, so this checked nothing"
-        );
-        assert_eq!(
-            room.solid().len(),
-            at_rest,
-            "a corridor with {} people in it has colliders a corridor at rest does not",
-            out.len()
-        );
-
-        // and the floor of the corridor is clear where they are walking,
-        // away from the doorways, where the leaves swing
-        let solid = room.solid();
-
-        for who in out.iter().filter(|who| (0.2..0.8).contains(&who.along)) {
-            let chest = who.at + vec3(0.0, 1.2, 0.0);
-
-            for box_ in solid.iter() {
-                assert!(
-                    !box_.contains_point(chest),
-                    "room {}'s guest is halfway across and inside something solid",
-                    who.from
-                );
-            }
         }
     }
 

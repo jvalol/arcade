@@ -184,17 +184,8 @@ Sending everybody to room n+2 instead left it green.
   close. — `tests::the_figure_is_drawn_close`
 - Nobody is one colour from crown to toe, and no two wear the same
   coat. — `people::tests::nobody_is_one_colour_from_crown_to_toe`
-- Nobody is drawn for a guest the wave has not reached, and everybody the wave
-  is passing is. — `people::tests::only_the_ones_the_wave_has_reached_are_out`
-- They walk from their own door to the next room's, which is across the
-  corridor. — `people::tests::they_cross_to_the_next_number`
-- The number on screen is bounded by the wave's width rather than by how long
-  the corridor is. — `people::tests::a_longer_corridor_is_not_a_bigger_crowd`
 - The legs swap, and a foot is only off the floor on the way
   forward. — `people::tests::the_legs_swap`, `people::tests::a_foot_lifts_only_on_the_way_forward`
-- They are in nothing you can walk into. — `people::tests::nobody_is_solid`
-- The corridor at rest is unchanged: every taken room still has its strip
-  lit. — `aleph::tests::a_room_at_rest_is_still_a_light_under_a_door`
 
 ### Verified by hand
 
@@ -268,3 +259,16 @@ without losing the shoulder line it also has to hold.
 So it holds the silhouette and anything that stands off the face, and not a
 small change to the face itself. That is a long way from nothing, which is
 what was holding it this morning.
+
+## 2026-11-10: the crowd this was built for is gone
+
+**Spec 0062 took the hotel's corridor out**, and `people::crossing` with it:
+the band of guests behind the wave, their walk to the room the move sent
+them to, and the cap that kept the crowd bounded by the wave's width rather
+than by how long the corridor was. Five of this spec's criteria were about
+that crowd and are struck above.
+
+What it built that survives is the figure itself, which is what every other
+room with somebody in it reads: the imaginarium's four, the one waiting at
+the hotel's desk, and the watchman at the top of the bridge. Spec 0046
+carries the gait.

@@ -1,14 +1,20 @@
-//! The register, behind the one door in the hotel's corridor with no number
-//! on it. Spec 0031.
+//! The register, behind the one door out of the hotel's lobby. Specs 0031
+//! and 0062.
 //!
 //! An endless list of endless entries, which is what a hotel with a room for
 //! every number would have to keep. You walk along it, and at each step the
 //! character on the diagonal is taken, changed, and added to what you carry.
 //! At the end of the walk you hold a guest who is on no line of the book.
 //!
-//! That is Cantor's diagonal and it is the exception to the sign hanging over
-//! the corridor outside, which says the rooms do not run out. They do not.
-//! This is a guest that cannot be given one.
+//! That is Cantor's diagonal and it is the exception to the sign hanging
+//! over this door, which says the rooms do not run out. They do not. This is
+//! a guest that cannot be given one.
+//!
+//! **It stood behind a numberless door in spec 0029's corridor**, which was
+//! the joke: the room proving not everything can be numbered was behind the
+//! one door in forty with no number. Spec 0062 took the corridor away, and
+//! with no numbered doors left there is nothing for a blank one to be blank
+//! against. The sign carries the claim now and the door is under it.
 //!
 //! Everything here is arithmetic, so it can be checked without a window.
 
@@ -343,34 +349,48 @@ fn seed_of(who: &[u8]) -> u64 {
 /// of. The book is on the far side and you go along it.
 pub const DEEP: f32 = 3.0;
 pub const LONG: f32 = 9.0;
-/// And how high, which is nearly twice the corridor it is off.
+/// And how high, which is a metre over the lobby it is off.
 ///
 /// **The diagonal can be no longer along the wall than the wall is high.**
 /// Rows stack, so the cell taken from row n is n down and n along: the walk
-/// is the height. At the corridor's 2.4 that is a two metre stroll, and the
-/// first build hid it by sliding the page along under the reader, which is
-/// why Jake said the wall seemed to move with him. It did.
+/// is the height. At the 2.4 of the corridor this room first opened off that
+/// is a two metre stroll, and the first build hid it by sliding the page
+/// along under the reader, which is why Jake said the wall seemed to move
+/// with him. It did.
 ///
 /// A hall of records is a tall room anyway, and at this height the diagonal
 /// is a walk of nearly four metres along a wall that stays where it is.
 pub const TALL: f32 = 4.2;
 
-/// Where the room's inside begins and ends along `z`, which is away from the
-/// corridor.
+/// Where the room's inside begins and ends along `z`.
+///
+/// **Centred on the lobby's own doorway line**, so you walk west out of the
+/// lobby straight into the length of the room and the book is on your left
+/// as you go.
+///
+/// Spec 0062 put it here. It was keyed off `aleph::blank_door`, which stood
+/// a stride inside spec 0029's corridor, and there is no corridor now. What
+/// that cost is the joke the old siting was chosen for: the room that proves
+/// not everything can be numbered stood behind the one door in forty with no
+/// number on it, and with no numbered doors left there is nothing for a
+/// blank one to be blank against.
 pub fn across(reaches: f32) -> (f32, f32) {
-    let door = crate::aleph::blank_door(reaches);
+    let middle = crate::aleph::middle_z(reaches);
 
-    (door.z - THICK - DEEP, door.z - THICK)
+    (middle - DEEP * 0.5, middle + DEEP * 0.5)
 }
 
 /// And along `x`, which is the length you walk.
 ///
-/// It runs west from the door, the same way the corridor does, so turning in
-/// is a quarter turn rather than a doubling back.
-pub fn along(reaches: f32) -> (f32, f32) {
-    let door = crate::aleph::blank_door(reaches);
+/// **It stops at the far face of the lobby's west wall**, which this room
+/// borrows as its own east wall the way it borrowed the corridor's before.
+/// One wall, cut once for this door in `aleph::solid`: building a second in
+/// the same plane is two faces in one plane, which is the fault this
+/// building has fought eight times and the eighth was here.
+pub fn along(_reaches: f32) -> (f32, f32) {
+    let (west, _) = crate::aleph::span();
 
-    (door.x - LONG, door.x + crate::aleph::DOOR_WIDE)
+    (west - THICK - LONG, west - THICK)
 }
 
 /// The lid over this room, which is what it shows the sky. Spec 0040 lays a
@@ -388,10 +408,11 @@ pub fn lid(reaches: f32) -> Aabb {
 /// The floor of this room, which `room::Room::grounds` gathers with every
 /// other room's.
 ///
-/// It laps under the corridor's, for the reason `twine::floor` sets out: a
-/// fault that spec 0007's step-over has since taken away, and a lap kept
-/// because it costs nothing. What the floor still owes is to meet the
-/// corridor's with no gap.
+/// It laps under the lobby's rather than meeting it edge to edge. Two floors
+/// at one height that meet on a line put a vertical face at the walking
+/// surface, which `walk` reports as nothing at all and which stops you dead:
+/// found three times in one day in this building. What this floor owes is to
+/// meet the lobby's with no gap, and a lap is the way that costs nothing.
 pub fn floor(reaches: f32) -> Aabb {
     let (west, east) = along(reaches);
     let (far, near) = across(reaches);
@@ -404,8 +425,8 @@ pub fn floor(reaches: f32) -> Aabb {
 
 /// Everything solid in here: the floor, three walls, the ceiling.
 ///
-/// The fourth wall is the corridor's, which stands already and is cut for the
-/// blank door.
+/// The fourth wall is the lobby's, which stands already and is cut for this
+/// room's door.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let (west, east) = along(reaches);
     let (far, near) = across(reaches);
@@ -413,49 +434,42 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     vec![
         floor(reaches),
         // the far wall, which is the one the book is on
+        Aabb::new(vec3(west - THICK, 0.0, far - THICK), vec3(east, TALL, far)),
+        // the near wall, which this room builds for itself.
+        //
+        // **It used to borrow one.** Spec 0031 put this room behind a door
+        // in the hotel corridor's south wall, so its near side was that wall
+        // and building one here as well was two walls in exactly the same
+        // place: two faces in one plane, which speckles as you move, and
+        // Jake walked the corridor and saw it. Spec 0062 took the corridor
+        // away, so there is nothing left on this side to borrow.
+        Aabb::new(
+            vec3(west - THICK, 0.0, near),
+            vec3(east, TALL, near + THICK),
+        ),
+        // and the far end, where the page begins
         Aabb::new(
             vec3(west - THICK, 0.0, far - THICK),
-            vec3(east + THICK, TALL, far),
+            vec3(west, TALL, near + THICK),
         ),
-        // and the two ends, which stop short of the corridor's wall rather
-        // than meeting it.
+        // **No east wall.** That is the lobby's own west wall, which stands
+        // already and is cut for this door in `aleph::solid`.
         //
-        // **Neither buried nor flush.** Running them into it put their end
-        // faces in the same plane as its face, which is the same fault as
-        // building the wall twice and was the second half of it. Stopping
-        // half a thickness short leaves a slot too narrow to stand in,
-        // closed on every side, and no two faces anywhere near each other.
-        Aabb::new(
-            vec3(west - THICK, 0.0, far - THICK),
-            vec3(west, TALL, near - THICK * 0.5),
-        ),
-        Aabb::new(
-            vec3(east, 0.0, far - THICK),
-            vec3(east + THICK, TALL, near - THICK * 0.5),
-        ),
-        // **No near wall.** That is the corridor's own, which stands already
-        // and is cut for the blank door in `aleph::solid`. Building one here
-        // too put two walls in exactly the same place, which is two faces in
-        // one plane and speckles as you move: the fault this building has
-        // fought seven times, and the eighth was mine.
+        // **Except above it.** That wall stops at the lobby's height and
+        // this room is a metre taller, so the strip over it is open unless
+        // somebody tops it. Spec 0012 did this twice and missed it once each
+        // time, and the building's own notes carry the warning: where a wall
+        // is borrowed from a shorter room, sweep the boundary at the height
+        // between the two ceilings rather than checking the corners.
         //
-        // **Except above it.** That wall is the corridor's and stops at the
-        // corridor's height, and this room is nearly twice as tall, so the
-        // strip over it is open unless somebody tops it. Spec 0012 did this
-        // twice and missed it once each time, and the warning is in the
-        // building's own notes: where a wall is borrowed from a shorter
-        // room, sweep the boundary at the height between the two ceilings.
-        // **Starting above the corridor's ceiling, not at its wall's top.**
-        // That ceiling is 0.3 thick and lies in this same z, so a strip from
-        // the wall's top ran through it with both their near faces in one
-        // plane, which is what Jake saw dithering along the top of this room.
-        // The ceiling closes those three hundred millimetres itself.
+        // **Starting above the lobby's lid, not at its wall's top.** That
+        // lid is 0.3 thick and stands in this same `x`, so a strip from the
+        // wall's top would run through it with both their west faces in one
+        // plane. The lid closes those three hundred millimetres itself.
         Aabb::new(
-            vec3(west - THICK, crate::aleph::TALL + THICK, near),
+            vec3(east, crate::aleph::LOBBY_TALL + THICK, far - THICK),
             vec3(east + THICK, TALL, near + THICK),
         ),
-        // Below that it closes this room's near side along the whole of it,
-        // since it runs two kilometres west and is cut only at the doorway.
         lid(reaches),
     ]
 }
@@ -567,8 +581,8 @@ pub fn page_left(reaches: f32) -> f32 {
 ///
 /// So the head of the page is the lit end of a dark hall, which is a thing
 /// you go and look at without being told to. The room had no fittings at all
-/// before this, which the building's own notes say is a room that reads as a
-/// corridor however right everything in it is.
+/// before this, which the building's own notes say is a room that reads as
+/// a corridor however right everything in it is.
 pub const SCONCE: Vec3 = vec3(0.1, 0.3, 0.1);
 pub const SCONCE_RANGE: f32 = 5.5;
 pub const SCONCE_LIT: f32 = 1.15;
@@ -1168,7 +1182,9 @@ mod tests {
     fn the_walk_starts_at_the_head_of_the_page() {
         let reaches = reaches();
         let book = Book::new();
-        let door = crate::aleph::blank_door(reaches);
+        // the doorway, which spec 0062 moved to this room's east wall
+        let (_, east) = along(reaches);
+        let door = vec3(east, 0.0, crate::aleph::middle_z(reaches));
         let mut carried = Carried::new();
 
         // standing in the doorway, which is the far end of the book
@@ -1321,18 +1337,19 @@ mod tests {
         assert!(head < east - CELL * 20.0, "no room for the entries");
     }
 
-    /// Spec 0031: the blank door is solid, standing open.
+    /// Specs 0031 and 0062: the register's door is solid, standing open.
     ///
-    /// It is not in the hotel's list of rooms, which is where every other
-    /// leaf gets its collider, so it had none and you walked through it.
+    /// It was not in the hotel's list of rooms, which is where every other
+    /// leaf got its collider, so it had none and you walked through it.
+    /// There is no list of rooms any more and this is the only leaf left.
     #[test]
-    fn the_blank_door_is_solid() {
+    fn the_book_door_is_solid() {
         let room = Room::of(crate::games());
-        let want = crate::aleph::leaf_box(room.reaches, crate::aleph::BLANK, 1.0);
+        let want = crate::aleph::book_leaf(room.reaches);
 
         assert!(
             room.solid().contains(&want),
-            "the one door with no number is a door you walk through"
+            "the way into the register is a door you walk through"
         );
     }
 
@@ -1365,32 +1382,32 @@ mod tests {
 
     /// Spec 0012's warning: the strip over a borrowed wall is closed.
     ///
-    /// This room is nearly twice the height of the corridor it is off, and
-    /// its near side is that corridor's wall, which stops at the corridor's
-    /// ceiling. Without something over it the gap is open at the height
-    /// between the two, which is a thing you find by sweeping the boundary
-    /// rather than by looking at the corners. This building has done it twice
-    /// and missed it both times.
+    /// This room is a metre taller than the lobby it is off, and its east
+    /// side is that lobby's wall, which stops at the lobby's ceiling.
+    /// Without something over it the gap is open at the height between the
+    /// two, which is a thing you find by sweeping the boundary rather than
+    /// by looking at the corners. This building has done it twice and missed
+    /// it both times.
+    ///
+    /// The wall it borrows is on the east now rather than the north, so the
+    /// sweep runs in `z` where it used to run in `x`. Spec 0062.
     #[test]
     fn the_strip_over_the_borrowed_wall_is_closed() {
         let reaches = reaches();
-        let (west, east) = along(reaches);
-        let (_, near) = across(reaches);
+        let (_, east) = along(reaches);
+        let (far, near) = across(reaches);
         let boxes = solid(reaches);
 
-        // sweep the boundary at a few heights between the two ceilings
-        // between the corridor's ceiling and this room's, which is the gap
-        // only this room can close
         for up in [
-            crate::aleph::TALL + THICK + 0.05,
-            (crate::aleph::TALL + THICK + TALL) * 0.5,
+            crate::aleph::LOBBY_TALL + THICK + 0.05,
+            (crate::aleph::LOBBY_TALL + THICK + TALL) * 0.5,
             TALL - 0.05,
         ] {
             for along_by in 0..12 {
                 let at = vec3(
-                    west + (east - west) * (along_by as f32 + 0.5) / 12.0,
+                    east + THICK * 0.5,
                     up,
-                    near + THICK * 0.5,
+                    far + (near - far) * (along_by as f32 + 0.5) / 12.0,
                 );
                 let closed = boxes.iter().any(|b| {
                     b.min.x <= at.x
@@ -1403,57 +1420,56 @@ mod tests {
 
                 assert!(
                     closed,
-                    "the strip over the corridor's wall is open at {:.2} up, {:.2} along",
-                    up, at.x
+                    "the strip over the lobby's wall is open at {:.2} up, {:.2} along",
+                    up, at.z
                 );
             }
         }
     }
 
-    /// Spec 0014: this room and the corridor it is off do not both build
-    /// the wall between them.
+    /// Spec 0014: this room and the lobby it is off do not both build the
+    /// wall between them.
     ///
     /// **They did.** The register's near wall and the corridor's even side
     /// were the same box, in the same plane, drawn twice, which speckles as
     /// you move and is the fault this building has fought seven times. Jake
-    /// walked the corridor and saw it. The corridor's wall is cut for the
-    /// doorway now and this room builds none of that side.
+    /// walked the corridor and saw it. Spec 0062 took the corridor away and
+    /// the borrowed wall is the lobby's own west wall now, cut for this
+    /// room's door, and this room builds none of that side.
     #[test]
     fn the_wall_between_is_built_once() {
         let reaches = reaches();
-        let (far, near) = across(reaches);
-        let _ = far;
+        let (_, east) = along(reaches);
 
         for box_ in solid(reaches) {
             // anything of this room's reaching into the plane of that wall,
             // or stopping flush with its face. A box that crosses a plane
             // and carries on is buried and hidden; one that ends in it
             // fights, and so does a second wall laid along it.
-            // only what stands at the wall's own height. The ceiling passes
-            // over that wall and is buried inside the corridor's own, and a
-            // face inside another solid is hidden rather than fighting.
-            // at the borrowed wall's own height, which is the corridor's and
+            //
+            // At the borrowed wall's own height, which is the lobby's and
             // not this room's. The strip above it is this room's to build,
             // because that wall stops short of this ceiling.
-            let at_its_height = box_.min.y < crate::aleph::TALL - 1e-3 && box_.max.y > 1e-3;
-            let reaches_it = at_its_height && box_.max.z > near - THICK * 0.5 + 1e-3;
+            let at_its_height = box_.min.y < crate::aleph::LOBBY_TALL - 1e-3 && box_.max.y > 1e-3;
+            let reaches_it = at_its_height && box_.max.x > east + 1e-3;
 
             assert!(
                 !reaches_it,
-                "the register builds {:?}, which reaches the corridor's wall",
+                "the register builds {:?}, which reaches the lobby's wall",
                 box_
             );
         }
 
-        // and the corridor's own wall is cut for the door rather than whole
-        let blank = crate::aleph::blank_door(reaches);
+        // and the lobby's own wall is cut for the door rather than whole
+        let (door_from, door_to) = crate::aleph::book_door(reaches);
+        let middle = (door_from + door_to) * 0.5;
         let across_it: Vec<_> = crate::aleph::solid(reaches)
             .into_iter()
             .filter(|b| {
-                b.min.z < blank.z + 1e-3
-                    && b.max.z > blank.z - THICK - 1e-3
-                    && b.min.x < blank.x
-                    && b.max.x > blank.x
+                b.min.z < middle
+                    && b.max.z > middle
+                    && b.min.x < east + THICK + 1e-3
+                    && b.max.x > east - 1e-3
                     // in the doorway's own height. A ceiling over it is a
                     // head, which every doorway has.
                     && b.min.y < crate::aleph::DOOR_TALL - 1e-3
@@ -1463,13 +1479,13 @@ mod tests {
 
         assert!(
             across_it.is_empty(),
-            "the corridor's wall runs straight across the blank doorway: {:?}",
+            "the lobby's wall runs straight across the register's doorway: {:?}",
             across_it
         );
     }
 
-    /// Spec 0031: the room is behind the blank door and runs off the
-    /// corridor rather than through anything else.
+    /// Specs 0031 and 0062: the room runs west off the lobby and through
+    /// nothing else.
     #[test]
     fn nothing_of_the_register_is_in_another_room() {
         let reaches = reaches();

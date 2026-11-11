@@ -1,6 +1,6 @@
 # 0029 A corridor with a room for every number
 
-**Status:** implemented
+**Status:** cut on 2026-11-10 by spec 0062, which took the hotel's corridor and the long hall out of the building. What is written below is the record of a room that was built and stood for three weeks, and the tests it cites went with it.
 **Built:** 2026-10-20, the same day, and short of what this spec says in one way that matters. See "What this shipped short".
 **Date:** 2026-10-20
 **Amended:** 2026-10-20, twice, both on the day it was written, and 2026-11-09 for a doorway roofed by neither room.
@@ -572,3 +572,20 @@ nothing moves, which is why no kept picture changed.
   cannot drift. — `aleph::tests::what_fills_everything_fills_everything`
 - A wave passes every room you can see before it
   ends. — `aleph::tests::the_wave_passes_everything_you_can_see`
+
+## 2026-11-10: cut by spec 0062
+
+**Jake, having played it: the hotel is arguably the least interesting room
+or feature, and worth dropping entirely.** The corridor, the forty drawn
+doors, the four arrivals, both waves, the people crossing and spec 0035's
+long hall all came out. What stayed is the lobby, the desk, the board, the
+sign and the register behind the one door left in the west wall.
+
+The reasons are in [0062](0062-the-hotel-comes-down-to-its-desk.md). The
+short of it is that this was the fourth round on one complaint, each fix
+correct and none of them changing what the room was: a desk you press and
+then watch.
+
+Everything above is left as written. What is wrong with it is not the
+arithmetic, which held up, and the arithmetic is the part worth keeping a
+record of.
