@@ -152,19 +152,22 @@ const BODY_UNBUILT: Vec4 = vec4(0.13, 0.13, 0.14, 1.0);
 ///
 /// Warm from above and cool in what it does not reach, which is how a room
 /// with a light in it looks and is why a shadow reads as blue.
-/// The moon, which is lit by nothing: past one in every channel, so it
-/// is a body giving light rather than a body taking it. Cool, because
-/// the one thing everybody knows about moonlight is that it is not warm.
-/// **Large, because what multiplies it at night is very small.** A
-/// colour here is a multiplier on what the light does, and the only
-/// light on a moon at midnight is the fill, which `garden::filled`
-/// holds at a twentieth. At three the moon came out a dull blue-grey
-/// disc barely above the sky behind it, which is the opposite of the
-/// one thing a moon is for. Twenty times the fill is a moon.
+/// What the lit part of the moon comes to on screen, through
+/// `garden::gives_off`. Cool, because the one thing everybody knows
+/// about moonlight is that it is not warm.
 ///
-/// Solid, unlike the carved face: see `RUNE_GLAZE` for the one that
-/// has to stay under one and what happens when it does not.
-pub const MOON: Vec4 = vec4(28.0, 28.6, 31.0, 1.0);
+/// **It was a multiplier of 28 and that threw the face away.** A colour
+/// past one is a body giving light rather than taking it, and the fill
+/// at midnight is 0.03, 0.04, 0.09, so 28 times it was a moon. It was
+/// also 2.5 in blue: measured in the garden on 2026-11-12, the blue
+/// channel sat at 255 across 1407 of the moon's 1483 pixels, so a third
+/// of the range was gone before anything was drawn on the face. With
+/// nothing on the face nobody could tell.
+///
+/// `gives_off` divides the fill back out, so what is written here is
+/// what lands, and a face with craters on it has all three channels to
+/// be drawn in. Spec 0065.
+pub const MOON: Vec3 = glam::vec3(0.95, 0.96, 1.0);
 
 pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
 pub const SUN_STRENGTH: f32 = 0.62;

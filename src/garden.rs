@@ -6,7 +6,7 @@
 //! room of this building is two pieces of code saying where something is.
 
 use blitzkit::collision::Aabb;
-use glam::{vec2, vec3, vec4, Vec2, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3};
 
 use crate::room::{CABINET, NOOK_DEEP, NOOK_SPAN, THICK, WALL};
 
@@ -495,122 +495,9 @@ pub fn skylit(since: f32) -> glam::Vec4 {
     night + (day - night) * share
 }
 
-/// Where the moon stands: the sun's own place turned half a day, with a
-/// lean of its own so the two do not run the same line across the sky.
-///
-/// Jake: throw a moon in there too.
-pub fn moon_at(since: f32) -> Vec3 {
-    let turn = hour(since) * std::f32::consts::TAU + std::f32::consts::PI;
-
-    vec3(turn.cos(), turn.sin(), -0.34).normalize()
-}
-
-/// How much of it there is to see: none while the sun is up, and it
-/// comes in as the sun goes.
-///
-/// Read off the moon's own height rather than the sun's, so a change to
-/// either one's lean carries. A full moon every night and no phases: a
-/// garden is not a planet, the same reason `sun_up` is a plain sine.
-pub fn moonlit(since: f32) -> f32 {
-    let up = (moon_at(since).y / 0.14).clamp(0.0, 1.0);
-    let dark = 1.0 - (sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
-
-    up * dark * dark
-}
-
-/// How far off it hangs and how wide it is drawn.
-///
-/// Further than anything in the field and well inside `field::SEES`, so
-/// it is never clipped and nothing out there stands in front of it.
-/// Wider than the real one by about five, which is the size a moon is
-/// remembered at rather than the size it measures.
-pub const MOON_OFF: f32 = 230.0;
-pub const MOON_WIDE: f32 = 16.0;
-
-/// The colour it is drawn in at a given moment: bright, fading out as
-/// the sun comes up, and never quite solid.
-///
-/// **The fade goes on the colour and not on the alpha.** `MOON *
-/// moonlit` took the fourth channel with it, which put a half
-/// transparent moon in the sky with the storm showing through it.
-pub fn moon_lit(since: f32) -> glam::Vec4 {
-    let lit = crate::aim::MOON * moonlit(since);
-
-    vec4(lit.x, lit.y, lit.z, crate::aim::MOON.w)
-}
-
-pub fn moon_mesh() -> blitzkit::mesh::MeshData {
-    use std::f32::consts::{PI, TAU};
-
-    let mut mesh = blitzkit::mesh::MeshData::surface(40, 24, |u, v| {
-        let round = -u * TAU;
-        let up = v * PI;
-
-        vec3(
-            round.cos() * up.sin() * 0.5,
-            -up.cos() * 0.5,
-            round.sin() * up.sin() * 0.5,
-        )
-    });
-    mesh.compute_normals();
-
-    mesh
-}
-
-/// Its face: pale, mottled, with a few dark seas on it.
-///
-/// **Because a disc of one colour is a hole in the sky.** It is drawn
-/// past one in every channel, so nothing lights it and nothing shades
-/// it; the only thing that can say it is a body rather than a cut-out
-/// is what is written on it.
-pub fn moon_face() -> blitzkit::texture::TextureData {
-    const WIDE: usize = 192;
-    const TALL: usize = 96;
-
-    // where the seas are, in turns round it and down it, and how big
-    let seas: [(f32, f32, f32, f32); 6] = [
-        (0.30, 0.38, 0.16, 0.82),
-        (0.44, 0.30, 0.10, 0.86),
-        (0.22, 0.56, 0.12, 0.88),
-        (0.52, 0.52, 0.07, 0.84),
-        (0.72, 0.40, 0.13, 0.87),
-        (0.86, 0.62, 0.08, 0.90),
-    ];
-    let mut pixels = Vec::with_capacity(WIDE * TALL * 4);
-
-    for row in 0..TALL {
-        for column in 0..WIDE {
-            let u = column as f32 / WIDE as f32;
-            let v = row as f32 / TALL as f32;
-            // a mottle that wraps, so there is no seam down the back
-            let round = u * std::f32::consts::TAU;
-            let mottle = ((round * 5.0).sin() * (v * 9.0).cos()) * 0.035
-                + ((round * 11.0 + 1.1).sin() * (v * 17.0 + 0.4).cos()) * 0.022
-                + ((round * 23.0 + 2.3).sin() * (v * 31.0 + 1.7).cos()) * 0.014;
-            let mut shade = 1.0 + mottle;
-
-            for (at_u, at_v, across, deep) in seas.iter() {
-                // the shorter way round, so a sea may sit on the seam
-                let off_u = (u - at_u).abs().min(1.0 - (u - at_u).abs());
-                let off = (off_u * off_u + (v - at_v).powi(2)).sqrt() / across;
-
-                if off < 1.0 {
-                    let edge = 1.0 - off * off;
-
-                    shade *= 1.0 - (1.0 - deep) * edge;
-                }
-            }
-
-            for channel in [0.86, 0.88, 0.94] {
-                pixels.push((255.0 * (channel * shade).clamp(0.0, 1.0)) as u8);
-            }
-
-            pixels.push(255);
-        }
-    }
-
-    blitzkit::texture::TextureData::from_pixels(WIDE as u32, TALL as u32, pixels)
-}
+// The moon is in `moon.rs`, which owns where it stands, how big it is drawn,
+// which way it faces and what is written on it. It reads this file's clock and
+// its `gives_off`, and nothing here reads it back.
 
 /// How much of their light the lanterns are giving.
 ///

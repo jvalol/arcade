@@ -25,6 +25,7 @@ mod kociemba;
 mod mandel;
 mod metronome;
 mod mirrors;
+mod moon;
 mod neon;
 mod noise;
 mod orrery;
@@ -338,8 +339,13 @@ fn starting_hour() -> Option<f32> {
     said.trim().parse().ok().map(garden::when)
 }
 
-/// Where to stand this run, instead of at the door.
-/// `POSE=x,y,z,yaw,pitch`.
+/// Where to stand this run, and when, instead of at the door in the
+/// afternoon. `POSE=x,y,z,eye,yaw,pitch,since`, which is the line the plate
+/// prints under M with commas for the gaps, or with the gaps left as they
+/// are.
+///
+/// It sets the clock as well, so it outranks `AT`. That one stays for when
+/// the hour is all you want.
 ///
 /// **The other half of `WHERE`.** That one answers where the camera was
 /// when you saw something; this one puts the camera back there. Together
@@ -360,14 +366,50 @@ fn starting_hour() -> Option<f32> {
 /// **It does not survive a reset.** `back_to_the_door` puts you at the
 /// door, which is what it is for, and this is read once on the first frame
 /// rather than fought with.
-fn posed_at() -> Option<(Vec3, f32, f32)> {
-    let said = std::env::var("POSE").ok()?;
+fn posed_at() -> Option<Pose> {
+    read_pose(&std::env::var("POSE").ok()?)
+}
+
+/// Everything a frame of this building needs to be stood up again.
+///
+/// **The clock is in here because a pose on its own is not a picture.** The
+/// day is twenty minutes, the sun swings through it, the sky's picture slides
+/// by `since` at 0.011 of itself a second and the moon rises and sets. On
+/// 2026-11-12 a screenshot of the field came back with a pale shape in the
+/// sky nobody could name, and the hunt for it drew that exact spot at every
+/// tenth of the day and across ten days of weather, because the line on the
+/// plate carried the place and nothing at all about when.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Pose {
+    at: Vec3,
+    eye: f32,
+    yaw: f32,
+    pitch: f32,
+    since: f32,
+}
+
+/// Reads one, in the order and the units `Arcade::where_you_are` prints.
+///
+/// **The same seven numbers, so the line can be pasted.** They were not: the
+/// plate said degrees, `POSE` took radians, and the fourth number on the
+/// plate was the eye, which `POSE` had no place for at all. A readout that
+/// cannot be fed back into the thing that reads it is two accounts of one
+/// pose, which is the fault this building has written down under five other
+/// names.
+fn read_pose(said: &str) -> Option<Pose> {
     let n: Vec<f32> = said
-        .split(',')
+        .split([',', ' '])
+        .filter(|one| !one.trim().is_empty())
         .filter_map(|one| one.trim().parse().ok())
         .collect();
 
-    (n.len() >= 5).then(|| (vec3(n[0], n[1], n[2]), n[3], n[4]))
+    (n.len() >= 7).then(|| Pose {
+        at: vec3(n[0], n[1], n[2]),
+        eye: n[3],
+        yaw: n[4].to_radians(),
+        pitch: n[5].to_radians(),
+        since: n[6],
+    })
 }
 
 /// Where flight takes you: along `wish`, at `FLIES` times the pace, through
@@ -5770,23 +5812,30 @@ impl Arcade {
     /// **Bare numbers, because the plate is user facing and the words on it
     /// are Jake's.** A readout that says `at` and `yaw` is copy, and copy
     /// goes in under a marker and holds the gate until he has rewritten it.
-    /// Six numbers in a fixed order are not, and whoever reads them off a
+    /// Seven numbers in a fixed order are not, and whoever reads them off a
     /// screenshot is me.
     ///
     /// The feet and the eye both, because they are not the same number and
     /// a replay set from one alone draws the room from the floor of
     /// whatever storey it opened on. Spec 0042 paid for that one.
     ///
-    /// A string rather than a print, so a test can read it.
+    /// **And the clock last, which is the whole of what this was missing.**
+    /// Everything the sky does is worked out from `since`, which is a plain
+    /// sum of frame times and nothing else, so these seven numbers are the
+    /// frame. See `Pose`.
+    ///
+    /// A string rather than a print, so a test can read it, and in the order
+    /// and the units `read_pose` takes so it can be pasted straight back.
     fn where_you_are(&self) -> String {
         format!(
-            "{:.2} {:.2} {:.2}   {:.2}   {:.1} {:.1}",
+            "{:.2} {:.2} {:.2}   {:.2}   {:.1} {:.1}   {:.1}",
             self.at.x,
             self.at.y,
             self.at.z,
             self.looking_from().y,
             self.yaw.to_degrees(),
             self.pitch.to_degrees(),
+            self.since,
         )
     }
 
@@ -5795,6 +5844,22 @@ impl Arcade {
     ///
     /// With your frame at nought this is `(at.x, eye + EYE, at.z)`, which
     /// is what it has always been.
+    /// Puts the game where a `Pose` says, which is the inverse of
+    /// `where_you_are` and the one place `POSE` lands.
+    ///
+    /// **The fourth number is the camera's height and `eye` is the feet's.**
+    /// The two are `EYE` apart and the first go at this fed one straight into
+    /// the other, which stands the camera a metre and a half too high.
+    /// Nothing said so, because the number came back out of the readout
+    /// looking exactly like the one that went in.
+    fn stand(&mut self, pose: Pose) {
+        self.at = pose.at;
+        self.eye = pose.eye - EYE;
+        self.yaw = pose.yaw;
+        self.pitch = pose.pitch;
+        self.since = pose.since;
+    }
+
     fn looking_from(&self) -> Vec3 {
         let over = self.over();
 
@@ -6364,8 +6429,8 @@ impl Game for Arcade {
         self.kerbs = [-1.0f32, 1.0]
             .map(|side| Some(renderer.add_mesh(&bridge::kerb_mesh(self.room.reaches, side))));
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
-        self.moon = Some(renderer.add_mesh(&garden::moon_mesh()));
-        self.moon_face = Some(renderer.add_texture(&garden::moon_face()));
+        self.moon = Some(renderer.add_mesh(&moon::mesh()));
+        self.moon_face = Some(renderer.add_texture(&moon::face()));
         // the field: one quad for the ground, counted so a tile of grass is a
         // tile wherever the slab has slid to, and a trunk for each kind of
         // tree it stands. Spec 0040.
@@ -6898,11 +6963,8 @@ impl Game for Arcade {
 
         // where to stand, if this run was told. Spec 0013's diagnostics.
         if first {
-            if let Some((at, yaw, pitch)) = posed_at() {
-                self.at = at;
-                self.eye = at.y;
-                self.yaw = yaw;
-                self.pitch = pitch;
+            if let Some(pose) = posed_at() {
+                self.stand(pose);
             }
         }
         // and the readout of where you are standing, which runs out on its
@@ -6944,13 +7006,13 @@ impl Game for Arcade {
             self.said += dt;
             if self.said >= 0.5 {
                 self.said = 0.0;
+                // off `where_you_are`, so the line the log carries and the
+                // line the plate shows are the same line and both go back
+                // into `POSE`. They were a different set of numbers in
+                // different units.
                 eprintln!(
-                    "WHERE at {:.2} {:.2} {:.2}  yaw {:.3}  pitch {:.3}  room {:?}  frame {}",
-                    self.at.x,
-                    self.at.y,
-                    self.at.z,
-                    self.yaw,
-                    self.pitch,
+                    "WHERE {}  room {:?}  frame {}",
+                    self.where_you_are(),
                     noise::room_at(self.room.reaches, self.at),
                     self.standing_in
                 );
@@ -8503,17 +8565,24 @@ impl Game for Arcade {
             // outside anything in the field, so nothing out there stands
             // in front of it; indoors it would be hanging inside the
             // building.
-            if let (Some(moon), Some(face)) = (self.moon, self.moon_face) {
-                let showing = garden::moonlit(self.since);
+            if let (Some(ball), Some(face)) = (self.moon, self.moon_face) {
+                let showing = moon::showing(self.since);
 
                 if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
-                    let hung = self.looking_from() + garden::moon_at(self.since) * garden::MOON_OFF;
+                    let out = moon::at(self.since);
+                    let hung = self.looking_from() + out * moon::OFF;
 
                     scene.push_textured(
-                        moon,
+                        ball,
                         face,
-                        &Transform::at(hung).with_scale(Vec3::splat(garden::MOON_WIDE)),
-                        garden::moon_lit(self.since),
+                        // **And turned to look back down the way it hangs.**
+                        // The light on its face is baked for a face that
+                        // points at you, per `moon::face`, and the real one
+                        // keeps the same side to us anyway.
+                        &Transform::at(hung)
+                            .with_rotation(moon::turned(-out))
+                            .with_scale(Vec3::splat(moon::WIDE)),
+                        moon::lit(self.since),
                         aim::VOID,
                     );
                 }
@@ -12038,8 +12107,27 @@ mod tests {
         looking_at: Vec3,
         done: bool,
     ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        standing_at(at, looking_at, done, None)
+    }
+
+    /// The same, at an hour of the garden's day rather than at whatever one a
+    /// fresh game opens on.
+    ///
+    /// **Because the only picture of the moon is at night.** A day here is
+    /// twenty minutes and a game starts mid-afternoon, which is the same
+    /// reason `AT` exists for the window.
+    fn standing_at(
+        at: Vec3,
+        looking_at: Vec3,
+        done: bool,
+        hour: Option<f32>,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
         move |renderer| {
             let (mut arcade, mut geometry, mut text, sound) = built(renderer, done);
+
+            if let Some(hour) = hour {
+                arcade.since = garden::when(hour);
+            }
 
             posed(
                 &mut arcade,
@@ -13993,11 +14081,7 @@ mod tests {
         let reaches = reaches();
         let foot = bridge::foot(reaches);
         let along = 0.42;
-        let at = vec3(
-            foot.x - along * bridge::RUN,
-            bridge::high(along),
-            foot.z,
-        );
+        let at = vec3(foot.x - along * bridge::RUN, bridge::high(along), foot.z);
 
         looks_right_at_the_end(
             "horizon",
@@ -14039,6 +14123,26 @@ mod tests {
         // on the ground a few paces off, and aimed at where it lies this
         // is a picture of fish
         looks_right("garden", at, vec3(pond.x, EYE, pond.z));
+    }
+
+    /// Spec 0065: the moon over the garden, at midnight.
+    ///
+    /// **Looking up rather than along.** At midnight `moon::at` puts it
+    /// within twenty degrees of straight overhead, which is the one hour it
+    /// is fully lit, so the picture that holds the face is the one taken at
+    /// the pitch it is actually at.
+    #[test]
+    fn the_moon_is_drawn() {
+        let reaches = reaches();
+        let at = garden::at(reaches);
+        let since = garden::when(0.75);
+        let look = vec3(at.x, at.y + EYE, at.z) + moon::at(since) * 60.0;
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("moon"),
+            (WIDE, TALL),
+            standing_at(at, look, false, Some(0.75)),
+        );
     }
 
     /// Spec 0027: the baths, from the corner by the tub, down the pool.
@@ -14849,6 +14953,7 @@ mod tests {
         one.eye = 1.31;
         one.yaw = 225f32.to_radians();
         one.pitch = 25f32.to_radians();
+        one.since = 931.4;
 
         let said = one.where_you_are();
 
@@ -14857,6 +14962,7 @@ mod tests {
         assert!(said.contains("2.86"), "no eye in {}", said);
         assert!(said.contains("225.0"), "no yaw in {}", said);
         assert!(said.contains("25.0"), "no pitch in {}", said);
+        assert!(said.contains("931.4"), "no clock in {}", said);
 
         one.at.x += 3.0;
         one.yaw = 0.0;
@@ -14887,6 +14993,88 @@ mod tests {
 
         one.update(Arcade::PLACE_SHOWS, &mut geometry, &mut text, &sound);
         assert_eq!(one.showing_place, 0.0, "it never goes out");
+    }
+
+    /// Spec 0045: the line the plate prints is the line `POSE` takes.
+    ///
+    /// **The control is that it would have failed before today.** The plate
+    /// said degrees and `POSE` read radians, and the plate's fourth number
+    /// was the eye, which `POSE` skipped: pasting a readout back in put you
+    /// somewhere else entirely, facing somewhere else, at the wrong hour.
+    /// Nobody noticed because the two were only ever read by eye.
+    #[test]
+    fn the_plate_says_what_pose_takes() {
+        let mut one = Arcade::new();
+
+        one.at = vec3(-95.61, -0.02, -50.24);
+        one.eye = -0.02;
+        one.yaw = 53.5f32.to_radians();
+        one.pitch = 12.1f32.to_radians();
+        one.since = 960.0;
+
+        let said = one.where_you_are();
+        let back = read_pose(&said).expect("the plate's own line parses");
+
+        assert!(
+            back.at.distance(one.at) < 0.01,
+            "{} came back standing at {}",
+            said,
+            back.at
+        );
+        assert!(
+            (back.eye - one.looking_from().y).abs() < 0.01,
+            "{} came back with its eye at {}",
+            said,
+            back.eye
+        );
+        assert!(
+            (back.yaw.to_degrees() - 53.5).abs() < 0.1
+                && (back.pitch.to_degrees() - 12.1).abs() < 0.1,
+            "{} came back facing {} {}",
+            said,
+            back.yaw.to_degrees(),
+            back.pitch.to_degrees()
+        );
+        assert!(
+            (back.since - one.since).abs() < 0.1,
+            "{} came back at {} seconds",
+            said,
+            back.since
+        );
+        // and with commas in it, which is how it is pasted
+        assert_eq!(
+            read_pose(&said.replace("   ", ",").replace(' ', ",")),
+            Some(back),
+            "the same line with commas in it is not the same pose"
+        );
+
+        // and the whole way round: stand somewhere else, put the line back
+        // in, and the game says the same line again
+        let mut again = Arcade::new();
+
+        again.at = vec3(4.0, 0.0, 4.0);
+        again.eye = 0.0;
+        again.stand(back);
+
+        assert_eq!(
+            again.where_you_are(),
+            said,
+            "the line went in and a different line came out"
+        );
+    }
+
+    /// And a line that is not one is not read as one.
+    #[test]
+    fn a_line_that_is_not_a_pose_is_not_read_as_one() {
+        assert!(read_pose("").is_none(), "nothing is a pose");
+        assert!(
+            read_pose("-95.61 -0.02 -50.24   -0.02   53.5 12.1").is_none(),
+            "the old six number line is read as a pose"
+        );
+        assert!(
+            read_pose("Use WASD and the mouse to get about.").is_none(),
+            "the help is read as a pose"
+        );
     }
 
     /// Spec 0045: and asking moves nothing.
