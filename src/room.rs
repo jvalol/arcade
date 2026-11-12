@@ -1639,6 +1639,7 @@ impl Room {
         out.extend(crate::behind::near_wall(self.reaches));
         out.extend(crate::back::solid(self.reaches));
         out.extend(crate::mirrors::solid());
+        out.extend(crate::glass::solid(self.reaches));
 
         if lit_by_the_sun {
             out.extend(crate::behind::solid(self.reaches));
@@ -1773,6 +1774,7 @@ impl Room {
         let mut out = self.ceiling();
 
         out.push(crate::back::roofs(self.reaches));
+        out.push(crate::glass::lid(self.reaches));
         out
     }
 
@@ -2040,12 +2042,12 @@ impl Room {
     }
 
     pub fn ceiling(&self) -> Vec<Aabb> {
-        // **No hole in it any more.** Spec 0037 ran a stair up through this
-        // ceiling and spec 0063 parked the room it went to. The clipping
-        // below stays and is given nothing to clip to: a ceiling that knows
-        // how to have a hole in it is worth more than the lines it costs,
-        // and whoever brings the stair back will want it.
-        let well: Vec<Aabb> = Vec::new();
+        // **And there is a hole in it again.** Spec 0037 ran a stair up
+        // through this ceiling, spec 0063 parked the room it went to, and
+        // the clipping was kept with nothing to clip to on the argument that
+        // whoever brought a stair back would want it. Spec 0064 did, and it
+        // was here waiting.
+        let well = [crate::glass::well(self.reaches)];
         let mut out = Vec::new();
 
         for slab in self.floors().iter() {
@@ -3297,6 +3299,8 @@ mod tests {
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
                 + crate::mirrors::solid().len()
+                // and the room over the nook, per spec 0064
+                + crate::glass::solid(room.reaches).len()
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid
@@ -4174,6 +4178,8 @@ mod tests {
                 // and the back room, per spec 0024
                 + crate::back::solid(room.reaches).len()
                 + crate::mirrors::solid().len()
+                // and the room over the nook, per spec 0064
+                + crate::glass::solid(room.reaches).len()
                 // and the one slab beyond the door, per spec 0018
                 + 1
                 // the sauna's glass door and the baths' own, both solid

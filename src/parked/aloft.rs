@@ -3263,27 +3263,68 @@ mod tests {
         );
 
         // **Nothing of this room is in `room.solid()` at all now**, because
-        // spec 0063 parked it, so what this still says is that the space
-        // over the hall is empty and stays that way: whoever brings the
+        // spec 0063 parked it, so what this said was that the space over
+        // the hall is empty and stays that way: whoever brings the
         // imaginarium back gets the room it was built for rather than a
         // room with something else already standing in it.
         //
         // The three leaves were excluded here because where each one is
         // depends on whether you have shut it and the building held that
         // state. It does not hold it any more.
+        //
+        // **And on 2026-11-12 somebody did build in it.** Spec 0064's room
+        // stands over the nook, floor at 3.5 and lid at 7.0, and this room's
+        // own `BASE` is 6.0: the two overlap by 1.3 metres and there is no
+        // version of either that fits in what is left, because 3.5 to 5.7 is
+        // a crawl space. A parked room cannot hold a storey empty against a
+        // room that is being built, so the space is spec 0064's now.
+        //
+        // What this test still does is name the one thing that took it. The
+        // imaginarium is not blocked by a mystery: it is blocked by a room
+        // with a glass ball in it, and bringing it back means finding it a
+        // new height or a new place first.
+        let glass: Vec<Aabb> = crate::glass::solid(room.reaches)
+            .into_iter()
+            .chain(std::iter::once(crate::glass::lid(room.reaches)))
+            .collect();
+
         for one in room.solid() {
-            if solid().contains(&one) {
+            if solid().contains(&one) || glass.contains(&one) {
                 continue;
             }
 
             assert!(
                 !one.intersects(&mine),
-                "something is already up here: {:?} to {:?}",
+                "something other than spec 0064's room is up here: {:?} to {:?}",
                 one.min,
                 one.max
             );
         }
     }
+    /// The building this room was parked out of, which is not the building
+    /// there is now.
+    ///
+    /// **Spec 0064 built over the nook on 2026-11-12.** Its floor is a lid
+    /// across the airspace this room's stair climbs through, so a walk given
+    /// today's `solid()` stops at 2.25 and a seam walk sticks. Neither says
+    /// anything about this room, which is the thing these tests are for:
+    /// spec 0063 parked it so that it would not rot, and a parked room is
+    /// tested against the building it was parked out of.
+    ///
+    /// What the collision itself means is written where it belongs, in
+    /// `nothing_in_the_building_is_up_here`.
+    fn without_the_glass(room: &crate::room::Room) -> Vec<Aabb> {
+        let glass: Vec<Aabb> = crate::glass::solid(room.reaches)
+            .into_iter()
+            .chain(std::iter::once(crate::glass::lid(room.reaches)))
+            .collect();
+
+        room.solid()
+            .into_iter()
+            .filter(|one| !glass.contains(one))
+            .collect()
+    }
+
     /// Spec 0037: the way up leaves the nook's floor, meets its own landing
     /// and arrives on the imaginarium's, with no step out of line at any of
     /// the three.
@@ -3909,8 +3950,7 @@ mod tests {
         // Spec 0063 parked it: `room.solid()` is the rest of the building,
         // which a walk still needs so it does not walk through the wall it
         // shares, and the room's own boxes come from the room.
-        let solid: Vec<Aabb> = room
-            .solid()
+        let solid: Vec<Aabb> = without_the_glass(&room)
             .into_iter()
             .chain(solid())
             .chain((0..FRAMES).map(|k| leaf(k, 1.0)))
@@ -3980,8 +4020,7 @@ mod tests {
         // Spec 0063 parked it: `room.solid()` is the rest of the building,
         // which a walk still needs so it does not walk through the wall it
         // shares, and the room's own boxes come from the room.
-        let solid: Vec<Aabb> = room
-            .solid()
+        let solid: Vec<Aabb> = without_the_glass(&room)
             .into_iter()
             .chain(solid())
             .chain((0..FRAMES).map(|k| leaf(k, 1.0)))

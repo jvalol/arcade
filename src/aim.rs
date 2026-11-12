@@ -169,6 +169,30 @@ const BODY_UNBUILT: Vec4 = vec4(0.13, 0.13, 0.14, 1.0);
 /// be drawn in. Spec 0065.
 pub const MOON: Vec3 = glam::vec3(0.95, 0.96, 1.0);
 
+/// Spec 0064's room, which is a dark room with lit bays in it.
+///
+/// **Dark on purpose, and it is the sphere that asks for it.** The first
+/// build used this building's own floor, wall and ceiling, which are a pale
+/// room, and the glass came back as a brown disc with a blown white bottom:
+/// everything in it was within a shade of everything else, so the room was
+/// in there and could not be read. A sphere squeezes the whole room into a
+/// disc, so what it needs is a few bright things against a dark ground
+/// rather than an evenly lit room. Spec 0064's spike said the same thing
+/// about the hall's aisle and called it depth and variety with angle.
+pub const GLASS_FLOOR: Vec4 = vec4(0.17, 0.18, 0.21, 1.0);
+pub const GLASS_WALL: Vec4 = vec4(0.40, 0.35, 0.31, 1.0);
+pub const GLASS_CEIL: Vec4 = vec4(0.15, 0.15, 0.17, 1.0);
+pub const GLASS_PIER: Vec4 = vec4(0.62, 0.56, 0.48, 1.0);
+
+/// The lit panels over spec 0064's colonnade.
+///
+/// **Past one, because it has to be a light inside a marble as well as a
+/// lamp on a wall.** The tracer knows the ambient and the sun and nothing
+/// else, so a box the glass meets comes back as its colour times the
+/// ambient. A panel under one would be a dark rectangle in the ball, which
+/// is the opposite of what a lit room looks like through glass.
+pub const GLASS_LAMP: Vec4 = vec4(3.4, 3.2, 2.8, 1.0);
+
 pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
 pub const SUN_STRENGTH: f32 = 0.62;
 pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);

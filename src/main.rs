@@ -14,6 +14,7 @@ mod display;
 mod field;
 mod garden;
 mod gate;
+mod glass;
 mod globe;
 mod gyro;
 // **Allowed to be unused until the bench exists.** Spec 0050's cube is being
@@ -7818,6 +7819,30 @@ impl Game for Arcade {
 
             mirrors::draw(scene, cube, self.pane, &self.glass_targets, seen);
         }
+
+        // and the room over the nook, per spec 0064. Its shell is drawn
+        // wherever you are, the way the corridor's is: a room's walls do not
+        // depend on whether its one object is in shot.
+        //
+        // **The glass itself only when it can be seen**, for the reason
+        // `mirrors::draw` gives and for a second one of its own: the lens
+        // pass traces every box it is given for every pixel of the sphere,
+        // so a ball nobody is looking at is a bill nobody asked for.
+        {
+            let (middle, across) = glass::ball(self.room.reaches);
+            let eye = self.looking_from();
+            let seen = !self.room.out_of_doors(eye)
+                && eye.distance(middle) <= glass::SEES
+                && camera.frustum().holds_sphere(middle, across);
+
+            glass::draw(
+                scene,
+                &self.room,
+                self.since,
+                cube,
+                seen.then_some(self.globe_mesh).flatten(),
+            );
+        }
         self.draw_the_people(scene);
 
         // and the wear in it where feet have gone, which is the only thing in
@@ -10850,6 +10875,19 @@ impl Game for Arcade {
             let (at, lit, strength, range) = bridge::carving_lamp(stone, size, self.since);
 
             shades.push((eye.distance_squared(at), at, lit, strength, range));
+        }
+
+        // and spec 0064's bays, which are the only light in the room over
+        // the nook. Every lamp sits in a fitting, per this building's own
+        // rule, and up there the fitting is the slot between two columns.
+        for at in glass::lamps(self.room.reaches) {
+            shades.push((
+                eye.distance_squared(at),
+                at,
+                glass::LAMP_COLOUR,
+                glass::LAMP_LIT,
+                glass::LAMP_RANGE,
+            ));
         }
 
         // and the pendant over the sign, which is a fitting like any other.
@@ -14138,6 +14176,26 @@ mod tests {
             "valhalla-hall",
             vec3(door.x - 2.0, door.y + valhalla::FLOOR_UP, door.z),
             vec3(one.at.x - one.wide * 0.4, door.y + EYE + 0.2, door.z),
+        );
+    }
+
+    /// Spec 0064: the room over the nook, from its south end, with the
+    /// sphere in the middle of the colonnade.
+    ///
+    /// **From the end and not at the glass.** What the room has to show is
+    /// length with something repeating down it and one small bright thing in
+    /// the middle of that, which is the shot the spike settled on after four
+    /// placements came back as a flat disc on a flat wall.
+    #[test]
+    fn the_glass_room_is_drawn() {
+        let reaches = reaches();
+        let room = glass::inside(reaches);
+        let (ball, _) = glass::ball(reaches);
+
+        looks_right(
+            "glass",
+            vec3(ball.x, glass::UP, room.min.z + 1.2),
+            vec3(ball.x, ball.y, glass::floor(reaches).max.z),
         );
     }
 
