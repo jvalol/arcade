@@ -55,16 +55,48 @@ pub fn at(since: f32) -> Vec3 {
     vec3(turn.cos(), turn.sin(), -0.34).normalize()
 }
 
-/// How much of it there is to see: none while the sun is up, and it comes in
-/// as the sun goes.
+/// How far below the horizon the moon's own light is gone, and over how much
+/// of a drop it goes.
 ///
-/// Read off the moon's own height rather than the sun's, so a change to either
-/// one's lean carries.
-pub fn showing(since: f32) -> f32 {
-    let up = (at(since).y / 0.14).clamp(0.0, 1.0);
-    let dark = 1.0 - (crate::garden::sun_up(since) * 0.5 + 0.5).clamp(0.0, 1.0);
+/// **A moon has to set behind something, not fade in mid-air.** This put it
+/// out at a height of 0.14, which is eight degrees up, and the field's
+/// horizon stands about five, so it died just short of the hills every night.
+/// Jake, 2026-11-12: it sort of melted into the background hills instead of
+/// setting behind them.
+///
+/// It keeps its light now until its middle is just under the horizon, and the
+/// hills and the ground do the hiding, which is what they are there for. It
+/// is out by the time the whole disc is under: the ground's own far edge sits
+/// half a degree below the horizon from eye height, and a moon `WIDE` across
+/// at `OFF` is ten degrees of radius, so this is well past where anything
+/// could show under the land.
+pub const SETS_AT: f32 = -0.05;
+pub const SETS_OVER: f32 = 0.20;
 
-    up * dark * dark
+/// Where in the sun's own climb the moon's light goes, as the sun's height.
+///
+/// **The other half of why it melted.** `at` hangs the moon opposite the sun,
+/// so the moon is low exactly when the sun is near the horizon and a moonset
+/// here is always a twilight. This was a straight ramp across the sun's whole
+/// range and squared, which left the moon at a quarter of its light at the
+/// moment it reached the hills, against a sky that is still bright. Fixing
+/// the height alone would have moved the melt down rather than stopped it.
+///
+/// It holds its light until the sun is properly climbing and is gone by the
+/// time the day is up, which is also what a full moon does at dawn.
+pub const DAWNS_AT: f32 = -0.05;
+pub const DAWNS_BY: f32 = 0.25;
+
+/// How much of it there is to see: all of it through the night, out as the
+/// sun comes up, and gone once it is under the land.
+///
+/// Read off the moon's own height rather than the sun's, so a change to
+/// either one's lean carries.
+pub fn showing(since: f32) -> f32 {
+    let up = ((at(since).y - SETS_AT) / SETS_OVER + 1.0).clamp(0.0, 1.0);
+    let dark = 1.0 - smoothstep(DAWNS_AT, DAWNS_BY, crate::garden::sun_up(since));
+
+    up * dark
 }
 
 /// What to hand the engine so the face lands at `crate::aim::MOON` whatever the hour.
@@ -1083,5 +1115,46 @@ mod tests {
     fn it_is_a_night_thing() {
         assert!(showing(crate::garden::when(0.25)) < 0.01, "up at noon");
         assert!(showing(crate::garden::when(0.75)) > 0.9, "down at midnight");
+    }
+
+    /// And it still has its light while it is on the skyline, so that the
+    /// hills are what hide it.
+    ///
+    /// **The control is the second half.** A moon that keeps its light all
+    /// the way down shows under the land, which from eye height starts half a
+    /// degree below the horizon. This asks for both: lit while anything of it
+    /// is above the hills, and out before the whole disc is under the ground.
+    #[test]
+    fn it_sets_behind_the_hills_rather_than_fading_over_them() {
+        // the field's horizon stands about five degrees up, so this is the
+        // last place a hill can hide it
+        let on_the_skyline = 6.0f32.to_radians().sin();
+        // and half the disc, which is what has to be gone before it goes out
+        let all_under = -(crate::moon::WIDE * 0.5 / crate::moon::OFF).atan().sin() - 0.1;
+        let mut lit_low = false;
+        let mut out_under = false;
+
+        for n in 0..4000 {
+            let since = crate::garden::when(n as f32 / 4000.0);
+            let high = at(since).y;
+            let lit = showing(since);
+
+            if (high - on_the_skyline).abs() < 0.01 && lit > 0.5 {
+                lit_low = true;
+            }
+
+            if high < all_under && lit > 0.01 {
+                out_under = true;
+            }
+        }
+
+        assert!(
+            lit_low,
+            "the moon is never lit while it is down on the skyline"
+        );
+        assert!(
+            !out_under,
+            "the moon still has light on it with the whole disc under the ground"
+        );
     }
 }
