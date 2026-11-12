@@ -8597,7 +8597,11 @@ impl Game for Arcade {
                     scene.backdrop(
                         dome,
                         storm,
-                        garden::skylit(self.since) + self.flashed(),
+                        garden::gives_off(
+                            (garden::skylit(self.since) + self.flashed()).truncate(),
+                            self.since,
+                        )
+                        .extend(1.0),
                         900.0,
                     );
                 }

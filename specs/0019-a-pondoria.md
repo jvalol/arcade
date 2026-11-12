@@ -167,6 +167,29 @@ rather than scenery round it. One thing that moves and a place to sit facing
 it. If a second thing is wanted, the right question is whether the first is
 not enough rather than what else would look good.
 
+### The sky says what it comes to, 2026-11-12
+
+`aim::SKY` has always been documented as a colour past one, which is this
+engine's way of saying a thing is lit rather than being lit. That was true of
+the intent and false of the arithmetic: the dome went through the ordinary
+mesh shader, so the sun ran over its normals and the half turned toward it
+came out brighter, with a hard edge where the lambert clipped at nought. Jake
+saw that edge from the field as a pale wedge in the evening sky and it was
+hunted through the storm's own picture four times before anybody turned the
+sun off.
+
+The engine draws a backdrop unlit now, per its spec 0086. So the colour this
+file hands over is what lands, and `garden::gives_off` divides the fill out
+of it, which is the same move `aim::MOON`, the runestone and Valhalla's
+painted night already make. `skylit` is unchanged and still says what the sky
+comes to at a given hour, which is what `noon_is_the_garden_as_it_was` has
+always asserted it says.
+
+The flash goes through the same division, added to `skylit` before it rather
+than to the result after. A strike is something the sky comes to as well, and
+added afterwards it would have been faint at noon and blinding at midnight,
+which is backwards.
+
 ## Acceptance criteria
 
 - The weather goes over while you watch, in two directions that do not
