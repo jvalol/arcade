@@ -847,6 +847,45 @@ pub fn read(tour: &str) -> Result<Vec<Step>, String> {
         .collect()
 }
 
+/// How long a day lasts while the clip is being filmed, and what hour it
+/// opens at.
+///
+/// **A film wants one evening, not three days.** The clip runs fifty-six
+/// seconds and `garden::DAY` is twenty, so filmed at the working length the
+/// sky would go round nearly three times: the garden would be a different
+/// hour each time the route passes it, and the one outdoor shot would get
+/// whichever sky its second happened to fall on. At twenty minutes the whole
+/// film moves the clock by a twentieth of a day and every shot gets the hour
+/// this names, give or take: fifty-eight seconds of this is a twentieth of a
+/// day, which carries the moon seventeen degrees across the sky over the
+/// whole film and a degree and a half over the five seconds of standing that
+/// matter. `the_clip_looks_at_the_moon` asks the whole span rather than the
+/// moment, because where in the film the shot falls is not a thing the
+/// constants here know.
+pub const FILM_DAY: f32 = 20.0 * 60.0;
+
+/// And the hour, which is chosen by the one shot that can see a sky.
+///
+/// The route stands in the garden's way out and looks west at Bifrost, so
+/// the sky in that frame is the western one. Late in the night the moon is
+/// low in the west, which puts it in the same stretch of sky as the arc.
+/// Anywhere else in the night it is overhead or behind you, and by day it is
+/// not there at all.
+///
+/// **Chosen by looking, and it is not the hour of the shot.** The hour
+/// decides where the moon sits against things that do not move, and the
+/// frame that works has it in open sky between a trunk and the garden's
+/// wall, with the arc to the left. That frame is hour 0.95. A take at 0.94
+/// puts a trunk straight across the moon and one at 0.96 puts it against the
+/// wall's edge, so there is about a hundredth of a day of room either side.
+///
+/// **This is that hour less the time the camera takes to get there**, which
+/// is about fifteen seconds of a twenty minute day. The first take set this
+/// to the hour of the shot and the film arrived thirteen thousandths of a
+/// day late, with the moon already sliding behind the wall. A start hour is
+/// not a shot hour and nothing but looking at the film says so.
+pub const FILM_AT: f32 = 0.937;
+
 /// How far back a place stands from the thing it is there to look at.
 ///
 /// A body is 0.9 across and the lattice steps half a metre, so anything
@@ -933,16 +972,32 @@ pub fn clip(room: &crate::room::Room, done: bool) -> Vec<Step> {
     if done {
         let (from, to) = crate::field::way(reaches);
 
-        route.push(Step::At(
-            vec3(
-                crate::field::starts(reaches) + BACK_FROM_THE_WAY,
-                0.0,
-                (from + to) * 0.5,
-            ),
-            0,
-        ));
+        let stand = vec3(
+            crate::field::starts(reaches) + BACK_FROM_THE_WAY,
+            0.0,
+            (from + to) * 0.5,
+        );
+
+        route.push(Step::At(stand, 0));
         route.push(Step::Look(crate::bridge::top(reaches)));
         route.push(Step::Stand(3.0));
+
+        // **And up at the moon, which is the only thing on this route that
+        // is not in the building.** Spec 0065 gave it a face and nothing
+        // published had ever shown it. It hangs off the eye rather than
+        // standing anywhere, so where to look is a direction from where you
+        // are standing and not a place: `moon::at` at the hour the film
+        // opens, which `FILM_DAY` holds still for the length of the clip.
+        //
+        // After the bridge rather than before it. Both are west, the moon is
+        // the higher of the two, and a turn that ends looking up is a better
+        // last thing to see of the field than a turn that ends looking along
+        // it.
+        let eye = vec3(stand.x, stand.y + crate::EYE, stand.z);
+        let moon = crate::moon::at(crate::garden::when(FILM_AT));
+
+        route.push(Step::Look(eye + moon * crate::moon::OFF));
+        route.push(Step::Stand(2.0));
     }
 
     // **The solarium, down the line rather than along it.** Every planet
@@ -1335,6 +1390,109 @@ mod tests {
     /// **At rest only.** `stands` is asked for the unswung arrangement, so
     /// every planet lies on one ray out of the sun. That is the line the
     /// walk out through the door crosses, which is the case worth asking
+    /// Spec 0065: the clip looks at the moon, and the moon is there when it
+    /// does.
+    ///
+    /// **Three things have to agree and they are written in three places.**
+    /// The route has to make the look, `FILM_AT` has to be an hour the moon
+    /// is up and west at, and `FILM_DAY` has to be long enough that it has
+    /// not moved by the time the camera gets there. Any one of them changing
+    /// alone puts the film back to showing a patch of sky.
+    #[test]
+    fn the_clip_looks_at_the_moon() {
+        let room = crate::room::Room::of(crate::games());
+        let since = crate::garden::when(FILM_AT);
+
+        assert!(
+            crate::moon::showing(since) > 0.9,
+            "at the film's hour the moon is only {:.2} lit",
+            crate::moon::showing(since)
+        );
+
+        // where the route stands for its one outdoor shot, and the two
+        // things it looks at from there
+        let steps = clip(&room, true);
+        let mut stand = None;
+        let mut looks: Vec<Vec3> = Vec::new();
+
+        for (n, step) in steps.iter().enumerate() {
+            if let Step::Look(at) = step {
+                // the stand this look is made from is the last `At` before it
+                let from = steps[..n].iter().rev().find_map(|one| match one {
+                    Step::At(at, _) => Some(*at),
+                    _ => None,
+                });
+
+                if from == Some(the_way_out(&room)) {
+                    stand = from;
+                    looks.push(*at);
+                }
+            }
+        }
+
+        let stand = stand.expect("the route stands in the garden's way out");
+
+        assert_eq!(
+            looks.len(),
+            2,
+            "it looks {} ways from the way out, not two",
+            looks.len()
+        );
+
+        let eye = vec3(stand.x, stand.y + crate::EYE, stand.z);
+        let way = (looks[1] - eye).normalize();
+        let moon = crate::moon::at(since);
+
+        assert!(
+            way.dot(moon) > 0.9999,
+            "the second look is {:?} and the moon is {:?}",
+            way,
+            moon
+        );
+
+        // and it is still there whenever the camera gets to it. Where in
+        // the film the shot falls is not this file's to know, so this asks
+        // the whole span rather than a moment in it: the moon has to be lit
+        // and in the west from the first frame to the last.
+        //
+        // **Asked as hours and not as seconds.** `garden::day` is whatever
+        // this run is using and a test is not a film, so 58 seconds here is
+        // nearly three days at `garden::DAY`. What the film gets is 58
+        // seconds of `FILM_DAY`, and `when` then `at` cancel the length out
+        // between them.
+        let film = 58.0 / FILM_DAY;
+
+        for n in 0..=20 {
+            let hour = FILM_AT + film * n as f32 / 20.0;
+            let then = crate::garden::when(hour);
+            let lit = crate::moon::showing(then);
+            let where_ = crate::moon::at(then);
+
+            assert!(
+                lit > 0.5,
+                "a fifth of the way through the film the moon is {:.2} lit",
+                lit
+            );
+            assert!(
+                where_.x < -0.5,
+                "at hour {:.3} the moon is at {:?}, which is not the west",
+                hour,
+                where_
+            );
+        }
+    }
+
+    /// Where that shot is taken from, which `clip` works out the same way.
+    fn the_way_out(room: &crate::room::Room) -> Vec3 {
+        let (from, to) = crate::field::way(room.reaches);
+
+        vec3(
+            crate::field::starts(room.reaches) + BACK_FROM_THE_WAY,
+            0.0,
+            (from + to) * 0.5,
+        )
+    }
+
     /// about; swung, they are somewhere else and this says nothing.
     #[test]
     fn the_clip_never_stands_inside_a_body() {

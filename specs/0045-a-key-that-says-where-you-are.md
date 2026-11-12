@@ -38,9 +38,11 @@ standing in the imaginarium.
 ## Behavior
 
 M, pressed, puts one line on the screen under the help, on the same plate,
-for `PLACE_SHOWS` seconds, and writes it to the error stream as well. Held,
-it does nothing more: the repeats of a held key ask for nothing, as with spec
-0048's P.
+and leaves it there. M again takes it off. Either way it writes the line to
+the error stream, because a press that turned the readout off is still a
+press that was made somewhere and a log is what gets grepped afterwards.
+Held, it does nothing more: the repeats of a held key ask for nothing, as
+with spec 0048's P.
 
 **On the screen and not only in the log**, which was the first build and was
 the wrong shape. The whole point is that a screenshot carries its own pose,
@@ -57,8 +59,15 @@ and `yaw` is copy, it goes in under a marker, and it holds the gate until
 Jake has rewritten it in his own voice. Seven numbers in a fixed order are
 not copy, and whoever reads them off a screenshot already knows the order.
 
-It runs out on its own rather than being turned off. A readout that stays is
-a mode and a mode wants a second key.
+**It ran out on its own until 2026-11-12.** The argument was that a readout
+which stays is a mode, and a mode wants a second key. Jake, having used it:
+it shouldn't disappear after a few seconds, it should be more like a toggle.
+
+The second key is the same key, which is what that argument was missing. And
+the eight seconds were chosen to be long enough to take a screenshot without
+hurrying, which is a guess about how long somebody takes to do something, of
+exactly the kind this building gets wrong by sitting on the other side of
+the screen from the person doing it.
 
 **A string and not a print.** `where_you_are` gives the line, the key shows
 it and logs it, so a test can read what it says. A key whose whole output is
@@ -108,15 +117,15 @@ again.
   you have moved. — `tests::m_says_where_you_are`
 - The line the plate prints is the line `POSE` takes, all the way round. — `tests::the_plate_says_what_pose_takes`
 - And a line that is not a pose is not read as one. — `tests::a_line_that_is_not_a_pose_is_not_read_as_one`
-- It goes on the screen on the press and runs out on its
-  own. — `tests::m_shows_where_you_are_for_a_while`
+- It goes on the screen on the press, stays there, and comes off when it is
+  asked again. — `tests::m_shows_where_you_are_until_it_is_asked_again`
 - And asking moves nothing. — `tests::m_moves_nothing`
 - The repeats of a held key ask for nothing. — `tests::the_repeats_of_a_held_p_ask_for_nothing`
 
 ### Verified by hand
 
 - Run the arcade, stand somewhere, press M, and read the line under the
-  help.
+  help. Walk, and watch it keep up. Press M again and watch it go.
 
 ## Out of scope
 
@@ -127,5 +136,6 @@ or the cradle's swing, still wants a recorder. That is not built, because
 every fault chased so far has been "stand here, at this time, look that
 way".
 
-**A readout you leave up.** This one runs out. Something that stays on the
-screen while you walk is spec 0013's business and has its own key.
+**Every other readout.** This one is a place and a clock. What is solid,
+what the sight is on and what a frame costs are spec 0013's business and
+have their own keys.

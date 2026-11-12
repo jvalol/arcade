@@ -402,9 +402,35 @@ pub const DOME_UP: f32 = 12.0;
 pub const DAY: f32 = 20.0;
 pub const OPENS_AT: f32 = 0.4;
 
+/// What a run is actually using, which is `DAY` unless it has been told
+/// otherwise before it started.
+///
+/// **Because a film is not a session.** A day this short is for watching the
+/// sky change while working on it, and a clip of the building is fifty-six
+/// seconds long, so at `DAY` it crosses nearly three days: every shot gets
+/// whichever sky its second lands on, the garden is a different hour each
+/// time the route passes it, and staging anything by the clock means pinning
+/// a number that every edit to the route re-rolls. A film wants one evening.
+///
+/// Set once, before the first frame and before anything has read it. Unset
+/// it cannot be, which is the point: a length that changed halfway through
+/// would move every hour that had already happened.
+pub fn day() -> f32 {
+    *RUNS_FOR.get().unwrap_or(&DAY)
+}
+
+/// Says how long a day is for this run. Later calls do nothing, so the
+/// first caller wins and there is no way to change it under something that
+/// has already asked.
+pub fn runs_for(seconds: f32) {
+    let _ = RUNS_FOR.set(seconds);
+}
+
+static RUNS_FOR: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+
 /// How far through a day it is, nought at dawn and a half at dusk.
 pub fn hour(since: f32) -> f32 {
-    (since / DAY + OPENS_AT).rem_euclid(1.0)
+    (since / day() + OPENS_AT).rem_euclid(1.0)
 }
 
 /// And back: how long the building has been open at a given hour.
@@ -418,7 +444,7 @@ pub fn hour(since: f32) -> f32 {
 /// is. `AT` wants it, because the one place the hour itself is the
 /// question is in setting the clock before a picture.
 pub fn when(hour: f32) -> f32 {
-    (hour - OPENS_AT).rem_euclid(1.0) * DAY
+    (hour - OPENS_AT).rem_euclid(1.0) * day()
 }
 
 /// How high the sun stands, one overhead and negative when it is down.
@@ -6066,7 +6092,7 @@ mod tests {
         // measurement that matters: the first visit is the one that has to
         // show the room is alive. Taken at noon instead it is flat, which is
         // what Jake could not see.
-        let moved = (sun_up(DAY * 0.1) - sun_up(0.0)).abs();
+        let moved = (sun_up(day() * 0.1) - sun_up(0.0)).abs();
 
         assert!(
             moved > 0.1,
@@ -6102,9 +6128,9 @@ mod tests {
     fn a_day_comes_round() {
         for at in [0.0f32, 123.0, 600.0] {
             assert!(
-                (hour(at) - hour(at + DAY)).abs() < 1e-3,
+                (hour(at) - hour(at + day())).abs() < 1e-3,
                 "a day and the same day are {} apart at {}",
-                hour(at) - hour(at + DAY),
+                hour(at) - hour(at + day()),
                 at
             );
         }
@@ -6127,9 +6153,9 @@ mod tests {
 
         // and over more than a stroke. A lamp that snaps on is a switch.
         let mut went = 0.0;
-        let step = DAY / 2000.0;
+        let step = day() / 2000.0;
         let mut at = when(0.3);
-        let until = at + DAY * 0.3;
+        let until = at + day() * 0.3;
 
         while at < until {
             let (one, other) = (lanterns_lit(at), lanterns_lit(at + step));
@@ -6148,9 +6174,9 @@ mod tests {
         // a switch. At twenty minutes a day one range of seconds satisfied
         // both, so each says its own now.
         assert!(
-            (0.015..0.25).contains(&(went / DAY)),
+            (0.015..0.25).contains(&(went / day())),
             "they take {:.3} of a day to come up",
-            went / DAY
+            went / day()
         );
         // **And the seconds are a floor rather than a range.** This asked for
         // two of them, which was right at a two minute day and false at a
@@ -6170,7 +6196,7 @@ mod tests {
     #[test]
     fn the_sky_is_never_black() {
         for n in 0..64 {
-            let at = DAY * n as f32 / 64.0;
+            let at = day() * n as f32 / 64.0;
             let lit = skylit(at);
 
             assert!(

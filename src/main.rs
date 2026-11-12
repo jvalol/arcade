@@ -322,6 +322,34 @@ fn flying() -> bool {
     std::env::var("FLY").is_ok()
 }
 
+/// How long a day lasts this run, in seconds. `DAY=120`.
+///
+/// **Because a film is not a session.** `garden::DAY` is twenty seconds, set
+/// there so the sky can be watched while it is being worked on. The clip of
+/// this building is fifty-six seconds, which at that length crosses nearly
+/// three days: every shot gets whichever sky its second falls on, and
+/// staging anything by the clock means pinning a number that every edit to
+/// the route re-rolls. So a film gets `tour::FILM_DAY` and sits inside one
+/// evening, and `DAY=` is here for the same job by hand.
+///
+/// Said once, before the first frame, because `garden::runs_for` takes the
+/// first answer and keeps it.
+fn how_long_a_day_is() -> f32 {
+    std::env::var("DAY")
+        .ok()
+        .and_then(|said| said.trim().parse().ok())
+        .unwrap_or(if filming() {
+            tour::FILM_DAY
+        } else {
+            garden::DAY
+        })
+}
+
+/// Whether this run is the clip being filmed.
+fn filming() -> bool {
+    std::env::args().any(|arg| arg.starts_with("--film="))
+}
+
 /// What time it is when this run starts, as a share of a day: nought is
 /// dawn, a quarter noon, a half dusk, three quarters midnight.
 /// `AT=0.8`.
@@ -335,9 +363,14 @@ fn flying() -> bool {
 /// this. It was eight minutes of sitting when a day was twenty; it is
 /// forty seconds now.
 fn starting_hour() -> Option<f32> {
-    let said = std::env::var("AT").ok()?;
+    let said = std::env::var("AT").ok();
 
-    said.trim().parse().ok().map(garden::when)
+    match said {
+        Some(said) => said.trim().parse().ok().map(garden::when),
+        // and a film opens at its own hour, which is the one its one
+        // outdoor shot is staged for. See `tour::FILM_AT`.
+        None => filming().then(|| garden::when(tour::FILM_AT)),
+    }
 }
 
 /// Where to stand this run, and when, instead of at the door in the
@@ -1079,9 +1112,8 @@ struct Arcade {
     /// engine. One press, one check: it compares every drawn thing with every
     /// other and the answer does not change between frames.
     wants_planes: bool,
-    /// How long the readout of where you are standing has left on screen,
-    /// per spec 0045.
-    showing_place: f32,
+    /// Whether the readout of where you are standing is up, per spec 0045.
+    showing_place: bool,
     /// The patches the last check found, kept so they can be outlined. A press
     /// asks, the frame after draws them, and they stay up until the next ask.
     fighting: Vec<Aabb>,
@@ -1434,7 +1466,7 @@ impl Arcade {
             timed: false,
             ran: false,
             wants_planes: false,
-            showing_place: 0.0,
+            showing_place: false,
             fighting: Vec::new(),
             walking: [false; 4],
             shifted: false,
@@ -5788,12 +5820,6 @@ impl Arcade {
         }
     }
 
-    /// How long the readout stays up.
-    ///
-    /// Long enough to take a screenshot without hurrying and short enough
-    /// that it is gone before you have forgotten you pressed anything.
-    const PLACE_SHOWS: f32 = 8.0;
-
     /// Where you are standing and which way you are looking, as six bare
     /// numbers: the feet, the eye's height, the yaw and the pitch.
     ///
@@ -6968,9 +6994,6 @@ impl Game for Arcade {
                 self.stand(pose);
             }
         }
-        // and the readout of where you are standing, which runs out on its
-        // own rather than being turned off. Spec 0045.
-        self.showing_place = (self.showing_place - dt).max(0.0);
         // **Two rooms answer by being reached, and neither needs anything
         // planted in it.** Spec 0011's space behind the hall's end wall is
         // the answer to the question spec 0020's worn track asks by being
@@ -7528,7 +7551,7 @@ impl Game for Arcade {
 
         // and where you are standing, under the help and on the same plate,
         // for the seconds after M. Spec 0045.
-        if self.showing_place > 0.0 {
+        if self.showing_place {
             lines.push(self.where_you_are());
         }
 
@@ -11213,8 +11236,12 @@ impl Game for Arcade {
             // a screenshot carries its own pose, and in the log as well
             // because a log can be grepped.
             KeyboardKey::M if held && !input.repeat => {
-                self.showing_place = Self::PLACE_SHOWS;
+                self.showing_place = !self.showing_place;
 
+                // and said every time it is asked for, not only when it comes
+                // up: the log line is how a walk gets grepped afterwards, and
+                // a press that turned it off is still a press that was made
+                // somewhere.
                 eprintln!("{}  seeing {:?}", self.where_you_are(), self.what_i_see());
             }
             // back to the door, when flying has lost you. Spec 0041.
@@ -11790,6 +11817,8 @@ fn main() {
 
         return;
     }
+
+    garden::runs_for(how_long_a_day_is());
 
     start("capriccio", Box::new(Arcade::new()));
 }
@@ -14973,27 +15002,41 @@ mod tests {
         assert_ne!(said, moved, "it says the same thing wherever you stand");
     }
 
-    /// Spec 0045: M puts the line on the screen, and it runs out on its own.
+    /// Spec 0045: M puts the line on the screen and leaves it there, and M
+    /// again takes it off.
     ///
-    /// The control is the last line. A readout that never goes away is a
-    /// mode, and a mode wants a key to come out of it.
+    /// **It ran out on its own until 2026-11-12**, on the argument that a
+    /// readout which stays is a mode and a mode wants a second key. Jake,
+    /// having used it: it shouldn't disappear after a few seconds, it should
+    /// be more like a toggle. The second key is the same key, which is what
+    /// the argument was missing.
+    ///
+    /// The control is the last pair. A toggle that only turns on is a key
+    /// that writes a line and then lies about it.
     #[test]
-    fn m_shows_where_you_are_for_a_while() {
+    fn m_shows_where_you_are_until_it_is_asked_again() {
         let mut one = Arcade::new();
-
-        assert_eq!(one.showing_place, 0.0, "it opened with the readout up");
-
-        press(&mut one, KeyboardKey::M);
-        assert_eq!(one.showing_place, Arcade::PLACE_SHOWS, "M showed nothing");
-
         let (mut geometry, mut text) = (Geometry::new(), TextRenderer::new());
         let sound = SoundSystem::new();
 
-        one.update(Arcade::PLACE_SHOWS * 0.5, &mut geometry, &mut text, &sound);
-        assert!(one.showing_place > 0.0, "it went out half way through");
+        assert!(!one.showing_place, "it opened with the readout up");
 
-        one.update(Arcade::PLACE_SHOWS, &mut geometry, &mut text, &sound);
-        assert_eq!(one.showing_place, 0.0, "it never goes out");
+        press(&mut one, KeyboardKey::M);
+        assert!(one.showing_place, "M showed nothing");
+
+        // and it is still there a long time later, which is the whole of
+        // what changed
+        for _ in 0..30 {
+            one.update(1.0, &mut geometry, &mut text, &sound);
+        }
+
+        assert!(one.showing_place, "it went out on its own");
+
+        press(&mut one, KeyboardKey::M);
+        assert!(!one.showing_place, "asking again left it up");
+
+        press(&mut one, KeyboardKey::M);
+        assert!(one.showing_place, "it only ever goes off");
     }
 
     /// Spec 0045: the line the plate prints is the line `POSE` takes.

@@ -138,6 +138,15 @@ ball are the same place. There is one now, and the inverse is written once in
 - The craters read at the terminator and not in the flat light, which is
   correct and is also the reason the phase is a lie.
 
+## It is in the film, 2026-11-12
+
+Jake: the arcade clip should show the moon. It does now. Spec 0049's route
+already stood in the garden's way out and looked west at Bifrost, which is
+the one shot on it that can see a sky, and it gained a second look from the
+same place, up at the moon. The film runs at its own hour and its own day
+length so that the moon is up and in the west for the whole of it, which
+spec 0049 explains and `tour::FILM_AT` holds.
+
 ## Out of scope
 
 - **A room for it.** The moon cannot be seen from under a lid, so a room that

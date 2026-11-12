@@ -120,6 +120,32 @@ fact about the film and not about the route. The route's own length is
 printed by the test below: 341 metres of walking, which is about 98
 seconds before the turns.
 
+### The film keeps its own clock, 2026-11-12
+
+A day was cut to twenty seconds that morning so the sky could be watched
+while it was being worked on, and the clip is fifty-eight seconds. Filmed at
+that length it crosses nearly three days: the garden is a different hour
+each time the route passes it, and the one shot that can see a sky gets
+whichever sky its second falls on. Staging anything by the clock would mean
+pinning a number that every edit to the route re-rolls.
+
+So a run with `--film=` takes `tour::FILM_DAY` and `tour::FILM_AT` instead
+of `garden::DAY` and the door's hour, and the whole film sits in one night.
+`DAY=<seconds>` does the same by hand for anybody looking at something.
+
+**The hour is chosen by what the route looks at**, which is why it lives
+beside the route and not in the shell script. The clip stands in the
+garden's way out and looks west at Bifrost, so the sky in that frame is the
+western one, and late in the night the moon is low in the west. It took six
+takes: at 0.94 a trunk went straight across it, at 0.88 the garden's own
+wall cut it off.
+
+And the route gained a second look from that same place, up at the moon,
+which spec 0065 gave a face and which nothing published had ever shown. The
+moon hangs off the eye rather than standing anywhere, so where to look is a
+direction from where you are standing rather than a place: it is the one
+step in the route that is not read off an owner in the building.
+
 ## What stops being tested, which is the cost
 
 Today the clip's keys go through System Events into a window, and that is
@@ -138,6 +164,8 @@ what the input path is tested with: a short keyed walk that presses
 something and reads the readout, run by the gate rather than by the camera.
 
 ## Acceptance criteria
+
+- The clip looks at the moon, at an hour the moon is up and west for the length of the film. — `tour::tests::the_clip_looks_at_the_moon`
 
 - A path is found between two places in different rooms, and every step of
   it is one the walker can walk. — `tour::tests::every_step_of_a_path_can_be_walked`
