@@ -1150,6 +1150,15 @@ pub const HEARTH_REACH: f32 = 9.5;
 /// What it comes to on screen, through `garden::gives_off`, so the
 /// panel is the same picture at every hour. Over one in every channel:
 /// the star cores in the picture are white and clip, the cobalt round
+/// What stands on the field's horizon, per spec 0040.
+///
+/// **Darker and bluer than the ground it stands past.** Everything far
+/// enough off goes toward the colour of the air between, and the air out
+/// here is spec 0019's storm. A hill painted the green of the grass at your
+/// feet reads as a green hill near you rather than a far one.
+pub const FAR_HILL: Vec4 = vec4(0.115, 0.145, 0.205, 1.0);
+pub const FAR_TOWER: Vec4 = vec4(0.095, 0.115, 0.175, 1.0);
+
 /// them does not, so the stars burn and the sky stays blue.
 pub const NIGHT_BURNS: Vec3 = glam::vec3(1.70, 1.85, 2.60);
 pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);

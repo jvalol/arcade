@@ -594,3 +594,41 @@ field's planting is.
 - The ground has no lit path down the middle of it that turns with you.
   The first build had one: a broad specular highlight on a surface this
   size, which is the garden pond's note on a field.
+
+## 2026-11-11: hills, towers and trees
+
+**Jake, first thing that morning: hills, towers and trees.** The trees were
+already here. What was not was any far side at all: from anywhere high enough
+to see over the canopy, the field ran to a dead straight line where the ground
+slab ends, and then sky. A field with no far side that shows you its edge is
+arguing against itself.
+
+**Round the eye, not on the ground.** Anything standing on this ground can be
+walked to, and a hill you can walk to is a hill that wants a collider and
+stops being a horizon. The engine already draws the sky and the stars this
+way: round the eye and not round the room, so walking does not shift a star,
+which is what a star does. So the range keeps its bearing however far you
+walk, which is what a distant range does, and it never arrives, which is what
+this room is about.
+
+Sixty-four forms on a ring, jittered off their bearings so it does not read as
+a cog, about one in nine a tower rather than a hill. Jake asked for hills,
+towers and trees in that order and the order is the proportion.
+
+### The sky is nearer than it looks, which took four pictures
+
+A backdrop sits at nine tenths of the far plane. This one is square at the
+rim, because a round dome has to cover a square garden, so its nearest point
+is the middle of an edge and not a corner: measured off the dome's own
+vertices, that is about 0.44 of the far plane rather than 0.90.
+
+Put the ring out at nine tenths and the whole of it is behind the sky, and
+**a thing behind a backdrop looks exactly like a thing that was never
+pushed**. Four pictures went by ruling out the mesh, the colour, the cull and
+the push before the sky was suspected at all. The guard below measures the
+rim rather than repeating that reasoning.
+
+## Acceptance criteria, 2026-11-11
+
+- The horizon stands inside the sky, measured off the dome's own vertices rather than off a share of the far plane. — `field::tests::the_horizon_stands_inside_the_sky`
+- And it is drawn, from the one place in this building high enough over the field to see its far side. — `tests::the_horizon_is_drawn`

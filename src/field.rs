@@ -272,6 +272,102 @@ pub fn sees(at: Vec3) -> f32 {
     SEES * grown(at)
 }
 
+/// The horizon: how far out it stands as a share of what the camera sees,
+/// how many forms are round it, and how tall the tallest is against the
+/// width of the widest.
+///
+/// **Round the eye, not on the ground.** The field has no far side, so
+/// anything standing on its ground can be walked to, and a hill you can walk
+/// to is a hill that wants a collider and stops being a horizon. The engine
+/// already draws the sky and the stars this way, for the same reason spec
+/// 0019 gives: round the eye and not round the room, so walking does not
+/// shift a star, which is what a star does.
+///
+/// So these keep their bearing however far you walk, which is what a distant
+/// range does, and they never arrive, which is what this room is about.
+///
+/// **Inside the sky, which is nearer than it looks.** A backdrop sits at
+/// `BEHIND_IT_ALL` of the far plane, which is nine tenths of it, but this one
+/// is square at the rim so that a round dome covers a square garden: its
+/// nearest point is the middle of an edge and not a corner, at about seven
+/// tenths of the radius the corners reach. Put out at nine tenths the whole
+/// range was behind the sky and nothing was drawn at all, which took four
+/// pictures to work out because a thing behind a backdrop looks exactly like
+/// a thing that was never pushed.
+///
+/// `tests::the_horizon_stands_inside_the_sky` holds it, measured off the
+/// dome's own vertices rather than off this reasoning.
+pub const HORIZON_OUT: f32 = 0.35;
+pub const HORIZON_MANY: usize = 64;
+pub const HILL_HIGH: f32 = 0.085;
+pub const HILL_WIDE: f32 = 0.42;
+
+/// How much of the ring is towers rather than hills.
+///
+/// **Few, because a skyline of them is a city and this is a field.** Jake
+/// asked for hills, towers and trees, in that order, and the order is the
+/// proportion.
+pub const TOWERS: f32 = 0.11;
+
+/// What stands on the horizon at one bearing: where it is, how wide, how
+/// high, and whether it is a tower.
+pub struct Far {
+    pub at: Vec3,
+    pub wide: f32,
+    pub high: f32,
+    pub tower: bool,
+}
+
+/// The ring, from where you are standing.
+///
+/// Placed by bearing rather than by cell, because a thing at infinity has a
+/// bearing and no position. The hash is of the bearing's index, so the same
+/// hill is in the same quarter of the sky for the whole walk.
+pub fn horizon(at: Vec3) -> Vec<Far> {
+    let out = sees(at) * HORIZON_OUT;
+    let mut rolls = Rolls::of((0, 0), 0x40F1);
+    let mut out_of = Vec::with_capacity(HORIZON_MANY);
+
+    for n in 0..HORIZON_MANY {
+        let bearing = n as f32 / HORIZON_MANY as f32 * std::f32::consts::TAU;
+        // a bearing of its own, jittered, or the ring reads as a cog
+        let aside = (rolls.next() - 0.5) * std::f32::consts::TAU / HORIZON_MANY as f32 * 1.6;
+        let turn = bearing + aside;
+        let tower = rolls.next() < TOWERS;
+        let size = 0.45 + rolls.next() * 0.55;
+        // and standing a little nearer or further, so the range has depth
+        let far = out * (0.82 + rolls.next() * 0.3);
+
+        let (wide, high) = if tower {
+            (out * HILL_WIDE * 0.16 * size, out * HILL_HIGH * 2.1 * size)
+        } else {
+            (out * HILL_WIDE * size, out * HILL_HIGH * size)
+        };
+
+        out_of.push(Far {
+            at: vec3(at.x + turn.cos() * far, 0.0, at.z + turn.sin() * far),
+            wide,
+            high,
+            tower,
+        });
+    }
+
+    out_of
+}
+
+/// A hill, turned on a wheel: wide at the foot and drawn to nothing.
+///
+/// **Not a cone.** A cone is a tent. The profile eases, so the foot meets
+/// the ground at a shallow angle and the top rounds over, which is what
+/// reads as land from a long way off.
+pub fn hill_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(22, 14, |v| {
+        let waist = (1.0 - v).powf(0.62) * (1.0 - v * v * 0.35);
+
+        (v, waist.max(0.0))
+    })
+}
+
 /// Whether a cell this far off is sown at all.
 ///
 /// **A field that reaches ten times further asks for a hundred times the
@@ -947,6 +1043,50 @@ pub fn flower(seed: u32, head: [u8; 3]) -> blitzkit::texture::TextureData {
 
 #[cfg(test)]
 mod tests {
+    /// Spec 0040: the horizon stands inside the sky.
+    ///
+    /// **Measured off the dome's own vertices.** It is square at the rim, so
+    /// its nearest point is the middle of an edge rather than a corner, and
+    /// a ring placed at the share of the far plane a backdrop sits at is
+    /// behind the sky on three quarters of its bearings. A thing behind a
+    /// backdrop looks exactly like a thing that was never pushed, which is
+    /// four pictures of an empty horizon before anybody works that out.
+    #[test]
+    fn the_horizon_stands_inside_the_sky() {
+        use glam::vec3;
+
+        for up in [0.0f32, 12.0, 60.0] {
+            let at = vec3(0.0, up, 0.0);
+            let scale = crate::garden::sky_scale(at);
+            let dome = crate::garden::dome_mesh(0.0);
+            // the rim, which is the band that stands between the eye and
+            // anything on the ground. Higher up the dome closes in over
+            // your head and its radius means nothing to a hill.
+            let nearest = dome
+                .vertices
+                .iter()
+                .filter(|one| one.position[1].abs() < 0.08)
+                .map(|one| {
+                    let [x, _, z] = one.position;
+
+                    x.hypot(z) * scale
+                })
+                .fold(f32::MAX, f32::min);
+
+            for far in horizon(at) {
+                let out = (far.at - at).length();
+
+                assert!(
+                    out < nearest,
+                    "a hill {:.0} out, with the sky nearest at {:.0}, from {:.0} up",
+                    out,
+                    nearest,
+                    up
+                );
+            }
+        }
+    }
+
     use super::*;
 
     /// A building the size of the one that ships, for the tests to measure

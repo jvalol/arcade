@@ -749,6 +749,9 @@ struct Arcade {
     /// the bridge the lid is 3.8 degrees down, which is nearly edge on, and
     /// from `FLY=1` it is a hole straight into the hall.
     roof_meshes: Vec<MeshId>,
+    /// The hill turned on a wheel that the field's horizon is made of, per
+    /// spec 0040. One mesh, stood many times.
+    hill: Option<MeshId>,
     /// One unit quad, laid on whichever outward face is being dressed.
     /// Each face carries its own skin, generated at that face's size, so
     /// one mesh does for all of them.
@@ -1265,6 +1268,7 @@ impl Arcade {
             render: None,
             rendered: vec![None, None],
             roof_meshes: Vec::new(),
+            hill: None,
             wall_quad: None,
             roof_skin: None,
             outdoors: false,
@@ -2398,6 +2402,27 @@ impl Arcade {
                 // turns with you. The garden's pond is the same note.
                 aim::VOID,
             );
+        }
+
+        // the horizon, which is hills and a few towers stood round the eye
+        // rather than on the ground. See `field::horizon` for why: a hill
+        // you can walk to is a hill that wants a collider.
+        //
+        // Before the trees, because it stands behind everything out here and
+        // a thing at infinity is drawn first.
+        if let Some(hill) = self.hill {
+            for far in field::horizon(self.at) {
+                scene.push_material(
+                    hill,
+                    &Transform::at(far.at).with_scale(vec3(far.wide, far.high, far.wide)),
+                    if far.tower {
+                        aim::FAR_TOWER
+                    } else {
+                        aim::FAR_HILL
+                    },
+                    aim::DULL,
+                );
+            }
         }
 
         // the trees, which are three meshes stood many times
@@ -6344,6 +6369,7 @@ impl Game for Arcade {
         // the field: one quad for the ground, counted so a tile of grass is a
         // tile wherever the slab has slid to, and a trunk for each kind of
         // tree it stands. Spec 0040.
+        self.hill = Some(renderer.add_mesh(&field::hill_mesh()));
         self.sward = Some(renderer.add_mesh(&room::tiled_plane(glam::Vec2::splat(
             field::GROUND_REACH * 2.0 / field::TILE,
         ))));
@@ -13951,6 +13977,32 @@ mod tests {
                 EYE + 3.0,
                 garden::at(reaches).z,
             ),
+        );
+    }
+
+    /// Spec 0040: the field's horizon, from the bridge.
+    ///
+    /// **From up on the deck, because that is where a horizon can be seen.**
+    /// At eye level out there the field is trees: the scatter is full at the
+    /// reach it has on foot, so every ground level view is into a wood. The
+    /// bridge is the one place in this building you stand high enough over
+    /// the field to see its far side, and until 2026-11-11 what was there
+    /// was a dead straight line where the ground slab ends.
+    #[test]
+    fn the_horizon_is_drawn() {
+        let reaches = reaches();
+        let foot = bridge::foot(reaches);
+        let along = 0.42;
+        let at = vec3(
+            foot.x - along * bridge::RUN,
+            bridge::high(along),
+            foot.z,
+        );
+
+        looks_right_at_the_end(
+            "horizon",
+            at,
+            vec3(at.x + 6.0, at.y + EYE - 1.6, at.z + 320.0),
         );
     }
 
