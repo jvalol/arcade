@@ -763,6 +763,7 @@ struct Arcade {
     moving_the_view: bool,
     /// A pocket's net. Spec 0007.
     bag: Option<MeshId>,
+    baluster: Option<MeshId>,
     /// The turned pieces in the baths. Spec 0008.
     urn: Option<MeshId>,
     sconce: Option<MeshId>,
@@ -1301,6 +1302,7 @@ impl Arcade {
                 trail
             },
             bag: None,
+            baluster: None,
             urn: None,
             sconce: None,
             basin: None,
@@ -6404,6 +6406,7 @@ impl Game for Arcade {
         self.shin =
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 8, people::shin_profile)));
         self.bag = Some(renderer.add_mesh(&cellar::bag_mesh()));
+        self.baluster = Some(renderer.add_mesh(&glass::baluster_mesh()));
         self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
         self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
         self.basin = Some(renderer.add_mesh(&spa::basin_mesh()));
@@ -7841,6 +7844,8 @@ impl Game for Arcade {
                 self.since,
                 cube,
                 seen.then_some(self.globe_mesh).flatten(),
+                self.baluster,
+                self.sconce,
             );
         }
         self.draw_the_people(scene);
@@ -14199,7 +14204,7 @@ mod tests {
         looks_right(
             "glass",
             vec3(ball.x, glass::UP, room.min.z + 1.2),
-            vec3(ball.x, ball.y, glass::floor(reaches).max.z),
+            vec3(ball.x, ball.y, glass::well(reaches).min.z),
         );
     }
 

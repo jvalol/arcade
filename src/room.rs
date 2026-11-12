@@ -951,6 +951,16 @@ pub fn nook_lamps(reaches: f32) -> Vec<(Vec3, f32, f32)> {
                 .into_iter()
                 .map(|shade| (pendant_lamp(shade), PENDANT_LIT, PENDANT_RANGE)),
         )
+        // and the two on spec 0064's flight, which stand in this room's
+        // volume and are the light over its north end now that the pendant
+        // that was there hangs from nothing. One list, so the measurement
+        // of what reaches this floor is taken over every lamp that reaches
+        // it rather than over the ones this file happens to own.
+        .chain(
+            crate::glass::stair_lamps(reaches)
+                .into_iter()
+                .map(|at| (at, crate::glass::SCONCE_LIT, crate::glass::SCONCE_RANGE)),
+        )
         .collect()
 }
 
@@ -979,6 +989,24 @@ pub fn pendant_shades(reaches: f32) -> Vec<Vec3> {
             pendants(at.z - size.z * 0.5, at.z + size.z * 0.5)
                 .into_iter()
                 .map(move |along| vec3(across, up, along))
+        })
+        // **Not one over the flight.** Spec 0064 put a stair up to the room
+        // over this one, and the pendant grid had one hanging in the middle
+        // of it at the head height of anybody climbing. The lamps come off
+        // this list, so dropping the shade drops the light with it, and the
+        // flight carries two sconces of its own instead.
+        //
+        // The flight and not the well, which are two questions with similar
+        // answers. The well is the whole north strip of this ceiling and
+        // most of it is a void you look up through, which still wants its
+        // lamps; only the part with steps under it is a place a head goes.
+        .filter(|shade| {
+            let flight = crate::glass::flight(reaches);
+
+            !(shade.x > flight.min.x
+                && shade.x < flight.max.x
+                && shade.z > flight.min.z
+                && shade.z < flight.max.z)
         })
         .collect()
 }
@@ -2170,12 +2198,17 @@ impl Room {
         // bar and each tile is clipped to the well rather than dropped: the
         // well is cut to the stair and a tile dropped whole leaves the hole
         // wider than the shaft wall that is meant to edge it.
-        // **No hole in it any more.** Spec 0037 ran a stair up through this
-        // ceiling and spec 0063 parked the room it went to. The clipping
-        // below stays and is given nothing to clip to: a ceiling that knows
-        // how to have a hole in it is worth more than the lines it costs,
-        // and whoever brings the stair back will want it.
-        let well: Vec<Aabb> = Vec::new();
+        // **And there is a hole in it again.** Spec 0037 ran a stair up
+        // through here, spec 0063 parked the room it went to, and the
+        // clipping was kept with nothing to clip to on the argument that
+        // whoever brought a stair back would want it. Spec 0064 did, and it
+        // was here waiting.
+        //
+        // `ceiling` above was given the well straight away and this was
+        // not, so the slabs had the hole and the bars and tiles hanging
+        // under them ran straight across it. Jake stood at the head of the
+        // stair and said the ceiling from below was in the way of it.
+        let well = [crate::glass::well(self.reaches)];
         let clipped = |hung: &Vec<Hung>| {
             hung.iter()
                 .flat_map(|(at, size)| {

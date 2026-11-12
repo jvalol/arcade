@@ -184,6 +184,19 @@ pub const GLASS_WALL: Vec4 = vec4(0.40, 0.35, 0.31, 1.0);
 pub const GLASS_CEIL: Vec4 = vec4(0.15, 0.15, 0.17, 1.0);
 pub const GLASS_PIER: Vec4 = vec4(0.62, 0.56, 0.48, 1.0);
 
+/// The joinery on the stair up to spec 0064's room: the string, the rail,
+/// the newels and the balusters.
+///
+/// **Timber against the room's stone, and the nook's timber at that.** The
+/// flight climbs out of a room of oak shelves into a room of pale piers, so
+/// the stair belongs to the one it starts in: a rail that matched the stone
+/// would be a stair carved out of the floor above, which is not what a
+/// building does. The rail and the newel caps are the lighter of the two
+/// because they are the parts a hand goes on.
+pub const GLASS_STRING: Vec4 = vec4(0.27, 0.16, 0.10, 1.0);
+pub const GLASS_RAIL: Vec4 = vec4(0.46, 0.30, 0.17, 1.0);
+pub const GLASS_BALUSTER: Vec4 = vec4(0.70, 0.64, 0.56, 1.0);
+
 /// The lit panels over spec 0064's colonnade.
 ///
 /// **Past one, because it has to be a light inside a marble as well as a
@@ -192,6 +205,27 @@ pub const GLASS_PIER: Vec4 = vec4(0.62, 0.56, 0.48, 1.0);
 /// ambient. A panel under one would be a dark rectangle in the ball, which
 /// is the opposite of what a lit room looks like through glass.
 pub const GLASS_LAMP: Vec4 = vec4(3.4, 3.2, 2.8, 1.0);
+
+/// The bowls on the stair up to it, which are a warmer and quieter light
+/// than the bays: a flight wants enough to see the treads by and the room at
+/// the top is the thing you are going to look at.
+pub const GLASS_SCONCE: Vec4 = vec4(2.4, 2.1, 1.6, 1.0);
+
+/// The worked stone in spec 0064's room: the bases and capitals on the
+/// columns, the beams across the ceiling, and the mouldings on the plinth.
+///
+/// Lighter than the piers it sits on, because what a base and a capital do
+/// is catch the light at the two ends of a shaft, and a moulding the same
+/// colour as the thing it is on is a line drawn on it.
+pub const GLASS_TRIM: Vec4 = vec4(0.72, 0.66, 0.57, 1.0);
+
+/// And the floor it all stands on, which was one flat slab.
+///
+/// A border and a panel, laid on the floor rather than in it: two faces in
+/// one plane fight, and this building has spent four sittings on that. The
+/// panel is the darker of the two so the ball has something quiet under it.
+pub const GLASS_BORDER: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
+pub const GLASS_PANEL: Vec4 = vec4(0.13, 0.14, 0.17, 1.0);
 
 pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
 pub const SUN_STRENGTH: f32 = 0.62;

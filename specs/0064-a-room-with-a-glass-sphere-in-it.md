@@ -230,6 +230,241 @@ empty against one being built, so the space is this one's. Its test says so
 by name now, and bringing it back means finding it a new height or a new
 place first.
 
+## Jake looked at it, 2026-11-12
+
+*The stairs to it need a lot of work, and the room itself needs some
+decoration to be more interesting.* Both are the first build of a room being
+a blocking model, which is what the first build of a room here always is.
+
+### The stair
+
+It was fourteen bare slabs against the nook's stone, and that is all it was.
+No string, no rail, no post, no nosing, and no light of its own. The open
+side was a three and a half metre drop with nothing on it: you could walk
+straight off the fourth step into the nook.
+
+It has a closed string and a handrail now, each one box turned to the
+stair's pitch, a turned baluster to every tread, and a newel at the foot and
+at the head. The rail on the flight is lower than the rail round the well,
+because a rail you hold going up is not a rail you lean on standing still,
+and the newel at the head is what that step is for.
+
+**The rake is named once.** What a body meets has to be upright boxes and
+what a hand runs along wants to be at the stair's angle, so there are two
+accounts of one balustrade. That is allowed here under this building's own
+rule, because the two would not still agree if either changed: a collider is
+axis aligned and a rail is not. So the pitch is written down in `rake`, taken
+through the nosings rather than along the corners of the flight, and both are
+set out from it.
+
+**Through the nosings, which is not the same line.** The flight's own
+diagonal runs floor to floor and the nosing line runs a riser higher at the
+bottom and lands on the top tread. A rail set out from the first drifts a
+quarter of a step away from the steps by the top.
+
+### The lamp that was hanging in it
+
+The nook's pendant grid had one in the middle of the flight, at the head
+height of anybody climbing. That ceiling was solid when the grid was laid
+out and this spec cut a well through it, so the lamp had been hanging from
+nothing since the room was built.
+
+It is dropped where the list is made, so its light goes with it. **The
+flight and not the well**, which are two questions with similar answers: the
+well is the whole north strip of the nook's ceiling and most of it is a void
+you look up through, which still wants its lamps. Only the part with steps
+under it is a place a head goes. Filtering on the well put the nook's north
+end out and three other pictures with it.
+
+The flight carries two sconces of its own instead, and their light goes into
+`room::nook_lamps` rather than into a second list beside it, so the
+measurement of what reaches that floor is taken over every lamp that reaches
+it. That is what caught the next thing: with the pendant gone, the foot of
+the stair was at 0.056 of a lamp against the 0.12 this building calls black.
+The lower sconce came down the flight until it was not.
+
+### The room
+
+The columns were plain extrusions, the plinth was a cube and the floor was
+one flat slab. Each column has a base and a capital with a bead necking it
+to the shaft, the ceiling has a beam over every bay on the colonnade's own
+pitch, the plinth has a base and a cap, and the floor has a panel laid on it
+inside a border.
+
+**Laid on and not cut in.** Two faces in one plane fight, and this building
+has spent four sittings on that.
+
+**All of it drawn and none of it walked.** A base is a hand's breadth of
+overhang at ankle height and a capital is over your head. What a body meets
+is the shaft, which is already in `solid` and already what the glass traces,
+so adding the trim to the walk would be a ring of ledges round every column
+for nothing.
+
+### What is still a blocking model
+
+The stone on the nook's wall beside the flight is one texture stretched over
+the whole of it: soft scallops a metre across and texels you can count. That
+is this project's own named fault and it belongs to the nook rather than to
+this room.
+
+### He walked it, and the first build of the balustrade was wrong three ways
+
+Two pictures, 2026-11-12: the head of the stair, and the ball on its plinth.
+
+**The rail and the string were set out from the rake.** The rake's own two
+ends are the bottom and the top nosing, and neither of those is under a
+newel: the foot's post stands a nosing further east and the head's a whole
+going further west. So the boards overshot at the bottom and fell a fifth of
+a metre short at the top, which left the last two balusters hanging under
+nothing. They run newel centre to newel centre now, which is where joinery
+meets a post.
+
+**The post at the head ran from the nook's floor.** It stands just inside the
+well's edge, where this room's own floor reaches, so the slab was threaded
+through a five metre post at mid height. It stands on the floor it arrives at.
+
+**And the string was dropped by half its depth.** A board at the stair's
+pitch is turned, so two lines half a depth apart square to the board are half
+a depth *divided by* the cosine of that pitch apart measured straight up.
+Dropped by a plain half depth its top edge came five centimetres over the
+line the balusters stand on and ate their feet; multiplying by the cosine,
+which was the first guess at the fix, buried them twice as deep. A red string
+is what found it, after two passes of reasoning about it got the direction
+wrong both times.
+
+### The blocky patch on the plinth was not a shadow
+
+It read as one: a quantised grey staircase on the top of the plinth, exactly
+where the ball meets it, which is what a point lamp's shadow map looks like
+at the edge of its resolution.
+
+It was the cap moulding and the plinth's own box, both topping out at the
+same height and both drawn, fighting for the same pixels. The plinth is drawn
+as a base, a die and a cap now, with the die stopping short of the cap and
+the cap covering it. The box in `plinth` is still what a body walks into and
+what the ball stands on, and it is no longer what is drawn.
+
+**The engine's own coplanar check cannot answer this one, and it was asked.**
+Over the whole building, the way `behind.rs` says to ask it, it passed the
+broken version: that check throws out a face buried in another solid, and the
+die's top is inside the cap it fights. The rule is right for what you can see
+past and wrong for two things that are both drawn.
+
+**Handed a fragment it reports nothing at all**, whatever is wrong with the
+fragment. `behind.rs` wrote that down after losing an afternoon to it and the
+first version of this test was written into it anyway, so its own control
+passed. Two tests in one sitting passed their controls before either was
+worth anything.
+
+### A linear way out, 2026-11-12
+
+Jake, having walked it: *the stair needs a lot of work. I think it should be
+a linear way out, not a left turn. I fall through the floor when I try to
+walk to the stairs.*
+
+**The fall was the gap in the rail.** It was 1.3 wide, sized on the note that
+"what has to pass through it is a body and not a step", and a body is 0.9.
+Only the first 0.3 of that gap had the top tread under it; the rest was open
+over treads a riser, two risers and three risers down. Walking at the stair
+anywhere but dead on the top tread dropped you three quarters of a metre.
+The question was never how wide a body is. It is what is under the gap.
+
+**The flight runs along the room now**, on the plinth's own axis, descending
+north. You walk at the sphere, past it, and straight on down. The spec's
+first reason for crossing the room was that climbing back south costs 4.2
+metres of the room's length and the length is the point of the room; that
+reason held only because the well was taken at the full width. Cut as a slot
+the width of the flight it costs the room nothing: the floor wraps round
+three sides of it, the colonnade stands well outside it and runs the room's
+whole length, and the only edges up here are the slot's own two. The
+colonnade is longer than it was.
+
+**The top tread is level with the floor it leaves.** Fourteen risers of 0.25
+is 3.5, which is this floor, so there is no step at the head of the flight
+at all and nothing to walk off.
+
+**Two balustrades, because a flight down the middle of a room is open on
+both sides.** That is double the joinery of one against a wall, and the
+alternative was putting the flight against a wall, which buys one balustrade
+and costs the turn Jake asked to have taken out.
+
+The joinery stands in a gap of its own and is thinner than the gap. Filling
+it exactly put the string's inner face on the treads' edge and its outer
+face on the floor slab's cut edge, which is two faces in one plane twice
+over: `aloft`'s check named a patch three and a half metres square. Two
+centimetres of air each side is not a gap a body can find.
+
+**The steps are drawn a step thick and walked as slabs.** A tread runs to the
+floor because spec 0007 asks what is in front of your foot straight down, so
+a tread with daylight under it is a tread you fall through. Running along
+the room that makes the flight a solid wedge 3.5 high whose south end faces
+the nook, and the room below got a blank pale slab in the middle of it with
+the way up hidden behind. Drawn a step thick the underside is a stepped
+rake, which is what a stair looks like from below, and consecutive boards
+overlap by five centimetres so there is no daylight through it either.
+
+**The lamps moved onto the newels**, because there is no wall beside this
+flight any more. One at the head and one at the foot, on opposite sides, so
+the light crosses the steps rather than running down them.
+
+**It takes the space the imaginarium's own flight wanted.** `aloft` is
+parked and its second flight is in the nook's air where this one now runs,
+so its coplanar check found a tread of each sharing a plane. The two are
+never both drawn, so that is not a fault; the conflict between the rooms is
+real and is recorded where it belongs, in the test that names what took the
+storey.
+
+### Standing at the head of it, 2026-11-12
+
+Jake: *why is there a light on the right and not on the left, it looks like
+the ceiling from below is in the way of the stairs.*
+
+**The ceiling was in the way, and the clipping for it was already written.**
+`Room::ceiling` was given the well the day this room was built, so the slabs
+had the hole; the bars and tiles that hang under them were given an empty
+list, under a note from spec 0063 saying the clipping stays and whoever
+brings a stair back will want it. Spec 0064 brought one back and nobody
+handed it over. Every bar and tile ran straight across the stairwell. One
+line.
+
+**And a lamp on every newel, which is four.** The first pair went one at the
+head and one at the foot on opposite sides, reasoning that the light would
+cross the steps rather than run down them. Standing at the head that is a
+lamp on one post and a bare post facing it. A pair of newels is a pair.
+
+**What is not a fault:** from the head of the flight you see over it into
+the room below rather than down onto the treads. The rake is 0.25 on 0.3,
+which is forty degrees, and any line of sight shallower than that runs above
+every nosing. It is what a steep stair looks like from the top.
+
+### And it ended at a wall, 2026-11-12
+
+Jake, standing on the flight: *now the stairs end at a wall.*
+
+The flight was at the room's north end, so it came down four tenths of a
+metre from the nook's north wall. That is the same turn he had asked to have
+taken out of the top, moved to the bottom.
+
+**The flight did not need to be at the end of the room.** The nook's open
+floor runs its whole length, so stopping the flight short of the end lets it
+arrive in the room instead of at its wall. `CLEAR_AT_THE_FOOT` is 3.2 and is
+the one number that moves it.
+
+**It trades against the sphere's own depth, a metre for a metre**, and
+sixteen metres of room has to do both jobs now. The test that asked for five
+metres of room behind the ball either way was written when the room was a
+plain box and the ball could stand in the middle of the whole of it. The
+stair takes four and a half metres down the middle, so the ball stands in
+the middle of the floor the stair arrives at, which is eight and a half
+long: five each way is not available anywhere in the room. The bar is four,
+and buying back the fifth metre would leave a metre and a half of nook in
+front of the bottom tread, which is the fault this move was made to fix.
+
+The same test measured to the well, because the well used to be the room's
+north end and the floor stopped at it. It is a slot in the middle now and
+the walls, the colonnade and the ceiling run past it, so what is behind the
+ball from the south is the whole room and not the floor's edge.
+
 ## Acceptance criteria
 
 - The sphere traces the room's own boxes, and the list it is given is `solid` plus `lids` rather than a second account of the building. — `glass::tests::it_traces_the_building_itself`
@@ -240,6 +475,11 @@ place first.
 - You can walk its length and all the way round the plinth with the passage this project has settled on. — `glass::tests::you_can_walk_round_it`
 - The stair's foot is inside the nook's end wall and its head is clear of the garden's way. — `glass::tests::the_stair_fits_the_nook`
 - The room does not stand over anything that is already there. — `glass::tests::nothing_of_the_building_is_under_it`
+- A body pushed at either open side of the flight is stopped by that side's balustrade rather than ending up on the nook's floor. — `glass::tests::you_cannot_walk_off_the_side_of_the_flight`
+- And the balustrade costs the flight none of its going, because it stands outside the tread ends. — `glass::tests::the_balustrade_costs_the_flight_none_of_its_going`
+- Nothing of the room below hangs in the flight. — `glass::tests::nothing_of_the_nook_hangs_in_the_flight`
+- One piece of the plinth draws its top, and only one, so no two faces of it fight for the same pixels. — `glass::tests::one_piece_of_the_plinth_draws_its_top`
+- Every part of the nook's open floor still has a lamp on it with the pendant over the flight gone. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
 - And the room over the nook is drawn. — `tests::the_glass_room_is_drawn`
 
 ### Verified by hand

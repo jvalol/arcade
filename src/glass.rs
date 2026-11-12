@@ -47,21 +47,6 @@ pub const GOING: f32 = STEPS as f32 * crate::cellar::TREAD;
 /// How wide the flight is, which is the cellar's passage again.
 pub const FLIGHT: f32 = crate::cellar::PASSAGE;
 
-/// How much of the nook's north end is given to the stairwell.
-///
-/// **The flight runs across the nook and not along it**, which is the whole
-/// of why this room is long. Spec 0037 measured the chain for a flight
-/// running north and found 0.40 between the nook's end wall and the garden's
-/// way, which is no room at all, and spec 0064 inherited that and said the
-/// flight turns and climbs back south. Climbing back south costs the room
-/// 4.2 metres of its own length for the going, and the length is the point
-/// of the room.
-///
-/// The nook is ten metres wide and sixteen and a half long. Crossing it costs
-/// the width of the flight instead, which is 1.8, and leaves fourteen metres
-/// of room. Nothing has to turn.
-pub const WELL_DEEP: f32 = FLIGHT + 0.4;
-
 /// What the room is drawn and walked inside, as the nook's own footprint less
 /// a wall all round.
 ///
@@ -81,64 +66,106 @@ pub fn inside(reaches: f32) -> Aabb {
     )
 }
 
-/// The well at the north end: open from the nook's floor to this room's
-/// ceiling, with the flight crossing it.
+/// How wide the cut in the floor is: the flight, and a balustrade each side
+/// of it.
+pub const WELL_WIDE: f32 = FLIGHT + GUARD * 2.0;
+
+/// The well: the slot the flight comes down, on the room's own axis.
 ///
 /// It is a stairwell and not an opened ceiling. Spec 0064 rules the second
 /// out as its own room, and the difference is that this one is as wide as the
 /// stair and no wider.
+///
+/// **A slot down the middle and not the whole north end.** The first build
+/// took the north strip of the floor across the full width, because the
+/// flight crossed it. A flight running along the room needs 4.2 metres of
+/// its length, and taking that at the full width would cost the colonnade
+/// two bays and leave a nine metre cliff edge with a rail along all of it.
+/// Cut as a slot instead it costs the room nothing but the slot: the floor
+/// wraps round three sides of it and the colonnade, which stands well
+/// outside it, runs the room's whole length.
 pub fn well(reaches: f32) -> Aabb {
     let room = inside(reaches);
+    let foot = stair_foot(reaches);
 
     Aabb::new(
-        vec3(room.min.x, -THICK, room.max.z - WELL_DEEP),
-        vec3(room.max.x, room.max.y, room.max.z),
+        vec3(foot.x - WELL_WIDE * 0.5, -THICK, stair_head(reaches).z),
+        vec3(foot.x + WELL_WIDE * 0.5, room.max.y, foot.z + LANDING),
     )
 }
 
-/// The floor you walk on up here, which is the nook's footprint less the
-/// well.
-pub fn floor(reaches: f32) -> Aabb {
+/// The floor you walk on up here, which is the nook's footprint with the
+/// slot cut out of it: three slabs rather than one.
+pub fn floors(reaches: f32) -> Vec<Aabb> {
     let room = inside(reaches);
     let well = well(reaches);
+    let (under, top) = (room::TALL, UP);
+    let (south, north) = (room.min.z - THICK, room.max.z + THICK);
 
-    Aabb::new(
-        vec3(room.min.x - THICK, room::TALL, room.min.z - THICK),
-        vec3(room.max.x + THICK, UP, well.min.z),
+    vec![
+        // west of the slot, the room's whole length
+        Aabb::new(
+            vec3(room.min.x - THICK, under, south),
+            vec3(well.min.x, top, north),
+        ),
+        // east of it, the same
+        Aabb::new(
+            vec3(well.max.x, under, south),
+            vec3(room.max.x + THICK, top, north),
+        ),
+        // the width of the slot south of it, which is where you walk at the
+        // stair head
+        Aabb::new(
+            vec3(well.min.x, under, south),
+            vec3(well.max.x, top, well.min.z),
+        ),
+        // and the same north of it
+        Aabb::new(
+            vec3(well.min.x, under, well.max.z),
+            vec3(well.max.x, top, north),
+        ),
+    ]
+}
+
+/// Where the flight stands: its foot, at the north end of the room's own
+/// axis, with the flight climbing south from it.
+///
+/// **It runs along the room now and not across it.** Jake walked it on
+/// 2026-11-12: *it should be a linear way out, not a left turn.* Crossing
+/// the room meant you walked its whole length to the north end and then
+/// turned ninety degrees to go down, which is what a fire escape does and
+/// not what the way out of a room with one thing in it should do.
+///
+/// On the middle of the width, which is the plinth's own line, so coming up
+/// the stair puts the sphere straight ahead of you and walking at the sphere
+/// and past it walks you out.
+pub fn stair_foot(reaches: f32) -> Vec3 {
+    let room = inside(reaches);
+
+    vec3(
+        (room.min.x + room.max.x) * 0.5,
+        0.0,
+        room.max.z - CLEAR_AT_THE_FOOT,
     )
 }
 
-/// How much daylight the flight's foot leaves in front of the nook's bench
-/// row, which is the aisle you work the toys from.
+/// How much nook is left in front of the bottom tread.
 ///
-/// A body is 0.9 and spec 0006's row is worked from the west, so this is
-/// what somebody standing at the last bench needs behind them.
-pub const CLEAR_OF_THE_ROW: f32 = 1.2;
+/// **The flight is not at the end of the room, and that is the whole of
+/// this.** Put at the north end it came down to a wall four tenths of a
+/// metre away: Jake walked it and said the stairs end at a wall, which is
+/// the same turn he had asked to have taken out, moved to the bottom. The
+/// nook's open floor runs its whole length, so the fix is simply to stop
+/// the flight short of the end and let it arrive in the room rather than
+/// at its wall.
+///
+/// It is the number that trades against the sphere's own depth, one metre
+/// for one metre, and sixteen metres of room has to do both jobs now.
+pub const CLEAR_AT_THE_FOOT: f32 = 3.2;
 
-/// Where the flight stands: its foot, and which way it climbs.
-///
-/// It climbs west, across the room rather than along it, and it starts where
-/// the nook's bench row stops.
-///
-/// **Read off the row rather than measured against it.** The first go put
-/// the foot against the east wall, which is where the row is: the bottom
-/// four treads stood on the kociemba and the cascada, and the walk said so
-/// by not reaching either of them. The row's own west face is the number
-/// that decides this, so this asks for it.
-///
-/// **Flush with the floor's own north edge**, so that stepping off the top
-/// tread is stepping onto the floor. The first go put the flight in the
-/// middle of the well and left two tenths of nothing between the two, which
-/// is a hole you cross on the way out of the room.
-pub fn stair_foot(reaches: f32) -> Vec3 {
-    let row = crate::room::benches(-reaches)
-        .into_iter()
-        .filter(|one| one.at.x < 0.0 && one.at.x > -20.0)
-        .map(|one| one.at.x - one.size.x * 0.5)
-        .fold(f32::INFINITY, f32::min);
-
-    vec3(row - CLEAR_OF_THE_ROW, 0.0, floor(reaches).max.z + FLIGHT)
-}
+/// How much of the well is left past the bottom tread, which is a step off
+/// and not a landing: the landing is the nook, under this room's floor.
+pub const LANDING: f32 = 0.3;
 
 /// The treads, as the boxes you actually stand on.
 ///
@@ -146,37 +173,263 @@ pub fn stair_foot(reaches: f32) -> Vec3 {
 /// floating over nothing: spec 0007 found that what is in front of your foot
 /// is a question about the floor, asked straight down, so a tread with
 /// daylight under it is a tread you fall through.
+///
+/// **The top one is level with the floor it leaves.** Fourteen risers of
+/// 0.25 is 3.5, which is this floor, so the last tread is the floor and
+/// there is no step at the head of the flight at all. That is the fault the
+/// first build had: the gap in the rail was 1.3 wide and only its first 0.3
+/// was at floor level, so walking through it anywhere but the top tread
+/// dropped you three risers. Jake found it by walking at the stairs.
 pub fn treads(reaches: f32) -> Vec<Aabb> {
     let foot = stair_foot(reaches);
     let going = crate::cellar::TREAD;
     let riser = crate::cellar::RISER;
+    let half = FLIGHT * 0.5;
 
     (0..STEPS)
         .map(|n| {
             let top = riser * (n + 1) as f32;
-            let west = foot.x - going * (n + 1) as f32;
+            let south = foot.z - going * (n + 1) as f32;
 
             Aabb::new(
-                vec3(west, -THICK, foot.z - FLIGHT),
-                vec3(west + going, top, foot.z),
+                vec3(foot.x - half, -THICK, south),
+                vec3(foot.x + half, top, south + going),
             )
         })
         .collect()
 }
 
-/// Where the flight arrives, which is the west end of it.
+/// How thick a step is where it is drawn.
+pub const STEP_THICK: f32 = 0.3;
+
+/// The steps as they are drawn, which is not how they are walked.
+///
+/// **A tread is a slab from the floor up, and that is a wall.** Spec 0007
+/// asks what is in front of your foot straight down, so a tread with
+/// daylight under it is a tread you fall through, and every tread in
+/// `treads` runs to the floor for that reason. Running along the room, the
+/// top of the flight is 3.5 high and its south end faces the nook: the room
+/// below got a blank pale slab standing in the middle of it, with the way
+/// up hidden behind it.
+///
+/// So the steps are drawn a step thick and the underside of the flight is a
+/// stepped rake, which is what a stair looks like from below. Consecutive
+/// boards overlap by five centimetres, so there is no daylight through it
+/// either.
+pub fn tread_boards(reaches: f32) -> Vec<Aabb> {
+    treads(reaches)
+        .into_iter()
+        .map(|tread| {
+            Aabb::new(
+                vec3(tread.min.x, tread.max.y - STEP_THICK, tread.min.z),
+                tread.max,
+            )
+        })
+        .collect()
+}
+
+/// The volume the steps stand in: what a head passes through on the way up.
+pub fn flight(reaches: f32) -> Aabb {
+    let foot = stair_foot(reaches);
+    let head = stair_head(reaches);
+    let half = FLIGHT * 0.5;
+
+    Aabb::new(
+        vec3(foot.x - half, 0.0, head.z),
+        vec3(foot.x + half, UP, foot.z),
+    )
+}
+
+/// Where the flight arrives, which is the south end of it.
 pub fn stair_head(reaches: f32) -> Vec3 {
     let foot = stair_foot(reaches);
 
-    vec3(foot.x - GOING, UP, foot.z - FLIGHT)
+    vec3(foot.x, UP, foot.z - GOING)
 }
 
-/// How wide the gap in the rail is where the stair comes up.
+/// The nosing a tread carries, which is the lip that throws the shadow line.
 ///
-/// Wider than the last tread, because what has to pass through it is a body
-/// and not a step. A body is 0.9 and this project's own rule is 1.05 clear
-/// anywhere somebody has to walk.
-pub const WAY_UP: f32 = 1.3;
+/// **A flight of plain slabs reads as a ramp with lines on it.** What tells
+/// you a stair is a stair from across a room is the row of shadows under the
+/// nosings, and a tread whose front is flush with its riser has none. Drawn
+/// and not walked: thirty five millimetres is well under `reach::STEP`, so
+/// nothing here is a ledge.
+pub const NOSING_OUT: f32 = 0.035;
+pub const NOSING_TALL: f32 = 0.045;
+
+pub fn nosings(reaches: f32) -> Vec<Aabb> {
+    treads(reaches)
+        .into_iter()
+        .map(|tread| {
+            Aabb::new(
+                vec3(tread.min.x, tread.max.y - NOSING_TALL, tread.max.z),
+                vec3(tread.max.x, tread.max.y, tread.max.z + NOSING_OUT),
+            )
+        })
+        .collect()
+}
+
+/// How thick the balustrade is, how far up the rail sits over the rake, and
+/// what it is made of.
+///
+/// There is one to each side of the flight, because a flight down the middle
+/// of a room is open on both. They stand outside the going, so the stair is
+/// as wide to walk as `FLIGHT` says it is: taking a hand's breadth off the
+/// nook's own passage for a rail is the thing this project keeps being told
+/// not to do.
+pub const GUARD: f32 = 0.14;
+/// And how thick the joinery standing in that gap is.
+///
+/// **Thinner than the gap, so neither of its faces is in a plane with
+/// anything.** Filling the gap exactly put the string's inner face on the
+/// treads' own edge and its outer face on the floor slab's cut edge, which
+/// is two faces in one plane twice over: `aloft`'s check caught a patch
+/// three and a half metres square. Two centimetres of air each side costs
+/// nothing and is not a gap a body can find, since a body is 0.9 across.
+pub const BALUSTRADE: f32 = 0.1;
+pub const HANDRAIL: f32 = 0.08;
+pub const HANDRAIL_UP: f32 = 0.9;
+pub const STRING_OVER: f32 = 0.08;
+pub const STRING_DEEP: f32 = 0.34;
+pub const BALUSTER: f32 = 0.055;
+pub const NEWEL: f32 = 0.12;
+
+/// Which side of the flight a balustrade is on: west is -1 and east is +1.
+pub const SIDES: [f32; 2] = [-1.0, 1.0];
+
+/// The line one side's joinery is set out from: the stair's own pitch, taken
+/// through the nosings.
+///
+/// **Through the nosings and not along the corners of the flight.** Those are
+/// two lines with similar answers, which this building has a rule about: the
+/// flight's own diagonal runs from the floor to the floor above and the
+/// nosing line runs a riser higher at the bottom and lands on the top tread,
+/// so a rail set out from the first drifts a quarter of a step away from the
+/// steps by the top.
+pub fn rake(reaches: f32, side: f32) -> (Vec3, Vec3) {
+    let foot = stair_foot(reaches);
+    let going = crate::cellar::TREAD;
+    let riser = crate::cellar::RISER;
+    let across = foot.x + side * (FLIGHT * 0.5 + GUARD * 0.5);
+
+    (
+        vec3(across, riser, foot.z),
+        vec3(
+            across,
+            riser * STEPS as f32,
+            foot.z - going * (STEPS - 1) as f32,
+        ),
+    )
+}
+
+/// The point on that line at a given place along the room.
+///
+/// The rail and the string both run past the rake's own two ends, because
+/// those are nosings and the posts they die into are not over nosings.
+pub fn rake_at(reaches: f32, side: f32, z: f32) -> Vec3 {
+    let (low, high) = rake(reaches, side);
+    let share = (z - low.z) / (high.z - low.z);
+
+    vec3(low.x, low.y + (high.y - low.y) * share, z)
+}
+
+/// Where each baluster stands: one to a tread, at the nosing.
+pub fn balusters(reaches: f32, side: f32) -> Vec<Vec3> {
+    let (low, _) = rake(reaches, side);
+    let going = crate::cellar::TREAD;
+    let riser = crate::cellar::RISER;
+
+    (0..STEPS)
+        .map(|n| {
+            vec3(
+                low.x,
+                riser * (n + 1) as f32 + STRING_OVER,
+                low.z - going * n as f32,
+            )
+        })
+        .collect()
+}
+
+/// How tall one is: from the string it stands on to the underside of the
+/// rail. The same for every one of them, because the rail is parallel to the
+/// string.
+pub fn baluster_tall() -> f32 {
+    HANDRAIL_UP - STRING_OVER - HANDRAIL * 0.5
+}
+
+/// The two posts one side's balustrade is hung between.
+///
+/// The one at the head stands on the floor it arrives at and carries the
+/// step from the flight's rail to the landing's, which stand at different
+/// heights because a rail you hold going up is not a rail you lean on
+/// standing still. The one at the foot stands on the nook's floor.
+pub fn newels(reaches: f32, side: f32) -> Vec<Aabb> {
+    let (low, high) = rake(reaches, side);
+    let half = NEWEL * 0.5;
+
+    vec![
+        Aabb::new(
+            vec3(low.x - half, -THICK, low.z + NOSING_OUT),
+            vec3(
+                low.x + half,
+                low.y + HANDRAIL_UP + 0.12,
+                low.z + NOSING_OUT + NEWEL,
+            ),
+        ),
+        Aabb::new(
+            vec3(high.x - half, UP, high.z - crate::cellar::TREAD),
+            vec3(
+                high.x + half,
+                UP + RAIL_UP + 0.12,
+                high.z - crate::cellar::TREAD + NEWEL,
+            ),
+        ),
+    ]
+}
+
+/// What the balustrades stop, as boxes.
+///
+/// **A flight down the middle of a room is open on both sides.** The rail is
+/// drawn along the rake, which is one turned box and no use to a walk: what
+/// a body meets has to be an upright box, so it is one to a tread, stepping
+/// up with them.
+pub fn guard(reaches: f32) -> Vec<Aabb> {
+    let mut out = Vec::new();
+
+    for side in SIDES {
+        let (low, _) = rake(reaches, side);
+
+        out.extend(treads(reaches).into_iter().map(|tread| {
+            Aabb::new(
+                vec3(low.x - BALUSTRADE * 0.5, tread.max.y, tread.min.z),
+                vec3(
+                    low.x + BALUSTRADE * 0.5,
+                    tread.max.y + HANDRAIL_UP,
+                    tread.max.z,
+                ),
+            )
+        }));
+        out.extend(newels(reaches, side));
+    }
+
+    out
+}
+
+/// How high the balustrade round the well stands.
+///
+/// **There was a `WAY_UP` here and it was the fault Jake walked into.** It
+/// was the gap in the old rail across the head of the stair, 1.3 wide
+/// "because what has to pass through it is a body and not a step". A body
+/// does need 1.3, and only the first 0.3 of that gap had the top tread under
+/// it: the rest was open over treads a riser, two risers and three risers
+/// down. Walking at the stair anywhere but dead on the top tread dropped
+/// you three quarters of a metre.
+///
+/// The question was never how wide a body is. It is what is under the gap,
+/// and the answer now is that the way in is the whole width of the flight
+/// and every bit of it has the top tread under it, which is level with the
+/// floor.
+pub const RAIL_UP: f32 = 1.05;
 
 /// The frames down the long walls, as where each one stands and how big it
 /// is.
@@ -208,7 +461,11 @@ pub const FRAME_IN: f32 = 1.5;
 
 pub fn frames(reaches: f32) -> Vec<(Vec3, Vec3)> {
     let room = inside(reaches);
-    let long = room.max.z - WELL_DEEP - room.min.z;
+    // **The room's whole length, because the well no longer takes its north
+    // end.** The colonnade stands well outside the slot the flight comes
+    // down, so nothing about the stair shortens it: cut as a full width well
+    // it would have lost two bays, and the rhythm is what the sphere is for.
+    let long = room.max.z - room.min.z - FRAME_WIDE;
     let bays = (long / crate::mirrors::PITCH) as usize;
     // centred on the run, so the two ends match
     let first = room.min.z + (long - crate::mirrors::PITCH * (bays - 1) as f32) * 0.5;
@@ -248,6 +505,12 @@ pub fn frames(reaches: f32) -> Vec<(Vec3, Vec3)> {
 ///
 /// The same answer `aim::MOON`, the runestone and Valhalla's hearth all
 /// reached. See `garden::gives_off`.
+/// What a sconce bowl on the flight comes to, which is what lands and not
+/// what it is multiplied by: `garden::gives_off` again.
+pub fn lit_sconce(since: f32) -> glam::Vec4 {
+    crate::garden::gives_off(crate::aim::GLASS_SCONCE.truncate(), since).extend(1.0)
+}
+
 pub fn lit(since: f32) -> glam::Vec4 {
     crate::garden::gives_off(crate::aim::GLASS_LAMP.truncate(), since).extend(1.0)
 }
@@ -390,7 +653,7 @@ pub fn middle(reaches: f32) -> Vec3 {
     vec3(
         (room.min.x + room.max.x) * 0.5,
         UP,
-        (room.min.z + room.max.z - WELL_DEEP) * 0.5,
+        (room.min.z + stair_head(reaches).z) * 0.5,
     )
 }
 
@@ -414,9 +677,12 @@ pub fn ball(reaches: f32) -> (Vec3, f32) {
 /// Everything up here a body stops against.
 pub fn solid(reaches: f32) -> Vec<Aabb> {
     let room = inside(reaches);
-    let mut out = vec![floor(reaches), plinth(reaches)];
+    let mut out = floors(reaches);
+
+    out.push(plinth(reaches));
 
     out.extend(treads(reaches));
+    out.extend(guard(reaches));
     // **The colonnade is solid and not only drawn.** A pilaster you walk
     // through is a painting of a pilaster, and there is a second reason
     // here: what the glass traces is `solid`, so a frame that is only drawn
@@ -468,29 +734,14 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
         out.extend(pieces);
     }
 
-    // and the rail along the floor's own edge at the well, which is the only
-    // place up here you could walk off. In two pieces, with the way up
-    // between them: a rail across the head of a stair is a rail you climb
-    // fourteen steps to meet.
-    let edge = floor(reaches).max.z;
-    let head = stair_head(reaches).x;
-    let gap = (head, head + WAY_UP);
-
-    for (from, to) in [(room.min.x, gap.0), (gap.1, room.max.x)] {
-        if to - from > 1e-3 {
-            out.push(Aabb::new(
-                vec3(from, UP, edge - RAIL),
-                vec3(to, UP + RAIL_UP, edge),
-            ));
-        }
-    }
-
+    // **No rail across the head of the stair any more.** There was one, in
+    // two pieces with a gap to walk through, because the well was the room's
+    // whole north end and the floor stopped at a nine metre cliff. The well
+    // is a slot now: the only edges up here are the slot's own two sides and
+    // they are what the balustrades stand on, so a rail across the width
+    // would be a rail across the way out.
     out
 }
-
-/// The rail at the well's edge: how thick, and how high.
-pub const RAIL: f32 = 0.12;
-pub const RAIL_UP: f32 = 1.05;
 
 /// The glazing in the slots, which is drawn and not solid: what stops you is
 /// the sill, which is higher than anything here can ride.
@@ -635,6 +886,400 @@ fn colour(box_: Aabb, up: f32, since: f32) -> glam::Vec4 {
     }
 }
 
+/// The lights on the flight, as the middle of each sconce bowl.
+///
+/// **The stair had none and was not meant to.** It climbed under the nook's
+/// own ceiling, so it borrowed a pendant from the grid up there, and spec
+/// 0064 then cut that ceiling away for the well: the pendant was left
+/// hanging from nothing in the middle of the flight and the flight was left
+/// dark when it went. A stair that borrows its light from the room it leaves
+/// is dark halfway up whatever is done to either room.
+///
+/// Two of them, a third and two thirds of the way up. One at the bottom
+/// leaves the top dark and one at the top is a light you climb toward, and
+/// what a flight wants is to be lit the whole way.
+pub const SCONCE_WIDE: f32 = 0.34;
+pub const SCONCE_LIT: f32 = 0.8;
+pub const SCONCE_RANGE: f32 = 4.0;
+
+pub fn stair_sconces(reaches: f32) -> Vec<Vec3> {
+    // **On the newels, because there is no wall beside this flight.** The
+    // first pair were bowls on the nook's north wall, which is where the
+    // stair ran when it crossed the room. Down the middle it has open air
+    // on both sides and the only thing standing at the right height is the
+    // post at each end of it.
+    //
+    // **One on every post, which is four.** The first go put one at the
+    // head and one at the foot on opposite sides, reasoning that the light
+    // would cross the steps rather than run down them. Standing at the head
+    // of the stair that is a lamp on one post and a bare post facing it,
+    // and Jake asked why there was a light on the right and not on the
+    // left. A pair of newels is a pair.
+    let posts: Vec<Aabb> = SIDES
+        .iter()
+        .flat_map(|side| newels(reaches, *side))
+        .collect();
+
+    posts
+        .iter()
+        .map(|post| {
+            vec3(
+                post.center().x,
+                post.max.y + SCONCE_WIDE * 0.3,
+                post.center().z,
+            )
+        })
+        .collect()
+}
+
+/// And the light in each, which is the bowl itself.
+///
+/// Off the sconces rather than worked out again, so there is no lamp up here
+/// that is not in a fitting and nobody has to remember. The baths' pair is
+/// what this copies.
+pub fn stair_lamps(reaches: f32) -> Vec<Vec3> {
+    stair_sconces(reaches)
+        .into_iter()
+        .map(|at| at + Vec3::Y * 0.04)
+        .collect()
+}
+
+/// One baluster, turned.
+///
+/// **A box would have been four more boxes in a room that is already boxes.**
+/// The one thing this room has to do is give a sphere something with shape in
+/// it to show, and fourteen square sticks are fourteen more rectangles. The
+/// lathe is already here for the cellar's barrels and the people's limbs.
+pub fn baluster_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(12, 26, |v| {
+        let waist = if v < 0.07 {
+            1.0
+        } else if v < 0.13 {
+            0.58
+        } else if v < 0.44 {
+            // the vase, fattest just over the foot and falling away
+            0.96 - 0.5 * ((v - 0.13) / 0.31)
+        } else if v < 0.88 {
+            0.40
+        } else if v < 0.94 {
+            0.74
+        } else {
+            0.92
+        };
+
+        (v - 0.5, waist)
+    })
+}
+
+/// The joinery on the open side of the flight.
+///
+/// The string and the rail are one box each, turned to the stair's pitch,
+/// because a raked board is a raked board and a staircase of little boxes
+/// pretending to be one is the thing this building keeps being told reads as
+/// a painting of a thing.
+///
+/// What a body meets is `guard`, which is upright boxes, and those are not
+/// drawn. Two accounts of one balustrade, which this project has a rule
+/// about, and the rule's own test is whether they would still agree if one
+/// requirement changed: they would not. A collider wants to be axis aligned
+/// and a rail wants to be at the stair's angle, and that is two questions
+/// with similar answers. So the rake is named once, in `rake`, and both of
+/// them are set out from it.
+pub fn draw_the_stair(
+    scene: &mut Scene,
+    reaches: f32,
+    since: f32,
+    cube: MeshId,
+    baluster: Option<MeshId>,
+    sconce: MeshId,
+) {
+    // **Newel to newel, and not the rake plus a post's width.** A board
+    // runs from the middle of one post to the middle of the other, which is
+    // where joinery meets a post. The rake's own two ends are the bottom and
+    // top nosings and neither is under a newel, so a board set out from the
+    // rake overshoots at one end and falls short at the other. Jake's
+    // picture of the stair head, 2026-11-12.
+    for side in SIDES {
+        let posts = newels(reaches, side);
+        let low = rake_at(reaches, side, posts[0].center().z);
+        let high = rake_at(reaches, side, posts[1].center().z);
+        let run = high - low;
+        let long = (run.y * run.y + run.z * run.z).sqrt();
+        // the flight runs along z and climbs in y, so a board on it turns
+        // about x: the box's own length is its z and the turn takes that to
+        // the rake
+        let turn = glam::Quat::from_rotation_x((-run.y).atan2(run.z));
+        let middle = (low + high) * 0.5;
+        // **A turned board's top edge is further from its middle than half
+        // its depth, not nearer.** Two lines at the stair's pitch half a
+        // depth apart square to the board are half a depth *divided by* the
+        // cosine of that pitch apart measured straight up. Dropping the
+        // string by a plain half depth put its top edge over the line the
+        // balusters stand on and ate their feet; multiplying by the cosine,
+        // which was the first guess at the fix, buried them twice as deep.
+        let upright = run.z.abs() / long;
+
+        for (up, deep, thick, colour) in [
+            (
+                STRING_OVER - STRING_DEEP * 0.5 / upright,
+                STRING_DEEP,
+                BALUSTRADE,
+                crate::aim::GLASS_STRING,
+            ),
+            (
+                HANDRAIL_UP,
+                HANDRAIL,
+                HANDRAIL * 1.4,
+                crate::aim::GLASS_RAIL,
+            ),
+        ] {
+            scene.push_material(
+                cube,
+                &Transform::at(middle + Vec3::Y * up)
+                    .with_rotation(turn)
+                    .with_scale(vec3(thick, deep, long)),
+                colour,
+                crate::aim::MATTE,
+            );
+        }
+
+        for post in posts {
+            scene.push_material(
+                cube,
+                &Transform::at(post.center()).with_scale(post.size()),
+                crate::aim::GLASS_STRING,
+                crate::aim::MATTE,
+            );
+            // the cap, which says a post ended rather than ran out
+            let cap = 0.07;
+
+            scene.push_material(
+                cube,
+                &Transform::at(vec3(
+                    post.center().x,
+                    post.max.y - cap * 0.5,
+                    post.center().z,
+                ))
+                .with_scale(vec3(NEWEL + 0.05, cap, NEWEL + 0.05)),
+                crate::aim::GLASS_RAIL,
+                crate::aim::MATTE,
+            );
+        }
+
+        if let Some(baluster) = baluster {
+            let tall = baluster_tall();
+
+            for at in balusters(reaches, side) {
+                scene.push_material(
+                    baluster,
+                    &Transform::at(at + Vec3::Y * tall * 0.5)
+                        .with_scale(vec3(BALUSTER, tall, BALUSTER)),
+                    crate::aim::GLASS_BALUSTER,
+                    crate::aim::MATTE,
+                );
+            }
+        }
+    }
+
+    // the steps, in the stair's own stone.
+    //
+    // **Not through `colour`, which reads a box's shape.** A step drawn a
+    // step thick is flat and wide, which that function calls a floor, so the
+    // whole underside of the flight came out the glass room's navy and hung
+    // over the nook's toy tables as a dark wedge. A stair is masonry and the
+    // nosings on it are already this stone.
+    for board in tread_boards(reaches) {
+        scene.push_material(
+            cube,
+            &Transform::at(board.center()).with_scale(board.size()),
+            crate::aim::GLASS_PIER,
+            crate::aim::MATTE,
+        );
+    }
+
+    // the bowls on the newel caps, which are this flight's only light
+    for at in stair_sconces(reaches) {
+        scene.push_material(
+            sconce,
+            &Transform::at(at).with_scale(Vec3::splat(SCONCE_WIDE)),
+            lit_sconce(since),
+            crate::aim::VOID,
+        );
+    }
+
+    for nosing in nosings(reaches) {
+        scene.push_material(
+            cube,
+            &Transform::at(nosing.center()).with_scale(nosing.size()),
+            crate::aim::GLASS_PIER,
+            crate::aim::MATTE,
+        );
+    }
+}
+
+/// How deep a base or a capital is, how far it stands out from the shaft,
+/// and the bead that necks the two together.
+pub const CAP: f32 = 0.16;
+pub const CAP_OUT: f32 = 0.07;
+pub const BEAD: f32 = 0.05;
+pub const BEAD_OUT: f32 = 0.025;
+
+/// How proud of the floor the border and the panel are laid, and how wide
+/// the margin between them is.
+pub const LAID: f32 = 0.025;
+pub const MARGIN: f32 = 0.34;
+
+/// How deep the beams across the ceiling are and how far they come down.
+pub const BEAM: f32 = 0.2;
+pub const BEAM_DOWN: f32 = 0.16;
+
+/// What makes the room worked stone rather than a box with boxes in it.
+///
+/// **Everything here is drawn and nothing is walked.** A base is a hand's
+/// breadth of overhang at ankle height and a capital is over your head, so
+/// neither is a thing a body meets; what a body meets is the shaft, which is
+/// already in `solid` and already what the glass traces. Adding them to the
+/// walk would be a ring of ledges round every column for no gain.
+pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId) {
+    let room = inside(reaches);
+    // **The border stops at the stairwell rather than running over it.** It
+    // is laid between the two colonnades and the slot is between them too,
+    // so a border run the room's whole length would be a rug over a hole.
+    let floor = Aabb::new(
+        vec3(room.min.x, UP, room.min.z),
+        vec3(room.max.x, UP, well(reaches).min.z - 0.3),
+    );
+
+    // the floor, as a border with a panel laid on it. Proud and not sunk:
+    // a border cut into a floor is two faces in one plane, which is the
+    // fault this building has made four times.
+    let inner = (
+        room.min.x + FRAME_IN + FRAME_DEEP * 0.5 + 0.1,
+        room.max.x - FRAME_IN - FRAME_DEEP * 0.5 - 0.1,
+    );
+
+    for (shrink, up, colour) in [
+        (0.0, LAID, crate::aim::GLASS_BORDER),
+        (MARGIN, LAID * 2.0, crate::aim::GLASS_PANEL),
+    ] {
+        let low = vec3(inner.0 + shrink, UP, floor.min.z + 0.5 + shrink);
+        let high = vec3(inner.1 - shrink, UP + up, floor.max.z - 0.5 - shrink);
+        let box_ = Aabb::new(low, high);
+
+        scene.push_material(
+            cube,
+            &Transform::at(box_.center()).with_scale(box_.size()),
+            colour,
+            crate::aim::MATTE,
+        );
+    }
+
+    // a base and a capital on every shaft, with a bead necking each to it
+    for (at, size) in frames(reaches) {
+        let low = at.y - size.y * 0.5;
+        let high = at.y + size.y * 0.5;
+
+        for (middle, wide) in [
+            (low + CAP * 0.5, CAP_OUT),
+            (low + CAP + BEAD * 0.5, BEAD_OUT),
+            (high - CAP - BEAD * 0.5, BEAD_OUT),
+            (high - CAP * 0.5, CAP_OUT),
+        ] {
+            scene.push_material(
+                cube,
+                &Transform::at(vec3(at.x, middle, at.z)).with_scale(vec3(
+                    size.x + wide * 2.0,
+                    if wide > BEAD_OUT { CAP } else { BEAD },
+                    size.z + wide * 2.0,
+                )),
+                crate::aim::GLASS_TRIM,
+                crate::aim::MATTE,
+            );
+        }
+    }
+
+    // and a beam over every bay, on the colonnade's own pitch. The ceiling
+    // is the largest flat thing in any view of this room after the floor
+    // and it was one dark slab.
+    let mut along: Vec<f32> = frames(reaches).into_iter().map(|(at, _)| at.z).collect();
+
+    along.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    along.dedup_by(|a, b| (*a - *b).abs() < 1e-3);
+
+    for z in along {
+        scene.push_material(
+            cube,
+            &Transform::at(vec3(
+                (room.min.x + room.max.x) * 0.5,
+                room.max.y - BEAM_DOWN * 0.5,
+                z,
+            ))
+            .with_scale(vec3(room.max.x - room.min.x, BEAM_DOWN, BEAM)),
+            crate::aim::GLASS_TRIM,
+            crate::aim::MATTE,
+        );
+    }
+
+    for (piece, colour) in plinth_pieces(reaches) {
+        scene.push_material(
+            cube,
+            &Transform::at(piece.center()).with_scale(piece.size()),
+            colour,
+            crate::aim::MATTE,
+        );
+    }
+}
+
+/// The plinth as it is drawn: a base, a die and a cap, with what each is.
+///
+/// **The die stops short of the cap rather than running up to it.** The
+/// first go laid the mouldings round the plinth's own box and left the two
+/// topping out at the same height, which is two faces in one plane with both
+/// on show. Jake's picture of the ball on its plinth came back with a patch
+/// of blocky squares on top where they were fighting, and it read as a
+/// shadow.
+///
+/// Named rather than built where it is pushed, so the engine's own coplanar
+/// check can be pointed at it. The box in `plinth` is what a body walks into
+/// and what the ball stands on, and it is not this.
+pub fn plinth_pieces(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
+    let die = plinth(reaches);
+    let wide = die.size().x;
+    let at = die.center();
+
+    [
+        (die.min.y, die.min.y + 0.1, 0.13, crate::aim::GLASS_TRIM),
+        (
+            die.min.y + 0.1,
+            die.min.y + 0.16,
+            0.08,
+            crate::aim::GLASS_TRIM,
+        ),
+        (die.min.y + 0.16, die.max.y - 0.14, 0.0, crate::aim::STAND),
+        (
+            die.max.y - 0.14,
+            die.max.y - 0.05,
+            0.11,
+            crate::aim::GLASS_TRIM,
+        ),
+        (die.max.y - 0.05, die.max.y, 0.06, crate::aim::GLASS_TRIM),
+    ]
+    .iter()
+    .copied()
+    .map(|(from, to, out, colour)| {
+        let half = (wide + out * 2.0) * 0.5;
+
+        (
+            Aabb::new(
+                vec3(at.x - half, from, at.z - half),
+                vec3(at.x + half, to, at.z + half),
+            ),
+            colour,
+        )
+    })
+    .collect()
+}
+
 /// Draws the room, and the ball in it.
 pub fn draw(
     scene: &mut Scene,
@@ -642,23 +1287,27 @@ pub fn draw(
     since: f32,
     cube: MeshId,
     sphere: Option<MeshId>,
+    baluster: Option<MeshId>,
+    sconce: Option<MeshId>,
 ) {
     let reaches = room.reaches;
 
     let plinth = plinth(reaches);
+    // the balustrade stands in `solid` as upright boxes and is drawn as
+    // joinery; the plinth stands there as one box and is drawn as a base, a
+    // die and a cap. What is walked into here is not what is looked at.
+    let guard = guard(reaches);
+    let treads = treads(reaches);
 
     for piece in solid(reaches)
         .into_iter()
         .chain([lid(reaches), cornice(reaches)])
+        .filter(|piece| !guard.contains(piece) && !treads.contains(piece) && *piece != plinth)
     {
         scene.push_material(
             cube,
             &Transform::at(piece.center()).with_scale(piece.size()),
-            if piece == plinth {
-                crate::aim::STAND
-            } else {
-                colour(piece, UP + TALL * 0.5, since)
-            },
+            colour(piece, UP + TALL * 0.5, since),
             crate::aim::MATTE,
         );
     }
@@ -671,6 +1320,12 @@ pub fn draw(
             lit(since),
             crate::aim::VOID,
         );
+    }
+
+    draw_the_room(scene, reaches, cube);
+
+    if let Some(sconce) = sconce {
+        draw_the_stair(scene, reaches, since, cube, baluster, sconce);
     }
 
     let Some(sphere) = sphere else {
@@ -822,9 +1477,138 @@ mod tests {
 
         assert!(holds(room.min.z), "the south end is not in the glass");
         assert!(
-            holds(floor(reaches).max.z),
+            holds(well(reaches).min.z),
             "the north end is not in the glass"
         );
+    }
+
+    /// Spec 0064: one piece of the plinth draws its top, and only one.
+    ///
+    /// **Jake's picture of the ball on its plinth, 2026-11-12.** A patch of
+    /// blocky squares on the top of it, which read as a shadow and was two
+    /// surfaces fighting for the same pixels: the cap moulding was laid
+    /// round the plinth's own box and both topped out at the same height.
+    ///
+    /// **The engine's own coplanar check cannot answer this one.** It was
+    /// asked first, over the whole building the way `behind.rs` says to ask
+    /// it, and it passed the broken version: that check throws out a face
+    /// buried in another solid, and the die's top is inside the cap it
+    /// fights. The rule holds for what you can see past and not for what is
+    /// drawn, and both of these are drawn. So this asks the specific thing
+    /// that broke instead of a general one.
+    #[test]
+    fn one_piece_of_the_plinth_draws_its_top() {
+        let reaches = reaches();
+        let top = plinth(reaches).max.y;
+        let drawing: Vec<Aabb> = plinth_pieces(reaches)
+            .into_iter()
+            .map(|(box_, _)| box_)
+            .filter(|box_| (box_.max.y - top).abs() < 1e-4)
+            .collect();
+
+        assert_eq!(
+            drawing.len(),
+            1,
+            "{} pieces of the plinth top out at {:.2} and every one of them \
+             is drawn, so they fight for the same pixels: {:?}",
+            drawing.len(),
+            top,
+            drawing
+        );
+    }
+
+    /// Spec 0064: the open side of the flight stops a body.
+    ///
+    /// **It was a three and a half metre drop with nothing on it.** You
+    /// climbed fourteen steps beside a void with no rail, no string and
+    /// nothing in the walk to say there was an edge. Walked rather than
+    /// measured, because a rail that is tall enough and a rail a body
+    /// actually stops against are two different claims and this project has
+    /// been caught by the difference before.
+    #[test]
+    fn you_cannot_walk_off_the_side_of_the_flight() {
+        let reaches = reaches();
+        let steps = treads(reaches);
+
+        // from the middle of a tread half way up, pushed hard at each side
+        // in turn. Both sides, because a flight down the middle of a room is
+        // open on both.
+        for side in SIDES {
+            let open = rake(reaches, side).0.x;
+
+            for n in [3usize, 7, 11] {
+                let tread = steps[n];
+                let from = vec3(
+                    (tread.min.x + tread.max.x) * 0.5,
+                    tread.max.y + 0.2,
+                    (tread.min.z + tread.max.z) * 0.5,
+                );
+                let at = walked(from, vec3(open + side * 4.0, from.y, from.z), 4.0);
+
+                assert!(
+                    (at.x - from.x).abs() < FLIGHT * 0.5,
+                    "pushed at the {} side from tread {} a body ended at x {:.2}, \
+                     past the balustrade at {:.2}",
+                    if side < 0.0 { "west" } else { "east" },
+                    n,
+                    at.x,
+                    open
+                );
+            }
+        }
+    }
+
+    /// Spec 0064: and it costs the flight none of its width.
+    ///
+    /// `FLIGHT` is the nook's own passage, and this project's rule is 1.05
+    /// clear anywhere somebody has to walk. A rail standing on the tread
+    /// ends would have taken a hand's breadth off that for nothing: it
+    /// stands outside the going instead, so every tread is as wide to walk
+    /// as it ever was.
+    #[test]
+    fn the_balustrade_costs_the_flight_none_of_its_going() {
+        let reaches = reaches();
+
+        for post in guard(reaches) {
+            for tread in treads(reaches) {
+                let over = post.min.x < tread.max.x
+                    && post.max.x > tread.min.x
+                    && post.min.z < tread.max.z - 1e-4
+                    && post.max.z > tread.min.z + 1e-4;
+
+                assert!(
+                    !over,
+                    "a piece of the balustrade at {:?} stands on the tread at {:?}",
+                    post, tread
+                );
+            }
+        }
+    }
+
+    /// Spec 0064: nothing of the room below hangs in the flight.
+    ///
+    /// **The nook's pendant grid had one in the middle of it.** That ceiling
+    /// was solid when the grid was laid out and this spec cut a well through
+    /// it, so the lamp was left hanging from nothing at the head height of
+    /// anybody climbing. It is dropped where the list is made, which is what
+    /// takes its light with it.
+    #[test]
+    fn nothing_of_the_nook_hangs_in_the_flight() {
+        let reaches = reaches();
+        let flight = flight(reaches);
+
+        for shade in crate::room::pendant_shades(reaches) {
+            let inside = shade.x > flight.min.x
+                && shade.x < flight.max.x
+                && shade.z > flight.min.z
+                && shade.z < flight.max.z;
+
+            assert!(
+                !inside,
+                "a pendant hangs at {:?}, which is in the flight",
+                shade
+            );
+        }
     }
 
     /// You can walk its length and all the way round the plinth.
@@ -832,7 +1616,7 @@ mod tests {
     fn you_can_walk_round_it() {
         let reaches = reaches();
         let room = inside(reaches);
-        let floor = floor(reaches);
+        let floor = well(reaches);
         let middle = middle(reaches);
         // the length of it, from the head of the stair to the far end, down
         // the aisle between the plinth and one row rather than through the
@@ -878,32 +1662,46 @@ mod tests {
         }
     }
 
-    /// The plinth stands in the middle of the room's length, and not against
-    /// either end.
+    /// The plinth has the room's length behind it from either end of the
+    /// walk, and stands against neither.
     ///
     /// **Which is the whole of what the spike found.** A sphere shows what is
     /// behind it, so a plinth at an end wall puts the room's length behind
-    /// your eye. Within a tread of the middle, which is as near as anything
-    /// in this building is placed.
+    /// your eye.
+    ///
+    /// **The bar came down from five metres to four, 2026-11-12, and that is
+    /// worth defending.** It was five when the room was a plain box and the
+    /// ball could stand in the middle of sixteen metres. The stair runs down
+    /// the middle of the room now and takes four and a half of them, so the
+    /// ball cannot be in the middle: it stands in the middle of the floor
+    /// the stair arrives at, and that floor is eight and a half long. Five
+    /// each way is not available at any position, and buying it back would
+    /// mean leaving a metre and a half of nook in front of the bottom tread,
+    /// which is the fault this move was made to fix.
+    ///
+    /// **Measured to the room's own ends and not to the well.** The well was
+    /// the room's north end once and the floor stopped at it; it is a slot
+    /// in the middle now and the walls, the colonnade and the ceiling run
+    /// past it, so what is behind the ball from the south is the whole room
+    /// and not the floor's edge.
     #[test]
     fn the_sphere_has_length_behind_it_either_way() {
         let reaches = reaches();
         let room = inside(reaches);
-        let floor = floor(reaches);
         let (ball, _) = ball(reaches);
         let south = ball.z - room.min.z;
-        let north = floor.max.z - ball.z;
+        let north = room.max.z - ball.z;
 
         assert!(
-            (south - north).abs() < crate::cellar::TREAD,
-            "the ball stands {:.2} from one end and {:.2} from the other",
-            south,
-            north
-        );
-        assert!(
-            south.min(north) > 5.0,
+            south.min(north) > 4.0,
             "the shorter way to an end is {:.2} metres",
             south.min(north)
+        );
+        assert!(
+            south > PLINTH && north > PLINTH,
+            "the ball stands against an end: {:.2} and {:.2}",
+            south,
+            north
         );
     }
 
