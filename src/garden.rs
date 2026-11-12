@@ -380,11 +380,26 @@ pub const DOME_UP: f32 = 12.0;
 /// height to 0.95 of its height on the other side, and the brightness does not
 /// move at all.
 ///
-/// At four tenths the sun is low and falling. A minute in it is visibly
-/// dimmer, two and it is nearly down, four and the lanterns are up. The first
-/// visit is the one that has to show the room is alive, and this is the only
-/// stretch of the day that shows it inside a minute.
-pub const DAY: f32 = 20.0 * 60.0;
+/// At four tenths the sun is low and falling, which is the stretch of the day
+/// that shows the room is alive soonest.
+///
+/// **Twenty seconds, cut from twenty minutes on 2026-11-12.** Jake: twenty
+/// minutes is too long for a day, for now it is more important to be able to
+/// see the changes quickly. Then, having watched a moonset at two minutes:
+/// maybe even twenty seconds, it took about two minutes to see.
+///
+/// That trades away the half of this the old number was chosen for, which was
+/// a day long enough that nobody watched it loop, and it is the right trade
+/// while the sky, the weather and the moon are all being built and every one
+/// of them has to be waited for. Midnight was seven minutes from a standing
+/// start and is seven seconds.
+///
+/// **It is a working setting and it makes some things here untestable.** Any
+/// claim of the form "a person can see this happen" is about seconds, and at
+/// this length everything in the sky happens faster than anybody would call
+/// gradual. The lantern fade's own test says what that cost. Put a longer one
+/// back when the building is being played rather than worked on.
+pub const DAY: f32 = 20.0;
 pub const OPENS_AT: f32 = 0.4;
 
 /// How far through a day it is, nought at dawn and a half at dusk.
@@ -6032,45 +6047,48 @@ mod tests {
 
     /// Spec 0019: a day is long against a visit and plain inside a minute.
     ///
-    /// Those two pull against each other and the number has to serve both. A
-    /// day you can watch go round is a loop; a day that moves too little to
-    /// notice is the empty room spec 0011 built.
+    /// **Rewritten on 2026-11-12 when the day went from twenty minutes to
+    /// twenty seconds.** This held the old trade, that a day is long against
+    /// a visit and still plain within one, and the first half of that is gone
+    /// on purpose: `DAY`'s own note says why. What is left is the half that
+    /// still has to be true, and every claim about the shape of a day is off
+    /// `DAY` now rather than off a count of minutes that only worked at one
+    /// length.
     #[test]
-    fn the_day_is_long_against_a_visit_and_plain_within_one() {
+    fn the_day_is_short_enough_to_watch_and_plain_while_you_do() {
         assert!(
-            (10.0 * 60.0..=40.0 * 60.0).contains(&DAY),
+            (10.0..=5.0 * 60.0).contains(&DAY),
             "a day is {:.0} seconds",
             DAY
         );
 
-        // a minute of it, taken from where the building opens, which is the
+        // a tenth of it, taken from where the building opens, which is the
         // measurement that matters: the first visit is the one that has to
-        // show the room is alive. Taken at noon instead it is 0.05, which is
+        // show the room is alive. Taken at noon instead it is flat, which is
         // what Jake could not see.
-        let moved = (sun_up(60.0) - sun_up(0.0)).abs();
+        let moved = (sun_up(DAY * 0.1) - sun_up(0.0)).abs();
 
         assert!(
             moved > 0.1,
-            "a minute from opening moves the sun {:.3} of its height, which is \
-             nothing to see",
+            "a tenth of a day from opening moves the sun {:.3} of its height, \
+             which is nothing to see",
             moved
         );
-        // and four minutes in, the lanterns are coming up
+        // and the lanterns are up by dusk, whatever a day is worth
         assert!(
-            lanterns_lit(4.0 * 60.0) > 0.5,
-            "four minutes in the lanterns are {:.2} lit",
-            lanterns_lit(4.0 * 60.0)
+            lanterns_lit(when(0.55)) > 0.5,
+            "at dusk the lanterns are {:.2} lit",
+            lanterns_lit(when(0.55))
         );
-        let dawn = when(0.0);
-        // and ten minutes is a different garden from one. By where the light
-        // comes from and not by how high it is: ten minutes from dawn is dusk,
-        // so the sun is back at the height it started at and on the other side
-        // of the sky, which is the whole of what you see.
-        let turned = sunlight(dawn + 600.0).dot(sunlight(dawn + 60.0));
+        // and dawn and dusk are a different garden. By where the light comes
+        // from and not by how high it is: at dusk the sun is back at the
+        // height it started at and on the other side of the sky, which is the
+        // whole of what you see.
+        let turned = sunlight(when(0.5)).dot(sunlight(when(0.0)));
 
         assert!(
             turned < -0.5,
-            "ten minutes on, the light comes from {:.2} of the same way",
+            "at dusk the light comes from {:.2} of the way it did at dawn",
             turned
         );
     }
@@ -6123,9 +6141,26 @@ mod tests {
             at += step;
         }
 
+        // **Two questions that happen to have had one answer.** How much of
+        // a day the fade takes is a property of the sun's shape and does not
+        // move when `DAY` does. How long it takes in front of somebody is
+        // seconds, and that is what decides whether it reads as a lamp or as
+        // a switch. At twenty minutes a day one range of seconds satisfied
+        // both, so each says its own now.
         assert!(
-            (20.0..300.0).contains(&went),
-            "they take {:.0} seconds to come up",
+            (0.015..0.25).contains(&(went / DAY)),
+            "they take {:.3} of a day to come up",
+            went / DAY
+        );
+        // **And the seconds are a floor rather than a range.** This asked for
+        // two of them, which was right at a two minute day and false at a
+        // twenty second one, where the fade is two thirds of a second and
+        // everything else in the sky is quicker still. What survives any
+        // length is that a fade has to take more than a frame or two, or it
+        // is a cut.
+        assert!(
+            went > 0.1,
+            "they take {:.2} seconds to come up, which is a cut",
             went
         );
     }

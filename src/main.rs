@@ -328,11 +328,12 @@ fn flying() -> bool {
 ///
 /// **The third of the set, after `FLY` and `POSE`.** Those two get the
 /// camera to the thing; this one gets the thing to the hour it is worth
-/// looking at. A day here is twenty minutes and a run begins at 0.4,
+/// looking at. A day here is `garden::DAY` and a run begins at 0.4,
 /// mid-afternoon, so photographing anything the night does means sitting
-/// in front of it for eight minutes first, once per picture. The moon
-/// and the runestone's glow are both night things and neither could be
-/// looked at without this.
+/// in front of it first, once per picture. The moon and the runestone's
+/// glow are both night things and neither could be looked at without
+/// this. It was eight minutes of sitting when a day was twenty; it is
+/// forty seconds now.
 fn starting_hour() -> Option<f32> {
     let said = std::env::var("AT").ok()?;
 
@@ -373,7 +374,7 @@ fn posed_at() -> Option<Pose> {
 /// Everything a frame of this building needs to be stood up again.
 ///
 /// **The clock is in here because a pose on its own is not a picture.** The
-/// day is twenty minutes, the sun swings through it, the sky's picture slides
+/// day is `garden::DAY`, the sun swings through it, the sky's picture slides
 /// by `since` at 0.011 of itself a second and the moon rises and sets. On
 /// 2026-11-12 a screenshot of the field came back with a pale shape in the
 /// sky nobody could name, and the hunt for it drew that exact spot at every
@@ -7682,7 +7683,7 @@ impl Game for Arcade {
         // and cool in what it misses, because a white sun over a neutral fill
         // is what made every surface in here grey.
         //
-        // and it moves, per spec 0019. A day in the garden is twenty minutes
+        // and it moves, per spec 0019. A day in the garden is `garden::DAY`
         // and this is the one light in the building that keeps it: the hall,
         // the nook, the cellar and the baths are roofed and the sun reaches
         // none of them, which `room::outline` records as measured, so a sun
@@ -12114,7 +12115,7 @@ mod tests {
     /// fresh game opens on.
     ///
     /// **Because the only picture of the moon is at night.** A day here is
-    /// twenty minutes and a game starts mid-afternoon, which is the same
+    /// `garden::DAY` and a game starts mid-afternoon, which is the same
     /// reason `AT` exists for the window.
     fn standing_at(
         at: Vec3,

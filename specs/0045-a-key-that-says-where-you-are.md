@@ -66,8 +66,8 @@ a side effect is a key nothing can check.
 
 ## The clock, 2026-11-12
 
-The line carried the place and nothing about when, and the day here is
-twenty minutes long. The sun swings through it, the sky's picture slides by
+The line carried the place and nothing about when, and a day here runs its
+whole round while you stand in it. The sun swings through it, the sky's picture slides by
 `since` at 0.011 of itself a second, the lanterns come on and go out, and
 spec 0065's moon rises and sets. Two frames from one spot are two different
 pictures.

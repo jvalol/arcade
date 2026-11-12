@@ -63,7 +63,15 @@ and do nothing.
 Settled, and it is the garden. The other two readings are kept below because
 they were real and may be again.
 
-**A day in the garden lasts twenty minutes.** The sun goes round once, east to
+**A day in the garden lasts twenty seconds**, cut from twenty minutes on
+2026-11-12 so that the sky, the weather and the moon can be looked at
+without waiting for them. It is a working setting: see `garden::DAY` for
+the trade, for what the twenty minutes bought, and for what it costs to
+test at this length.
+The rest of this section is the reasoning that chose the hour it opens at,
+which the length does not change.
+
+**It lasts a fixed time and goes round once.** The sun goes round once, east to
 west and under, and three things follow it: the light's direction, colour and
 strength; what the sky's own picture is multiplied by; and how much of their
 light the lanterns are giving.
@@ -163,7 +171,7 @@ not enough rather than what else would look good.
 
 - The weather goes over while you watch, in two directions that do not
   divide. — `garden::tests::the_weather_goes_over_while_you_watch`
-- A day is long against a visit and plain inside a minute. — `garden::tests::the_day_is_long_against_a_visit_and_plain_within_one`
+- A day is short enough to watch go round and plain while you do. — `garden::tests::the_day_is_short_enough_to_watch_and_plain_while_you_do`
 - And it comes round, which is the point rather than a flaw. — `garden::tests::a_day_comes_round`
 - The lanterns come up as the sun goes down, and take their time over it. — `garden::tests::the_lanterns_come_up_as_the_sun_goes_down`
 - The sky is never black. — `garden::tests::the_sky_is_never_black`
