@@ -1689,9 +1689,15 @@ pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Mes
 /// that light twice and the ball washed out to white.
 ///
 /// So this is a plain tint again, and what a mirror is worth is the only
-/// thing in it: ninety two hundredths, because no mirror gives back all of
-/// what it takes.
-pub const SILVER: f32 = 0.92;
+/// thing in it.
+///
+/// **And it is what the ball gives back face on, not everywhere.** The
+/// engine's spec 0098 carries it to all of the light at a grazing angle
+/// now, which is what makes a ball read as a ball: the rim is a bright ring
+/// and the face is not. At ninety two hundredths there was no ring to see,
+/// because there was nowhere left for the edge to climb to. This is the
+/// number that sets how much of one there is.
+pub const SILVER: f32 = 0.7;
 
 pub fn silvered(_since: f32) -> glam::Vec4 {
     Vec3::splat(SILVER).extend(1.0)
