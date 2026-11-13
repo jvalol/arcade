@@ -3762,7 +3762,7 @@ impl Arcade {
                     &Transform::at(at)
                         .with_rotation(glam::Quat::from_rotation_z(lean))
                         .with_scale(size),
-                    aim::VALHALLA_ROOF * tone,
+                    aim::VALHALLA_TURF * tone,
                     aim::MATTE,
                 );
             }

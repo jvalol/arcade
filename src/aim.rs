@@ -1134,6 +1134,17 @@ pub const VALHALLA_GROUND: Vec4 = vec4(0.085, 0.088, 0.078, 1.0);
 pub const VALHALLA_WET: f32 = 48.0;
 pub const VALHALLA_WALL: Vec4 = vec4(0.27, 0.235, 0.195, 1.0);
 pub const VALHALLA_ROOF: Vec4 = vec4(0.155, 0.135, 0.115, 1.0);
+
+/// And the sod laid up it, which is the thing the roof actually is.
+///
+/// **Green, because the courses were the roof's own brown and read as
+/// heavy planks.** A turf roof is the hillside carried up onto the
+/// building, so this is the field's green pulled down and cooled: darker
+/// than `FIELD_GROUND`, which is a dry meadow in full sun, and greener
+/// than anything else up here. What stays brown is the pitch under it,
+/// which shows in the gap between one course and the next and is the
+/// timber the sod is laid on.
+pub const VALHALLA_TURF: Vec4 = vec4(0.165, 0.225, 0.115, 1.0);
 /// What is burning behind an opening, and the jamb round it.
 ///
 /// **Dimmer than it was, because the lamp outside already lights it.** At
