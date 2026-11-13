@@ -9,6 +9,8 @@
 //! Norse settlement is both at once: a longhouse with smaller buildings
 //! round it. Spec 0055 carries the argument.
 
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
+
 use blitzkit::collision::Aabb;
 use glam::{vec3, Vec3};
 
@@ -240,24 +242,236 @@ pub fn lit(reaches: f32) -> Vec<Lit> {
     out
 }
 
-/// Where the people stand, and which way each faces.
+/// The fire out in the lane, and the woodpile that feeds it. Spec 0067.
 ///
-/// **Nobody is fighting and nobody is waiting for a war.** Spec 0055: keep
-/// the figures, drop the rest of what the myth puts in this hall.
-pub fn people(reaches: f32) -> Vec<(Vec3, f32)> {
-    let middle = at(reaches);
+/// **Because an errand needs somewhere to be an errand to.** The people had
+/// rounds before these existed and the rounds were legible as walking and
+/// not as doing: a figure that stops in an empty yard, turns, and goes back
+/// is a figure on a track. Jake asked for walking from the house to the
+/// outside firepit and for getting food, and the shortest way to all of it
+/// is to put the two ends of one errand on the ground where you can see
+/// them.
+///
+/// The ring is stones round a dish of coals, low enough to step over and
+/// wide enough to stand round. The pile is split wood stacked against the
+/// south store's gable, which is the wall that faces the lane.
+pub const RING_WIDE: f32 = 2.2;
+pub const RING_HIGH: f32 = 0.34;
+pub const RING_STONES: usize = 11;
+/// Three flames in it, for the reason the trench has many: one is a cone.
+pub const RING_FLAMES: usize = 3;
+
+/// Where the fire in the lane is.
+///
+/// Off the middle line for the same reason nobody stands on it: the lane is
+/// what you arrive along, and `tests::nothing_stands_in_the_way_in` holds
+/// that for everything that stands in it, this included.
+pub fn ring(reaches: f32) -> Vec3 {
     let (door, _, _) = doorway(reaches);
 
-    vec![
-        // one by the door, looking out along the lane at whoever is coming
-        (
-            vec3(door.x + 1.8, door.y, door.z + 2.2),
-            std::f32::consts::FRAC_PI_2,
+    vec3(door.x + 7.0, door.y, door.z - 6.5)
+}
+
+/// The stones round it, each a lump of its own.
+pub fn ring_stones(reaches: f32) -> Vec<(Vec3, f32)> {
+    let middle = ring(reaches);
+
+    (0..RING_STONES)
+        .map(|n| {
+            let round = n as f32 / RING_STONES as f32 * TAU;
+            // not evenly, because a ring of eleven even stones is a wheel
+            let out = RING_WIDE * 0.5 * (0.94 + 0.12 * (round * 3.0).sin());
+
+            (
+                vec3(
+                    middle.x + round.cos() * out,
+                    middle.y + RING_HIGH * 0.5,
+                    middle.z + round.sin() * out,
+                ),
+                round,
+            )
+        })
+        .collect()
+}
+
+/// How big the woodpile is, and where.
+pub const PILE_LONG: f32 = 2.6;
+pub const PILE_HIGH: f32 = 1.1;
+pub const PILE_DEEP: f32 = 0.8;
+
+/// The woodpile, against the lane-facing wall of the store to the south.
+pub fn pile(reaches: f32) -> Aabb {
+    let store = built(reaches)[1];
+    let face = store.at.z + store.long * 0.5;
+
+    Aabb::from_center_size(
+        vec3(
+            store.at.x,
+            store.at.y + PILE_HIGH * 0.5,
+            face + PILE_DEEP * 0.5,
         ),
-        // and two further in, together, facing each other
-        (vec3(middle.x + 6.0, middle.y, middle.z - 5.5), 2.6),
-        (vec3(middle.x + 7.4, middle.y, middle.z - 6.4), -0.5),
+        vec3(PILE_LONG, PILE_HIGH, PILE_DEEP),
+    )
+}
+
+/// Each split log in it, so it reads as wood rather than as a block.
+pub fn logs(reaches: f32) -> Vec<(Vec3, f32)> {
+    let box_ = pile(reaches);
+    let rows = 5usize;
+    let along = 6usize;
+    let high = (box_.max.y - box_.min.y) / rows as f32;
+    let wide = (box_.max.x - box_.min.x) / along as f32;
+
+    (0..rows)
+        .flat_map(|row| {
+            (0..along).map(move |n| {
+                // every other row laid back a little, which is how a stack
+                // of split wood sits and what stops it reading as brick
+                let back = if row % 2 == 0 { 0.0 } else { 0.06 };
+                let seed = (row * 7 + n * 13) as f32;
+
+                (
+                    vec3(
+                        box_.min.x + (n as f32 + 0.5) * wide,
+                        box_.min.y + (row as f32 + 0.5) * high,
+                        box_.min.z + (box_.max.z - box_.min.z) * 0.5 + back,
+                    ),
+                    (seed * 1.7).sin() * 0.25,
+                )
+            })
+        })
+        .collect()
+}
+
+/// How far clear of a wall somebody stands when their errand is at it.
+///
+/// A body is 0.9 across and the walk wants about 1.05 clear of everything,
+/// per the room-furnishing rules. This is that and a little, so a figure at
+/// a door is at the door rather than in it.
+pub const CLEAR_OF: f32 = 1.6;
+
+/// What the people here are doing, as a round apiece. Spec 0067.
+///
+/// **Nobody is fighting and nobody is waiting for a war.** Spec 0055: keep
+/// the figures, drop the rest of what the myth puts in this hall. What they
+/// do instead is live here, which Jake asked for: walking from the house to
+/// the fire, to the stores and back, which is what a steading is.
+///
+/// **Laid over the lane rather than across the buildings.** The hall runs
+/// 24 east and west and 9 north and south, and the three outbuildings stand
+/// off the line you walk in on, so the open ground is the band east of the
+/// hall's door and the strips north and south of it. Every stop below is in
+/// that band and `tests::nobody_walks_through_a_wall` holds it, because a
+/// figure that clips a gable is the one thing here nobody would forgive.
+///
+/// **Zero is a corner and not a stop.** A stop that stays no time is walked
+/// straight through, which is how a round turns without the turn being a
+/// pause: see `people::doing`.
+pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
+    use crate::people::Stop;
+
+    let middle = at(reaches);
+    let (door, _, _) = doorway(reaches);
+    let yard = door.x + CLEAR_OF * 1.6;
+    let stores = built(reaches);
+    // the north face of the one to the south, and the south face of the one
+    // to the north, which are the sides that look onto the lane
+    let north = stores[2];
+    let behind = stores[3];
+    let stop = |at: Vec3, facing: f32, stays: f32| Stop { at, facing, stays };
+    let fire = ring(reaches);
+    let wood = pile(reaches);
+    // where somebody stands to take wood off the pile: clear of it, on the
+    // lane side of it, with the pile in front of them
+    let at_the_wood = vec3(
+        (wood.min.x + wood.max.x) * 0.5,
+        door.y,
+        wood.max.z + CLEAR_OF,
+    );
+
+    vec![
+        // **One who keeps the door.** Out of the hall, up the lane to the
+        // store to the north, and back with whatever was in it. The longest
+        // stay is at the door, looking out at the climb, which is what spec
+        // 0055's one figure was doing standing still.
+        vec![
+            // off the middle line, because the lane you arrive along is
+            // the one place up here nobody may stand: spec 0056, and
+            // `tests::nothing_stands_in_the_way_in`
+            stop(vec3(yard, door.y, door.z + 2.4), -FRAC_PI_2, 7.0),
+            stop(
+                vec3(yard + 1.2, door.y, north.at.z - north.long * 0.5 - 2.0),
+                0.0,
+                0.0,
+            ),
+            stop(
+                vec3(north.at.x, door.y, north.at.z - north.long * 0.5 - CLEAR_OF),
+                0.0,
+                4.5,
+            ),
+            stop(
+                vec3(yard + 1.2, door.y, north.at.z - north.long * 0.5 - 2.0),
+                0.0,
+                0.0,
+            ),
+        ],
+        // **One who keeps the fire.** The pile is against the south store's
+        // gable and the ring is out in the lane, so this is the errand Jake
+        // named: from the house to the outside firepit and back for more
+        // wood, with something to see at both ends of it.
+        vec![
+            stop(at_the_wood, PI, 4.0),
+            stop(
+                vec3(fire.x + RING_WIDE * 3.0, door.y, fire.z - 4.0),
+                0.0,
+                0.0,
+            ),
+            // **Clear of the ring and not clear of its middle.** Standing
+            // `CLEAR_OF` from the middle of a fire 2.2 across puts a body
+            // in the coals, which is what `tests::nobody_walks_through_a_wall`
+            // said the first time this was written.
+            stop(
+                vec3(fire.x + RING_WIDE * 0.5 + CLEAR_OF, door.y, fire.z),
+                -FRAC_PI_2,
+                6.5,
+            ),
+            stop(
+                vec3(fire.x + RING_WIDE * 3.0, door.y, fire.z - 4.0),
+                0.0,
+                0.0,
+            ),
+        ],
+        // **And one round the back**, past the gable to the third store and
+        // round again. It is the only round that leaves the lane, and what
+        // it is for is that somebody is always arriving from somewhere you
+        // were not looking.
+        vec![
+            stop(
+                vec3(
+                    behind.at.x,
+                    door.y,
+                    behind.at.z + behind.long * 0.5 + CLEAR_OF,
+                ),
+                PI,
+                5.5,
+            ),
+            stop(vec3(middle.x - 2.0, door.y, middle.z - 7.5), 0.0, 0.0),
+            stop(vec3(yard + 0.5, door.y, middle.z - 6.0), -FRAC_PI_2, 4.0),
+            stop(vec3(middle.x - 2.0, door.y, middle.z - 7.5), 0.0, 0.0),
+        ],
     ]
+}
+
+/// Where the people stand when nothing is moving them, which is the first
+/// stop of each round.
+///
+/// Only the tests want it: what draws is `rounds` through `people::doing`.
+#[cfg(test)]
+pub fn people(reaches: f32) -> Vec<(Vec3, f32)> {
+    rounds(reaches)
+        .iter()
+        .filter_map(|round| round.first().map(|stop| (stop.at, stop.facing)))
+        .collect()
 }
 
 /// What you cannot walk through up here.
@@ -282,6 +496,15 @@ pub fn solid(reaches: f32, trail: &Trail) -> Vec<Aabb> {
     out.extend(hall_walls(reaches));
     out.push(floor(reaches));
     out.push(fire(reaches));
+    // the yard's fire and its wood, per spec 0067. A fire you can walk
+    // through is not a fire, and the ring is given the trench's own kerb
+    // height for the same reason the trench has one: below that `walk`
+    // rides over it and you stand in the coals.
+    out.push(Aabb::from_center_size(
+        ring(reaches) + Vec3::Y * FIRE_KERB * 0.5,
+        vec3(RING_WIDE, FIRE_KERB, RING_WIDE),
+    ));
+    out.push(pile(reaches));
     out.extend(posts(reaches));
     out.extend(ties(reaches));
     out.extend(benches(reaches));
@@ -1011,6 +1234,59 @@ mod tests {
         trail
     }
 
+    /// Spec 0067: nobody on a round walks through a wall.
+    ///
+    /// **Walked rather than measured**, which is this repo's own rule and
+    /// the reason the baths' steps passed four legal rises while being one
+    /// solid block. A stop that is clear and a stop after it that is clear
+    /// say nothing about the gable between them.
+    ///
+    /// So this samples the whole of every round, at a step shorter than a
+    /// body is wide, and asks the thing that actually stops you: whether a
+    /// body that size at that place overlaps anything solid up here.
+    #[test]
+    fn nobody_walks_through_a_wall() {
+        let solid = everything();
+        let body = vec3(
+            crate::RADIUS * 2.0,
+            crate::people::TALL,
+            crate::RADIUS * 2.0,
+        );
+
+        for (n, round) in rounds(REACHES).into_iter().enumerate() {
+            let whole: f32 = round
+                .iter()
+                .enumerate()
+                .map(|(i, stop)| {
+                    stop.stays
+                        + stop.at.distance(round[(i + 1) % round.len()].at) / crate::people::PACE
+                })
+                .sum();
+            let steps = (whole / 0.15).ceil() as usize;
+
+            for step in 0..steps {
+                let doing = crate::people::doing(&round, whole * step as f32 / steps as f32);
+                let stands =
+                    Aabb::from_center_size(doing.at + Vec3::Y * crate::people::TALL * 0.5, body);
+
+                for one in solid.iter() {
+                    // the ground they walk on is solid and is meant to be
+                    if one.max.y <= doing.at.y + 0.05 {
+                        continue;
+                    }
+
+                    assert!(
+                        !stands.intersects(one),
+                        "round {} is inside {:?} at {:?}",
+                        n,
+                        one,
+                        doing.at
+                    );
+                }
+            }
+        }
+    }
+
     /// Spec 0056: a hall in the sky over a field with no way up to it is
     /// worse than nothing, so it is there exactly when the bridge is.
     #[test]
@@ -1525,14 +1801,24 @@ mod tests {
             );
         }
 
-        for (where_, _) in people(REACHES) {
-            let off = (where_.z - middle.z).abs();
+        // **Every stop on every round, and not only where they begin.**
+        // Spec 0067 set them walking, so the first stop of a round is one
+        // of four places each of them stands. Crossing the lane is fine and
+        // is what a lane is for; standing in it is not.
+        for round in rounds(REACHES) {
+            for where_ in round
+                .iter()
+                .filter(|stop| stop.stays > 0.0)
+                .map(|stop| stop.at)
+            {
+                let off = (where_.z - middle.z).abs();
 
-            assert!(
-                off > crate::RADIUS || where_.x < door.x,
-                "somebody stands in the doorway at {:?}",
-                where_
-            );
+                assert!(
+                    off > crate::RADIUS || where_.x < door.x,
+                    "somebody stands in the doorway at {:?}",
+                    where_
+                );
+            }
         }
     }
 

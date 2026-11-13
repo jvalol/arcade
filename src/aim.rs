@@ -1235,6 +1235,44 @@ pub const FAR_TOWER: Vec4 = vec4(0.095, 0.115, 0.175, 1.0);
 
 /// them does not, so the stars burn and the sky stays blue.
 pub const NIGHT_BURNS: Vec3 = glam::vec3(1.70, 1.85, 2.60);
+/// The village out in the field, per spec 0068.
+///
+/// **Paler and warmer than the steading.** `VALHALLA_WALL` is a dark
+/// daubed brown, which is right for a longhouse under a storm at the top
+/// of a bridge. A pioneer cabin is sawn boards gone grey-gold in the sun,
+/// and the two places have to read as two places: the same brown twice
+/// would say the same builder made both.
+pub const VILLAGE_WALL: Vec4 = vec4(0.46, 0.385, 0.285, 1.0);
+
+/// And its roof, which is shingle rather than turf, so darker than the
+/// wall rather than the same colour in shadow.
+pub const VILLAGE_ROOF: Vec4 = vec4(0.27, 0.215, 0.165, 1.0);
+
+/// The sawn timber of its fittings: the wagons, the rail, the fences and
+/// the well's frame. One colour for all of them, because they are one
+/// kind of thing and a village whose cart is a different wood from its
+/// fence is a village somebody bought.
+pub const VILLAGE_TIMBER: Vec4 = vec4(0.38, 0.30, 0.215, 1.0);
+
+/// Its ironwork, which is the wheel rims, the pot and the well's chain.
+/// The beaten earth of its street, which is the one surface here that is
+/// neither grass nor timber.
+pub const VILLAGE_EARTH: Vec4 = vec4(0.235, 0.195, 0.145, 1.0);
+
+/// And a cabin's door, a shade darker than the boards round it so it reads
+/// as an opening rather than as a panel.
+pub const VILLAGE_DOOR: Vec4 = vec4(0.235, 0.175, 0.125, 1.0);
+
+pub const VILLAGE_IRON: Vec4 = vec4(0.115, 0.115, 0.125, 1.0);
+
+/// And the water in the trough and the well, which gives back the sky
+/// rather than having a colour of its own.
+pub const VILLAGE_WATER: Vec4 = vec4(0.13, 0.17, 0.21, 1.0);
+
+/// A horse. Two of them stand at the rail, per spec 0068.
+pub const HORSE_COAT: Vec4 = vec4(0.235, 0.145, 0.095, 1.0);
+pub const HORSE_MANE: Vec4 = vec4(0.09, 0.062, 0.045, 1.0);
+
 pub const VALHALLA_SPILL: Vec3 = glam::vec3(1.0, 0.72, 0.38);
 pub const VALHALLA_SPILL_LIT: f32 = 3.1;
 pub const VALHALLA_SPILL_REACH: f32 = 14.0;

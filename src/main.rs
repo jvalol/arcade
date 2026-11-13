@@ -42,6 +42,7 @@ mod tesseract;
 mod tour;
 mod trail;
 mod valhalla;
+mod village;
 mod walk;
 mod wrecker;
 
@@ -880,6 +881,8 @@ struct Arcade {
     gable: Option<MeshId>,
     /// One flame of the hall's fire. Spec 0060.
     hearth_flame: Option<MeshId>,
+    /// The pot over the village's cook fire, per spec 0068.
+    cook_pot: Option<MeshId>,
     granite: Option<TextureId>,
     standing_stone: Option<MeshId>,
     rubble_mound: Option<MeshId>,
@@ -1386,6 +1389,7 @@ impl Arcade {
             night: None,
             gable: None,
             hearth_flame: None,
+            cook_pot: None,
             granite: None,
             standing_stone: None,
             rubble_mound: None,
@@ -2692,6 +2696,14 @@ impl Arcade {
         }
 
         self.draw_bridge(scene);
+        // **Beside the bridge and not inside it.** Spec 0068's village is
+        // out in the field and nothing was answered to earn it, where
+        // `draw_bridge` returns at once until the trail is done. Put in
+        // there it drew nothing at all, and an empty field looks exactly
+        // like a village that was never pushed.
+        if let Some(cube) = self.cube {
+            self.draw_the_village(scene, cube);
+        }
     }
 
     /// The picture a tree's foliage wears, and the colour to draw it in.
@@ -3061,6 +3073,570 @@ impl Arcade {
     /// What is through the door at the top of it. Spec 0056.
     ///
     /// **Drawn with the bridge and on the same condition**, because a hall
+    /// The village out in the field. Spec 0068.
+    ///
+    /// **Drawn like the steading and not like a room.** Walls, two pitches
+    /// leaning on each other, one lit window apiece and a lamp behind it.
+    /// Nothing here is hollow: the hall at the top of the bridge is the one
+    /// building in this game you go into.
+    fn draw_the_village(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+
+        // the track and the common, which is what tells a street from a
+        // mown gap between two rows of cabins
+        for ground in [village::track(reaches), village::common(reaches)] {
+            scene.push_material(
+                cube,
+                &Transform::at(ground.center()).with_scale(ground.size()),
+                aim::VILLAGE_EARTH,
+                aim::MATTE,
+            );
+        }
+
+        for one in village::built(reaches) {
+            let walls = one.walls();
+
+            scene.push_material(
+                cube,
+                &Transform::at(walls.center()).with_scale(walls.size()),
+                aim::VILLAGE_WALL,
+                aim::MATTE,
+            );
+
+            // the roof, as two pitches leaning on each other
+            let rise = one.ridge - one.eaves;
+            let slope = (rise / (one.wide * 0.5)).atan();
+            let along = village::slope_run(&one);
+            let over = one.long * village::OVERSAILS;
+
+            for side in [-1.0f32, 1.0] {
+                let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+                let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
+                let middle = (eaves + ridge) * 0.5;
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(vec3(middle.x, middle.y, one.at.z))
+                        .with_rotation(glam::Quat::from_rotation_z(-side * slope))
+                        .with_scale(vec3(along * 1.04, 0.2, over * 2.0)),
+                    aim::VILLAGE_ROOF,
+                    aim::MATTE,
+                );
+            }
+        }
+
+        // the lamp inside each one, and the opening it shows through
+        for one in village::lamps(reaches) {
+            scene.push_light(blitzkit::lighting::PointLight::new(
+                one,
+                aim::VALHALLA_SPILL,
+                aim::VALHALLA_SPILL_LIT * 0.5,
+                aim::VALHALLA_SPILL_REACH * 0.7,
+            ));
+        }
+
+        for (at, looks) in village::windows(reaches) {
+            let across = if looks.x.abs() > 0.5 {
+                vec3(0.06, village::WINDOW_HIGH, village::WINDOW_WIDE)
+            } else {
+                vec3(village::WINDOW_WIDE, village::WINDOW_HIGH, 0.06)
+            };
+
+            scene.push_plain(
+                cube,
+                &Transform::at(at).with_scale(across),
+                garden::gives_off(aim::VALHALLA_LIT.truncate(), self.since).extend(1.0),
+            );
+        }
+
+        // a door apiece, on the face that looks at the street
+        for (at, looks) in village::doors(reaches) {
+            let across = if looks.x.abs() > 0.5 {
+                vec3(0.06, village::DOOR_HIGH, village::DOOR_WIDE)
+            } else {
+                vec3(village::DOOR_WIDE, village::DOOR_HIGH, 0.06)
+            };
+
+            scene.push_material(
+                cube,
+                &Transform::at(at + looks * 0.04).with_scale(across),
+                aim::VILLAGE_DOOR,
+                aim::MATTE,
+            );
+        }
+
+        self.draw_the_village_yard(scene, cube);
+        self.draw_the_village_horses(scene, cube);
+    }
+
+    /// Everything in the village that is not a building. Spec 0068.
+    ///
+    /// **This is the half that makes it a village.** Seven gabled boxes in
+    /// two rows is a camp; what tells somebody that people live here is the
+    /// cook fire, the water, the carts and the animals, which is the list
+    /// Jake gave and is also what the people's rounds are for.
+    fn draw_the_village_yard(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+
+        // the fire, stones and all, as the steading's is
+        for (at, round) in village::ring_stones(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(at)
+                    .with_rotation(glam::Quat::from_rotation_y(round))
+                    .with_scale(vec3(0.4, village::RING_HIGH, 0.32)),
+                aim::HEARTH_STONE,
+                aim::VOID,
+            );
+        }
+
+        let middle = village::ring(reaches);
+        scene.push_material(
+            cube,
+            &Transform::at(middle + Vec3::Y * 0.06).with_scale(vec3(
+                village::RING_WIDE * 0.46,
+                0.12,
+                village::RING_WIDE * 0.46,
+            )),
+            garden::gives_off(aim::HEARTH_COALS.truncate(), self.since).extend(1.0),
+            aim::VOID,
+        );
+
+        if let Some(flame) = self.hearth_flame {
+            for n in 0..village::RING_FLAMES {
+                let own = bridge::burning(self.since + n as f32 * 1.11);
+                let round = n as f32 / village::RING_FLAMES as f32 * std::f32::consts::TAU;
+                let out = village::RING_WIDE * 0.15;
+
+                scene.push_plain(
+                    flame,
+                    &Transform::at(vec3(
+                        middle.x + round.cos() * out,
+                        middle.y + 0.1,
+                        middle.z + round.sin() * out,
+                    ))
+                    .with_rotation(glam::Quat::from_rotation_y(own * 2.1))
+                    .with_scale(vec3(
+                        valhalla::FLAME_WIDE * 0.8,
+                        (0.22 + own * 0.18) * 0.9,
+                        valhalla::FLAME_WIDE * 0.8,
+                    )),
+                    garden::gives_off(aim::HEARTH_FIRE * own, self.since).extend(1.0),
+                );
+            }
+
+            let own = bridge::burning(self.since * 1.13);
+            scene.push_light(blitzkit::lighting::PointLight::new(
+                middle + Vec3::Y * 0.4,
+                aim::HEARTH_SHADE,
+                aim::HEARTH_LIT * (0.8 + own * 0.4),
+                aim::HEARTH_REACH,
+            ));
+        }
+
+        // the tripod over it, and the pot hanging in the smoke
+        for (foot, head) in village::tripod(reaches) {
+            let along = head - foot;
+            let lean = (along.x.hypot(along.z) / along.y).atan();
+            let round = along.x.atan2(along.z);
+
+            scene.push_material(
+                cube,
+                &Transform::at((foot + head) * 0.5)
+                    .with_rotation(
+                        glam::Quat::from_rotation_y(round) * glam::Quat::from_rotation_x(lean),
+                    )
+                    .with_scale(vec3(0.07, along.length(), 0.07)),
+                aim::VILLAGE_TIMBER,
+                aim::MATTE,
+            );
+        }
+
+        if let Some(pot) = self.cook_pot {
+            scene.push_material(
+                cube,
+                &Transform::at(middle + Vec3::Y * (village::POT_UP + 0.42))
+                    .with_scale(vec3(0.03, 0.5, 0.03)),
+                aim::VILLAGE_IRON,
+                aim::MATTE,
+            );
+            scene.push_material(
+                pot,
+                &Transform::at(middle + Vec3::Y * village::POT_UP)
+                    .with_scale(Vec3::splat(village::POT_WIDE)),
+                aim::VILLAGE_IRON,
+                aim::MATTE,
+            );
+        }
+
+        // the well: a kerb, two posts, a beam and a bucket
+        let one = village::well(reaches);
+        scene.push_material(
+            cube,
+            &Transform::at(one + Vec3::Y * village::WELL_HIGH * 0.5).with_scale(vec3(
+                village::WELL_WIDE,
+                village::WELL_HIGH,
+                village::WELL_WIDE,
+            )),
+            aim::HEARTH_STONE,
+            aim::MATTE,
+        );
+        scene.push_material(
+            cube,
+            &Transform::at(one + Vec3::Y * (village::WELL_HIGH + 0.01)).with_scale(vec3(
+                village::WELL_WIDE * 0.72,
+                0.04,
+                village::WELL_WIDE * 0.72,
+            )),
+            aim::VILLAGE_WATER,
+            aim::DULL,
+        );
+
+        for side in [-1.0f32, 1.0] {
+            scene.push_material(
+                cube,
+                &Transform::at(
+                    one + vec3(
+                        side * village::WELL_WIDE * 0.42,
+                        village::WELL_HIGH + 0.75,
+                        0.0,
+                    ),
+                )
+                .with_scale(vec3(0.1, 1.5, 0.1)),
+                aim::VILLAGE_TIMBER,
+                aim::MATTE,
+            );
+        }
+
+        scene.push_material(
+            cube,
+            &Transform::at(one + Vec3::Y * (village::WELL_HIGH + 1.52)).with_scale(vec3(
+                village::WELL_WIDE * 1.15,
+                0.12,
+                0.3,
+            )),
+            aim::VILLAGE_TIMBER,
+            aim::MATTE,
+        );
+
+        // the trough beside it, water and all
+        let trough = village::trough(reaches);
+        scene.push_material(
+            cube,
+            &Transform::at(trough.center()).with_scale(trough.size()),
+            aim::VILLAGE_TIMBER,
+            aim::MATTE,
+        );
+        scene.push_material(
+            cube,
+            &Transform::at(vec3(
+                trough.center().x,
+                trough.max.y - 0.06,
+                trough.center().z,
+            ))
+            .with_scale(vec3(
+                village::TROUGH_LONG * 0.86,
+                0.04,
+                village::TROUGH_WIDE * 0.7,
+            )),
+            aim::VILLAGE_WATER,
+            aim::DULL,
+        );
+
+        self.draw_the_village_carts(scene, cube);
+    }
+
+    /// The wagons, the hitching rail and the fences. Spec 0068.
+    ///
+    /// **A wheel is spokes and a rim, not a disc.** A cart with two discs
+    /// on it reads as a toy at any distance, and the spokes are what the
+    /// eye uses to tell a wheel from a wheel-shaped thing. Ten of them,
+    /// which is a wagon wheel; one with four is a cable drum.
+    fn draw_the_village_carts(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+
+        for (at, facing) in village::wagons(reaches) {
+            let turn = glam::Quat::from_rotation_y(facing);
+            let put = |off: Vec3| at + turn * off;
+
+            scene.push_material(
+                cube,
+                &Transform::at(put(Vec3::Y * village::WAGON_BED))
+                    .with_rotation(turn)
+                    .with_scale(vec3(village::WAGON_LONG, 0.16, village::WAGON_WIDE)),
+                aim::VILLAGE_TIMBER,
+                aim::MATTE,
+            );
+
+            // its sides and ends, which is what makes it a wagon and not a
+            // flat cart
+            for (off, size) in [
+                (
+                    vec3(0.0, 0.0, village::WAGON_WIDE * 0.5),
+                    vec3(village::WAGON_LONG, village::WAGON_SIDE, 0.1),
+                ),
+                (
+                    vec3(0.0, 0.0, -village::WAGON_WIDE * 0.5),
+                    vec3(village::WAGON_LONG, village::WAGON_SIDE, 0.1),
+                ),
+                (
+                    vec3(village::WAGON_LONG * 0.5, 0.0, 0.0),
+                    vec3(0.1, village::WAGON_SIDE, village::WAGON_WIDE),
+                ),
+                (
+                    vec3(-village::WAGON_LONG * 0.5, 0.0, 0.0),
+                    vec3(0.1, village::WAGON_SIDE, village::WAGON_WIDE),
+                ),
+            ] {
+                scene.push_material(
+                    cube,
+                    &Transform::at(put(
+                        off + Vec3::Y * (village::WAGON_BED + village::WAGON_SIDE * 0.5)
+                    ))
+                    .with_rotation(turn)
+                    .with_scale(size),
+                    aim::VILLAGE_TIMBER,
+                    aim::MATTE,
+                );
+            }
+
+            // the shafts, which say which end a horse goes at
+            for side in [-1.0f32, 1.0] {
+                scene.push_material(
+                    cube,
+                    &Transform::at(put(vec3(
+                        village::WAGON_LONG * 0.5 + 1.0,
+                        village::WAGON_BED * 0.72,
+                        side * village::WAGON_WIDE * 0.3,
+                    )))
+                    .with_rotation(turn * glam::Quat::from_rotation_z(0.12))
+                    .with_scale(vec3(2.1, 0.09, 0.09)),
+                    aim::VILLAGE_TIMBER,
+                    aim::MATTE,
+                );
+            }
+
+            // four wheels, each spokes and a rim
+            for along in [-1.0f32, 1.0] {
+                for side in [-1.0f32, 1.0] {
+                    let hub = put(vec3(
+                        along * village::WAGON_LONG * 0.36,
+                        village::WHEEL_WIDE * 0.5,
+                        side * (village::WAGON_WIDE * 0.5 + village::WHEEL_THICK),
+                    ));
+
+                    for n in 0..village::SPOKES {
+                        let round = n as f32 / village::SPOKES as f32 * std::f32::consts::PI;
+
+                        scene.push_material(
+                            cube,
+                            &Transform::at(hub)
+                                .with_rotation(turn * glam::Quat::from_rotation_x(round))
+                                .with_scale(vec3(
+                                    0.05,
+                                    village::WHEEL_WIDE * 0.92,
+                                    village::WHEEL_THICK * 0.5,
+                                )),
+                            aim::VILLAGE_TIMBER,
+                            aim::MATTE,
+                        );
+                    }
+
+                    for n in 0..village::SPOKES * 2 {
+                        let round = n as f32 / (village::SPOKES * 2) as f32 * std::f32::consts::TAU;
+                        let out = village::WHEEL_WIDE * 0.5;
+
+                        scene.push_material(
+                            cube,
+                            &Transform::at(
+                                hub + turn * vec3(round.cos() * out, round.sin() * out, 0.0),
+                            )
+                            .with_rotation(turn * glam::Quat::from_rotation_z(round))
+                            .with_scale(vec3(
+                                0.1,
+                                village::WHEEL_WIDE * 0.34,
+                                village::WHEEL_THICK,
+                            )),
+                            aim::VILLAGE_IRON,
+                            aim::MATTE,
+                        );
+                    }
+                }
+            }
+        }
+
+        // the hitching rail: two posts and a bar
+        let one = village::rail(reaches);
+        for side in [-1.0f32, 1.0] {
+            scene.push_material(
+                cube,
+                &Transform::at(
+                    one + vec3(
+                        side * village::RAIL_LONG * 0.5,
+                        village::RAIL_HIGH * 0.5,
+                        0.0,
+                    ),
+                )
+                .with_scale(vec3(0.14, village::RAIL_HIGH, 0.14)),
+                aim::VILLAGE_TIMBER,
+                aim::MATTE,
+            );
+        }
+
+        scene.push_material(
+            cube,
+            &Transform::at(one + Vec3::Y * (village::RAIL_HIGH - 0.12)).with_scale(vec3(
+                village::RAIL_LONG,
+                village::RAIL_THICK,
+                village::RAIL_THICK,
+            )),
+            aim::VILLAGE_TIMBER,
+            aim::MATTE,
+        );
+
+        // and the fences between the cabins
+        for (from, to) in village::fences(reaches) {
+            let run = to - from;
+            let posts = (run.length() / village::FENCE_POSTS).ceil().max(1.0) as usize;
+
+            for rail in [0.35f32, 0.72] {
+                scene.push_material(
+                    cube,
+                    &Transform::at((from + to) * 0.5 + Vec3::Y * village::FENCE_HIGH * rail)
+                        .with_scale(vec3(run.length(), 0.08, 0.06)),
+                    aim::VILLAGE_TIMBER,
+                    aim::MATTE,
+                );
+            }
+
+            for n in 0..=posts {
+                let at = from + run * (n as f32 / posts as f32);
+
+                scene.push_material(
+                    cube,
+                    &Transform::at(at + Vec3::Y * village::FENCE_HIGH * 0.5).with_scale(vec3(
+                        0.1,
+                        village::FENCE_HIGH,
+                        0.1,
+                    )),
+                    aim::VILLAGE_TIMBER,
+                    aim::MATTE,
+                );
+            }
+        }
+    }
+
+    /// The horses at the rail. Spec 0068.
+    ///
+    /// **Boxes and turned lumps, like the people are.** Spec 0033 settled
+    /// that the figures in this building have no faces and read anyway,
+    /// because what makes a body read is where the colour changes and how
+    /// the parts are proportioned. A horse is the same argument with four
+    /// legs: a barrel, a neck that leans, a head on the end of it and a
+    /// tail, and nothing finer than that.
+    ///
+    /// They stand. Spec 0067's gait is a two-legged walk and a horse that
+    /// used it would be a person on all fours.
+    fn draw_the_village_horses(&self, scene: &mut Scene, cube: MeshId) {
+        let reaches = self.room.reaches;
+
+        for (at, facing) in village::horses(reaches) {
+            // **A quarter turn off the facing.** The body is built along
+            // its own +x and a facing of `f` in this building looks down
+            // `(sin f, 0, -cos f)`, so the two are ninety degrees apart:
+            // written straight, both animals stood broadside to the rail
+            // they were supposed to be tied to.
+            let turn = glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2 - facing);
+            let put = |off: Vec3| at + turn * off;
+            // **Leaned about z and not about x.** A horse's forward here
+            // is its own +x, so a turn about x tips it sideways: the first
+            // build had two animals with their necks lolling off one
+            // shoulder, which from behind read as a pair of benches.
+            // Negative leans the top of a piece forward.
+            let piece = |scene: &mut Scene, off: Vec3, size: Vec3, lean: f32, colour| {
+                scene.push_material(
+                    cube,
+                    &Transform::at(put(off))
+                        .with_rotation(turn * glam::Quat::from_rotation_z(lean))
+                        .with_scale(size),
+                    colour,
+                    aim::MATTE,
+                );
+            };
+
+            // the barrel, hung between the back and the belly
+            piece(
+                scene,
+                Vec3::Y * (village::HORSE_BELLY + village::HORSE_DEEP * 0.5),
+                vec3(
+                    village::HORSE_LONG,
+                    village::HORSE_DEEP,
+                    village::HORSE_WIDE,
+                ),
+                0.0,
+                aim::HORSE_COAT,
+            );
+
+            // four legs, standing on the ground and reaching the belly
+            for along in [-1.0f32, 1.0] {
+                for side in [-1.0f32, 1.0] {
+                    piece(
+                        scene,
+                        vec3(
+                            along * village::HORSE_LONG * 0.34,
+                            village::HORSE_BELLY * 0.5,
+                            side * village::HORSE_WIDE * 0.3,
+                        ),
+                        vec3(0.14, village::HORSE_BELLY + 0.1, 0.14),
+                        0.0,
+                        aim::HORSE_COAT,
+                    );
+                }
+            }
+
+            // the neck, rising forward off the shoulder to where the head
+            // is carried
+            let shoulder = vec3(village::HORSE_LONG * 0.4, village::HORSE_BACK - 0.1, 0.0);
+            let head = vec3(village::HORSE_LONG * 0.62, village::HORSE_HEAD, 0.0);
+            let rises = head - shoulder;
+            let lean = -rises.x.atan2(rises.y);
+
+            piece(
+                scene,
+                (shoulder + head) * 0.5,
+                vec3(0.26, rises.length() * 1.15, 0.3),
+                lean,
+                aim::HORSE_COAT,
+            );
+
+            // the head on the end of it, dropped toward whatever it is
+            // standing at
+            piece(
+                scene,
+                head + vec3(0.22, -0.06, 0.0),
+                vec3(0.52, 0.21, 0.21),
+                -1.35,
+                aim::HORSE_COAT,
+            );
+
+            // the mane down the back of the neck, and a tail off the rump
+            piece(
+                scene,
+                (shoulder + head) * 0.5 - vec3(0.13, 0.0, 0.0),
+                vec3(0.1, rises.length() * 1.1, 0.2),
+                lean,
+                aim::HORSE_MANE,
+            );
+            piece(
+                scene,
+                vec3(-village::HORSE_LONG * 0.5, village::HORSE_BACK - 0.3, 0.0),
+                vec3(0.11, 0.66, 0.14),
+                0.3,
+                aim::HORSE_MANE,
+            );
+        }
+    }
+
     /// in the sky above a field with no way up to it is worse than nothing.
     fn draw_valhalla(&self, scene: &mut Scene, cube: MeshId) {
         let reaches = self.room.reaches;
@@ -3139,6 +3715,86 @@ impl Arcade {
         }
 
         self.draw_the_hall(scene, cube);
+
+        // **The fire in the lane and the wood that feeds it.** Spec 0067.
+        // These are what the people's rounds are for: an errand with
+        // nothing at either end of it is a figure on a track.
+        for (at, round) in valhalla::ring_stones(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(at)
+                    .with_rotation(glam::Quat::from_rotation_y(round))
+                    .with_scale(vec3(0.42, valhalla::RING_HIGH, 0.34)),
+                aim::HEARTH_STONE,
+                aim::VOID,
+            );
+        }
+
+        if let Some(flame) = self.hearth_flame {
+            let middle = valhalla::ring(reaches);
+            // a bed of coals under it, as the hall's trench has
+            scene.push_material(
+                cube,
+                &Transform::at(middle + Vec3::Y * 0.07).with_scale(vec3(
+                    valhalla::RING_WIDE * 0.46,
+                    0.14,
+                    valhalla::RING_WIDE * 0.46,
+                )),
+                garden::gives_off(aim::HEARTH_COALS.truncate(), self.since).extend(1.0),
+                aim::VOID,
+            );
+
+            // **Three flames and not one.** One is a cone and reads as a
+            // cone; the hall's trench learnt this at sixteen metres and a
+            // yard fire is the same lesson at two.
+            for n in 0..valhalla::RING_FLAMES {
+                let own = bridge::burning(self.since + n as f32 * 1.31);
+                let (aside, size) = valhalla::flame_sits(n + 3);
+                let round = n as f32 / valhalla::RING_FLAMES as f32 * std::f32::consts::TAU;
+                let out = valhalla::RING_WIDE * 0.16;
+
+                scene.push_plain(
+                    flame,
+                    &Transform::at(vec3(
+                        middle.x + round.cos() * out + aside * 0.1,
+                        middle.y + 0.12,
+                        middle.z + round.sin() * out,
+                    ))
+                    .with_rotation(glam::Quat::from_rotation_y(own * 2.1))
+                    .with_scale(vec3(
+                        valhalla::FLAME_WIDE * size,
+                        (0.26 + own * 0.2) * size,
+                        valhalla::FLAME_WIDE * size,
+                    )),
+                    garden::gives_off(aim::HEARTH_FIRE * own, self.since).extend(1.0),
+                );
+            }
+
+            // and the light it throws into the lane, which is what puts
+            // the people walking past it in front of something
+            let own = bridge::burning(self.since * 1.07);
+            scene.push_light(blitzkit::lighting::PointLight::new(
+                middle + Vec3::Y * 0.45,
+                aim::HEARTH_SHADE,
+                aim::HEARTH_LIT * (0.8 + own * 0.4),
+                aim::HEARTH_REACH,
+            ));
+        }
+
+        for (at, turn) in valhalla::logs(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(at)
+                    .with_rotation(glam::Quat::from_rotation_z(turn))
+                    .with_scale(vec3(
+                        (valhalla::PILE_LONG / 6.0) * 0.92,
+                        (valhalla::PILE_HIGH / 5.0) * 0.86,
+                        valhalla::PILE_DEEP * 0.9,
+                    )),
+                aim::VALHALLA_ROOF,
+                aim::VOID,
+            );
+        }
 
         // and what those openings throw, which is the whole of why they
         // are openings. One light a building rather than one a window:
@@ -3224,6 +3880,9 @@ impl Arcade {
         out.extend(bridge::solid(self.room.reaches, &self.trail));
         out.extend(gate::solid(self.room.reaches, &self.trail, self.gate));
         out.extend(valhalla::solid(self.room.reaches, &self.trail));
+        // and spec 0068's village, which is out in the field and so is there
+        // whatever the trail says: nothing was answered to earn it
+        out.extend(village::solid(self.room.reaches));
 
         out
     }
@@ -3924,18 +4583,53 @@ impl Arcade {
             );
 
             // and whoever is already up there. Spec 0056: a few, and none
-            // of them fighting.
-            for (n, (at, facing)) in valhalla::people(reaches).into_iter().enumerate() {
+            // of them fighting. Spec 0067: and going about something, which
+            // is what makes a steading read as lived in rather than as a
+            // set. Each has a round and `people::doing` says where that
+            // puts them now.
+            //
+            // **Off their own clock and not the sky's.** `since` is what
+            // the weather and the sun run on; a round wants the same number
+            // so a picture pinned at an hour puts everybody back where they
+            // were, and nothing here is stepped forward.
+            for (n, round) in valhalla::rounds(reaches).into_iter().enumerate() {
+                // started apart, so three rounds of nearly a length are not
+                // three people moving together
+                let doing = people::doing(&round, self.since + n as f32 * 4.3);
+
                 stand(
-                    at,
+                    doing.at,
                     glam::Quat::IDENTITY,
-                    facing,
-                    None,
+                    doing.facing,
+                    doing.walked,
                     n,
                     people::Look::Einherjar,
                     false,
                 );
             }
+        }
+
+        // **And the village out in the field.** Spec 0068, on spec 0067's
+        // rounds. Not inside `bridge::shows`, because nothing was answered
+        // to earn this place: it is there from the first second.
+        //
+        // `Look::Guest` rather than the carved kit the steading wears. The
+        // ones at the top of the climb are carved because spec 0055 wanted
+        // a little style on them and because a carved thing has no face by
+        // nature. These are people living in a village and the plain body
+        // is what says so.
+        for (n, round) in village::rounds(reaches).into_iter().enumerate() {
+            let doing = people::doing(&round, self.since + n as f32 * 5.7);
+
+            stand(
+                doing.at,
+                glam::Quat::IDENTITY,
+                doing.facing,
+                doing.walked,
+                n + 3,
+                people::Look::Guest,
+                false,
+            );
         }
 
         // **And you, in the glass.** Spec 0061.
@@ -6634,6 +7328,7 @@ impl Game for Arcade {
         self.night = Some(renderer.add_texture(&valhalla::night_sky()));
         self.gable = Some(renderer.add_mesh(&valhalla::gable_mesh()));
         self.hearth_flame = Some(renderer.add_mesh(&valhalla::flame_mesh()));
+        self.cook_pot = Some(renderer.add_mesh(&village::pot_mesh()));
         self.granite = Some(renderer.add_texture(&garden::granite(bridge::STONE_SEED)));
         // out of round, like the garden's set stones, and squashed thin by
         // the transform so the carved face is near enough flat to cut
@@ -14459,6 +15154,113 @@ mod tests {
                 standing_when(at, look, false, Some(since)),
             );
         }
+    }
+
+    /// Spec 0068: the village out in the field, down its own street.
+    ///
+    /// **From the east end looking west**, which is how you arrive: the
+    /// garden is east of it and the barn closes the far end, so what the
+    /// frame holds is the whole length of the thing.
+    #[test]
+    fn the_village_is_drawn() {
+        let reaches = reaches();
+        let middle = village::at(reaches);
+        let since = garden::under(0.28, "fair").expect("no fair afternoon in a fortnight");
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("village"),
+            (WIDE, TALL),
+            standing_when(
+                vec3(middle.x + 17.0, 0.0, middle.z + 2.6),
+                vec3(middle.x - 14.0, EYE - 0.3, middle.z + 1.0),
+                false,
+                Some(since),
+            ),
+        );
+    }
+
+    /// Spec 0068: the common, which is the cook fire and the pot over it.
+    #[test]
+    fn the_village_common_is_drawn() {
+        let reaches = reaches();
+        let fire = village::ring(reaches);
+        let since = garden::under(0.42, "fair").expect("no fair evening in a fortnight");
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("village-common"),
+            (WIDE, TALL),
+            standing_when(
+                vec3(fire.x + 7.0, 0.0, fire.z + 3.5),
+                vec3(fire.x, 1.0, fire.z),
+                false,
+                Some(since),
+            ),
+        );
+    }
+
+    /// Spec 0068: the hitching rail, with the horses at it.
+    ///
+    /// **Because a horse is the one thing here that is not a box on a
+    /// box.** If it reads as a dog or as a table this is where that shows.
+    #[test]
+    fn the_village_horses_are_drawn() {
+        let reaches = reaches();
+        let rail = village::rail(reaches);
+        let since = garden::under(0.3, "fair").expect("no fair afternoon in a fortnight");
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("village-horses"),
+            (WIDE, TALL),
+            standing_when(
+                vec3(rail.x + 8.0, 0.0, rail.z + 1.3),
+                vec3(rail.x, 1.1, rail.z + 1.3),
+                false,
+                Some(since),
+            ),
+        );
+    }
+
+    /// Spec 0067: the steading, with its people out on their rounds.
+    ///
+    /// **Pinned at a second where somebody is walking.** A round is mostly
+    /// standing, which is what a round is, so a picture taken at nought is
+    /// three figures on their marks and holds nothing about the walking.
+    #[test]
+    fn the_steading_is_lived_in() {
+        let reaches = reaches();
+        let (door, _, _) = valhalla::doorway(reaches);
+        let middle = valhalla::at(reaches);
+        let rounds = valhalla::rounds(reaches);
+
+        // **The three wants do not divide**, so the second is looked for
+        // rather than worked out: a day is 20 seconds, a round is nearer
+        // 25, and what this picture needs is a fair sky, a daylight hour
+        // and somebody mid-stride all at once.
+        let since = (0..20_000)
+            .map(|n| n as f32 * 0.05)
+            .find(|since| {
+                let hour = garden::hour(*since);
+
+                (0.2..0.4).contains(&hour)
+                    && garden::weather(*since).name == "fair"
+                    && rounds.iter().enumerate().any(|(n, round)| {
+                        people::doing(round, since + n as f32 * 4.3)
+                            .walked
+                            .is_some()
+                    })
+            })
+            .expect("no fair afternoon with anybody walking in a thousand seconds");
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("steading"),
+            (WIDE, TALL),
+            standing_when(
+                vec3(door.x + 8.0, door.y, middle.z + 9.0),
+                vec3(door.x + 2.0, door.y + EYE, middle.z - 6.0),
+                true,
+                Some(since),
+            ),
+        );
     }
 
     /// Spec 0027: the baths, from the corner by the tub, down the pool.

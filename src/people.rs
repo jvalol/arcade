@@ -638,8 +638,313 @@ pub fn elbow(walked: f32, leg: usize) -> f32 {
     }
 }
 
+use std::f32::consts::{PI, TAU};
+
+use glam::Vec3;
+
+// --- somebody with somewhere to be, per spec 0067 ---------------------------
+
+/// How fast somebody walks, in metres a second.
+///
+/// **Slower than you.** The guest runs at `crate::RUNS` and walks at
+/// `crate::WALKS`, and a villager crossing a yard is doing neither: this is
+/// an errand rather than a journey. Measured against the gait rather than
+/// chosen, which is the trap `STEP` records: at 1.1 a stride is 1.27 seconds
+/// and the feet read as walking rather than as a wind-up toy.
+pub const PACE: f32 = 1.1;
+
+/// How long somebody takes to turn on the spot, in seconds.
+///
+/// **Because arriving is where a figure stops being a person.** Without it a
+/// villager walks up to the fire facing the way it came and is facing the
+/// fire on the next frame, which is the one thing in a walk cycle that no
+/// amount of leg work survives. The turn is eased at both ends and taken the
+/// short way round.
+pub const TURNS_IN: f32 = 0.7;
+
+/// One stop on a round: where to stand, which way to face while there, and
+/// how long to stay.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Stop {
+    pub at: Vec3,
+    pub facing: f32,
+    pub stays: f32,
+}
+
+/// Where somebody on a round is at a given moment.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Doing {
+    pub at: Vec3,
+    pub facing: f32,
+    /// How far they have walked in all, which is what the gait runs on, or
+    /// `None` while they are standing still.
+    pub walked: Option<f32>,
+}
+
+/// Which way `from` has to turn to be facing `to`, the short way round.
+///
+/// **Its own function because the long way round is the obvious bug.** A
+/// figure at 3.0 radians asked to face -3.0 turns through nearly a whole
+/// circle rather than through the 0.28 that is actually between them.
+pub fn shortest_turn(from: f32, to: f32) -> f32 {
+    (to - from + PI).rem_euclid(TAU) - PI
+}
+
+/// Where somebody is, somewhere in a round that loops for ever. Spec 0067.
+///
+/// **Arithmetic and not a simulation**, like the strikes, the koi and the
+/// moon. Nothing here is stepped forward and nothing is remembered: hand it
+/// the round and the clock and it says where that body is. What it buys is
+/// that a frame can be drawn at any `since` at all, which is what every
+/// picture in this repo does.
+///
+/// **A round begins standing.** `walked` runs on across the whole round so
+/// the gait never jumps mid-stride, and it starts again at nought when the
+/// round comes round. That is only invisible because the first thing on a
+/// round is a stop, where the legs are still anyway, and a round that opened
+/// with a walk would snap there once a loop.
+///
+/// An empty round leaves them at the origin, which is a round nobody wrote
+/// rather than a place.
+pub fn doing(round: &[Stop], since: f32) -> Doing {
+    let Some(first) = round.first() else {
+        return Doing {
+            at: Vec3::ZERO,
+            facing: 0.0,
+            walked: None,
+        };
+    };
+
+    // each stop, then the walk from it to the next
+    let legs: Vec<(f32, f32)> = round
+        .iter()
+        .enumerate()
+        .map(|(n, stop)| {
+            let next = round[(n + 1) % round.len()];
+
+            (stop.stays, stop.at.distance(next.at) / PACE)
+        })
+        .collect();
+    let whole: f32 = legs.iter().map(|(a, b)| a + b).sum();
+
+    if whole <= 0.0 {
+        return Doing {
+            at: first.at,
+            facing: first.facing,
+            walked: None,
+        };
+    }
+
+    let mut left = since.rem_euclid(whole);
+    let mut walked = 0.0;
+
+    for (n, (stays, takes)) in legs.iter().copied().enumerate() {
+        let stop = round[n];
+        let next = round[(n + 1) % round.len()];
+        let way = next.at - stop.at;
+        let goes = if way.length_squared() > 1e-8 {
+            way.x.atan2(-way.z)
+        } else {
+            stop.facing
+        };
+
+        if left < stays {
+            // **Standing, and turning at both ends of it.** The way in is
+            // whichever way they came, which is the leg before this one, and
+            // the way out is the one they are about to take.
+            let before = round[(n + round.len() - 1) % round.len()];
+            let came = next_way(before.at, stop.at, stop.facing);
+            let facing = if left < TURNS_IN && stays > TURNS_IN * 2.0 {
+                turned(came, stop.facing, left / TURNS_IN)
+            } else if left > stays - TURNS_IN && stays > TURNS_IN * 2.0 {
+                turned(stop.facing, goes, (left - (stays - TURNS_IN)) / TURNS_IN)
+            } else {
+                stop.facing
+            };
+
+            return Doing {
+                at: stop.at,
+                facing,
+                walked: None,
+            };
+        }
+
+        left -= stays;
+
+        if left < takes {
+            let share = if takes > 0.0 { left / takes } else { 0.0 };
+
+            return Doing {
+                at: stop.at + way * share,
+                facing: goes,
+                walked: Some(walked + way.length() * share),
+            };
+        }
+
+        left -= takes;
+        walked += way.length();
+    }
+
+    Doing {
+        at: first.at,
+        facing: first.facing,
+        walked: None,
+    }
+}
+
+/// Which way a walk from `from` to `to` points, or `spare` if it is no walk
+/// at all.
+fn next_way(from: Vec3, to: Vec3, spare: f32) -> f32 {
+    let way = to - from;
+
+    if way.length_squared() > 1e-8 {
+        way.x.atan2(-way.z)
+    } else {
+        spare
+    }
+}
+
+/// An eased turn from one facing to another, the short way round.
+fn turned(from: f32, to: f32, share: f32) -> f32 {
+    let t = share.clamp(0.0, 1.0);
+
+    from + shortest_turn(from, to) * (t * t * (3.0 - 2.0 * t))
+}
+
 #[cfg(test)]
 mod tests {
+
+    // --- spec 0067: somebody with somewhere to be -------------------------
+
+    fn a_round() -> Vec<Stop> {
+        vec![
+            Stop {
+                at: Vec3::ZERO,
+                facing: 0.0,
+                stays: 4.0,
+            },
+            Stop {
+                at: glam::vec3(6.0, 0.0, 0.0),
+                facing: 1.0,
+                stays: 3.0,
+            },
+            // a corner, walked straight through
+            Stop {
+                at: glam::vec3(6.0, 0.0, -5.0),
+                facing: 2.0,
+                stays: 0.0,
+            },
+        ]
+    }
+
+    /// How long one loop of a round takes.
+    fn whole(round: &[Stop]) -> f32 {
+        round
+            .iter()
+            .enumerate()
+            .map(|(n, stop)| stop.stays + stop.at.distance(round[(n + 1) % round.len()].at) / PACE)
+            .sum()
+    }
+
+    /// Spec 0067: a round comes round.
+    #[test]
+    fn a_round_comes_round() {
+        let round = a_round();
+        let loops = whole(&round);
+
+        for n in 0..50 {
+            let t = n as f32 / 50.0 * loops;
+            let (now, again) = (doing(&round, t), doing(&round, t + loops));
+
+            assert!(
+                now.at.distance(again.at) < 1e-3,
+                "at {:.2} they are at {:?} and a round later at {:?}",
+                t,
+                now.at,
+                again.at
+            );
+        }
+    }
+
+    /// Spec 0067: the legs run while walking and not while standing.
+    ///
+    /// **Both ways round.** A gait that is always on is a figure marching on
+    /// the spot, and one that is never on is what this spec was written to
+    /// replace, and either passes half of this on its own.
+    #[test]
+    fn the_legs_run_only_while_walking() {
+        let round = a_round();
+        let loops = whole(&round);
+        let (mut still, mut going) = (0, 0);
+
+        for n in 0..400 {
+            let t = n as f32 / 400.0 * loops;
+            let doing = doing(&round, t);
+            // where they are a blink later says which they are doing, off
+            // the positions rather than off the thing under test
+            let moved = doing.at.distance(super::doing(&round, t + 0.01).at);
+
+            if moved > 1e-4 {
+                going += 1;
+                assert!(doing.walked.is_some(), "no gait while walking at {:.2}", t);
+            } else {
+                still += 1;
+                assert!(doing.walked.is_none(), "a gait while standing at {:.2}", t);
+            }
+        }
+
+        assert!(still > 20 && going > 20, "{} still, {} going", still, going);
+    }
+
+    /// Spec 0067: a turn goes the short way round.
+    #[test]
+    fn a_turn_goes_the_short_way() {
+        for (from, to, want) in [
+            (3.0f32, -3.0f32, 0.283_185_3f32),
+            (-3.0, 3.0, -0.283_185_3),
+            (0.0, 1.0, 1.0),
+            (0.0, -1.0, -1.0),
+        ] {
+            let got = shortest_turn(from, to);
+
+            assert!(
+                (got - want).abs() < 1e-4,
+                "{} to {} turned by {} and not {}",
+                from,
+                to,
+                got,
+                want
+            );
+        }
+    }
+
+    /// Spec 0067: nobody teleports.
+    ///
+    /// **The one a corner could break.** A stay of nought is walked straight
+    /// through, and a corner handled by skipping the leg rather than by
+    /// walking it would put somebody at the far end of it in one frame.
+    #[test]
+    fn nobody_moves_faster_than_they_walk() {
+        let round = a_round();
+        let loops = whole(&round);
+        let step = loops / 2_000.0;
+
+        for n in 1..2_000 {
+            let (was, now) = (
+                doing(&round, step * (n - 1) as f32),
+                doing(&round, step * n as f32),
+            );
+            let moved = was.at.distance(now.at);
+
+            assert!(
+                moved <= PACE * step * 1.01,
+                "they moved {:.4} in {:.4} seconds, which is {:.2} a second",
+                moved,
+                step,
+                moved / step
+            );
+        }
+    }
     /// Spec 0055: the horn is the watchman's and nobody else's.
     ///
     /// **Because every one of them had it.** The ones already in Valhalla

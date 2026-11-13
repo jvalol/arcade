@@ -587,7 +587,7 @@ pub fn trees(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         // stone stands. This list has only ever kept trees out of the
         // building, so one grew through the runestone and the low stretch
         // of the deck ran through whatever was sown under it.
-        if crate::bridge::shades(reaches, at) {
+        if crate::bridge::shades(reaches, at) || crate::village::shades(reaches, at) {
             continue;
         }
 
@@ -613,6 +613,13 @@ pub fn cover(reaches: f32, cell: (i32, i32)) -> Vec<Stood> {
         let size = 0.7 + rolls.next() * 0.7;
 
         if !open(reaches, at) {
+            continue;
+        }
+
+        // and not inside spec 0068's village, where flowers growing
+        // through a cart's bed is what a field does to anything standing
+        // on it that it was not told about
+        if crate::village::shades(reaches, at) {
             continue;
         }
 
