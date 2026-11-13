@@ -764,6 +764,7 @@ struct Arcade {
     /// A pocket's net. Spec 0007.
     bag: Option<MeshId>,
     baluster: Option<MeshId>,
+    column: Option<MeshId>,
     /// The turned pieces in the baths. Spec 0008.
     urn: Option<MeshId>,
     sconce: Option<MeshId>,
@@ -1303,6 +1304,7 @@ impl Arcade {
             },
             bag: None,
             baluster: None,
+            column: None,
             urn: None,
             sconce: None,
             basin: None,
@@ -6407,6 +6409,7 @@ impl Game for Arcade {
             Some(renderer.add_mesh(&cellar::turned(people::SIDES, 8, people::shin_profile)));
         self.bag = Some(renderer.add_mesh(&cellar::bag_mesh()));
         self.baluster = Some(renderer.add_mesh(&glass::baluster_mesh()));
+        self.column = Some(renderer.add_mesh(&glass::column_mesh()));
         self.urn = Some(renderer.add_mesh(&spa::urn_mesh()));
         self.sconce = Some(renderer.add_mesh(&spa::sconce_mesh()));
         self.basin = Some(renderer.add_mesh(&spa::basin_mesh()));
@@ -7842,10 +7845,13 @@ impl Game for Arcade {
                 scene,
                 &self.room,
                 self.since,
-                cube,
-                seen.then_some(self.globe_mesh).flatten(),
-                self.baluster,
-                self.sconce,
+                glass::Meshes {
+                    cube,
+                    sphere: seen.then_some(self.globe_mesh).flatten(),
+                    baluster: self.baluster,
+                    sconce: self.sconce,
+                    column: self.column,
+                },
             );
         }
         self.draw_the_people(scene);

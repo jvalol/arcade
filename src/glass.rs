@@ -689,11 +689,7 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
     // is a frame the sphere cannot see. The first build of this room had
     // them drawn, and the ball came back as three flat bands of floor, wall
     // and ceiling, which is the thing the colonnade exists to stop.
-    out.extend(
-        frames(reaches)
-            .into_iter()
-            .map(|(at, size)| Aabb::new(at - size * 0.5, at + size * 0.5)),
-    );
+    out.extend(column_boxes(reaches).into_iter().map(|(box_, _)| box_));
     out.extend(
         lamps(reaches)
             .into_iter()
@@ -844,12 +840,27 @@ pub fn traced(room: &crate::room::Room, since: f32) -> Vec<Traced> {
     // ambient, which is what a window looks like from inside a marble. The
     // list stays exactly `solid` and `lids`, which
     // `it_traces_the_building_itself` holds.
+    let named = named(room.reaches);
+    let round: Vec<Aabb> = column_boxes(room.reaches)
+        .into_iter()
+        .filter(|(_, round)| *round)
+        .map(|(box_, _)| box_)
+        .collect();
+
     for box_ in room.solid().into_iter().chain(room.lids()) {
         if box_.center().distance(ball) > SEES {
             continue;
         }
 
-        out.push(Traced::new(box_, colour(box_, ball.y, since)));
+        let said = colour(box_, &named, ball.y, since);
+
+        // **The colonnade is turned and the glass can say so now**, per the
+        // engine's spec 0098. What a body walks into is still the box.
+        out.push(if round.contains(&box_) {
+            Traced::round(box_, said)
+        } else {
+            Traced::new(box_, said)
+        });
     }
 
     out
@@ -869,13 +880,56 @@ pub fn traced(room: &crate::room::Room, since: f32) -> Vec<Traced> {
 /// a frame's colour and the trace did not, so the colonnade was the wall's
 /// own colour inside the glass and the ball came back as a flat grey disc.
 /// The whole point of the room is that the frames read in it.
-fn colour(box_: Aabb, up: f32, since: f32) -> glam::Vec4 {
+/// The pieces of this room whose colour no shape can tell.
+///
+/// **`colour` reads a box's shape, and that is right for a room of walls,
+/// floors and columns.** It cannot tell timber from stone: the balustrade
+/// is a run of upright boxes a column's width, so the glass showed Jake a
+/// stone handrail over a timber one, and a tread is a tall slab, which that
+/// function calls a wall.
+///
+/// **Not a second account.** The objection to a list of what things are
+/// made of is that it drifts from the thing it describes. These boxes are
+/// `guard` and `treads` themselves, asked by name, so there is nothing here
+/// to drift.
+pub fn named(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
+    // **The blocks at a column's ends, which shape gets badly wrong.** An
+    // abacus is a flat wide box over your head, which `colour` calls a
+    // ceiling, so the glass put a dark slab on top of every column while
+    // the room had a pale capital. The plinth under it came out as floor
+    // for the same reason. Jake went up to the ball and said there is
+    // something dark at the top.
+    column_boxes(reaches)
+        .into_iter()
+        .filter(|(_, round)| !*round)
+        .map(|(box_, _)| (box_, crate::aim::GLASS_TRIM))
+        .chain(
+            guard(reaches)
+                .into_iter()
+                .map(|box_| (box_, crate::aim::GLASS_STRING)),
+        )
+        .chain(
+            treads(reaches)
+                .into_iter()
+                .map(|box_| (box_, crate::aim::GLASS_PIER)),
+        )
+        .collect()
+}
+
+fn colour(box_: Aabb, named: &[(Aabb, glam::Vec4)], up: f32, since: f32) -> glam::Vec4 {
+    if let Some((_, said)) = named.iter().find(|(one, _)| *one == box_) {
+        return *said;
+    }
+
     let size = box_.size();
     let flat = size.y < 0.5 && size.x.min(size.z) > 0.5;
 
     if (size - LAMP).abs().max_element() < 1e-3 {
         lit(since)
-    } else if size.y > 1.0 && size.x.max(size.z) <= FRAME_DEEP.max(FRAME_WIDE) + 1e-3 {
+    } else if size.y > 0.2 && size.x.max(size.z) <= FRAME_DEEP.max(FRAME_WIDE) + ABACUS_OUT * 2.0 {
+        // **A column is a stack of short bands now, not one tall box.** The
+        // height this asked for was a metre, which was right while a shaft
+        // was one box and calls every band of a turned one a wall.
         crate::aim::GLASS_PIER
     } else if flat && box_.center().y > up {
         crate::aim::GLASS_CEIL
@@ -943,6 +997,127 @@ pub fn stair_lamps(reaches: f32) -> Vec<Vec3> {
         .map(|at| at + Vec3::Y * 0.04)
         .collect()
 }
+
+/// One column of the colonnade, turned.
+///
+/// **A box with two bands on it is a pier, and this room wanted a
+/// colonnade.** Jake, 2026-11-12: *the room should be more ornate and
+/// decorated.* The lathe has been in this building since the cellar's
+/// barrels and it is what the difference is made of.
+///
+/// Tuscan, roughly: a torus at the foot, a shaft with a little entasis so
+/// it is not a tube, a necking, and an echinus flaring out under the
+/// abacus. The square blocks at either end are boxes, because an abacus and
+/// a plinth are square and a lathe cannot be.
+pub fn column_mesh() -> blitzkit::mesh::MeshData {
+    crate::cellar::turned(18, 30, |v| (v - 0.5, column_waist(v)))
+}
+
+/// How fat the column is at a given height, as a share of its widest.
+///
+/// **One account of the profile**, because the lathe is not the only thing
+/// that needs it: spec 0098's tracer knows boxes and nothing else, so what
+/// the sphere shows of a turned column is whatever boxes stand in for it.
+/// Jake saw twelve flat piers in the glass while the room had a colonnade.
+/// `column_boxes` samples this same curve.
+pub fn column_waist(v: f32) -> f32 {
+    if v < 0.035 {
+        1.0
+    } else if v < 0.07 {
+        // the torus, falling into the shaft
+        1.0 - 0.14 * ((v - 0.035) / 0.035)
+    } else if v < 0.88 {
+        // entasis: fattest a third of the way up and tapering away, so
+        // the shaft reads as carried rather than extruded
+        let along = (v - 0.07) / 0.81;
+        0.86 + 0.03 * (along * std::f32::consts::PI).sin() - 0.14 * along
+    } else if v < 0.9 {
+        0.70
+    } else if v < 0.965 {
+        // the echinus
+        0.70 + 0.32 * ((v - 0.9) / 0.065)
+    } else {
+        1.02
+    }
+}
+
+/// The column as a body meets it and as the glass sees it: a stack of
+/// boxes following the turned profile.
+///
+/// **Not one box the shaft's full width.** That is what was here, and in
+/// the sphere it read as a flat pier with no base and no capital while the
+/// room had a column with both. The bands are wide enough to hold the lathe
+/// inside them, so nothing of the turning pokes out of what you walk into.
+pub fn column_boxes(reaches: f32) -> Vec<(Aabb, bool)> {
+    // **The profile's own joints, not an even slicing of its height.** Ten
+    // equal bands put the necking and the echinus in one band together, and
+    // a band is as wide as the widest thing in it, so the top of the shaft
+    // came out as wide as its foot and the taper disappeared. Jake, looking
+    // at the ball: the columns in the room have wider and thinner bases,
+    // the reflection doesn't match.
+    //
+    // Cut where the lathe changes instead: the torus, five down the shaft,
+    // the necking on its own, and the echinus. Same count of boxes, a
+    // column instead of a tube.
+    const BANDS: [(f32, f32); 8] = [
+        (0.0, 0.07),
+        (0.07, 0.23),
+        (0.23, 0.39),
+        (0.39, 0.56),
+        (0.56, 0.72),
+        (0.72, 0.88),
+        (0.88, 0.9),
+        (0.9, 1.0),
+    ];
+
+    frames(reaches)
+        .into_iter()
+        .flat_map(|(at, size)| {
+            let low = at.y - size.y * 0.5;
+            let tall = size.y - ABACUS * 2.0;
+            let round = size.x.max(size.z);
+            let blocks = [
+                (low, low + ABACUS),
+                (at.y + size.y * 0.5 - ABACUS, at.y + size.y * 0.5),
+            ]
+            .map(|(from, to)| {
+                let half = (round + ABACUS_OUT * 2.0) * 0.5;
+
+                Aabb::new(
+                    vec3(at.x - half, from, at.z - half),
+                    vec3(at.x + half, to, at.z + half),
+                )
+            });
+
+            let shaft = BANDS.iter().copied().map(move |(from, to)| {
+                // the widest the lathe gets anywhere in this band, so the
+                // box holds it
+                let widest = (0..=8)
+                    .map(|k| column_waist(from + (to - from) * k as f32 / 8.0))
+                    .fold(0.0f32, f32::max);
+                let half = widest * round * 0.5;
+
+                Aabb::new(
+                    vec3(at.x - half, low + ABACUS + tall * from, at.z - half),
+                    vec3(at.x + half, low + ABACUS + tall * to, at.z + half),
+                )
+            });
+
+            // the blocks are square and the shaft is turned, which is what
+            // the second of each pair says. The glass reads it; the walk
+            // does not, because a round collider buys nothing a box does
+            // not already give.
+            let mut out: Vec<(Aabb, bool)> = blocks.iter().map(|one| (*one, false)).collect();
+
+            out.extend(shaft.map(|one| (one, true)));
+            out
+        })
+        .collect()
+}
+
+/// How much of a column's height the blocks at either end take.
+pub const ABACUS: f32 = 0.11;
+pub const ABACUS_OUT: f32 = 0.06;
 
 /// One baluster, turned.
 ///
@@ -1120,14 +1295,24 @@ pub fn draw_the_stair(
 /// How deep a base or a capital is, how far it stands out from the shaft,
 /// and the bead that necks the two together.
 pub const CAP: f32 = 0.16;
-pub const CAP_OUT: f32 = 0.07;
-pub const BEAD: f32 = 0.05;
 pub const BEAD_OUT: f32 = 0.025;
 
 /// How proud of the floor the border and the panel are laid, and how wide
 /// the margin between them is.
 pub const LAID: f32 = 0.025;
 pub const MARGIN: f32 = 0.34;
+
+/// How far the skirting stands off the wall and how high it runs.
+pub const SKIRT: f32 = 0.06;
+pub const SKIRT_UP: f32 = 0.22;
+
+fn middle_x(room: Aabb) -> f32 {
+    (room.min.x + room.max.x) * 0.5
+}
+
+fn middle_z(room: Aabb) -> f32 {
+    (room.min.z + room.max.z) * 0.5
+}
 
 /// How deep the beams across the ceiling are and how far they come down.
 pub const BEAM: f32 = 0.2;
@@ -1140,7 +1325,7 @@ pub const BEAM_DOWN: f32 = 0.16;
 /// neither is a thing a body meets; what a body meets is the shaft, which is
 /// already in `solid` and already what the glass traces. Adding them to the
 /// walk would be a ring of ledges round every column for no gain.
-pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId) {
+pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Option<MeshId>) {
     let room = inside(reaches);
     // **The border stops at the stairwell rather than running over it.** It
     // is laid between the two colonnades and the slot is between them too,
@@ -1174,28 +1359,69 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId) {
         );
     }
 
-    // a base and a capital on every shaft, with a bead necking each to it
+    // a turned column on every one of the colonnade's places, with a square
+    // block at each end of it.
+    //
+    // **The box in `frames` is what a body walks into and what the glass
+    // traces; this is what you look at.** The same split the stair's
+    // balustrade and the plinth are drawn under. A lathe cannot be traced
+    // by spec 0098, which knows boxes, and a box is what the sphere needs
+    // to find anyway: what it reads is the rhythm of something standing out
+    // from the wall, and the turning is for the eye in the room.
     for (at, size) in frames(reaches) {
         let low = at.y - size.y * 0.5;
         let high = at.y + size.y * 0.5;
 
-        for (middle, wide) in [
-            (low + CAP * 0.5, CAP_OUT),
-            (low + CAP + BEAD * 0.5, BEAD_OUT),
-            (high - CAP - BEAD * 0.5, BEAD_OUT),
-            (high - CAP * 0.5, CAP_OUT),
-        ] {
+        for middle in [low + ABACUS * 0.5, high - ABACUS * 0.5] {
+            let round = size.x.max(size.z);
+
             scene.push_material(
                 cube,
                 &Transform::at(vec3(at.x, middle, at.z)).with_scale(vec3(
-                    size.x + wide * 2.0,
-                    if wide > BEAD_OUT { CAP } else { BEAD },
-                    size.z + wide * 2.0,
+                    round + ABACUS_OUT * 2.0,
+                    ABACUS,
+                    round + ABACUS_OUT * 2.0,
                 )),
                 crate::aim::GLASS_TRIM,
                 crate::aim::MATTE,
             );
         }
+
+        if let Some(column) = column {
+            let tall = size.y - ABACUS * 2.0;
+
+            scene.push_material(
+                column,
+                &Transform::at(vec3(at.x, at.y, at.z)).with_scale(vec3(
+                    size.x.max(size.z),
+                    tall,
+                    size.x.max(size.z),
+                )),
+                crate::aim::GLASS_PIER,
+                crate::aim::MATTE,
+            );
+        }
+    }
+
+    // a frame round every bay, which is what the wall between the columns
+    // had instead of anything at all
+    for slot in slots(reaches) {
+        let west = slot.center().x < (room.min.x + room.max.x) * 0.5;
+        let face = if west { room.min.x } else { room.max.x };
+        let out = if west { BEAD_OUT } else { -BEAD_OUT };
+
+        scene.push_material(
+            cube,
+            &Transform::at(vec3(face + out * 0.5, slot.center().y, slot.center().z)).with_scale(
+                vec3(
+                    BEAD_OUT.abs(),
+                    slot.size().y + CAP * 2.0,
+                    slot.size().z + CAP * 2.0,
+                ),
+            ),
+            crate::aim::GLASS_TRIM,
+            crate::aim::MATTE,
+        );
     }
 
     // and a beam over every bay, on the colonnade's own pitch. The ceiling
@@ -1215,6 +1441,75 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId) {
                 z,
             ))
             .with_scale(vec3(room.max.x - room.min.x, BEAM_DOWN, BEAM)),
+            crate::aim::GLASS_TRIM,
+            crate::aim::MATTE,
+        );
+    }
+
+    // and ribs the other way, which is what turns a run of beams into
+    // coffers. Beams one way alone are stripes.
+    //
+    // On the colonnade's lines and the room's middle, so the ceiling is
+    // divided by what is standing under it rather than by a spacing of its
+    // own: three ribs make four rows of coffers across a room nine metres
+    // wide.
+    for x in [
+        room.min.x + FRAME_IN,
+        (room.min.x + room.max.x) * 0.5,
+        room.max.x - FRAME_IN,
+    ] {
+        scene.push_material(
+            cube,
+            &Transform::at(vec3(
+                x,
+                room.max.y - BEAM_DOWN * 0.5,
+                (room.min.z + room.max.z) * 0.5,
+            ))
+            .with_scale(vec3(BEAM, BEAM_DOWN, room.max.z - room.min.z)),
+            crate::aim::GLASS_TRIM,
+            crate::aim::MATTE,
+        );
+    }
+
+    // a skirting where the wall meets the floor, which every other room in
+    // this building has and this one did not
+    for (at, size) in [
+        (
+            vec3(
+                room.min.x + SKIRT * 0.5,
+                UP + SKIRT_UP * 0.5,
+                middle_z(room),
+            ),
+            vec3(SKIRT, SKIRT_UP, room.max.z - room.min.z),
+        ),
+        (
+            vec3(
+                room.max.x - SKIRT * 0.5,
+                UP + SKIRT_UP * 0.5,
+                middle_z(room),
+            ),
+            vec3(SKIRT, SKIRT_UP, room.max.z - room.min.z),
+        ),
+        (
+            vec3(
+                middle_x(room),
+                UP + SKIRT_UP * 0.5,
+                room.min.z + SKIRT * 0.5,
+            ),
+            vec3(room.max.x - room.min.x, SKIRT_UP, SKIRT),
+        ),
+        (
+            vec3(
+                middle_x(room),
+                UP + SKIRT_UP * 0.5,
+                room.max.z - SKIRT * 0.5,
+            ),
+            vec3(room.max.x - room.min.x, SKIRT_UP, SKIRT),
+        ),
+    ] {
+        scene.push_material(
+            cube,
+            &Transform::at(at).with_scale(size),
             crate::aim::GLASS_TRIM,
             crate::aim::MATTE,
         );
@@ -1281,15 +1576,30 @@ pub fn plinth_pieces(reaches: f32) -> Vec<(Aabb, glam::Vec4)> {
 }
 
 /// Draws the room, and the ball in it.
-pub fn draw(
-    scene: &mut Scene,
-    room: &crate::room::Room,
-    since: f32,
-    cube: MeshId,
-    sphere: Option<MeshId>,
-    baluster: Option<MeshId>,
-    sconce: Option<MeshId>,
-) {
+/// What this room is drawn out of.
+///
+/// **One thing rather than six arguments.** The room gained a turned
+/// baluster, a sconce bowl and a turned column in one afternoon and the
+/// draw ran past what clippy will take, which is the right moment to stop
+/// adding parameters. Each is an option because a mesh is only there once
+/// the renderer has it.
+#[derive(Clone, Copy)]
+pub struct Meshes {
+    pub cube: MeshId,
+    pub sphere: Option<MeshId>,
+    pub baluster: Option<MeshId>,
+    pub sconce: Option<MeshId>,
+    pub column: Option<MeshId>,
+}
+
+pub fn draw(scene: &mut Scene, room: &crate::room::Room, since: f32, meshes: Meshes) {
+    let Meshes {
+        cube,
+        sphere,
+        baluster,
+        sconce,
+        column,
+    } = meshes;
     let reaches = room.reaches;
 
     let plinth = plinth(reaches);
@@ -1298,16 +1608,28 @@ pub fn draw(
     // die and a cap. What is walked into here is not what is looked at.
     let guard = guard(reaches);
     let treads = treads(reaches);
+    // the colonnade stands in `solid` as boxes, for the walk and for the
+    // glass, and is drawn as turned columns
+    let shafts: Vec<Aabb> = column_boxes(reaches)
+        .into_iter()
+        .map(|(box_, _)| box_)
+        .collect();
+    let named = named(reaches);
 
     for piece in solid(reaches)
         .into_iter()
         .chain([lid(reaches), cornice(reaches)])
-        .filter(|piece| !guard.contains(piece) && !treads.contains(piece) && *piece != plinth)
+        .filter(|piece| {
+            !guard.contains(piece)
+                && !treads.contains(piece)
+                && *piece != plinth
+                && !(column.is_some() && shafts.contains(piece))
+        })
     {
         scene.push_material(
             cube,
             &Transform::at(piece.center()).with_scale(piece.size()),
-            colour(piece, UP + TALL * 0.5, since),
+            colour(piece, &named, UP + TALL * 0.5, since),
             crate::aim::MATTE,
         );
     }
@@ -1322,7 +1644,7 @@ pub fn draw(
         );
     }
 
-    draw_the_room(scene, reaches, cube);
+    draw_the_room(scene, reaches, cube, column);
 
     if let Some(sconce) = sconce {
         draw_the_stair(scene, reaches, since, cube, baluster, sconce);
@@ -1337,7 +1659,7 @@ pub fn draw(
     scene.lens(
         sphere,
         &Transform::at(middle).with_scale(Vec3::splat(across * 2.0)),
-        glam::Vec4::splat(GLOW),
+        silvered(since),
         INDEX,
     );
 }
@@ -1352,18 +1674,48 @@ pub fn draw(
 /// outside the glass: the first build of this was a dark disc with a pale
 /// rim and nothing in it.
 ///
-/// Five is what brings the two to the same brightness. It is a fudge and it
-/// is the engine's own idiom, the one `aim` uses everywhere: a colour past
-/// one is a thing that gives light rather than takes it. The honest fix is
-/// point lights in the tracer, which is engine work and its own spec.
-pub const GLOW: f32 = 3.5;
+/// **A flat multiplier was a fudge and it carried the world's own colour
+/// with it.** The ambient the tracer shades by is `garden::filled`, which
+/// is the sky's: at night it is three hundredths red against nine
+/// hundredths blue, so everything the ball showed came back blue over a
+/// room of warm stone. Jake saw that before he saw anything else about it.
+///
+/// It was divided out through `garden::gives_off` for an afternoon, which
+/// is the move the sky, the moon and this room's own bays all make and was
+/// the wrong one here. Dividing the fill out was standing in for the lamps,
+/// and the tracer has the lamps now, per the engine's spec 0098: the room
+/// inside the ball is lit by the same bays and newel lamps that light the
+/// room outside it, with the same falloff. Kept on, the division counted
+/// that light twice and the ball washed out to white.
+///
+/// So this is a plain tint again, and what a mirror is worth is the only
+/// thing in it: ninety two hundredths, because no mirror gives back all of
+/// what it takes.
+pub const SILVER: f32 = 0.92;
+
+pub fn silvered(_since: f32) -> glam::Vec4 {
+    Vec3::splat(SILVER).extend(1.0)
+}
 
 /// What the glass bends light by.
 ///
 /// Crown glass, which is what a paperweight is. **No dial**, per spec 0064:
 /// an index on the arrow keys is the first thing anybody would reach for and
 /// it is the mistake aleph is parked for.
-pub const INDEX: f32 = 1.52;
+pub const INDEX: f32 = MIRROR;
+
+/// What the engine takes for a mirror rather than a lens, per its spec
+/// 0098: an index at or under nought, which no glass has.
+///
+/// **The ball was a lens and read as a smear.** Jake, 2026-11-12: the
+/// reflections aren't accurate, and the colour could look a lot more like a
+/// mirror instead of the blue, which isn't accurate for the room either.
+/// Both are the lens: it bends the room twice, turns it over and squeezes
+/// it into a disc, and what fills most of a sphere's view in here is the
+/// floor, so the disc came out the floor's own navy over a room of warm
+/// stone. A mirror shows the room the right way up and in the colours it
+/// actually has.
+pub const MIRROR: f32 = -1.0;
 
 #[cfg(test)]
 mod tests {

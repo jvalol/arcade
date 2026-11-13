@@ -465,6 +465,82 @@ north end and the floor stopped at it. It is a slot in the middle now and
 the walls, the colonnade and the ceiling run past it, so what is behind the
 ball from the south is the whole room and not the floor's edge.
 
+### The colonnade comes off the lathe, 2026-11-12
+
+Jake: *the room should be more ornate and decorated.* Then, with the
+columns turned: *the reflection doesn't show the details of the colonnade.*
+
+Both are the same thing said twice. A box with two bands round it is a
+pier, and this room is named for a colonnade. The lathe has been in this
+building since the cellar's barrels: the columns are Tuscan now, a torus at
+the foot, a shaft with a little entasis so it reads as carried rather than
+extruded, a necking and an echinus under a square abacus.
+
+**And spec 0098's tracer knows boxes and nothing else.** The sphere showed
+twelve flat piers while the room had twelve columns, because `solid` still
+held one box each. The profile is written once, in `column_waist`, and
+`column_boxes` samples the same curve into six bands wide enough to hold
+the lathe inside them. So the walk, the glass and the eye are all looking
+at the same column, which is the rule this building keeps being caught by.
+
+`colour` asked for a metre of height before it would call a box a column.
+That was right while a shaft was one box and calls every band of a turned
+one a wall.
+
+The ceiling has ribs the other way as well now, because beams one way alone
+are stripes, and the walls have a skirting and a frame round every bay.
+
+### A mirror, and what it showed wrong, 2026-11-12
+
+Jake: *the reflections aren't accurate, and the colour of the ball could
+look a lot more like a mirror like reflective surface instead of the blue,
+which isn't accurate for the room either.* Then, with it mirrored: *the
+reflection gets the colour of the stairs wrong, the columns still don't
+look like the ones in the room.*
+
+**The ball is a mirror now rather than a lens**, per the engine's spec 0098:
+an index at or under nought, which is not a refractive index. A solid glass
+sphere bends the room twice, turns it over and squeezes it into a disc. That
+is true and it reads as a smear of bands.
+
+**The blue was the tint, and the tint was a flat multiplier.** `GLOW` was
+3.5 of white, standing in for the point lights the tracer has not got. What
+it could not stand in for is the colour of the ambient it was multiplying:
+that ambient is `garden::filled`, which is the sky's, and at night the sky
+is three hundredths red against nine hundredths blue. Every surface the ball
+showed came back blue over a room of warm stone. It goes through
+`garden::gives_off` now, which is the move the sky, the moon, the runestone
+and this room's own bays all make, and what lands is the room's colours at
+`SILVER` of them whatever hour it is outside.
+
+**`colour` reads a box's shape, and no shape says timber.** The balustrade
+is a run of upright boxes a column's width, so the glass showed a stone
+handrail over a timber one, and a tread is a tall slab, which that function
+calls a wall. `named` holds the pieces whose colour no shape can tell. It is
+not the second account that function's note warns about: the boxes in it are
+`guard` and `treads` themselves, asked by name, so there is nothing in it to
+drift.
+
+**And the column in the glass is still boxes.** It is ten bands now rather
+than six, which is smoother and is still a stepped cylinder. The tracer
+knows boxes and nothing else, so the honest fix is a round primitive in it,
+which is engine work and is not this spec's.
+
+### Cut the column where the lathe changes, 2026-11-12
+
+Jake: *the columns in the room have wider and thinner bases, the reflection
+doesn't match.*
+
+`column_boxes` sliced the shaft's height into ten equal bands and made each
+one as wide as the widest thing in it, which is right: a band has to hold
+the lathe inside it. Equal bands put the necking and the echinus together
+in the last one, so the top of the shaft came out as wide as its foot and
+the taper disappeared. In the glass it was a tube.
+
+The bands are cut at the profile's own joints now, which is the torus, five
+down the shaft, the necking on its own and the echinus. The same count of
+boxes, and a column rather than a tube.
+
 ## Acceptance criteria
 
 - The sphere traces the room's own boxes, and the list it is given is `solid` plus `lids` rather than a second account of the building. — `glass::tests::it_traces_the_building_itself`
