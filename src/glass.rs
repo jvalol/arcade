@@ -1388,30 +1388,62 @@ pub fn draw_the_room(scene: &mut Scene, reaches: f32, cube: MeshId, column: Opti
                     size.x.max(size.z),
                 )),
                 crate::aim::GLASS_PIER,
-                crate::aim::MATTE,
+                // **No highlight at all on a turned shaft.** A point lamp
+                // on a vertical cylinder puts its highlight where the
+                // normals are squarest to it, which is a horizontal band at
+                // the lamp's own height, running across every column at
+                // once. The lamp is behind the column that wears it, so it
+                // reads as a bright smear with nothing to account for it:
+                // Jake asked what the streak was, and it was this.
+                //
+                // The garden's ground has the same note for the same
+                // reason. Stone is not polished.
+                crate::aim::VOID,
             );
         }
     }
 
-    // a frame round every bay, which is what the wall between the columns
-    // had instead of anything at all
+    // **A frame round every bay, which is four pieces and not one.**
+    //
+    // The first go was one slab the size of the opening and a margin, stood
+    // a bead proud of the wall. That is not a frame, it is a panel over the
+    // window: edge on down the room it read as a bright horizontal streak
+    // at the slot's own height, on both walls at once, and Jake asked what
+    // the light with no source was. It was this.
     for slot in slots(reaches) {
         let west = slot.center().x < (room.min.x + room.max.x) * 0.5;
         let face = if west { room.min.x } else { room.max.x };
         let out = if west { BEAD_OUT } else { -BEAD_OUT };
+        let at = vec3(face + out * 0.5, slot.center().y, slot.center().z);
+        let (tall, wide) = (slot.size().y, slot.size().z);
 
-        scene.push_material(
-            cube,
-            &Transform::at(vec3(face + out * 0.5, slot.center().y, slot.center().z)).with_scale(
-                vec3(
-                    BEAD_OUT.abs(),
-                    slot.size().y + CAP * 2.0,
-                    slot.size().z + CAP * 2.0,
-                ),
+        for (middle, size) in [
+            // the head and the sill
+            (
+                vec3(at.x, at.y + (tall + CAP) * 0.5, at.z),
+                vec3(BEAD_OUT.abs(), CAP, wide + CAP * 2.0),
             ),
-            crate::aim::GLASS_TRIM,
-            crate::aim::MATTE,
-        );
+            (
+                vec3(at.x, at.y - (tall + CAP) * 0.5, at.z),
+                vec3(BEAD_OUT.abs(), CAP, wide + CAP * 2.0),
+            ),
+            // and a jamb each side
+            (
+                vec3(at.x, at.y, at.z + (wide + CAP) * 0.5),
+                vec3(BEAD_OUT.abs(), tall, CAP),
+            ),
+            (
+                vec3(at.x, at.y, at.z - (wide + CAP) * 0.5),
+                vec3(BEAD_OUT.abs(), tall, CAP),
+            ),
+        ] {
+            scene.push_material(
+                cube,
+                &Transform::at(middle).with_scale(size),
+                crate::aim::GLASS_TRIM,
+                crate::aim::MATTE,
+            );
+        }
     }
 
     // and a beam over every bay, on the colonnade's own pitch. The ceiling

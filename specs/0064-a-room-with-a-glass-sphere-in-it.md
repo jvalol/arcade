@@ -569,6 +569,35 @@ That is the third test in two days to pass its control before it was worth
 anything, and all three were the same mistake: writing the assertion
 against what I meant rather than against what the code holds.
 
+### Two lights with no source, 2026-11-13
+
+Jake: *there are lights being reflected on the ball that have no obvious
+source*, and then *the far wall has a little streak of what looks like
+light*, which turned out to be on the columns and on both sides of the
+room.
+
+**The ones on the ball were real and are fixed**, in the engine's spec
+0098: there is no shadow in a traced surface, so the nook's lamps were
+putting highlights on a ball standing over their ceiling.
+
+**The streak is not a fault.** It is the bay lamps' own light on the
+columns. A point lamp on a vertical cylinder is brightest where the surface
+faces it, and a cylinder's normals are all horizontal, so the brightest
+place is a band at the lamp's own height, running across every column at
+once. Turning the lamps off takes it away and nothing else does. It reads
+as sourceless because the lamp sits behind the colonnade at that height, so
+the thing lighting the column is hidden by the column.
+
+`LAMP_UP` is the number that moves it, and whether the fitting is ever seen
+from the room is the other half.
+
+**What was ruled out on the way.** The column's own highlight, which is now
+off anyway: a shaft of stone is not polished, and the garden's ground
+carries the same note for the same reason. And the frame round each bay,
+which was a real fault and not this one: it was one slab the size of the
+opening rather than four pieces round it, so it was a panel over the
+window. It sat behind the lamp panel and so was never seen.
+
 ## Acceptance criteria
 
 - The sphere traces the room's own boxes, and the list it is given is `solid` plus `lids` rather than a second account of the building. — `glass::tests::it_traces_the_building_itself`
