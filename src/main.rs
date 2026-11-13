@@ -3093,6 +3093,17 @@ impl Arcade {
             );
         }
 
+        // the ruts worn down it, which is what says a cart goes up and
+        // down here rather than that somebody laid a surface
+        for rut in village::ruts(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(rut.center()).with_scale(rut.size()),
+                aim::VILLAGE_RUT,
+                aim::MATTE,
+            );
+        }
+
         for one in village::built(reaches) {
             let walls = one.walls();
 
@@ -3103,7 +3114,21 @@ impl Arcade {
                 aim::MATTE,
             );
 
-            // the roof, as two pitches leaning on each other
+            // **Boards on it, and shingle courses on the roof.** Spec
+            // 0068's second round: every surface out here was one flat
+            // colour, which the steading gets away with at thirty metres
+            // and a village looked at from the street does not.
+            for (at, size, tone) in village::boarding(&one) {
+                scene.push_material(
+                    cube,
+                    &Transform::at(at).with_scale(size),
+                    aim::VILLAGE_WALL * tone,
+                    aim::MATTE,
+                );
+            }
+
+            // the roof, as two pitches leaning on each other, with the
+            // courses laid up them
             let rise = one.ridge - one.eaves;
             let slope = (rise / (one.wide * 0.5)).atan();
             let along = village::slope_run(&one);
@@ -3123,6 +3148,28 @@ impl Arcade {
                     aim::MATTE,
                 );
             }
+
+            for (at, size, lean, tone) in village::shingling(&one) {
+                scene.push_material(
+                    cube,
+                    &Transform::at(at)
+                        .with_rotation(glam::Quat::from_rotation_z(lean))
+                        .with_scale(size),
+                    aim::VILLAGE_ROOF * tone,
+                    aim::MATTE,
+                );
+            }
+
+            // and a ridge board over the join, which is what every roof in
+            // the world has and what stops the two pitches reading as a
+            // fold in one sheet
+            scene.push_material(
+                cube,
+                &Transform::at(vec3(one.at.x, one.at.y + one.ridge + 0.05, one.at.z))
+                    .with_scale(vec3(0.26, 0.16, over * 2.0)),
+                aim::VILLAGE_TIMBER,
+                aim::MATTE,
+            );
         }
 
         // the lamp inside each one, and the opening it shows through
@@ -3701,6 +3748,21 @@ impl Arcade {
                 }
             }
 
+            // **The courses of turf up it.** Spec 0068's second round:
+            // the village got sawn boards and shingles, and this place
+            // gets what it would actually be built of, which is the other
+            // half of telling the two apart.
+            for (at, size, lean, tone) in valhalla::turfing(&one) {
+                scene.push_material(
+                    cube,
+                    &Transform::at(at)
+                        .with_rotation(glam::Quat::from_rotation_z(lean))
+                        .with_scale(size),
+                    aim::VALHALLA_ROOF * tone,
+                    aim::MATTE,
+                );
+            }
+
             // and one line of neon along the ridge of the hall, which is
             // the building's own light turning up in its own heaven. Spec
             // 0055, and wordless: anything with words on it is copy.
@@ -3712,6 +3774,17 @@ impl Arcade {
                     aim::arcade_tube(),
                 );
             }
+        }
+
+        // the staves stood against the walls, which is what this place is
+        // built of where the village is built of boards
+        for (at, size, tone) in valhalla::staves(reaches) {
+            scene.push_material(
+                cube,
+                &Transform::at(at).with_scale(size),
+                aim::VALHALLA_WALL * tone,
+                aim::MATTE,
+            );
         }
 
         self.draw_the_hall(scene, cube);

@@ -79,9 +79,41 @@ Both are solid. A fire you can walk through is not a fire, and the ring takes
 the trench's own kerb height for the reason the trench has one: below that
 `walk` rides over it and you stand in the coals.
 
+## Two things a walled room never had to say
+
+Every other room in this building is a box with walls, so a stop in the wrong
+place is a stop inside something and `nobody_walks_through_a_wall` catches it.
+The steading is a slab in the sky, and the two faults it has that no room has
+are both about what is not there.
+
+**A stop can be over nothing.** The yard is the nine metres between the hall's
+door and the east edge of the slab, and the ring was written as the door plus
+seven of them: a metre from a twenty-six metre drop, with no side left to stand
+on. The man who keeps it stood four and a half metres out in the air for six
+and a half seconds of every round, and the walls test passed on him exactly
+because there was nothing out there to be inside of. Jake, 2026-11-13, looking
+west from the top of the climb: this person is walking on air.
+
+So the ring is written off the yard and not off the door, there is room to
+stand all the way round it by construction, and `nobody_walks_on_air` walks
+every round and asks for ground under every step.
+
+**A facing can be backwards and look like a number.** A facing of `f` sends a
+body's forward to `(sin f, 0, -cos f)`. Three of the steading's four were
+written by hand with the sign the other way, so the man at the woodpile, the
+man at the north store and the man round the back all walked to their errand
+and stood with their backs to it. Nothing in a stop's three numbers shows it,
+and the one that was right was right because a test had already made somebody
+look at it.
+
+The fix is not a test. `people::facing` works a facing out from where the body
+is and what it is there for, and the stops call it, so there is no sign left to
+write.
+
 ## Acceptance criteria
 
 - Nobody on a round walks through a wall, or the fire, or the woodpile. — `valhalla::tests::nobody_walks_through_a_wall`
+- Nobody on a round is ever standing on nothing. — `valhalla::tests::nobody_walks_on_air`
 - Nobody stands in the lane you arrive along, at any stop on any round. — `valhalla::tests::nothing_stands_in_the_way_in`
 - A round loops, and where it puts somebody is the same at `t` and at `t` plus a whole round. — `people::tests::a_round_comes_round`
 - Somebody standing has no gait and somebody walking has one. — `people::tests::the_legs_run_only_while_walking`

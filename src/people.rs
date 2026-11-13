@@ -681,6 +681,24 @@ pub struct Doing {
     pub walked: Option<f32>,
 }
 
+/// Which way somebody standing at `at` faces to be looking at `thing`.
+///
+/// **The one place this is worked out.** A facing of `f` sends a body's own
+/// forward to `(sin f, 0, -cos f)`, which is a sign that is easy to write
+/// backwards and impossible to see wrong in a number: three of the
+/// steading's stops were written by hand with the sign the other way, so
+/// three people walked across a yard to a woodpile, a store and a gable and
+/// stood with their backs to them. Nobody had to be told the convention to
+/// get it wrong, only to write it out.
+///
+/// Spec 0067 wants a figure that is going somewhere. Arriving and then
+/// looking at it is the half that cannot be a constant.
+pub fn facing(at: Vec3, thing: Vec3) -> f32 {
+    let look = thing - at;
+
+    look.x.atan2(-look.z)
+}
+
 /// Which way `from` has to turn to be facing `to`, the short way round.
 ///
 /// **Its own function because the long way round is the obvious bug.** A

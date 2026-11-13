@@ -1259,6 +1259,10 @@ pub const VILLAGE_TIMBER: Vec4 = vec4(0.38, 0.30, 0.215, 1.0);
 /// neither grass nor timber.
 pub const VILLAGE_EARTH: Vec4 = vec4(0.235, 0.195, 0.145, 1.0);
 
+/// The ruts worn down the street, which are the same earth packed harder
+/// and damper than what is either side of them.
+pub const VILLAGE_RUT: Vec4 = vec4(0.17, 0.138, 0.102, 1.0);
+
 /// And a cabin's door, a shade darker than the boards round it so it reads
 /// as an opening rather than as a panel.
 pub const VILLAGE_DOOR: Vec4 = vec4(0.235, 0.175, 0.125, 1.0);

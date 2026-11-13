@@ -429,6 +429,46 @@ pub fn track(reaches: f32) -> Aabb {
     )
 }
 
+/// The wheel ruts worn down it, as a run of short pieces each.
+///
+/// **A track and not two painted lines.** The street was one flat slab of
+/// earth, which is a surface and not a place anybody has driven over. What
+/// says a cart goes up and down here is a pair of ruts at a wagon's own
+/// wheel spacing, and what stops them reading as road markings is that they
+/// wander: each piece is laid off the one before it by a little, the way a
+/// wheel follows the last wheel without following it exactly.
+pub const RUT_WIDE: f32 = 0.34;
+pub const RUT_PIECES: usize = 26;
+
+pub fn ruts(reaches: f32) -> Vec<Aabb> {
+    let middle = at(reaches);
+    let long = STREET_LONG + 14.0;
+    let piece = long / RUT_PIECES as f32;
+    let mut out = Vec::new();
+
+    for side in [-1.0f32, 1.0] {
+        // a wagon's own track, which is the wheels either side of its bed
+        let apart = (WAGON_WIDE * 0.5 + WHEEL_THICK) * side;
+
+        for n in 0..RUT_PIECES {
+            let along = middle.x - long * 0.5 + (n as f32 + 0.5) * piece;
+            let seed = along * 0.37 + side * 11.0;
+            let wander = (seed * 1.3).sin() * 0.22 + (seed * 0.47).sin() * 0.16;
+
+            out.push(Aabb::from_center_size(
+                vec3(
+                    along,
+                    middle.y + TRACK_UP + 0.004,
+                    middle.z + apart + wander,
+                ),
+                vec3(piece * 1.06, 0.01, RUT_WIDE),
+            ));
+        }
+    }
+
+    out
+}
+
 /// And the common off it, where the fire stands.
 pub fn common(reaches: f32) -> Aabb {
     let fire = ring(reaches);
@@ -471,6 +511,111 @@ pub const OVERSAILS: f32 = 0.58;
 /// The run of one pitch, from eaves to ridge.
 pub fn slope_run(one: &Built) -> f32 {
     (one.wide * 0.5).hypot(one.ridge - one.eaves)
+}
+
+/// How wide a board is, the gap between two, and how far they stand proud.
+///
+/// **Boards rather than a picture of boards.** The cellar's panelling says
+/// why, and it is the same reason here: a cube's corners run nought to one
+/// however big it is, so a timber texture on a cabin's wall would be a
+/// single plank seven metres long. What makes sawn boards read is the
+/// shadow line between one and the next, and a shadow line wants an edge.
+pub const BOARD: f32 = 0.3;
+pub const BOARD_GAP: f32 = 0.025;
+pub const BOARD_OUT: f32 = 0.035;
+
+/// Every board on one building: where it is, how big, and how its own tone
+/// stands against its neighbours.
+///
+/// **No two the same shade.** A wall of identical boards is a wall with
+/// lines ruled on it. Weathered sawn timber goes patchy, and the patchiness
+/// is most of what says this was built by hand out of what was to hand.
+///
+/// Off the board's own place rather than off a roll, so one building is one
+/// building from one frame to the next and nothing has to be remembered.
+pub fn boarding(one: &Built) -> Vec<(Vec3, Vec3, f32)> {
+    let courses = ((one.eaves / (BOARD + BOARD_GAP)).floor() as usize).max(1);
+    let mut out = Vec::new();
+
+    for course in 0..courses {
+        let up = (course as f32 + 0.5) * (BOARD + BOARD_GAP);
+
+        for (face, size) in [
+            (
+                vec3(one.wide * 0.5 + BOARD_OUT * 0.5, up, 0.0),
+                vec3(BOARD_OUT, BOARD, one.long),
+            ),
+            (
+                vec3(-one.wide * 0.5 - BOARD_OUT * 0.5, up, 0.0),
+                vec3(BOARD_OUT, BOARD, one.long),
+            ),
+            (
+                vec3(0.0, up, one.long * 0.5 + BOARD_OUT * 0.5),
+                vec3(one.wide, BOARD, BOARD_OUT),
+            ),
+            (
+                vec3(0.0, up, -one.long * 0.5 - BOARD_OUT * 0.5),
+                vec3(one.wide, BOARD, BOARD_OUT),
+            ),
+        ] {
+            let seed = face.x * 3.1 + face.z * 7.7 + up * 13.3;
+            // two sines that do not divide, so the pattern up a wall never
+            // repeats and no two walls of one building agree
+            let tone = 1.0 + (seed * 1.7).sin() * 0.07 + (seed * 0.41).sin() * 0.05;
+
+            out.push((one.at + face, size, tone));
+        }
+    }
+
+    out
+}
+
+/// How deep one course of shingles is up the slope, and how far each stands
+/// proud of the one above it.
+pub const SHINGLE: f32 = 0.42;
+pub const SHINGLE_OUT: f32 = 0.05;
+
+/// The courses on one roof: where each sits, how big, which way it leans,
+/// and its own tone.
+///
+/// **Laid from the eaves up, each lapping the one below.** A roof drawn as
+/// two flat slabs is a roof nobody has been on. What reads as shingle at
+/// thirty metres is the line of shadow under every course, which is why
+/// each one stands `SHINGLE_OUT` off the pitch it lies on.
+pub fn shingling(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
+    let run = slope_run(one);
+    let rise = one.ridge - one.eaves;
+    let slope = (rise / (one.wide * 0.5)).atan();
+    let over = one.long * OVERSAILS;
+    let courses = ((run / SHINGLE).floor() as usize).max(2);
+    let mut out = Vec::new();
+
+    for side in [-1.0f32, 1.0] {
+        let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+        let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
+
+        for course in 0..courses {
+            let along = (course as f32 + 0.5) / courses as f32;
+            let on = eaves + (ridge - eaves) * along;
+            // out of the pitch along its own normal, which leans with it
+            let up = vec3(
+                side * slope.sin() * SHINGLE_OUT,
+                slope.cos() * SHINGLE_OUT,
+                0.0,
+            );
+            let seed = along * 23.0 + side * 5.0 + one.at.x * 0.7;
+            let tone = 1.0 + (seed * 2.3).sin() * 0.09 + (seed * 0.57).sin() * 0.06;
+
+            out.push((
+                vec3(on.x + up.x, on.y + up.y, one.at.z),
+                vec3(run / courses as f32 * 1.12, 0.09, over * 2.0),
+                -side * slope,
+                tone,
+            ));
+        }
+    }
+
+    out
 }
 
 /// Where a cabin's lit window is, and which way it looks.
@@ -518,10 +663,9 @@ pub fn lamps(reaches: f32) -> Vec<Vec3> {
 fn at_the(thing: Vec3, from: Vec3, clear: f32) -> (Vec3, f32) {
     let way = (from - thing).normalize_or_zero();
     let at = vec3(thing.x + way.x * clear, 0.0, thing.z + way.z * clear);
-    // facing the thing, which is back down the way we came out
-    let look = thing - at;
 
-    (at, look.x.atan2(-look.z))
+    // facing the thing, which is back down the way we came out
+    (at, crate::people::facing(at, thing))
 }
 
 /// What the people here are doing, as a round apiece. Spec 0068, over spec

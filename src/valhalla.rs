@@ -9,7 +9,7 @@
 //! Norse settlement is both at once: a longhouse with smaller buildings
 //! round it. Spec 0055 carries the argument.
 
-use std::f32::consts::{FRAC_PI_2, PI, TAU};
+use std::f32::consts::{FRAC_PI_2, TAU};
 
 use blitzkit::collision::Aabb;
 use glam::{vec3, Vec3};
@@ -242,6 +242,135 @@ pub fn lit(reaches: f32) -> Vec<Lit> {
     out
 }
 
+/// How wide one stave is, the gap between two, and how far they stand proud.
+///
+/// **Upright, where the village's boards lie flat.** Spec 0068's cabins are
+/// sawn boards laid in courses, which is what a pioneer builds with a saw
+/// and a wagonload of planks. This is a longhouse: split staves stood on end
+/// against a sill, which is what you build with an axe and a wood. The two
+/// places have to read as two places, and the grain running the other way
+/// does more of that than any colour would.
+///
+/// Boards rather than a picture of boards, for the reason the cellar's
+/// panelling gives: a cube's corners run nought to one however big it is.
+pub const STAVE: f32 = 0.26;
+pub const STAVE_GAP: f32 = 0.03;
+pub const STAVE_OUT: f32 = 0.05;
+
+/// Every stave on this place: where it is, how big, and its own tone.
+///
+/// **Nothing across the doorway.** The hall is the one building up here you
+/// walk into, and a stave wall drawn over its opening is a door painted on
+/// a wall. Spec 0060 cut that opening and this leaves it alone.
+pub fn staves(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
+    let (door, door_wide, door_high) = doorway(reaches);
+    let mut out = Vec::new();
+
+    for one in built(reaches) {
+        for (face, along, across) in [
+            // the two long flanks, staves marching along z
+            (
+                vec3(one.wide * 0.5 + STAVE_OUT * 0.5, 0.0, 0.0),
+                one.long,
+                true,
+            ),
+            (
+                vec3(-one.wide * 0.5 - STAVE_OUT * 0.5, 0.0, 0.0),
+                one.long,
+                true,
+            ),
+            // and the two gables, along x
+            (
+                vec3(0.0, 0.0, one.long * 0.5 + STAVE_OUT * 0.5),
+                one.wide,
+                false,
+            ),
+            (
+                vec3(0.0, 0.0, -one.long * 0.5 - STAVE_OUT * 0.5),
+                one.wide,
+                false,
+            ),
+        ] {
+            let many = ((along / (STAVE + STAVE_GAP)).floor() as usize).max(1);
+
+            for n in 0..many {
+                let off = ((n as f32 + 0.5) / many as f32 - 0.5) * along;
+                let at = one.at
+                    + face
+                    + if across {
+                        vec3(0.0, one.eaves * 0.5, off)
+                    } else {
+                        vec3(off, one.eaves * 0.5, 0.0)
+                    };
+
+                // the hall's doorway, which nothing is drawn over
+                if one.hall
+                    && (at.x - door.x).abs() < one.wide * 0.5
+                    && (at.z - door.z).abs() < door_wide * 0.5 + STAVE
+                    && at.x > one.at.x
+                {
+                    continue;
+                }
+
+                let seed = at.x * 2.3 + at.z * 5.1;
+                let tone = 1.0 + (seed * 1.9).sin() * 0.08 + (seed * 0.43).sin() * 0.05;
+                let size = if across {
+                    vec3(STAVE_OUT, one.eaves, STAVE)
+                } else {
+                    vec3(STAVE, one.eaves, STAVE_OUT)
+                };
+
+                out.push((at, size, tone));
+            }
+        }
+    }
+
+    let _ = door_high;
+
+    out
+}
+
+/// How deep one course of turf is up a pitch, and how far it stands proud.
+///
+/// **Turf and not shingle**, which is the other half of telling the two
+/// places apart: the village is sawn and nailed and this is cut and laid.
+/// Deeper courses than the village's, because a turf is a spade's width and
+/// a shingle is a hand's.
+pub const TURF_COURSE: f32 = 0.62;
+pub const TURF_OUT: f32 = 0.06;
+
+/// The courses on one roof: where each sits, how big, its lean and its tone.
+pub fn turfing(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
+    let run = slope_run(one);
+    let rise = one.ridge - one.eaves;
+    let slope = (rise / (one.wide * 0.5)).atan();
+    let over = one.long * 0.52;
+    let courses = ((run / TURF_COURSE).floor() as usize).max(2);
+    let mut out = Vec::new();
+
+    for side in [-1.0f32, 1.0] {
+        let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+        let ridge = vec3(one.at.x, one.at.y + one.ridge, 0.0);
+
+        for course in 0..courses {
+            let along = (course as f32 + 0.5) / courses as f32;
+            let on = eaves + (ridge - eaves) * along;
+            let up = vec3(side * slope.sin() * TURF_OUT, slope.cos() * TURF_OUT, 0.0);
+            let seed = along * 17.0 + side * 3.0 + one.at.z * 0.9;
+            let tone = 1.0 + (seed * 2.1).sin() * 0.1 + (seed * 0.61).sin() * 0.07;
+
+            out.push((
+                vec3(on.x + up.x, on.y + up.y, one.at.z),
+                vec3(run / courses as f32 * 1.1, 0.12, over * 2.0),
+                -side * slope,
+                tone,
+            ));
+        }
+    }
+
+    out
+}
+
 /// The fire out in the lane, and the woodpile that feeds it. Spec 0067.
 ///
 /// **Because an errand needs somewhere to be an errand to.** The people had
@@ -266,10 +395,22 @@ pub const RING_FLAMES: usize = 3;
 /// Off the middle line for the same reason nobody stands on it: the lane is
 /// what you arrive along, and `tests::nothing_stands_in_the_way_in` holds
 /// that for everything that stands in it, this included.
+///
+/// **Halfway across the yard, and not seven metres out into it.** The yard
+/// is the nine metres between the hall's door and the east edge of the
+/// slab, and seven of them put the ring a metre from a twenty-six metre
+/// drop. The fire itself looked fine there; what did not was the man who
+/// tends it, who has to stand clear of it on some side and had only air on
+/// that one. Jake, 2026-11-13: this person is walking on air.
+///
+/// So it is written off the yard rather than off the door, and there is
+/// room to stand all the way round it by construction.
+/// `tests::nobody_walks_on_air` holds the rest.
 pub fn ring(reaches: f32) -> Vec3 {
     let (door, _, _) = doorway(reaches);
+    let edge = ground(reaches).max.x;
 
-    vec3(door.x + 7.0, door.y, door.z - 6.5)
+    vec3((door.x + edge) * 0.5, door.y, door.z - 6.5)
 }
 
 /// The stones round it, each a lump of its own.
@@ -379,6 +520,15 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
     let north = stores[2];
     let behind = stores[3];
     let stop = |at: Vec3, facing: f32, stays: f32| Stop { at, facing, stays };
+    // **A stop that is at something looks at it, worked out and not
+    // written.** Every facing below that had a thing to be about was
+    // written by hand and three of the four had the sign the wrong way,
+    // so the man at the woodpile, the one at the north store and the one
+    // round the back all stood with their backs to the errand they had
+    // just walked to. `people::facing` is the one account of which way
+    // round it goes.
+    let looking_at =
+        |at: Vec3, thing: Vec3, stays: f32| stop(at, crate::people::facing(at, thing), stays);
     let fire = ring(reaches);
     let wood = pile(reaches);
     // where somebody stands to take wood off the pile: clear of it, on the
@@ -388,6 +538,10 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         door.y,
         wood.max.z + CLEAR_OF,
     );
+    // **How far from the middle of a fire 2.2 across somebody stands who
+    // is clear of it**, which is the one number the whole of this errand
+    // is laid out on.
+    let clear_of_the_fire = RING_WIDE * 0.5 + CLEAR_OF;
 
     vec![
         // **One who keeps the door.** Out of the hall, up the lane to the
@@ -398,15 +552,19 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
             // off the middle line, because the lane you arrive along is
             // the one place up here nobody may stand: spec 0056, and
             // `tests::nothing_stands_in_the_way_in`
-            stop(vec3(yard, door.y, door.z + 2.4), -FRAC_PI_2, 7.0),
+            // and looking east, down the climb, which is what the comment
+            // above has always said and what the facing did not: a minus
+            // here points at the hall's door, with the whole of Bifrost
+            // behind them
+            stop(vec3(yard, door.y, door.z + 2.4), FRAC_PI_2, 7.0),
             stop(
                 vec3(yard + 1.2, door.y, north.at.z - north.long * 0.5 - 2.0),
                 0.0,
                 0.0,
             ),
-            stop(
+            looking_at(
                 vec3(north.at.x, door.y, north.at.z - north.long * 0.5 - CLEAR_OF),
-                0.0,
+                north.at,
                 4.5,
             ),
             stop(
@@ -420,43 +578,48 @@ pub fn rounds(reaches: f32) -> Vec<Vec<crate::people::Stop>> {
         // named: from the house to the outside firepit and back for more
         // wood, with something to see at both ends of it.
         vec![
-            stop(at_the_wood, PI, 4.0),
-            stop(
-                vec3(fire.x + RING_WIDE * 3.0, door.y, fire.z - 4.0),
-                0.0,
-                0.0,
+            looking_at(
+                at_the_wood,
+                vec3(at_the_wood.x, door.y, (wood.min.z + wood.max.z) * 0.5),
+                4.0,
             ),
             // **Clear of the ring and not clear of its middle.** Standing
             // `CLEAR_OF` from the middle of a fire 2.2 across puts a body
             // in the coals, which is what `tests::nobody_walks_through_a_wall`
             // said the first time this was written.
-            stop(
-                vec3(fire.x + RING_WIDE * 0.5 + CLEAR_OF, door.y, fire.z),
-                -FRAC_PI_2,
-                6.5,
-            ),
-            stop(
-                vec3(fire.x + RING_WIDE * 3.0, door.y, fire.z - 4.0),
-                0.0,
-                0.0,
-            ),
+            //
+            // **On the fire's south side and not its east.** East is where
+            // the woodpile is walked from and would be the shorter errand,
+            // and it is also a stride and a half from an unrailed
+            // twenty-six metre drop. South is fourteen metres of slab and
+            // the walk from the pile is one straight leg, so the corner
+            // that used to swing round the ring is gone with it.
+            looking_at(vec3(fire.x, door.y, fire.z - clear_of_the_fire), fire, 6.5),
         ],
         // **And one round the back**, past the gable to the third store and
         // round again. It is the only round that leaves the lane, and what
         // it is for is that somebody is always arriving from somewhere you
         // were not looking.
         vec![
-            stop(
+            looking_at(
                 vec3(
                     behind.at.x,
                     door.y,
                     behind.at.z + behind.long * 0.5 + CLEAR_OF,
                 ),
-                PI,
+                behind.at,
                 5.5,
             ),
             stop(vec3(middle.x - 2.0, door.y, middle.z - 7.5), 0.0, 0.0),
-            stop(vec3(yard + 0.5, door.y, middle.z - 6.0), -FRAC_PI_2, 4.0),
+            // **Written off the fire and not off the lane**, because the
+            // yard has a fire in the middle of it now. Six metres south of
+            // the way in used to be open ground and is the ring's west rim:
+            // what moved the fire is what should say where this went.
+            looking_at(
+                vec3(fire.x - clear_of_the_fire, door.y, fire.z - 1.5),
+                door,
+                4.0,
+            ),
             stop(vec3(middle.x - 2.0, door.y, middle.z - 7.5), 0.0, 0.0),
         ],
     ]
@@ -1752,6 +1915,58 @@ mod tests {
             ours.min.x,
             west
         );
+    }
+
+    /// Spec 0067: nobody on a round is ever standing on nothing.
+    ///
+    /// **This place is a slab in the sky and the slab has an edge.** Every
+    /// other room in the building is walled, so a stop in the wrong place
+    /// is a stop inside a wall and `nobody_walks_through_a_wall` says so.
+    /// Up here the wrong place is off the side, where there is nothing to
+    /// be inside of, and that test passes on it exactly because there is
+    /// nothing there.
+    ///
+    /// Jake, 2026-11-13, looking west from the top of the climb: this
+    /// person is walking on air. The one who keeps the fire stood four
+    /// metres out past the east edge for six and a half seconds of every
+    /// round, twenty-six metres up.
+    ///
+    /// Walked and not measured, because the stops either side of a drop
+    /// can both be over ground.
+    #[test]
+    fn nobody_walks_on_air() {
+        let solid = everything();
+
+        for (n, round) in rounds(REACHES).into_iter().enumerate() {
+            let whole: f32 = round
+                .iter()
+                .enumerate()
+                .map(|(i, stop)| {
+                    stop.stays
+                        + stop.at.distance(round[(i + 1) % round.len()].at) / crate::people::PACE
+                })
+                .sum();
+            let steps = (whole / 0.15).ceil() as usize;
+
+            for step in 0..steps {
+                let doing = crate::people::doing(&round, whole * step as f32 / steps as f32);
+                // what holds them up: a top at their own feet, under the
+                // place they are standing
+                let held = solid.iter().any(|one| {
+                    doing.at.x >= one.min.x
+                        && doing.at.x <= one.max.x
+                        && doing.at.z >= one.min.z
+                        && doing.at.z <= one.max.z
+                        && (one.max.y - doing.at.y).abs() < crate::walk::RIDES
+                });
+
+                assert!(
+                    held,
+                    "round {} stands on nothing at {:.2} {:.2} {:.2}",
+                    n, doing.at.x, doing.at.y, doing.at.z
+                );
+            }
+        }
     }
 
     /// Spec 0056: what you see on arriving is the door and not a flank.

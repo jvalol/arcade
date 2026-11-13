@@ -45,6 +45,32 @@ down it rather than at the back of something.
 Nothing is behind a door. Every fitting here is outside, because what this
 place is for is being walked through and looked at.
 
+## What it is made of
+
+**Geometry and not textures**, which is this building's own answer and the
+cellar's panelling gives the reason: a cube's corners run nought to one
+however big the cube is, so a timber texture on a cabin's wall would be a
+single plank seven metres long. What makes sawn boards read is the shadow
+line between one and the next, and a shadow line wants an edge.
+
+- **The cabins are boarded**, horizontal courses standing `BOARD_OUT` proud.
+- **The roofs are shingled**, courses laid from the eaves up, each lapping the
+  one below, with a ridge board over the join. Two flat slabs leaning together
+  is a roof nobody has been on.
+- **The street has ruts**, at a wagon's own wheel spacing, in pieces that
+  wander: a pair of straight lines is road markings, and what a wheel does is
+  follow the last wheel without following it exactly.
+- **No two pieces are the same shade.** Every board, shingle and course takes
+  a tone off its own place, through two sines that do not divide, so the
+  pattern up a wall never repeats and no two walls of one building agree. A
+  wall of identical boards is a wall with lines ruled on it.
+
+**And the steading is staved where this is boarded.** Spec 0056's longhouse
+got upright split staves and courses of turf at the same time, which is what
+you build with an axe and a wood where this is what you build with a saw and
+a wagonload of planks. The grain running the other way does more to tell the
+two places apart than any colour would.
+
 ## The people
 
 Spec 0067's rounds, over this geography. What Jake named, one errand each:
@@ -114,10 +140,11 @@ could not:
   outbuildings are. The hall at the top of the bridge is the one building in
   this game you go into and it should stay that way.
 - **Anything on the trail.** No station, no asking, nothing to answer.
-- **Boards, shingles and grain.** Every surface here is one flat colour. The
-  steading is the same and reads, because what tells a building at thirty
-  metres is its shape and where the colour changes, but a village is looked at
-  from closer than a hall at the top of a bridge is.
+- **A picture of a board.** Everything with character on it here is geometry,
+  not texture, which is the cellar's own argument: a cube's corners run nought
+  to one however big it is, so a timber texture on a cabin's wall would be one
+  plank seven metres long. What is missing is grain *within* a board, and that
+  wants `room::tiled_plane` and a bake, which is its own change.
 - **A horse that moves.** Spec 0067's gait is a two-legged walk and a horse
   that used it would be a person on all fours.
 - **People avoiding each other.** Four rounds that crossed at the same second
