@@ -540,6 +540,79 @@ pub fn skylit(since: f32) -> glam::Vec4 {
 // which way it faces and what is written on it. It reads this file's clock and
 // its `gives_off`, and nothing here reads it back.
 
+/// Where the sun stands, as a direction from the eye.
+///
+/// Off `sunlight`, which is the direction the light travels, so this is
+/// that negated. One account of where the sun is: the thing you can see and
+/// the thing that casts the shadows are the same thing, which is the whole
+/// reason this is here and not a second angle of its own.
+pub fn sun_at(since: f32) -> Vec3 {
+    -sunlight(since)
+}
+
+/// How far off the eye the sun is drawn, and how wide it is there.
+///
+/// **The moon's distance, so the two share a sky.** It is hung off the eye
+/// the way the moon and the weather are: nothing out here is at a distance
+/// you could walk to.
+///
+/// **Six degrees, which is eleven times life.** The real sun is half a
+/// degree, which at this distance is two metres and reads as a bright
+/// speck. The moon next to it is drawn at twenty, forty times life, because
+/// its craters do not read otherwise and spec 0065 writes that down as a
+/// lie told on purpose. A sun has nothing on it to read, so it needs far
+/// less of a lie: this is the smallest size that is a disc rather than a
+/// dot, and it is the number to turn.
+pub const SUN_FAR: f32 = crate::moon::OFF;
+pub const SUN_WIDE: f32 = 24.0;
+
+/// How far under the horizon the disc is gone, and over how much of a drop
+/// it goes.
+///
+/// **Its own pair rather than the moon's, which these happen to agree
+/// with.** `moon::SETS_AT` is reasoned from a disc ten degrees of radius;
+/// this one is three. The two numbers are near enough today to look like
+/// one, and they are answers to different questions: a change to either
+/// body's drawn size moves one of them and not the other.
+///
+/// The land does the hiding, as it does for the moon. The disc is whole
+/// until its middle is three degrees under, which is the bottom of it on
+/// the horizon, and out by nine, and the field's hills stand about five, so
+/// nothing of it is ever cut off in open sky.
+pub const SUN_SETS_AT: f32 = -0.05;
+pub const SUN_SETS_OVER: f32 = 0.10;
+
+/// How much of it there is to see.
+///
+/// Read off the height of the thing being drawn rather than off `sun_up`,
+/// which is the plain sine before the lean in `sunlight` shortens it.
+pub fn sun_showing(since: f32) -> f32 {
+    ((sun_at(since).y - SUN_SETS_AT) / SUN_SETS_OVER + 1.0).clamp(0.0, 1.0)
+}
+
+/// The ball it is drawn as.
+///
+/// **A ball and not a billboard**, so it sits in the depth buffer and the
+/// hills in front of it cut it off the way they cut off the moon. Thirty-two
+/// round and sixteen up, against the moon's sixty-four and thirty-two: the
+/// moon is drawn three times wider with craters on it, where this is a flat
+/// disc whose limb at `SUN_WIDE` is already smooth at a quarter of that.
+pub fn sun_mesh() -> blitzkit::mesh::MeshData {
+    let mut mesh = blitzkit::mesh::MeshData::surface(32, 16, |u, v| crate::moon::dir(u, v) * 0.5);
+    mesh.compute_normals();
+
+    mesh
+}
+
+/// What the disc comes to, whatever the hour.
+///
+/// The moon's own shape, in `moon::lit`: the fade rides on the colour and
+/// not on the alpha, because taking the fourth channel with it puts a half
+/// transparent sun in the sky with the storm showing through it.
+pub fn sunlit_disc(since: f32) -> glam::Vec4 {
+    gives_off(crate::aim::SUN_DISC * sun_showing(since), since).extend(1.0)
+}
+
 /// How much of their light the lanterns are giving.
 ///
 /// On through the night and out through the day, and they take a while over

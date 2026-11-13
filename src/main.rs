@@ -794,6 +794,7 @@ struct Arcade {
     dome: Option<MeshId>,
     moon: Option<MeshId>,
     moon_face: Option<TextureId>,
+    sun: Option<MeshId>,
     /// The gravel the garden is floored with: one picture per bed, painted in
     /// the garden's own coordinates so the raking knows where the stones are,
     /// and the one quad all of them are laid on.
@@ -1328,6 +1329,7 @@ impl Arcade {
             dome: None,
             moon: None,
             moon_face: None,
+            sun: None,
             gravel: Vec::new(),
             ground: None,
             stones: Vec::new(),
@@ -6465,6 +6467,14 @@ impl Game for Arcade {
         self.dome = Some(renderer.add_mesh(&garden::dome_mesh(0.0)));
         self.moon = Some(renderer.add_mesh(&moon::mesh()));
         self.moon_face = Some(renderer.add_texture(&moon::face()));
+
+        // **The sun's own ball, coarser than the moon's and for the same
+        // reason the moon's is fine.** The moon is drawn eighty metres
+        // across with craters on it, so a straight edge on its limb is the
+        // first thing anybody sees. The sun is drawn at a third of that
+        // with nothing on it at all, and at 32 by 16 its limb is already
+        // under a pixel of round.
+        self.sun = Some(renderer.add_mesh(&garden::sun_mesh()));
         // the field: one quad for the ground, counted so a tile of grass is a
         // tile wherever the slab has slid to, and a trunk for each kind of
         // tree it stands. Spec 0040.
@@ -8648,6 +8658,33 @@ impl Game for Arcade {
                             .with_scale(Vec3::splat(moon::WIDE)),
                         moon::lit(self.since),
                         aim::VOID,
+                    );
+                }
+            }
+
+            // **And a sun, hung off the eye on the same shell.** Jake,
+            // 2026-11-13: the sun right now doesn't have a presence in the
+            // sky but the moon does, i think it'd be interesting to put a
+            // real sun in the sky.
+            //
+            // Where it is comes off `garden::sun_at`, which is the
+            // direction the light already travels, negated. The thing you
+            // can see and the thing that casts the shadows are one thing:
+            // there is no second angle here to drift from the first.
+            //
+            // No texture and no highlight. A sun has no features and
+            // nothing lights it, so what is wanted is a flat disc past one
+            // in every channel, which `garden::sunlit_disc` is.
+            if let Some(ball) = self.sun {
+                let showing = garden::sun_showing(self.since);
+
+                if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
+                    let hung = self.looking_from() + garden::sun_at(self.since) * garden::SUN_FAR;
+
+                    scene.push_plain(
+                        ball,
+                        &Transform::at(hung).with_scale(Vec3::splat(garden::SUN_WIDE)),
+                        garden::sunlit_disc(self.since),
                     );
                 }
             }
@@ -14245,6 +14282,30 @@ mod tests {
             &reference("moon"),
             (WIDE, TALL),
             standing_at(at, look, false, Some(0.75)),
+        );
+    }
+
+    /// Spec 0065: the sun over the garden, in the middle of the morning.
+    ///
+    /// **Looking along `garden::sun_at` rather than at a pitch of its
+    /// own**, which is the moon's picture's trick and for the same reason:
+    /// the disc is small and the only reliable way to have it in frame is
+    /// to ask the thing that knows where it is.
+    ///
+    /// Not at noon. At noon it is overhead, and a picture straight up is
+    /// the sun on a plain sky with nothing to judge its size against. Here
+    /// the land is in the bottom of the frame.
+    #[test]
+    fn the_sun_is_drawn() {
+        let reaches = reaches();
+        let at = garden::at(reaches);
+        let since = garden::when(0.15);
+        let look = vec3(at.x, at.y + EYE, at.z) + garden::sun_at(since) * 60.0;
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("sun"),
+            (WIDE, TALL),
+            standing_at(at, look, false, Some(0.15)),
         );
     }
 

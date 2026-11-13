@@ -228,6 +228,19 @@ pub const GLASS_BORDER: Vec4 = vec4(0.34, 0.33, 0.36, 1.0);
 pub const GLASS_PANEL: Vec4 = vec4(0.13, 0.14, 0.17, 1.0);
 
 pub const SUN: Vec3 = glam::vec3(1.0, 0.88, 0.72);
+
+/// And the sun's own disc, which is a different thing from the light it
+/// casts: `SUN` is what falls on the building, and this is what the thing
+/// in the sky comes to on screen.
+///
+/// **Past one by a long way, because a sun is the brightest thing there
+/// is.** Like `MOON` it is what lands rather than what multiplies, so it
+/// goes through `garden::gives_off`. Where the moon asks for 0.95 this
+/// asks for eleven: it clips to white through the middle and keeps a warm
+/// edge where the picture falls off, which is what looking at one does.
+/// Warmer than `SUN` by a little, because the disc is the hot body and
+/// not the light after the air has had it.
+pub const SUN_DISC: Vec3 = glam::vec3(11.0, 9.4, 7.4);
 pub const SUN_STRENGTH: f32 = 0.62;
 pub const FILL: Vec3 = glam::vec3(0.15, 0.18, 0.29);
 

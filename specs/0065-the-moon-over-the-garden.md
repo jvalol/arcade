@@ -130,6 +130,7 @@ ball are the same place. There is one now, and the inverse is written once in
 - What is asked for is what lands, with nothing clipping. — `moon::tests::the_face_lands_at_what_it_is_asked_for`
 - It is up at midnight and gone at noon. — `moon::tests::it_is_a_night_thing`
 - The moon over the garden matches its reference. — `tests::the_moon_is_drawn`
+- The sun over the garden matches its reference. — `tests::the_sun_is_drawn`
 
 ### Verified by hand
 
@@ -147,6 +148,40 @@ same place, up at the moon. The film runs at its own hour and its own day
 length so that the moon is up and in the west for the whole of it, which
 spec 0049 explains and `tour::FILM_AT` holds.
 
+## And a sun beside it, 2026-11-13
+
+Jake: the sun right now doesn't have a presence in the sky but the moon
+does. i think it'd be interesting to put a real sun in the sky. And, when
+asked how big: start smaller on the sun, i'll tell you if it's too small.
+
+It is the moon's own shape with three of its four lies taken out, and it
+cost about forty lines because of that. `garden::sun_mesh` is a ball,
+`garden::sunlit_disc` is a colour past one through `gives_off`, and
+`garden::sun_showing` fades it as it goes under. No picture, no phase and
+no turn: a sun has no features, so there is nothing to bake and nothing to
+keep facing the eye.
+
+**Where it is, is not a new number.** `garden::sun_at` is `garden::sunlight`
+negated, which is the direction the light already travels. The thing you can
+see and the thing that casts the shadows are one thing, so there is no second
+angle here to come apart from the first. This is the half of the moon's
+design worth copying: `moon::at` had to invent a place because nothing else
+knew one.
+
+**What it is drawn at is a lie, and a much smaller one than the moon's.**
+The real sun is half a degree, two metres at this distance, and reads as a
+speck. `SUN_WIDE` is 24, six degrees, eleven times life. The moon beside it
+is drawn at twenty degrees, forty times life, because craters do not read
+otherwise. A sun has nothing on it to read, so it needs far less of the lie,
+and this is the smallest size that is a disc rather than a dot.
+
+**Its own setting pair, which happens to agree with the moon's.**
+`SUN_SETS_AT` and `SUN_SETS_OVER` are the same numbers `moon::SETS_AT` and
+`moon::SETS_OVER` hold, and they are not the same number. The moon's are
+reasoned from a disc ten degrees of radius and the sun's from one of three.
+Written once above both, a change to either body's drawn size would silently
+move the other.
+
 ## Out of scope
 
 - **A room for it.** The moon cannot be seen from under a lid, so a room that
@@ -159,3 +194,10 @@ spec 0049 explains and `tour::FILM_AT` holds.
   one thing.
 - **Clouds and fog over it.** Spec 0019's storm already drifts across the
   dome; whether it crosses the moon is not answered here.
+- **The layering, which is still the wrong way round.** Jake, 2026-11-13: the
+  atmosphere and celestial bodies like the moon and the sun, stars, etc,
+  should be different layers. the clouds and lightning are closer to the
+  ground than the moon. They are not. The storm is the backdrop at the far
+  plane and both bodies hang at 230, so a cloud can never cross either one.
+  Fixing it wants alpha in the storm's picture so the breaks let a sky
+  through, and that is its own spec.
