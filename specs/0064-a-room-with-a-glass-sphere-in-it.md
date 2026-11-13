@@ -541,6 +541,34 @@ The bands are cut at the profile's own joints now, which is the torus, five
 down the shaft, the necking on its own and the echinus. The same count of
 boxes, and a column rather than a tube.
 
+### The skin cuts round the bays now, 2026-11-13
+
+The glazing stood proud of the building's outside skin for a day, and the
+note where it did said teaching `Room::outside` to cut round an opening was
+the real fix and its own piece of work. This is that piece.
+
+That face samples a column of each wall and asks what is over the spot,
+which tells it where a wall is and nothing about where a hole in one is. So
+it plastered from the lowest opening to the top in one rectangle, straight
+over the slots, and a pane set inside the opening was a pane behind the
+plaster.
+
+It reads the wall's own vertical spans now, taken off the boxes rather than
+sampled: a line through them is exact and costs one pass, where sampling
+would quantise the edge of every opening to whatever step was chosen. Each
+run of wall gets its own piece of plaster, so a window has a hole in the
+skin at the size the window actually is.
+
+The glazing sits in the middle of the wall's thickness, with a reveal
+either side, which is where glazing goes. `PANE_PROUD` is gone.
+
+**The first test of this passed its own control.** A face is a plane and
+that plane stands at the wall's outer face, not in the middle of the wall,
+so asking at the slot's own middle found nothing whatever the skin did.
+That is the third test in two days to pass its control before it was worth
+anything, and all three were the same mistake: writing the assertion
+against what I meant rather than against what the code holds.
+
 ## Acceptance criteria
 
 - The sphere traces the room's own boxes, and the list it is given is `solid` plus `lids` rather than a second account of the building. — `glass::tests::it_traces_the_building_itself`
@@ -555,6 +583,8 @@ boxes, and a column rather than a tube.
 - And the balustrade costs the flight none of its going, because it stands outside the tread ends. — `glass::tests::the_balustrade_costs_the_flight_none_of_its_going`
 - Nothing of the room below hangs in the flight. — `glass::tests::nothing_of_the_nook_hangs_in_the_flight`
 - One piece of the plinth draws its top, and only one, so no two faces of it fight for the same pixels. — `glass::tests::one_piece_of_the_plinth_draws_its_top`
+- The building's skin leaves the bays open rather than plastering over them. — `glass::tests::the_skin_leaves_the_bays_open`
+- And the glazing stands in the opening rather than proud of the skin. — `glass::tests::the_glazing_is_in_the_opening`
 - Every part of the nook's open floor still has a lamp on it with the pendant over the flight gone. — `room::tests::every_part_of_the_open_floor_has_a_lamp_on_it`
 - And the room over the nook is drawn. — `tests::the_glass_room_is_drawn`
 

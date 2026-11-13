@@ -1944,6 +1944,8 @@ impl Room {
         solid.extend(lids.iter().copied());
 
         let (step, rise, out_by) = (0.4, 0.3, 0.12);
+        // how far inside the outer face the wall is asked about
+        const INTO_THE_WALL: f32 = 0.05;
         let reaches = self.reaches;
         let over = |at: Vec3| {
             solid.iter().any(|box_| {
@@ -2006,6 +2008,9 @@ impl Room {
                 // or nothing if it is roofed all the way up
                 let columns = ((to - from) / step).ceil().max(1.0) as usize;
                 let mut opens: Vec<Option<f32>> = Vec::with_capacity(columns);
+                // and which parts of that column are wall rather than
+                // opening, which is what lets plaster go round a window
+                let mut walls: Vec<Vec<(f32, f32)>> = Vec::with_capacity(columns);
 
                 for n in 0..columns {
                     let at = from + (n as f32 + 0.5) * (to - from) / columns as f32;
@@ -2030,7 +2035,49 @@ impl Room {
                         up -= rise;
                     }
 
-                    opens.push(lowest.map(|low| low.max(0.0)));
+                    let low = lowest.map(|low| low.max(0.0));
+
+                    // **What of this column is wall, read off the boxes
+                    // rather than probed.** A line through them is exact
+                    // and costs one pass; sampling it would quantise the
+                    // edge of every opening to whatever step was chosen.
+                    //
+                    // Taken a little inside the outer face, because that is
+                    // where the wall is: on the face itself a box's own
+                    // bound is a coin toss.
+                    let (px, pz) = if along == 2 {
+                        (on - looks.x * INTO_THE_WALL, at)
+                    } else {
+                        (at, on - looks.z * INTO_THE_WALL)
+                    };
+                    let mut spans: Vec<(f32, f32)> = solid
+                        .iter()
+                        .filter(|box_| {
+                            box_.min.x <= px
+                                && box_.max.x >= px
+                                && box_.min.z <= pz
+                                && box_.max.z >= pz
+                        })
+                        .map(|box_| (box_.min.y, box_.max.y))
+                        .collect();
+
+                    spans.sort_by(|one, two| {
+                        one.0
+                            .partial_cmp(&two.0)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+
+                    let mut joined: Vec<(f32, f32)> = Vec::new();
+
+                    for (one, two) in spans {
+                        match joined.last_mut() {
+                            Some(last) if one <= last.1 + 1e-3 => last.1 = last.1.max(two),
+                            _ => joined.push((one, two)),
+                        }
+                    }
+
+                    opens.push(low);
+                    walls.push(joined);
                 }
 
                 // and the runs of columns that open from the same height
@@ -2042,24 +2089,45 @@ impl Room {
                         continue;
                     };
                     let mut end = n + 1;
+                    let same = |other: usize| {
+                        opens[other].map(|was| (was - low).abs() < 1e-3) == Some(true)
+                            && walls[other].len() == walls[n].len()
+                            && walls[other]
+                                .iter()
+                                .zip(walls[n].iter())
+                                .all(|(a, b)| (a.0 - b.0).abs() < 1e-3 && (a.1 - b.1).abs() < 1e-3)
+                    };
 
-                    while end < columns
-                        && opens[end].map(|other| (other - low).abs() < 1e-3) == Some(true)
-                    {
+                    while end < columns && same(end) {
                         end += 1;
                     }
 
                     let span = (to - from) / columns as f32;
                     let (one, two) = (from + n as f32 * span, from + end as f32 * span);
 
-                    out.push((
-                        if along == 2 {
-                            Aabb::new(vec3(on, low, one), vec3(on, top, two))
-                        } else {
-                            Aabb::new(vec3(one, low, on), vec3(two, top, on))
-                        },
-                        looks,
-                    ));
+                    // **One piece of plaster for each run of wall in the
+                    // column, not one from the lowest opening to the top.**
+                    // This face knew walls and not openings, so a slot cut
+                    // right through a wall was plastered straight over:
+                    // capriccio's spec 0064 had to stand its glazing proud
+                    // of the skin, and spec 0038's ways out want the same
+                    // cut. The spans are what the wall actually is.
+                    for (floor, ceiling) in walls[n].iter().copied() {
+                        let (floor, ceiling) = (floor.max(low), ceiling.min(top));
+
+                        if ceiling - floor < 1e-3 {
+                            continue;
+                        }
+
+                        out.push((
+                            if along == 2 {
+                                Aabb::new(vec3(on, floor, one), vec3(on, ceiling, two))
+                            } else {
+                                Aabb::new(vec3(one, floor, on), vec3(two, ceiling, on))
+                            },
+                            looks,
+                        ));
+                    }
 
                     n = end;
                 }

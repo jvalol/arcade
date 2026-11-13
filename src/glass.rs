@@ -742,37 +742,27 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 /// The glazing in the slots, which is drawn and not solid: what stops you is
 /// the sill, which is higher than anything here can ride.
 ///
-/// **On the face and not in the opening, which is a compromise.** The slot
-/// is a real hole: nothing solid stands in it, you can see out of it, and
-/// the sphere traces through it. But the building's outside skin is
-/// `Room::outside`, which samples columns and asks what is over each one,
-/// so it knows walls and does not know openings and plasters straight over
-/// this. A pane set inside the opening is a pane behind the plaster, which
-/// is how this was built first and why the elevation came back blank.
+/// **In the opening, since 2026-11-13.** It sat a little proud of the
+/// building's skin for a day, because `Room::outside` sampled columns and
+/// asked what was over each one, so it knew walls and did not know
+/// openings and plastered straight over this. A pane set inside the
+/// opening was a pane behind the plaster, which is how this was built
+/// first and why the elevation came back blank.
 ///
-/// So the glazing sits a little proud of the skin, which reads right from
-/// the field and is a drawing decision rather than a lie about the wall.
-/// Teaching `Room::outside` to cut round an opening is the real fix, it is
-/// the thing spec 0038's ways out would want too, and it is its own piece
-/// of work.
-pub const PANE_PROUD: f32 = 0.06;
+/// That face reads the wall's own spans now and leaves the hole alone, so
+/// the glazing goes where glazing goes: in the middle of the wall's
+/// thickness, with a reveal either side of it.
+pub const PANE_THICK: f32 = 0.04;
 
 pub fn panes(reaches: f32) -> Vec<Aabb> {
-    let room = inside(reaches);
-
     slots(reaches)
         .into_iter()
         .map(|slot| {
-            let west = (slot.min.x + slot.max.x) * 0.5 < (room.min.x + room.max.x) * 0.5;
-            let face = if west {
-                room.min.x - THICK - PANE_PROUD
-            } else {
-                room.max.x + THICK + PANE_PROUD
-            };
+            let middle = (slot.min.x + slot.max.x) * 0.5;
 
             Aabb::new(
-                vec3(face - 0.03, slot.min.y, slot.min.z),
-                vec3(face + 0.03, slot.max.y, slot.max.z),
+                vec3(middle - PANE_THICK * 0.5, slot.min.y, slot.min.z),
+                vec3(middle + PANE_THICK * 0.5, slot.max.y, slot.max.z),
             )
         })
         .collect()
@@ -1838,6 +1828,63 @@ mod tests {
             holds(well(reaches).min.z),
             "the north end is not in the glass"
         );
+    }
+
+    /// Spec 0064: the building's skin leaves the bays open.
+    ///
+    /// **It plastered straight over them for a day.** `Room::outside`
+    /// samples a column of each face and asks what is over the spot, which
+    /// tells it where a wall is and nothing about where a hole in one is,
+    /// so the elevation came back blank and the glazing had to stand proud
+    /// of the skin to be seen at all. That face reads the wall's own spans
+    /// now.
+    ///
+    /// Asked of the middle of each slot, because an edge is where the
+    /// plaster is meant to stop and a test on an edge is a test on a
+    /// rounding.
+    #[test]
+    fn the_skin_leaves_the_bays_open() {
+        let room = crate::room::Room::of(crate::games());
+        let faces = room.outside();
+
+        for slot in slots(room.reaches) {
+            let middle = slot.center();
+            // **A face is a plane, and its plane stands at the wall's outer
+            // face rather than in the middle of the wall.** Asked at the
+            // slot's own middle this found nothing whatever the skin did,
+            // and passed its own control. What it has to ask is whether a
+            // face anywhere in the wall's thickness crosses the hole.
+            let over = faces.iter().find(|(face, _)| {
+                face.min.x >= slot.min.x - 0.01
+                    && face.max.x <= slot.max.x + 0.01
+                    && face.min.y < middle.y
+                    && face.max.y > middle.y
+                    && face.min.z < middle.z
+                    && face.max.z > middle.z
+            });
+
+            assert!(
+                over.is_none(),
+                "the skin covers the bay at {:?}: {:?}",
+                middle,
+                over
+            );
+        }
+    }
+
+    /// Spec 0064: and the glazing stands in the opening rather than on it.
+    #[test]
+    fn the_glazing_is_in_the_opening() {
+        let reaches = reaches();
+
+        for (pane, slot) in panes(reaches).into_iter().zip(slots(reaches)) {
+            assert!(
+                pane.min.x >= slot.min.x - 1e-3 && pane.max.x <= slot.max.x + 1e-3,
+                "a pane at {:?} is not inside its slot at {:?}",
+                pane,
+                slot
+            );
+        }
     }
 
     /// Spec 0064: one piece of the plinth draws its top, and only one.
