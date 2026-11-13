@@ -3143,7 +3143,7 @@ impl Arcade {
                     cube,
                     &Transform::at(vec3(middle.x, middle.y, one.at.z))
                         .with_rotation(glam::Quat::from_rotation_z(-side * slope))
-                        .with_scale(vec3(along * 1.04, 0.2, over * 2.0)),
+                        .with_scale(vec3(along * 1.04, village::PITCH_DEEP, over * 2.0)),
                     aim::VILLAGE_ROOF,
                     aim::MATTE,
                 );
@@ -3741,7 +3741,11 @@ impl Arcade {
                             // other way and the two pitches flared away from
                             // each other like wings with the sky between them.
                             .with_rotation(glam::Quat::from_rotation_z(-side * slope))
-                            .with_scale(vec3((to - from) * along * 1.04, 0.22, z_to - z_from)),
+                            .with_scale(vec3(
+                                (to - from) * along * 1.04,
+                                valhalla::PITCH_DEEP,
+                                z_to - z_from,
+                            )),
                         aim::VALHALLA_ROOF,
                         aim::MATTE,
                     );

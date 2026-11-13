@@ -336,8 +336,19 @@ pub fn staves(reaches: f32) -> Vec<(Vec3, Vec3, f32)> {
 /// places apart: the village is sawn and nailed and this is cut and laid.
 /// Deeper courses than the village's, because a turf is a spade's width and
 /// a shingle is a hand's.
+/// How thick a pitch is, which is the slab the courses lie on.
+///
+/// **Here rather than only where it is drawn**, for the reason spelt out
+/// at `village::PITCH_DEEP`: the courses came off the pitch's middle line
+/// and the pitch has a thickness of its own, so every course of turf on
+/// this roof was inside the slab it was laid on.
+pub const PITCH_DEEP: f32 = 0.22;
+
+/// How deep one course of turf is up the slope, the gap to the next, and
+/// how far each stands proud of the pitch.
 pub const TURF_COURSE: f32 = 0.62;
-pub const TURF_OUT: f32 = 0.06;
+pub const TURF_GAP: f32 = 0.07;
+pub const TURF_OUT: f32 = 0.12;
 
 /// The courses on one roof: where each sits, how big, its lean and its tone.
 pub fn turfing(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
@@ -355,13 +366,16 @@ pub fn turfing(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
         for course in 0..courses {
             let along = (course as f32 + 0.5) / courses as f32;
             let on = eaves + (ridge - eaves) * along;
-            let up = vec3(side * slope.sin() * TURF_OUT, slope.cos() * TURF_OUT, 0.0);
+            // half the pitch and half the course, so the course sits on
+            // the pitch's face rather than inside it
+            let deep = (PITCH_DEEP + TURF_OUT) * 0.5;
+            let up = vec3(side * slope.sin() * deep, slope.cos() * deep, 0.0);
             let seed = along * 17.0 + side * 3.0 + one.at.z * 0.9;
             let tone = 1.0 + (seed * 2.1).sin() * 0.1 + (seed * 0.61).sin() * 0.07;
 
             out.push((
                 vec3(on.x + up.x, on.y + up.y, one.at.z),
-                vec3(run / courses as f32 * 1.1, 0.12, over * 2.0),
+                vec3(run / courses as f32 - TURF_GAP, TURF_OUT, over * 2.0 - 0.04),
                 -side * slope,
                 tone,
             ));
@@ -1378,6 +1392,40 @@ mod tests {
     use crate::trail::Asked;
 
     const REACHES: f32 = 20.0;
+
+    /// Spec 0068: a course lies on the face of its pitch, not inside it.
+    ///
+    /// **Because the course and the pitch were written in two places.**
+    /// The pitch's thickness lived where it was drawn and the courses came
+    /// off the pitch's middle line, so every course of turf on every roof was
+    /// buried in the slab it was laid on and the roofs read as two smooth
+    /// planes. Nothing in either file was wrong on its own.
+    #[test]
+    fn every_course_stands_proud_of_its_pitch() {
+        for one in built(REACHES) {
+            let slope = ((one.ridge - one.eaves) / (one.wide * 0.5)).atan();
+
+            for (at, size, lean, _) in turfing(&one) {
+                // which pitch it is on, which its own lean says
+                let side = if lean < 0.0 { 1.0f32 } else { -1.0 };
+                let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+                let normal = vec3(side * slope.sin(), slope.cos(), 0.0);
+                let off = (vec3(at.x, at.y, 0.0) - eaves).dot(normal);
+
+                assert!(
+                    off - size.y * 0.5 >= PITCH_DEEP * 0.5 - 1e-3,
+                    "a course's underside is {:.3} off the pitch's middle and the pitch is {:.3} thick",
+                    off - size.y * 0.5,
+                    PITCH_DEEP
+                );
+                assert!(
+                    off + size.y * 0.5 >= PITCH_DEEP * 0.5 + TURF_OUT - 1e-3,
+                    "a course stands {:.3} proud of the pitch's face",
+                    off + size.y * 0.5 - PITCH_DEEP * 0.5
+                );
+            }
+        }
+    }
 
     /// Everything you can walk into up here, which is this place and the
     /// bridge it stands on the end of.

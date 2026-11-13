@@ -438,7 +438,7 @@ pub fn track(reaches: f32) -> Aabb {
 /// wander: each piece is laid off the one before it by a little, the way a
 /// wheel follows the last wheel without following it exactly.
 pub const RUT_WIDE: f32 = 0.34;
-pub const RUT_PIECES: usize = 26;
+pub const RUT_PIECES: usize = 58;
 
 pub fn ruts(reaches: f32) -> Vec<Aabb> {
     let middle = at(reaches);
@@ -458,10 +458,16 @@ pub fn ruts(reaches: f32) -> Vec<Aabb> {
             out.push(Aabb::from_center_size(
                 vec3(
                     along,
-                    middle.y + TRACK_UP + 0.004,
+                    middle.y + TRACK_UP + 0.002,
                     middle.z + apart + wander,
                 ),
-                vec3(piece * 1.06, 0.01, RUT_WIDE),
+                // **Barely off the track, and in short pieces.** It was a
+                // centimetre proud in pieces nearly three metres long,
+                // which lit along its edge and stepped sideways at every
+                // join: a kerb laid down the street rather than a wheel
+                // worn into it. What a rut is here is a darker line, and
+                // the lift is only enough to keep it off the track's face.
+                vec3(piece * 1.06, 0.005, RUT_WIDE),
             ));
         }
     }
@@ -570,18 +576,34 @@ pub fn boarding(one: &Built) -> Vec<(Vec3, Vec3, f32)> {
     out
 }
 
-/// How deep one course of shingles is up the slope, and how far each stands
-/// proud of the one above it.
+/// How thick a roof's pitch is, which is the slab the courses lie on.
+///
+/// **Here rather than only where it is drawn.** `shingling` has to stand
+/// its courses clear of this and the two were written in two places: the
+/// courses came off the pitch's middle line by five centimetres and the
+/// pitch is twenty thick, so every shingle on every roof in the village
+/// was inside the slab it was laid on. Nothing showed, and nothing could.
+/// `tests::every_course_stands_proud_of_its_pitch` holds it now.
+pub const PITCH_DEEP: f32 = 0.2;
+
+/// How deep one course of shingles is up the slope, the gap between one
+/// course and the next, and how far each stands proud of the pitch.
+///
+/// Laid the way the boards are laid on the walls: proud, with a gap, so
+/// the shadow line under a course is what the eye reads. Lapping them was
+/// the first try and it puts two courses' outer faces in one plane over
+/// the lap, which is this building's oldest fault.
 pub const SHINGLE: f32 = 0.42;
+pub const SHINGLE_GAP: f32 = 0.05;
 pub const SHINGLE_OUT: f32 = 0.05;
 
 /// The courses on one roof: where each sits, how big, which way it leans,
 /// and its own tone.
 ///
-/// **Laid from the eaves up, each lapping the one below.** A roof drawn as
+/// **Laid from the eaves up, each standing off the pitch.** A roof drawn as
 /// two flat slabs is a roof nobody has been on. What reads as shingle at
 /// thirty metres is the line of shadow under every course, which is why
-/// each one stands `SHINGLE_OUT` off the pitch it lies on.
+/// each one stands `SHINGLE_OUT` off the face of the pitch it lies on.
 pub fn shingling(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
     let run = slope_run(one);
     let rise = one.ridge - one.eaves;
@@ -597,18 +619,23 @@ pub fn shingling(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
         for course in 0..courses {
             let along = (course as f32 + 0.5) / courses as f32;
             let on = eaves + (ridge - eaves) * along;
-            // out of the pitch along its own normal, which leans with it
-            let up = vec3(
-                side * slope.sin() * SHINGLE_OUT,
-                slope.cos() * SHINGLE_OUT,
-                0.0,
-            );
+            // **Out of the pitch along its own normal, far enough to clear
+            // it.** Half the pitch and half the course, so the course sits
+            // on the pitch's face the way a board sits on a wall.
+            let deep = (PITCH_DEEP + SHINGLE_OUT) * 0.5;
+            let up = vec3(side * slope.sin() * deep, slope.cos() * deep, 0.0);
             let seed = along * 23.0 + side * 5.0 + one.at.x * 0.7;
             let tone = 1.0 + (seed * 2.3).sin() * 0.09 + (seed * 0.57).sin() * 0.06;
 
             out.push((
                 vec3(on.x + up.x, on.y + up.y, one.at.z),
-                vec3(run / courses as f32 * 1.12, 0.09, over * 2.0),
+                // and a little short of the gable at either end, so no two
+                // faces end in one plane
+                vec3(
+                    run / courses as f32 - SHINGLE_GAP,
+                    SHINGLE_OUT,
+                    over * 2.0 - 0.04,
+                ),
                 -side * slope,
                 tone,
             ));
@@ -826,6 +853,40 @@ mod tests {
     use super::*;
 
     const REACHES: f32 = 20.0;
+
+    /// Spec 0068: a course lies on the face of its pitch, not inside it.
+    ///
+    /// **Because the course and the pitch were written in two places.**
+    /// The pitch's thickness lived where it was drawn and the courses came
+    /// off the pitch's middle line, so every shingle on every roof was
+    /// buried in the slab it was laid on and the roofs read as two smooth
+    /// planes. Nothing in either file was wrong on its own.
+    #[test]
+    fn every_course_stands_proud_of_its_pitch() {
+        for one in built(REACHES) {
+            let slope = ((one.ridge - one.eaves) / (one.wide * 0.5)).atan();
+
+            for (at, size, lean, _) in shingling(&one) {
+                // which pitch it is on, which its own lean says
+                let side = if lean < 0.0 { 1.0f32 } else { -1.0 };
+                let eaves = vec3(one.at.x + side * one.wide * 0.5, one.at.y + one.eaves, 0.0);
+                let normal = vec3(side * slope.sin(), slope.cos(), 0.0);
+                let off = (vec3(at.x, at.y, 0.0) - eaves).dot(normal);
+
+                assert!(
+                    off - size.y * 0.5 >= PITCH_DEEP * 0.5 - 1e-3,
+                    "a course's underside is {:.3} off the pitch's middle and the pitch is {:.3} thick",
+                    off - size.y * 0.5,
+                    PITCH_DEEP
+                );
+                assert!(
+                    off + size.y * 0.5 >= PITCH_DEEP * 0.5 + SHINGLE_OUT - 1e-3,
+                    "a course stands {:.3} proud of the pitch's face",
+                    off + size.y * 0.5 - PITCH_DEEP * 0.5
+                );
+            }
+        }
+    }
 
     /// Spec 0068: there is a clear way down the street.
     ///
