@@ -20,13 +20,40 @@ use std::f32::consts::{PI, TAU};
 
 use glam::{vec3, Quat, Vec3, Vec4};
 
-/// How far off it hangs.
-///
-/// Further than anything in the field and well inside `field::SEES`, so it is
-/// never clipped and nothing out there stands in front of it.
-pub const OFF: f32 = 230.0;
+use crate::garden::smoothstep;
 
-/// How wide it is drawn, in metres at `OFF`.
+/// How far off it hangs, as a share of what the camera sees there.
+///
+/// **A share and not a number, since spec 0099.** It was 230, chosen as
+/// further than anything in the field and well inside `field::SEES`. But
+/// `field::sees` grows with the room you are standing in: out on the bridge
+/// it is 682 rather than 420, and the horizon forms that stand at
+/// `field::HORIZON_OUT` of it go to 239, which is past a moon at 230. The
+/// moon was in front of the hills out there and nobody had looked.
+///
+/// Everything hung off the eye now takes a share of the same number, so the
+/// order holds wherever you stand: the horizon at 0.35, the cloud deck from
+/// `garden::DECK_OUT`, the bodies here, and a backdrop at `BEHIND_IT_ALL`,
+/// which is 0.9. `garden::tests::the_sky_is_layered_in_order` holds it,
+/// measured off the deck's own vertices.
+///
+/// Eight tenths: far enough that the deck's furthest corner is well inside
+/// it, near enough that the far limb at 0.94 is inside the far plane.
+pub const OUT: f32 = 0.80;
+
+/// And where that comes to, for a view from `at`.
+pub fn off(at: Vec3) -> f32 {
+    crate::field::sees(at) * OUT
+}
+
+/// How wide it is drawn, as an angle across the sky.
+///
+/// **An angle and not a width, since spec 0099**, because `off` moves with
+/// where you are standing and a width in metres at one distance is a
+/// different moon at another. Measured back off the 80 metres at 230 this
+/// had always been, so nothing about the moon changed when the shell did.
+///
+/// What follows was written of that 80 and is all about the angle anyway:
 ///
 /// **Measured rather than chosen.** A moon 16 wide at 230 is four degrees
 /// across, which came to 43 pixels in a 900 by 720 frame, and at 43 pixels not
@@ -37,7 +64,12 @@ pub const OFF: f32 = 230.0;
 /// of a room rather than what is over one.
 ///
 /// Still a lie about the size, as the 16 was. The real one is half a degree.
-pub const WIDE: f32 = 80.0;
+pub const ACROSS: f32 = 19.74;
+
+/// What that comes to in metres, at a given distance.
+pub fn wide(off: f32) -> f32 {
+    2.0 * off * (ACROSS.to_radians() * 0.5).tan()
+}
 
 /// Which way the near side looks before it is turned.
 ///
@@ -367,12 +399,6 @@ fn fractal(p: Vec3, octaves: usize, scale: f32) -> f32 {
     }
 
     out / all
-}
-
-fn smoothstep(low: f32, high: f32, x: f32) -> f32 {
-    let t = ((x - low) / (high - low)).clamp(0.0, 1.0);
-
-    t * t * (3.0 - 2.0 * t)
 }
 
 /// How deep a crater of this radius is, in radii of the body.
@@ -1130,7 +1156,7 @@ mod tests {
         // last place a hill can hide it
         let on_the_skyline = 6.0f32.to_radians().sin();
         // and half the disc, which is what has to be gone before it goes out
-        let all_under = -(crate::moon::WIDE * 0.5 / crate::moon::OFF).atan().sin() - 0.1;
+        let all_under = -(crate::moon::ACROSS.to_radians() * 0.5).sin() - 0.1;
         let mut lit_low = false;
         let mut out_under = false;
 

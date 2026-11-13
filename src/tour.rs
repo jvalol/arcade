@@ -996,7 +996,7 @@ pub fn clip(room: &crate::room::Room, done: bool) -> Vec<Step> {
         let eye = vec3(stand.x, stand.y + crate::EYE, stand.z);
         let moon = crate::moon::at(crate::garden::when(FILM_AT));
 
-        route.push(Step::Look(eye + moon * crate::moon::OFF));
+        route.push(Step::Look(eye + moon * crate::moon::off(eye)));
         route.push(Step::Stand(2.0));
     }
 

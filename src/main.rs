@@ -782,7 +782,22 @@ struct Arcade {
     boarding: Vec<MeshId>,
     stonework: Option<TextureId>,
     /// The garden's sky and the dome it is painted on, per spec 0010.
-    storm: Option<TextureId>,
+    ///
+    /// One picture per weather rather than one picture, per spec 0066. They
+    /// are baked at load and never rebuilt: a sky costs three milliseconds
+    /// and the whole set costs twelve, which is nothing beside the moon's
+    /// five hundred and forty, and swapping which one the backdrop is
+    /// handed is free where rebaking one would be a hitch.
+    skies: Vec<TextureId>,
+    /// And the sky's own colour behind them, which the backdrop wears.
+    /// Spec 0099.
+    wash: Option<TextureId>,
+    /// The dome the cloud is drawn on, which is the backdrop's shape at a
+    /// hundred and sixty metres. Its own upload because it is see-through
+    /// and the backdrop is not, and `add_sky_mesh` because a mesh pushed
+    /// rather than handed over has nowhere for the renderer to take the
+    /// mark. Spec 0099.
+    cloud_deck: Option<MeshId>,
     /// Heimdall's own parts, per spec 0055: a carved head, a cloak, a
     /// helm with a nose bar, and the horn.
     carved_head: Option<MeshId>,
@@ -1320,7 +1335,9 @@ impl Arcade {
             grain: Vec::new(),
             boarding: Vec::new(),
             stonework: None,
-            storm: None,
+            skies: Vec::new(),
+            wash: None,
+            cloud_deck: None,
             carved_head: None,
             cloak: None,
             helm: None,
@@ -6236,9 +6253,13 @@ impl Game for Arcade {
             renderer.update_mesh(mesh, &spa::stream_mesh(self.since));
         }
 
-        // and the sky, whose weather goes round by its picture moving rather
-        // than by the dome turning. See `garden::dome_mesh`.
-        if let Some(mesh) = self.dome {
+        // and the cloud, whose weather goes round by its picture moving
+        // rather than by the dome turning. See `garden::dome_mesh`.
+        //
+        // The deck and not the backdrop, per spec 0099. The backdrop is a
+        // radial wash now, and a wash whose picture slides is a wash whose
+        // middle wanders off the apex, so it is uploaded once and left.
+        if let Some(mesh) = self.cloud_deck {
             renderer.update_mesh(mesh, &garden::dome_mesh(self.since));
         }
 
@@ -6451,7 +6472,14 @@ impl Game for Arcade {
             })
             .collect();
         self.stonework = Some(renderer.add_texture(&carpet::stonework(carpet::STONE_SEED)));
-        self.storm = Some(renderer.add_texture(&garden::storm(0x5704)));
+        // one seed for the lot, so the four are one field of cloud under four
+        // curves rather than four different nights
+        self.skies = garden::SKIES
+            .iter()
+            .map(|sky| renderer.add_texture(&garden::clouds(0x5704, sky)))
+            .collect();
+        self.wash = Some(renderer.add_texture(&garden::sky_wash()));
+        self.cloud_deck = Some(renderer.add_sky_mesh(&garden::dome_mesh(0.0)));
         self.carved_head =
             Some(renderer.add_mesh(&cellar::turned(people::CUT_SIDES, 14, people::carved_head)));
         self.cloak = Some(renderer.add_mesh(&cellar::turned(
@@ -8613,16 +8641,17 @@ impl Game for Arcade {
             // would have become the next time anybody refreshed it.
             // `sees_outdoors` is false out there, because `in_the_deep` is
             // the first half of it.
-            if let (Some(dome), Some(storm)) = (self.dome, self.storm) {
+            // The sky itself, which is now the colour and nothing else:
+            // the cloud comes after the moon and the sun, per spec 0099.
+            if let (Some(dome), Some(wash)) = (self.dome, self.wash) {
                 if self.sees_outdoors {
+                    let sky = garden::overhead(self.since).sky;
+
                     scene.backdrop(
                         dome,
-                        storm,
-                        garden::gives_off(
-                            (garden::skylit(self.since) + self.flashed()).truncate(),
-                            self.since,
-                        )
-                        .extend(1.0),
+                        wash,
+                        garden::gives_off(garden::skylit(self.since).truncate() * sky, self.since)
+                            .extend(1.0),
                         900.0,
                     );
                 }
@@ -8644,7 +8673,9 @@ impl Game for Arcade {
 
                 if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
                     let out = moon::at(self.since);
-                    let hung = self.looking_from() + out * moon::OFF;
+                    let eye = self.looking_from();
+                    let off = moon::off(eye);
+                    let hung = eye + out * off;
 
                     scene.push_textured(
                         ball,
@@ -8655,7 +8686,7 @@ impl Game for Arcade {
                         // keeps the same side to us anyway.
                         &Transform::at(hung)
                             .with_rotation(moon::turned(-out))
-                            .with_scale(Vec3::splat(moon::WIDE)),
+                            .with_scale(Vec3::splat(moon::wide(off))),
                         moon::lit(self.since),
                         aim::VOID,
                     );
@@ -8679,13 +8710,55 @@ impl Game for Arcade {
                 let showing = garden::sun_showing(self.since);
 
                 if showing > 0.01 && self.room.out_of_doors(self.looking_from()) {
-                    let hung = self.looking_from() + garden::sun_at(self.since) * garden::SUN_FAR;
+                    let eye = self.looking_from();
+                    let off = moon::off(eye);
+                    let hung = eye + garden::sun_at(self.since) * off;
 
                     scene.push_plain(
                         ball,
-                        &Transform::at(hung).with_scale(Vec3::splat(garden::SUN_WIDE)),
+                        &Transform::at(hung).with_scale(Vec3::splat(garden::sun_wide(off))),
                         garden::sunlit_disc(self.since),
                     );
+                }
+            }
+
+            // **And the cloud over the pair of them.** Spec 0099. Jake:
+            // the moon still appears to be in front of the clouds. It was,
+            // and it had to be, because the sky was one opaque thing at the
+            // far plane and a moon has to be nearer than that to be drawn
+            // at all. The deck hangs at `DECK_FAR`, inside the bodies.
+            //
+            // One deck most of the time and two while the weather turns,
+            // the old dissolving into the new. The alpha is each one's
+            // share and the tint is shared, because a tint apiece would
+            // tint the dissolve twice.
+            //
+            // **The flash is on the cloud and not on the sky**, which is
+            // what spec 0016 says is lighting up: not the bolt but a mile
+            // of cloud lit from inside. On the backdrop it lit a clear
+            // night sky, which is a flash with nothing to flash in.
+            if let (Some(mesh), true) = (self.cloud_deck, self.sees_outdoors) {
+                let overhead = garden::overhead(self.since);
+                // **The flash added after the tint and not before it.**
+                // It is its own light on the cloud rather than a share of
+                // the cloud's colour: multiplied in, a storm's dark deck
+                // put out its own lightning.
+                let lit = garden::gives_off(
+                    garden::skylit(self.since).truncate() * overhead.cloud
+                        + self.flashed().truncate(),
+                    self.since,
+                );
+                let hung = Transform::at(self.looking_from())
+                    .with_scale(Vec3::splat(garden::deck_scale(self.looking_from())));
+
+                for (which, share) in overhead.decks {
+                    if share <= 0.004 {
+                        continue;
+                    }
+
+                    if let Some(picture) = self.skies.get(which).copied() {
+                        scene.push_textured(mesh, picture, &hung, lit.extend(share), aim::VOID);
+                    }
                 }
             }
 
@@ -12242,11 +12315,26 @@ mod tests {
         done: bool,
         hour: Option<f32>,
     ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
+        standing_when(at, looking_at, done, hour.map(garden::when))
+    }
+
+    /// And the same at a given second rather than a given hour.
+    ///
+    /// **Because an hour is no longer a frame.** Spec 0066 gives the sky
+    /// four weathers and rolls one per day, so a picture that wants a
+    /// particular sky has to say which day as well, and `garden::under`
+    /// is what finds one.
+    fn standing_when(
+        at: Vec3,
+        looking_at: Vec3,
+        done: bool,
+        since: Option<f32>,
+    ) -> impl FnOnce(&mut blitzkit::renderer::Renderer) -> (Scene, Camera) {
         move |renderer| {
             let (mut arcade, mut geometry, mut text, sound) = built(renderer, done);
 
-            if let Some(hour) = hour {
-                arcade.since = garden::when(hour);
+            if let Some(since) = since {
+                arcade.since = since;
             }
 
             posed(
@@ -14272,16 +14360,22 @@ mod tests {
     /// is fully lit, so the picture that holds the face is the one taken at
     /// the pitch it is actually at.
     #[test]
+    ///
+    /// **On a clear night, since spec 0099.** With cloud over it this is a
+    /// picture of cloud, and what it is for is the face: the seas, the
+    /// craters and the terminator. The cloud has its own picture next door
+    /// in `the_cloud_crosses_the_moon`, and the two were the same frame
+    /// for an hour before anybody noticed.
     fn the_moon_is_drawn() {
         let reaches = reaches();
         let at = garden::at(reaches);
-        let since = garden::when(0.75);
+        let since = garden::under(0.75, "clear").expect("no clear midnight in a fortnight");
         let look = vec3(at.x, at.y + EYE, at.z) + moon::at(since) * 60.0;
 
         blitzkit::picture::drawn_looks_right(
             &reference("moon"),
             (WIDE, TALL),
-            standing_at(at, look, false, Some(0.75)),
+            standing_when(at, look, false, Some(since)),
         );
     }
 
@@ -14295,18 +14389,76 @@ mod tests {
     /// Not at noon. At noon it is overhead, and a picture straight up is
     /// the sun on a plain sky with nothing to judge its size against. Here
     /// the land is in the bottom of the frame.
+    ///
+    /// **And on a named day, not just at a named hour.** Spec 0066 rolls a
+    /// sky per day and puts the sun out under heavy cloud, so an hour on
+    /// its own gave this a storm and a picture of the sun with no sun in
+    /// it, which passed.
     #[test]
     fn the_sun_is_drawn() {
         let reaches = reaches();
         let at = garden::at(reaches);
-        let since = garden::when(0.15);
+        let since = garden::under(0.15, "clear").expect("no clear morning in a fortnight");
         let look = vec3(at.x, at.y + EYE, at.z) + garden::sun_at(since) * 60.0;
 
         blitzkit::picture::drawn_looks_right(
             &reference("sun"),
             (WIDE, TALL),
-            standing_at(at, look, false, Some(0.15)),
+            standing_when(at, look, false, Some(since)),
         );
+    }
+
+    /// Spec 0099: the cloud is in front of the moon.
+    ///
+    /// **The complaint, as a picture.** Jake: the moon still appears to be
+    /// in front of the clouds. It was. The sky was one opaque thing at the
+    /// far plane and the moon had to be nearer than that to be drawn at
+    /// all, so no cloud could ever cross it.
+    ///
+    /// A fair night rather than a storm, because a lid has nothing to
+    /// cross and a clear sky has nothing to cross with. Wound forward
+    /// until the deck's drift carries cloud over the moon's own place,
+    /// which is what `found` does, so the picture is of the thing rather
+    /// than of an hour that might have it.
+    #[test]
+    fn the_cloud_crosses_the_moon() {
+        let reaches = reaches();
+        let at = garden::at(reaches);
+        let since = garden::under(0.75, "fair").expect("no fair midnight in a fortnight");
+        let look = vec3(at.x, at.y + EYE, at.z) + moon::at(since) * 60.0;
+
+        blitzkit::picture::drawn_looks_right(
+            &reference("moon-behind-cloud"),
+            (WIDE, TALL),
+            standing_when(at, look, false, Some(since)),
+        );
+    }
+
+    /// Spec 0066: the garden under each of the four skies.
+    ///
+    /// **The test the weather actually has.** The three outdoor pictures
+    /// above take whichever sky the hour they are pinned at happens to
+    /// roll, which is a picture of the garden and not of the weather. These
+    /// four ask for a named sky and hold what it comes to.
+    ///
+    /// Looking up over the west wall, so the frame is mostly sky with
+    /// enough of the garden in it to say what the light is doing.
+    #[test]
+    fn the_skies_are_drawn() {
+        let reaches = reaches();
+        let at = garden::at(reaches);
+
+        for sky in garden::SKIES.iter() {
+            let since = garden::under(0.25, sky.name)
+                .unwrap_or_else(|| panic!("{} never comes up in a fortnight", sky.name));
+            let look = vec3(at.x - 30.0, at.y + EYE + 16.0, at.z);
+
+            blitzkit::picture::drawn_looks_right(
+                &reference(&format!("sky-{}", sky.name)),
+                (WIDE, TALL),
+                standing_when(at, look, false, Some(since)),
+            );
+        }
     }
 
     /// Spec 0027: the baths, from the corner by the tub, down the pool.

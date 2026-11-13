@@ -346,7 +346,15 @@ pub fn solid(reaches: f32) -> Vec<Aabb> {
 /// inside lands on cloud. Sprung level with the wall tops and only as wide as
 /// the room, there was a wedge of black over one corner where the sky ran out
 /// and the roof of the hall showed behind it.
-pub const SKY: u32 = 512;
+/// **A thousand and twenty-four since spec 0099.** At 512 over a whole sky a
+/// texel is the better part of a degree, and once the breaks between the
+/// cloud became real breaks rather than a change of shade, every edge in the
+/// picture was a coastline you could count the steps of. Jake: the sky reads
+/// like an atlas of continents.
+///
+/// Four of them at this size is fifty milliseconds at load, against the
+/// moon's five hundred and forty.
+pub const SKY: u32 = 1024;
 pub const DOME: f32 = 19.0;
 /// How high the vault goes at its middle.
 ///
@@ -427,6 +435,17 @@ pub fn runs_for(seconds: f32) {
 }
 
 static RUNS_FOR: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+
+/// What `SKY=` names, if it names one of `SKIES`.
+fn pinned_sky() -> Option<usize> {
+    let said = std::env::var("SKY").ok()?;
+    let said = said.trim().to_lowercase();
+
+    SKIES.iter().position(|sky| sky.name == said)
+}
+
+/// And held, because it cannot change under a running game. Spec 0066.
+static PINNED: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
 
 /// How far through a day it is, nought at dawn and a half at dusk.
 pub fn hour(since: f32) -> f32 {
@@ -537,8 +556,13 @@ pub fn skylit(since: f32) -> glam::Vec4 {
 }
 
 // The moon is in `moon.rs`, which owns where it stands, how big it is drawn,
-// which way it faces and what is written on it. It reads this file's clock and
-// its `gives_off`, and nothing here reads it back.
+// which way it faces and what is written on it. It reads this file's clock,
+// its `gives_off` and its `smoothstep`.
+//
+// The sun below is here and not beside it, because where the sun is, is
+// `sunlight` negated and that is already in this file. The two things this
+// side reads back are `moon::off`, which is the shell both bodies hang on,
+// and `moon::dir`, which is a unit sphere and nothing about the moon.
 
 /// Where the sun stands, as a direction from the eye.
 ///
@@ -550,21 +574,25 @@ pub fn sun_at(since: f32) -> Vec3 {
     -sunlight(since)
 }
 
-/// How far off the eye the sun is drawn, and how wide it is there.
+/// How wide the sun is drawn, as an angle across the sky.
 ///
-/// **The moon's distance, so the two share a sky.** It is hung off the eye
-/// the way the moon and the weather are: nothing out here is at a distance
-/// you could walk to.
+/// It hangs on the moon's own shell, `moon::off`, so the two share a sky,
+/// and like the moon it is an angle rather than a width because that shell
+/// moves with where you stand. Spec 0099.
 ///
 /// **Six degrees, which is eleven times life.** The real sun is half a
-/// degree, which at this distance is two metres and reads as a bright
-/// speck. The moon next to it is drawn at twenty, forty times life, because
-/// its craters do not read otherwise and spec 0065 writes that down as a
-/// lie told on purpose. A sun has nothing on it to read, so it needs far
-/// less of a lie: this is the smallest size that is a disc rather than a
-/// dot, and it is the number to turn.
-pub const SUN_FAR: f32 = crate::moon::OFF;
-pub const SUN_WIDE: f32 = 24.0;
+/// degree, which on this shell is two metres and reads as a bright speck.
+/// The moon next to it is drawn at twenty, forty times life, because its
+/// craters do not read otherwise and spec 0065 writes that down as a lie
+/// told on purpose. A sun has nothing on it to read, so it needs far less
+/// of a lie: this is the smallest size that is a disc rather than a dot,
+/// and it is the number to turn.
+pub const SUN_ACROSS: f32 = 5.97;
+
+/// What that comes to in metres, at a given distance.
+pub fn sun_wide(off: f32) -> f32 {
+    2.0 * off * (SUN_ACROSS.to_radians() * 0.5).tan()
+}
 
 /// How far under the horizon the disc is gone, and over how much of a drop
 /// it goes.
@@ -587,7 +615,10 @@ pub const SUN_SETS_OVER: f32 = 0.10;
 /// Read off the height of the thing being drawn rather than off `sun_up`,
 /// which is the plain sine before the lean in `sunlight` shortens it.
 pub fn sun_showing(since: f32) -> f32 {
-    ((sun_at(since).y - SUN_SETS_AT) / SUN_SETS_OVER + 1.0).clamp(0.0, 1.0)
+    let up = ((sun_at(since).y - SUN_SETS_AT) / SUN_SETS_OVER + 1.0).clamp(0.0, 1.0);
+
+    // and what the weather leaves of it, per spec 0066
+    up * weather(since).sun_through()
 }
 
 /// The ball it is drawn as.
@@ -738,15 +769,30 @@ pub fn strike(n: u32) -> Strike {
     }
 }
 
+/// Whether a strike happens at all, which is whether its own hour thunders.
+/// Spec 0066.
+///
+/// **Asked of the strike's hour and not of now.** A strike eight seconds off
+/// flashes in one hour and is heard in the next, and the weather can turn
+/// between them: taken off `since` the thunder of a strike you saw would go
+/// missing because the sky had cleared since.
+fn lands(n: u32) -> bool {
+    weather(strike(n).at).thunders
+}
+
 /// Which strike is the latest to have flashed by `since`, if any has.
 ///
 /// The strikes run in order of their slot, and the jitter is under half a slot
 /// either way, so a strike never overtakes its neighbour and a walk outward
 /// from the slot `since` falls in finds it.
+///
+/// **One filter for the whole storm.** Everything downstream of this and
+/// `heard` is the flash on the dome, the light thrown into the garden, the
+/// thunder and its delay, and none of them has to be told about the weather.
 pub fn struck(since: f32) -> Option<u32> {
     let slot = (since / STRIKES).floor().max(0.0) as u32;
 
-    (slot.saturating_sub(1)..=slot + 1).rfind(|n| strike(*n).at <= since)
+    (slot.saturating_sub(1)..=slot + 1).rfind(|n| strike(*n).at <= since && lands(*n))
 }
 
 /// Which strike is the latest whose thunder has had time to reach you.
@@ -757,7 +803,7 @@ pub fn struck(since: f32) -> Option<u32> {
 pub fn heard(since: f32) -> Option<u32> {
     let slot = (since / STRIKES).floor().max(0.0) as u32;
 
-    (slot.saturating_sub(2)..=slot + 1).rfind(|n| strike(*n).heard() <= since)
+    (slot.saturating_sub(2)..=slot + 1).rfind(|n| strike(*n).heard() <= since && lands(*n))
 }
 
 /// How far a strike's light leans toward the strike, against coming straight
@@ -857,12 +903,370 @@ pub fn flash_fills(away: f32) -> f32 {
     (away / NEAR).max(1.0).powi(-2)
 }
 
-/// A storm, as a picture to wrap round the inside of the dome.
+/// The ramp everything here softens with.
+///
+/// **One account of it**, in the file the rest of the building's shared
+/// arithmetic is in. It was private in `moon.rs` and wanted here too, and a
+/// second copy of three lines is how two curves come apart.
+pub fn smoothstep(low: f32, high: f32, x: f32) -> f32 {
+    let t = ((x - low) / (high - low)).clamp(0.0, 1.0);
+
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// What the sky is doing on a given day. Spec 0066.
+///
+/// **One knob and two colours**, which is what the bake already had buried in
+/// it as constants. Everything else about a sky, the noise, the octaves, the
+/// lean toward the apex, is the same under all four: weather here is a curve
+/// over one field rather than four fields.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Weather {
+    /// What to call it, for `SKY=` and for a failing test's message.
+    pub name: &'static str,
+    /// How much of the dome is cloud, nought to one.
+    ///
+    /// **Not a share, not linear, and not capped at one.** One is the storm
+    /// that has been here since spec 0019, which comes to 66 per cent of the
+    /// dome. Measured in twentieths: everything up to 0.20 is bit-for-bit
+    /// clear, the first cloud appears at 0.55, and it is 0.5 per cent at
+    /// 0.62, 4 at 0.70 and 16 at 0.80. The useful range is the top half and
+    /// the numbers below are chosen off that table rather than off the word.
+    ///
+    /// Past one the bias clears the noise outright and the deck is solid,
+    /// with no break anywhere, which is the only way to get a lid out of a
+    /// field that has holes in it.
+    pub cover: f32,
+    /// The sky itself at the horizon, and the cloud over it. Nought to one,
+    /// before `skylit` multiplies them.
+    ///
+    /// **Two layers now and not two ends of one gradient.** Spec 0099. The
+    /// sky is the backdrop's tint and the cloud is the deck's, so the two
+    /// are drawn at different distances with the sun and the moon between
+    /// them, and both lerp from one weather to the next because a colour
+    /// is a number and a baked picture is not.
+    ///
+    /// At the horizon, because `sky_wash` deepens it toward the apex and
+    /// what is written here is the pale end of that.
+    ///
+    /// **Measured on screen rather than chosen on paper.** What goes in
+    /// here is multiplied by `skylit`, which is 1.35, 1.40, 1.52 at noon,
+    /// and the result is written to an sRGB target, so a value lands a good
+    /// deal paler than it reads here. The first set were picked as colours
+    /// and came back as a washed-out overcast and a blue clipped flat at
+    /// 255: these were read back off the blessed pictures a pixel at a
+    /// time and worked backwards.
+    pub sky: [f32; 3],
+    pub cloud: [f32; 3],
+    /// And whether it thunders. Spec 0019's strikes ran under every sky.
+    pub thunders: bool,
+}
+
+impl Weather {
+    /// How much of the sun's own disc gets through, nought to one.
+    ///
+    /// **A step and not a fade.** Under broken cloud the sun is out or
+    /// behind a cloud, and which one depends on where the breaks are
+    /// rather than on how many there are, so fading it by `1 - cover`
+    /// would give a fair-weather day a permanently weak sun.
+    ///
+    /// The step sits above fair's 0.60 and below the storm's 0.88, so the
+    /// sun survives a fair day whole and is gone under storm and overcast.
+    /// It is a step between two numbers rather than a match on the name
+    /// because the name is a label and the cover is the fact.
+    pub fn sun_through(&self) -> f32 {
+        1.0 - smoothstep(0.68, 0.82, self.cover)
+    }
+}
+
+/// The skies there are.
+///
+/// **Four and not a continuum.** Each one is a baked picture, so the set is
+/// the set; three point one milliseconds apiece, measured, which is why
+/// having four of them costs nothing worth naming at load.
+///
+/// Clear and fair share a blue, because they are the same day with a
+/// different amount of cloud in it. Overcast's two colours sit close
+/// together, so there is nothing to read in it, which is what overcast is.
+/// Storm is what has always been here, to the byte.
+pub const SKIES: [Weather; 4] = [
+    Weather {
+        name: "clear",
+        cover: 0.0,
+        sky: [0.17, 0.32, 0.54],
+        cloud: [0.94, 0.95, 0.97],
+        thunders: false,
+    },
+    Weather {
+        name: "fair",
+        // **Down from 0.78 when the alpha ramp got its slope.** Nearly
+        // twice as much of the dome arrives as cloud now, so the number
+        // that was a fair day became a broken overcast. The table in
+        // `cover` above is the old ramp's and reads low against this one.
+        cover: 0.60,
+        sky: [0.17, 0.32, 0.54],
+        cloud: [0.94, 0.95, 0.97],
+        thunders: false,
+    },
+    Weather {
+        name: "overcast",
+        // **Past one, which is what makes it a lid.** At a cover of one the
+        // dome is two thirds cloud and a third break, which is the storm,
+        // and overcast drawn that way was the storm in a lighter grey with
+        // the same holes in the same places. Here the bias clears the noise
+        // outright and there is no break anywhere.
+        cover: 1.5,
+        // close together on purpose: a deck over a sky of nearly its own
+        // colour is a flat lid, which is what overcast is, and a shade
+        // under it rather than over so what little shows through reads as
+        // a break and not a hole
+        sky: [0.40, 0.42, 0.46],
+        cloud: [0.35, 0.36, 0.39],
+        thunders: false,
+    },
+    Weather {
+        name: "storm",
+        // **Down from one, for the same reason fair came down.** With the
+        // ramp's new slope a cover of one closed every break and the storm
+        // became the lid overcast is. What tells a storm from a lid is
+        // that you can see sky through it.
+        cover: 0.88,
+        // **Dark cloud over a pale break, which it could not be before.**
+        // Spec 0019 wrote the opposite down and gave its reason: a storm is
+        // dark for a sky and bright for a room, a slate chosen against
+        // daylight is the only light this garden has, and those pull
+        // opposite ways. They do not pull on each other any more. What
+        // fills the shade is `filled`, which reads the hour and not the
+        // weather, so the deck can be as dark as a storm wants and the
+        // garden under it is lit exactly as it was.
+        //
+        // Drawn with the old numbers against the new layers it came back a
+        // bright white overcast with blue holes in it, which is what a
+        // cloud painted pale looks like once the breaks are really breaks.
+        sky: [0.50, 0.54, 0.62],
+        cloud: [0.26, 0.28, 0.34],
+        thunders: true,
+    },
+];
+
+/// Where in the day the sky is swapped, as an hour.
+///
+/// **Midnight, because that is where it cannot be seen.** `skylit` takes the
+/// picture down to 0.055, 0.062, 0.085 there, so a sky changed on this hour
+/// is changed in the dark. The boundary `hour` already has is at dawn, which
+/// is the one hour of the night this could not use, so the weather counts its
+/// own days from here instead.
+pub const MIDNIGHT: f32 = 0.75;
+
+/// Which night-to-night day `since` falls in.
+///
+/// Signed, because `since` before the building opened is a day before the
+/// first one and `floor` on a negative is not a cast to an unsigned.
+pub fn nightfall(since: f32) -> i32 {
+    (since / day() + OPENS_AT - MIDNIGHT).floor() as i32
+}
+
+/// And what the sky is doing in it.
+///
+/// Rolled per day and not carried over: clear can follow storm, which real
+/// weather does not do and nothing here is asking for a model of.
+///
+/// `SKY` pins one by name, for looking at a particular sky without waiting
+/// for it to come round.
+/// How much of a day the sky takes to turn, as a share of one. Spec 0066.
+///
+/// **Because it was a swap and Jake saw it.** The first build changed the
+/// picture on the dome at midnight, on the argument that `skylit` is at its
+/// floor there and nobody could see it. They can: at a day of twenty seconds
+/// you are looking at the sky for a good share of every night, and an
+/// instant is an instant whatever the multiplier is.
+///
+/// It turns over the first eighth of the weather's own day, which runs from
+/// midnight, so the whole of the turn is between midnight and hour 0.87 and
+/// none of it is in the light. Two and a half seconds at `DAY`.
+pub const TURNS_OVER: f32 = 0.12;
+
+/// How far through its turn the sky is: nought while a weather holds, one
+/// once the next has fully arrived.
+///
+/// Straight to one under `SKY=`, which pins a weather: a pinned sky has
+/// nothing to turn from.
+pub fn turning(since: f32) -> f32 {
+    if PINNED.get_or_init(pinned_sky).is_some() {
+        return 1.0;
+    }
+
+    let at = since / day() + OPENS_AT - MIDNIGHT;
+
+    smoothstep(0.0, TURNS_OVER, at - at.floor())
+}
+
+/// What is overhead at this moment: one colour for the sky, one for the
+/// cloud, and the one or two decks that cloud is drawn as. Spec 0099.
+///
+/// **Two decks only while it is turning.** The old sky dissolves into the
+/// new one, which is what makes the change smooth, and the share of each is
+/// that deck's own alpha. Outside a turn the second share is nought and
+/// nothing is drawn for it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Overhead {
+    /// The sky's own colour at the horizon, lerped between the two.
+    pub sky: Vec3,
+    /// And the cloud's. One tint for both decks, because a tint apiece is
+    /// the dissolve tinting itself twice.
+    pub cloud: Vec3,
+    /// Which sky's picture, and how much of it, in `SKIES` order.
+    pub decks: [(usize, f32); 2],
+}
+
+pub fn overhead(since: f32) -> Overhead {
+    let (was, now) = (which_sky(since - day()), which_sky(since));
+    let t = turning(since);
+    let between = |a: [f32; 3], b: [f32; 3]| Vec3::from(a) + (Vec3::from(b) - Vec3::from(a)) * t;
+
+    Overhead {
+        sky: between(SKIES[was].sky, SKIES[now].sky),
+        cloud: between(SKIES[was].cloud, SKIES[now].cloud),
+        decks: [(was, 1.0 - t), (now, t)],
+    }
+}
+
+/// Which weather it mostly is, for the things a blend does not help.
+///
+/// **A step where `overhead` is a fade.** Whether it thunders and whether
+/// the sun is out are yes or no, and the whole of the turn is in the dark
+/// anyway: the sun is down for every second of it, and a storm whose first
+/// strike lands halfway through its own arrival is a storm starting.
+pub fn weather(since: f32) -> &'static Weather {
+    let [(was, _), (now, share)] = overhead(since).decks;
+
+    &SKIES[if share < 0.5 { was } else { now }]
+}
+
+/// The same as an index into `SKIES`, which is what the game holds its
+/// pictures in.
+///
+/// Its own function so nothing has to find a weather in the list again by
+/// its name. The order of `SKIES` is the order of the baked pictures and
+/// nothing re-sorts either.
+pub fn which_sky(since: f32) -> usize {
+    // read once rather than once a frame. This is asked several times a
+    // frame, by the backdrop, by the sun and by every strike within two
+    // slots, and `env::var` allocates on each of them.
+    if let Some(pinned) = PINNED.get_or_init(pinned_sky) {
+        return *pinned;
+    }
+
+    let mut rng = (nightfall(since) as u32).wrapping_mul(0x9E37_79B9) ^ 0x5706_0066 | 1;
+    rng ^= rng << 13;
+    rng ^= rng >> 17;
+    rng ^= rng << 5;
+
+    (rng >> 8) as usize % SKIES.len()
+}
+
+/// The first hour of the building's life that is both this hour and this
+/// sky. Spec 0066.
+///
+/// **For the pictures.** A blessed picture pins an hour, and with four skies
+/// an hour is no longer a frame: whichever sky the first day happens to roll
+/// is the one every outdoor reference gets, and the four of them would all
+/// be the same weather by accident. Nothing that runs wants this.
+///
+/// `None` if the sky is not one of `SKIES`, or if it does not come up inside
+/// a fortnight, which with four skies rolled per day is not a thing that
+/// happens.
+#[cfg(test)]
+pub fn under(hour: f32, sky: &str) -> Option<f32> {
+    (0..14)
+        .map(|n| when(hour) + day() * n as f32)
+        .find(|since| weather(*since).name == sky)
+}
+
+/// How far off the cloud deck's nearest point stands, as a share of what the
+/// camera sees there. Spec 0099.
+///
+/// **Between the field and the bodies**, which is the whole point of it
+/// being its own layer. Everything hung off the eye takes a share of
+/// `field::sees`: the horizon at `field::HORIZON_OUT`, 0.35; this; the moon
+/// and the sun at `moon::OUT`, 0.80; and the backdrop at `BEHIND_IT_ALL`,
+/// 0.9. Shares rather than metres because that number grows with the room,
+/// from 420 in the garden to 682 out on the bridge.
+///
+/// **Four tenths, and the dome's own shape is what pins it.** The mesh
+/// reaches 8 at the middle of an edge and 12 at the apex, so whatever its
+/// nearest point is, its furthest is half as much again: at 0.40 the deck
+/// runs from 0.40 to 0.60 and sits clear of the horizon below it and of the
+/// moon's near limb at 0.66 above.
+///
+/// It was 160 metres, worked out as `160 / DOME`, and `DOME` is 19 where the
+/// mesh's own furthest point is 12. The deck came out at 101 metres rather
+/// than 160, which is nearer than the horizon: Jake, from the top of the
+/// bridge, the clouds look like they cover the floor at Valhalla and
+/// Heimdall. They did, and everything else past a hundred metres with them.
+pub const DECK_OUT: f32 = 0.40;
+
+/// What the deck's mesh is scaled by, for a view from `at`.
+///
+/// **Off `vault_rim`, which is the thing that says how far the mesh reaches
+/// sideways**, rather than off a constant that happens to be near it. That
+/// substitution is the whole of the fault above.
+pub fn deck_scale(at: Vec3) -> f32 {
+    crate::field::sees(at) * DECK_OUT / vault_rim(0.0)
+}
+
+/// The sky itself, as a picture: white at the horizon and deepening toward
+/// the apex. Spec 0099.
+///
+/// **A gradient and not a flat colour**, because a flat dome reads as a lid
+/// and the one thing everybody knows about a sky is that it is deeper
+/// overhead. The weather's own `sky` is the pale end, at the horizon, and
+/// this darkens away from it: a multiply can take a channel down and not
+/// up, so what is written here has to be the brightest the sky ever is and
+/// the lean has to go the other way.
+///
+/// Laid on as a disc seen from below, like the cloud, so the middle of the
+/// picture is the apex. Small, because there is nothing in it to resolve.
+pub fn sky_wash() -> blitzkit::texture::TextureData {
+    const WIDE: u32 = 128;
+    // what the apex comes to against the horizon, per channel. Blue holds
+    // and the other two fall, which is what deepens it rather than simply
+    // darkening it.
+    const APEX: [f32; 3] = [0.62, 0.76, 1.0];
+
+    let mut pixels = Vec::with_capacity((WIDE * WIDE * 4) as usize);
+    for y in 0..WIDE {
+        for x in 0..WIDE {
+            let (u, v) = (x as f32 / WIDE as f32, y as f32 / WIDE as f32);
+            let from_middle =
+                (((u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5)).sqrt() / 0.5).min(1.0);
+            // eased, so the band at the horizon is wide and the deepening
+            // happens over the part of the sky anybody is looking at
+            let overhead = 1.0 - smoothstep(0.0, 1.0, from_middle);
+
+            for apex in APEX {
+                pixels.push(((1.0 + (apex - 1.0) * overhead) * 255.0) as u8);
+            }
+            pixels.push(255);
+        }
+    }
+
+    blitzkit::texture::TextureData::from_pixels(WIDE, WIDE, pixels)
+}
+
+/// A cloud deck, as a picture to wrap round the inside of a dome. Spec 0099.
 ///
 /// Value noise over a few octaves, wrapped the way round the dome so the seam
 /// does not show, and taken through a hard curve: a soft gradient of grey is
 /// haze, and what this wants is cloud with edges and breaks between.
-pub fn storm(seed: u32) -> blitzkit::texture::TextureData {
+///
+/// **White, with the cloud in its alpha.** Where the whole sky was one
+/// opaque picture this carried both colours and the breaks were painted in;
+/// now the breaks are see-through and what shows through them is the sky
+/// itself, one layer back, with the sun and the moon in between. That also
+/// puts the cloud's colour on the instance rather than in the texture, so it
+/// lerps from one weather to the next instead of popping.
+pub fn clouds(seed: u32, sky: &Weather) -> blitzkit::texture::TextureData {
     let mut rng = seed | 1;
     let mut next = move || {
         rng ^= rng << 13;
@@ -873,7 +1277,13 @@ pub fn storm(seed: u32) -> blitzkit::texture::TextureData {
 
     // the grid each octave is smoothed from, wrapping in u so the two edges of
     // the picture meet round the back of the dome
-    let octaves: Vec<(usize, Vec<f32>)> = [12usize, 24, 48, 96]
+    // **Six octaves and not four**, per spec 0099. A coastline is smooth and
+    // a cloud edge is not: the finest octave was 96 cells over the whole sky,
+    // so the outline of every break was a curve a few cells long with nothing
+    // ragged about it. The two added here are what fur it up, and they carry
+    // a sixteenth and a thirty-second of the weight between them, so the
+    // shape of the weather is unchanged and only its edges move.
+    let octaves: Vec<(usize, Vec<f32>)> = [12usize, 24, 48, 96, 192, 384]
         .iter()
         .map(|side| {
             let side = *side;
@@ -922,21 +1332,81 @@ pub fn storm(seed: u32) -> blitzkit::texture::TextureData {
             let from_middle =
                 (((u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5)).sqrt() / 0.5).min(1.0);
             let overhead = 1.0 - from_middle;
-            let heavy = (cloud * 1.6 - 0.25 + overhead * 0.18).clamp(0.0, 1.0);
-            // hard, so there are cloud edges rather than a wash
-            let shaped = heavy * heavy * (3.0 - 2.0 * heavy);
+            // **How much cloud, which is the whole of the weather.**
+            //
+            // Written as the storm's own `- 0.25` with a term that is
+            // nothing at a cover of one, rather than as a bias worked out
+            // from the cover. The two are the same number in arithmetic and
+            // not in f32: `- 1.85 + 1.6` is a hair off `- 0.25`, and that
+            // hair moved a few hundred pixels of three blessed pictures
+            // under a sky nobody had changed.
+            //
+            // At nought the term cannot reach the clamp from any value
+            // `cloud` takes, since the noise is at most one and `overhead`
+            // at most 0.18, so a clear sky is clear everywhere rather than
+            // nearly clear.
+            let heavy =
+                (cloud * 1.6 - 0.25 - (1.0 - sky.cover) * 1.6 + overhead * 0.18).clamp(0.0, 1.0);
+            // **Soft, where spec 0019 wanted it hard.** That curve was
+            // `heavy * heavy * (3 - 2 * heavy)`, and its reason was that a
+            // gradient of grey is haze and what a storm wants is cloud with
+            // edges. It was right while the picture was a ramp between two
+            // colours a shade apart, where nothing short of a hard curve
+            // read as an edge at all.
+            //
+            // It is wrong now that the edge is an alpha against open sky.
+            // The same curve crosses from clear to solid inside a texel,
+            // and a texel of this picture is most of a degree: every break
+            // came out with a staircase round it. `heavy` is already a
+            // ramp over two fifths of the noise's range, which is wide
+            // enough to cross several texels and narrow enough to be an
+            // edge rather than a wash.
+            // **And nothing on top of that.** A power was tried here, to
+            // spend more of the ramp near nothing and feather the thin
+            // edge. It does the opposite on the sky: the thin parts of a
+            // cloud are most of a fair-weather cloud, so taking them down
+            // left small hard islands and read more like a map rather than
+            // less. The ramp is the ramp.
+            //
+            // **It does have to arrive, though.** `heavy` on its own only
+            // reaches one where the noise does, so a fair-weather cloud
+            // was about a third opaque right through its middle and what
+            // you saw was two parts sky to one part cloud. Measured: the
+            // cloud came back at 149, 152, 160 against a sky of 116, 165,
+            // 234, which is a mass very slightly darker than the sky it
+            // sits on, and two areas of one luminance in two hues is how a
+            // map colours its countries.
+            //
+            // Near twice the slope puts the core solid while leaving the
+            // bottom half of the ramp to the edge.
+            let alpha = (heavy * 1.9).min(1.0);
 
-            // slate behind, and the breaks between the cloud are the brightest
-            // thing in the room
-            // A storm is dark for a sky and bright for a room. These read as
-            // nearly black twice over, because a slate chosen against daylight
-            // is the only light this garden has. What it has to be is dark for
-            // a sky and bright for a room, and those pull opposite ways.
-            let dark = [96.0, 104.0, 128.0];
-            let pale = [228.0, 232.0, 240.0];
-            let paint = |n: usize| (dark[n] + (pale[n] - dark[n]) * shaped) as u8;
+            // **And how dark the cloud is, off the noise and not off the
+            // alpha.** Spec 0099.
+            //
+            // The picture was flat white with the whole of the weather in
+            // its alpha, and a flat tint behind a clean outline against a
+            // flat sky is a map: Jake read it as an atlas of continents,
+            // and that is what it was. What the old opaque picture had and
+            // this had lost is shading inside the cloud, which came for
+            // free while the colour ramped from the sky's to the cloud's.
+            //
+            // Off `cloud` rather than off `alpha`, because `alpha`
+            // saturates: under a deck at full cover it is one almost
+            // everywhere, so a shade read from it is flat exactly where
+            // there is most cloud to shade. The noise underneath has its
+            // range back.
+            //
+            // Thickness doing both jobs is also what it does in the air. A
+            // thin edge passes light and reads bright; a deep belly stops
+            // it and reads dark from underneath. `DEEPEST` is what the
+            // thickest comes to against the thinnest, and it is the number
+            // to turn if the cloud reads flat or reads sooty.
+            const DEEPEST: f32 = 0.68;
+            let thick = smoothstep(0.30, 0.72, cloud);
+            let deep = ((1.0 + (DEEPEST - 1.0) * thick) * 255.0) as u8;
 
-            pixels.extend_from_slice(&[paint(0), paint(1), paint(2), 255]);
+            pixels.extend_from_slice(&[deep, deep, deep, (alpha * 255.0) as u8]);
         }
     }
 
@@ -4215,10 +4685,12 @@ mod tests {
     /// strike, which is the whole exhibit stated as arithmetic.
     #[test]
     fn the_strike_you_see_is_not_the_strike_you_hear() {
-        // a strike far enough off to still be in the air a second later
+        // a strike far enough off to still be in the air a second later, and
+        // one that happens: spec 0066 drops the strikes whose own hour is not
+        // a storm, and this is about the delay rather than about the filter
         let n = (0..200)
-            .find(|n| strike(*n).late() > 2.0)
-            .expect("no strike in two hundred is more than two seconds off");
+            .find(|n| strike(*n).late() > 2.0 && lands(*n))
+            .expect("no strike in two hundred is both a storm's and two seconds off");
         let hit = strike(n);
 
         // just after the flash: seen, and not yet heard
@@ -6353,6 +6825,401 @@ mod tests {
             !block.contains("ambient"),
             "the flash writes the ambient, which is added everywhere"
         );
+    }
+
+    // --- spec 0066: weather that is not always a storm ----------------------
+
+    /// How much of a deck's picture is cloud: the share of its pixels past
+    /// half opaque, and the mean alpha.
+    ///
+    /// Alpha and nothing else, because the picture is white now and the
+    /// colour lives on the instance. Spec 0099.
+    fn read_deck(sky: &super::Weather) -> (f32, f32) {
+        let made = super::clouds(0x5704, sky);
+        let pixels = &made.levels[0].pixels;
+        let mut clouded = 0usize;
+        let mut sum = 0.0f32;
+
+        for texel in pixels.chunks(4) {
+            if texel[3] > 127 {
+                clouded += 1;
+            }
+            sum += texel[3] as f32;
+        }
+
+        let all = (pixels.len() / 4) as f32;
+
+        (clouded as f32 / all, sum / all)
+    }
+
+    /// Spec 0066: a clear sky is clear everywhere, not nearly clear.
+    ///
+    /// **The one claim the arithmetic was chosen for.** The curve is
+    /// `cloud * 1.6 - 0.25 - (1 - cover) * 1.6`, and at a cover of nought
+    /// no value the noise can take reaches the clamp. A bias that only
+    /// mostly cleared it would leave haze round the apex, which is where
+    /// `overhead` leans, and that is exactly the pale wedge this building
+    /// has chased twice.
+    ///
+    /// Nothing at all rather than a low share: a deck of nought alpha is
+    /// not drawn and a sky with one texel of cloud on it is still a sky
+    /// with cloud on it.
+    #[test]
+    fn a_clear_sky_is_clear_everywhere() {
+        let clear = super::SKIES.iter().find(|s| s.name == "clear").unwrap();
+        let (clouded, mean) = read_deck(clear);
+
+        assert_eq!(clouded, 0.0, "a clear sky has cloud on it");
+        assert_eq!(
+            mean, 0.0,
+            "a clear sky's deck is {} opaque on average",
+            mean
+        );
+    }
+
+    /// Spec 0066: the four stand in order, and the storm has breaks in it.
+    ///
+    /// **What is left of `the_storm_is_unchanged`.** That held spec 0019's
+    /// picture to the byte, and spec 0099 changed every byte of it: the
+    /// colour came off the texture, the alpha went on, the hardening came
+    /// off, two octaves went in and the whole thing doubled in size. The
+    /// claim went from true to meaningless in one change and keeping it
+    /// would have been a blessed number nobody could read.
+    ///
+    /// What is worth holding instead is the thing a reader would ask: that
+    /// the four are four kinds of day and not four tints. Clear has no
+    /// cloud, fair has some, the storm has a lot and you can still see sky
+    /// through it, and overcast is the only one with no break anywhere.
+    /// That last is what tells a storm from a lid.
+    #[test]
+    fn the_four_skies_stand_in_order() {
+        let of = |name: &str| {
+            let sky = super::SKIES.iter().find(|s| s.name == name).unwrap();
+
+            read_deck(sky).0
+        };
+        let (clear, fair, storm, overcast) = (of("clear"), of("fair"), of("storm"), of("overcast"));
+
+        assert_eq!(clear, 0.0, "a clear sky is {:.3} cloud", clear);
+        assert!(
+            0.0 < fair && fair < storm,
+            "fair is {:.3} and the storm {:.3}",
+            fair,
+            storm
+        );
+        assert!(
+            storm < 0.95,
+            "the storm is {:.3} cloud, which is a lid and not a storm",
+            storm
+        );
+        assert_eq!(overcast, 1.0, "overcast is {:.3} cloud", overcast);
+    }
+
+    /// Spec 0066: four skies and four pictures.
+    ///
+    /// **Both halves of a sky**, since spec 0099 split it: the deck's own
+    /// picture and the two colours it is drawn in. Fair and clear share a
+    /// blue and differ in their cloud; overcast and storm are both full
+    /// cover and differ in nothing but colour. Either half on its own
+    /// passes on a pair that is really one sky.
+    #[test]
+    fn no_two_skies_are_the_same() {
+        for (n, one) in super::SKIES.iter().enumerate() {
+            for two in super::SKIES.iter().skip(n + 1) {
+                let (deck, other) = (read_deck(one), read_deck(two));
+                let apart = |a: [f32; 3], b: [f32; 3]| (0..3).any(|c| (a[c] - b[c]).abs() > 0.02);
+
+                assert!(
+                    (deck.1 - other.1).abs() > 1.0
+                        || apart(one.sky, two.sky)
+                        || apart(one.cloud, two.cloud),
+                    "{} and {} are the same sky",
+                    one.name,
+                    two.name
+                );
+            }
+        }
+    }
+
+    /// Spec 0066: the weather holds for a day and turns in the dark.
+    ///
+    /// **Measured against the dark and not against `MIDNIGHT`.** The first
+    /// go read the hour of each turn and held it against the constant the
+    /// turn is computed from, which cannot fail: moving `MIDNIGHT` to dawn
+    /// moved both sides of it and the test passed on a sky that swapped in
+    /// broad daylight. What has to hold is that nobody can see the swap,
+    /// so this asks the thing that decides whether anyone can, which is
+    /// `skylit`.
+    #[test]
+    fn the_sky_turns_in_the_dark() {
+        let day = super::day();
+        let step = day / 400.0;
+        // what the sky's multiplier comes to at the darkest hour there is
+        let floor = super::skylit(super::when(0.75)).truncate().max_element();
+        let mut turns = 0;
+
+        for n in 1..4_000 {
+            let since = step * n as f32;
+
+            if super::weather(since - step).name == super::weather(since).name {
+                continue;
+            }
+
+            turns += 1;
+
+            let lit = super::skylit(since).truncate().max_element();
+
+            assert!(
+                lit < floor * 1.1,
+                "the sky turned at hour {:.3}, where its multiplier is {:.4} against \
+                 a floor of {:.4}: the swap is in the light",
+                super::hour(since),
+                lit,
+                floor
+            );
+        }
+
+        assert!(turns > 3, "the sky never turned in ten days");
+    }
+
+    /// Spec 0099: the sky stands in layers, and in order, wherever you are.
+    ///
+    /// **The one claim the four shares exist for.** Everything hung off the
+    /// eye takes a share of `field::sees`, and that number grows with the
+    /// room: 420 in the garden, 682 out on the bridge. Fixed metres do not
+    /// keep their order across that, and did not: the moon sat at 230 while
+    /// the horizon out there stands at 239, so the moon was in front of the
+    /// hills, and the deck came out at 101 because its scale was worked out
+    /// off `DOME`, which is 19 where the mesh's own reach is 12.
+    ///
+    /// Measured off the deck's own vertices rather than off that reasoning,
+    /// which is the lesson of the 19: a number that is near the right one is
+    /// not the right one.
+    #[test]
+    fn the_sky_is_layered_in_order() {
+        let mesh = super::dome_mesh(0.0);
+        // the nearest point of the rim, which is the deck's distance along
+        // the ground and so the one the horizon's own forms meet. Not the
+        // skirt below it, which comes back inward and is under the ground.
+        // And the furthest point anywhere, which is the apex.
+        let (near, far) = mesh.vertices.iter().fold((f32::MAX, 0.0f32), |(a, b), v| {
+            let [x, y, z] = v.position;
+            let flat = (x * x + z * z).sqrt();
+            let whole = (x * x + y * y + z * z).sqrt();
+            let rim = if y.abs() < 0.001 { flat } else { f32::MAX };
+
+            (a.min(rim), b.max(whole))
+        });
+
+        assert!(near.is_finite(), "the dome has no rim at eye level");
+
+        for at in [
+            glam::Vec3::ZERO,
+            glam::vec3(-120.0, 26.0, 0.0),
+            glam::vec3(60.0, 0.0, -40.0),
+        ] {
+            let sees = crate::field::sees(at);
+            let scale = super::deck_scale(at);
+            let horizon = sees * crate::field::HORIZON_OUT;
+            let body = crate::moon::off(at);
+            let limb = crate::moon::wide(body) * 0.5;
+            let backdrop = blitzkit::renderer::scene::backdrop_reach(sees);
+
+            assert!(
+                horizon < near * scale,
+                "at {:?} the horizon stands at {:.0} and the deck's nearest \
+                 point at {:.0}: the cloud is in front of the hills",
+                at,
+                horizon,
+                near * scale
+            );
+            assert!(
+                far * scale < body - limb,
+                "at {:?} the deck reaches {:.0} and the moon's near limb is \
+                 at {:.0}: the cloud is behind the moon",
+                at,
+                far * scale,
+                body - limb
+            );
+            // **Its middle inside the backdrop, and the whole of it inside
+            // the far plane.** The far half of a body ten degrees of radius
+            // reaches past where a backdrop sits, and that is harmless: the
+            // backdrop is drawn before anything and writes no depth, so
+            // what is behind it is drawn over it rather than lost. What
+            // would lose it is the clipper.
+            assert!(
+                body < backdrop,
+                "at {:?} the moon stands at {:.0} and the backdrop at {:.0}",
+                at,
+                body,
+                backdrop
+            );
+            assert!(
+                body + limb < sees,
+                "at {:?} the moon's far limb is at {:.0} and the far plane at \
+                 {:.0}, so the clipper takes a bite out of it",
+                at,
+                body + limb,
+                sees
+            );
+        }
+    }
+
+    /// Spec 0099: and nothing about it ever jumps.
+    ///
+    /// **The complaint itself, as arithmetic.** Jake: the sky changes
+    /// abruptly, and not smoothly. It did: the picture on the dome was
+    /// swapped at midnight on the argument that nobody could see it there,
+    /// and at a twenty second day everybody could.
+    ///
+    /// So this walks a fine step across ten days and asks that no step
+    /// moves anything by much: not the sky's colour, not the cloud's, and
+    /// not how much of each of the four pictures is being drawn. The last
+    /// is the one that caught it, because the two colours were always
+    /// going to be continuous and the picture was not.
+    #[test]
+    fn the_sky_never_jumps() {
+        let day = super::day();
+        let step = day / 2_000.0;
+        // a step is a two thousandth of a day, and a turn takes 0.12 of
+        // one, so nothing honest moves more than about a hundredth of its
+        // range in a step. Three times that, for the ease at both ends.
+        let most = 0.03;
+        let shares = |since: f32| {
+            let mut out = [0.0f32; super::SKIES.len()];
+            for (which, share) in super::overhead(since).decks {
+                out[which] += share;
+            }
+            out
+        };
+
+        let mut biggest: (f32, f32, &str) = (0.0, 0.0, "nothing");
+
+        for n in 1..20_000 {
+            let (before, after) = (step * (n - 1) as f32, step * n as f32);
+            let (was, now) = (super::overhead(before), super::overhead(after));
+            let (was_share, now_share) = (shares(before), shares(after));
+
+            for (moved, what) in [
+                ((now.sky - was.sky).abs().max_element(), "the sky's colour"),
+                (
+                    (now.cloud - was.cloud).abs().max_element(),
+                    "the cloud's colour",
+                ),
+                (
+                    (0..super::SKIES.len())
+                        .map(|c| (now_share[c] - was_share[c]).abs())
+                        .fold(0.0f32, f32::max),
+                    "how much of a picture is drawn",
+                ),
+            ] {
+                // **A NaN is not a small change.** Every comparison against
+                // one is false and `f32::max` drops it, so a turn that
+                // divided by nothing came back blind: the one step where
+                // the swap happened was NaN and every assert below it was
+                // quietly skipped. The control found that, not the test.
+                assert!(
+                    moved.is_finite(),
+                    "{} came back {} at hour {:.3}",
+                    what,
+                    moved,
+                    super::hour(after)
+                );
+
+                if moved > biggest.0 {
+                    biggest = (moved, super::hour(after), what);
+                }
+            }
+        }
+
+        assert!(
+            biggest.0 < most,
+            "{} jumped by {:.4} at hour {:.3}, which is a swap and not a turn",
+            biggest.2,
+            biggest.0,
+            biggest.1
+        );
+    }
+
+    /// Spec 0066: all four come up.
+    ///
+    /// **Because a roll that cannot reach one of them is three skies.**
+    /// The index is a hash of the day number modulo four, and a hash with
+    /// a bad low bit gives two of the four and looks fine.
+    #[test]
+    fn every_sky_is_used() {
+        let day = super::day();
+        let mut seen: Vec<&str> = Vec::new();
+
+        for n in 0..200 {
+            let name = super::weather(super::when(0.25) + day * n as f32).name;
+            if !seen.contains(&name) {
+                seen.push(name);
+            }
+        }
+
+        assert_eq!(
+            seen.len(),
+            super::SKIES.len(),
+            "only {:?} of the four skies ever come up",
+            seen
+        );
+    }
+
+    /// Spec 0066: thunder belongs to the storm.
+    ///
+    /// Both ways round, because a filter that drops everything passes the
+    /// first half of this on its own.
+    #[test]
+    fn only_a_storm_thunders() {
+        let mut struck_in_a_storm = 0;
+
+        for n in 0..4_000 {
+            let since = n as f32 * 0.25;
+
+            for found in [super::struck(since), super::heard(since)]
+                .iter()
+                .copied()
+                .flatten()
+            {
+                let at = super::strike(found).at;
+
+                assert!(
+                    super::weather(at).thunders,
+                    "a strike at {} under a {} sky",
+                    at,
+                    super::weather(at).name
+                );
+
+                struck_in_a_storm += 1;
+            }
+        }
+
+        assert!(
+            struck_in_a_storm > 50,
+            "the filter dropped every strike there is: {}",
+            struck_in_a_storm
+        );
+    }
+
+    /// Spec 0066: cloud puts the sun out.
+    #[test]
+    fn cloud_puts_the_sun_out() {
+        for sky in super::SKIES.iter() {
+            let through = sky.sun_through();
+
+            match sky.name {
+                "clear" | "fair" => {
+                    assert!(through > 0.99, "{} hides the sun at {}", sky.name, through)
+                }
+                _ => assert!(
+                    through < 0.01,
+                    "{} lets the sun through at {}",
+                    sky.name,
+                    through
+                ),
+            }
+        }
     }
 }
 
