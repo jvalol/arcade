@@ -597,6 +597,17 @@ pub const SHINGLE: f32 = 0.42;
 pub const SHINGLE_GAP: f32 = 0.05;
 pub const SHINGLE_OUT: f32 = 0.05;
 
+/// And how wide one shingle is across the roof.
+///
+/// **Because a course in one piece is a plank.** Jake, 2026-11-13: make
+/// the village roofs read as shingle, not planks. A course that ran the
+/// whole length of the building gable to gable had no vertical joint
+/// anywhere in it, and an unbroken band is what a sawn board looks like
+/// however many of them you stack. What says shingle is the short joints
+/// between one and its neighbour, staggered course to course so they
+/// never line up into a seam.
+pub const SHINGLE_WIDE: f32 = 0.48;
+
 /// The courses on one roof: where each sits, how big, which way it leans,
 /// and its own tone.
 ///
@@ -624,21 +635,58 @@ pub fn shingling(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
             // on the pitch's face the way a board sits on a wall.
             let deep = (PITCH_DEEP + SHINGLE_OUT) * 0.5;
             let up = vec3(side * slope.sin() * deep, slope.cos() * deep, 0.0);
-            let seed = along * 23.0 + side * 5.0 + one.at.x * 0.7;
-            let tone = 1.0 + (seed * 2.3).sin() * 0.09 + (seed * 0.57).sin() * 0.06;
+            // **Across the roof in shingles, not in one band.** Every
+            // other course is stepped half a shingle along, so the joints
+            // never stack into a seam running up the pitch.
+            let long = over * 2.0 - 0.04;
+            let across = ((long / SHINGLE_WIDE).round() as usize).max(2);
+            let step = long / across as f32;
+            let shift = if course % 2 == 0 { 0.0 } else { step * 0.5 };
 
-            out.push((
-                vec3(on.x + up.x, on.y + up.y, one.at.z),
-                // and a little short of the gable at either end, so no two
-                // faces end in one plane
-                vec3(
-                    run / courses as f32 - SHINGLE_GAP,
-                    SHINGLE_OUT,
-                    over * 2.0 - 0.04,
-                ),
-                -side * slope,
-                tone,
-            ));
+            for n in 0..across {
+                // one more at the stepped end, trimmed where it runs off
+                // the gable, so a stagger does not leave a notch
+                let from = (n as f32 * step + shift - long * 0.5).max(-long * 0.5);
+                let to = ((n as f32 + 1.0) * step + shift - long * 0.5).min(long * 0.5);
+
+                if to - from <= SHINGLE_GAP {
+                    continue;
+                }
+
+                let at_z = one.at.z + (from + to) * 0.5;
+                let seed = along * 23.0 + side * 5.0 + one.at.x * 0.7 + at_z * 1.9;
+                let tone = 1.0 + (seed * 2.3).sin() * 0.09 + (seed * 0.57).sin() * 0.06;
+
+                out.push((
+                    vec3(on.x + up.x, on.y + up.y, at_z),
+                    vec3(
+                        run / courses as f32 - SHINGLE_GAP,
+                        SHINGLE_OUT,
+                        to - from - SHINGLE_GAP,
+                    ),
+                    -side * slope,
+                    tone,
+                ));
+            }
+
+            // and the sliver the stagger leaves at the near gable
+            if shift > 0.0 {
+                let to = shift - long * 0.5;
+                let at_z = one.at.z + (-long * 0.5 + to) * 0.5;
+                let seed = along * 23.0 + side * 5.0 + one.at.x * 0.7 + at_z * 1.9;
+                let tone = 1.0 + (seed * 2.3).sin() * 0.09 + (seed * 0.57).sin() * 0.06;
+
+                out.push((
+                    vec3(on.x + up.x, on.y + up.y, at_z),
+                    vec3(
+                        run / courses as f32 - SHINGLE_GAP,
+                        SHINGLE_OUT,
+                        shift - SHINGLE_GAP,
+                    ),
+                    -side * slope,
+                    tone,
+                ));
+            }
         }
     }
 
@@ -853,6 +901,75 @@ mod tests {
     use super::*;
 
     const REACHES: f32 = 20.0;
+
+    /// Spec 0068: a roof reads as shingle rather than as planks.
+    ///
+    /// **Which is a look, so this holds the two things under it.** A
+    /// course in one piece has no vertical joint anywhere in it, and that
+    /// is a sawn board however many you stack; joints that line up course
+    /// to course are a seam running up the pitch. Jake, 2026-11-13: make
+    /// the village roofs read as shingle, not planks.
+    #[test]
+    fn a_course_is_shingles_and_their_joints_are_staggered() {
+        for one in built(REACHES) {
+            for pitch in [-1.0f32, 1.0] {
+                // the joints of one course, which is the set of pieces
+                // sharing a place on the slope
+                let mut courses: Vec<(f32, Vec<f32>)> = Vec::new();
+
+                for (at, size, lean, _) in shingling(&one) {
+                    if (lean < 0.0) != (pitch > 0.0) {
+                        continue;
+                    }
+
+                    // back out the joint lines the gap was cut from
+                    let half = (size.z + SHINGLE_GAP) * 0.5;
+
+                    match courses.iter_mut().find(|(up, _)| (up - at.y).abs() < 1e-3) {
+                        Some((_, joints)) => joints.extend([at.z - half, at.z + half]),
+                        None => courses.push((at.y, vec![at.z - half, at.z + half])),
+                    }
+                }
+
+                // and the two gable lines, which every course shares and
+                // which are the roof's edge rather than a joint in it
+                let gables = courses
+                    .iter()
+                    .fold((f32::MAX, f32::MIN), |(lo, hi), (_, j)| {
+                        (
+                            j.iter().fold(lo, |lo: f32, one| lo.min(*one)),
+                            j.iter().fold(hi, |hi: f32, one| hi.max(*one)),
+                        )
+                    });
+                let inside = |z: &f32| {
+                    (z - gables.0).abs() > SHINGLE_GAP && (z - gables.1).abs() > SHINGLE_GAP
+                };
+
+                courses.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+                for (_, joints) in courses.iter() {
+                    assert!(
+                        joints.len() > 2,
+                        "a course of a {:.1} by {:.1} roof is one piece across the whole of it",
+                        one.wide,
+                        one.long
+                    );
+                }
+
+                for pair in courses.windows(2) {
+                    for over in pair[1].1.iter().filter(|z| inside(z)) {
+                        for under in pair[0].1.iter().filter(|z| inside(z)) {
+                            assert!(
+                                (over - under).abs() > SHINGLE_GAP,
+                                "a joint at {:.3} sits on the one in the course below",
+                                over
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /// Spec 0068: a course lies on the face of its pitch, not inside it.
     ///

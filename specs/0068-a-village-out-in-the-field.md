@@ -54,9 +54,15 @@ single plank seven metres long. What makes sawn boards read is the shadow
 line between one and the next, and a shadow line wants an edge.
 
 - **The cabins are boarded**, horizontal courses standing `BOARD_OUT` proud.
-- **The roofs are shingled**, courses laid from the eaves up, each lapping the
-  one below, with a ridge board over the join. Two flat slabs leaning together
-  is a roof nobody has been on.
+- **The roofs are shingled**, courses laid from the eaves up, each standing
+  `SHINGLE_OUT` off the face of the pitch, with a ridge board over the join.
+  Two flat slabs leaning together is a roof nobody has been on.
+- **And a course is shingles rather than one band.** It ran the whole length
+  of the building at first, gable to gable with no vertical joint anywhere in
+  it, which is what a sawn board looks like however many of them you stack.
+  Jake, 2026-11-13: make the village roofs read as shingle, not planks. They
+  are `SHINGLE_WIDE` across now, with every other course stepped half a
+  shingle along so the joints never stack into a seam running up the pitch.
 - **The street has ruts**, at a wagon's own wheel spacing, in pieces that
   wander: a pair of straight lines is road markings, and what a wheel does is
   follow the last wheel without following it exactly.
@@ -88,6 +94,8 @@ Spec 0067's rounds, over this geography. What Jake named, one errand each:
 - Nobody on a round walks through anything. — `village::tests::nobody_walks_through_anything`
 - No tree grows inside it. — `village::tests::nothing_is_sown_in_the_village`
 - It is clear of the bridge and of the garden. — `village::tests::it_stands_clear_of_everything_else`
+- A course lies on the face of its pitch rather than inside it. — `village::tests::every_course_stands_proud_of_its_pitch`
+- A course is shingles and their joints are staggered. — `village::tests::a_course_is_shingles_and_their_joints_are_staggered`
 - The street matches its reference. — `tests::the_village_is_drawn`
 - The common and its cook fire match theirs. — `tests::the_village_common_is_drawn`
 - And the horses at the rail. — `tests::the_village_horses_are_drawn`
