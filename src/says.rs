@@ -1,12 +1,17 @@
 //! What the building says, in the words it says it in.
 //!
 //! **One file, because the signature is a hash of a file.** Every string
-//! drafted for somebody to read carries `` until Jake takes
-//! it out, and `sign-copy` takes it out by showing him the words and
-//! writing the file's hash into `.copy-signed`. That works on a file
-//! whose contents are the copy. Pointed at `src/bridge.rs` it would
-//! make him re-approve the Bifröst inscription every time somebody
-//! moved a vertex in the same file, which is the opposite of easy.
+//! drafted for somebody to read carries a marker until Jake takes it out,
+//! and `sign-copy` takes it out by showing him the words and writing the
+//! file's hash into `.copy-signed`. That works on a file whose contents
+//! are the copy. Pointed at `src/bridge.rs` it would make him re-approve
+//! the Bifröst inscription every time somebody moved a vertex in the same
+//! file, which is the opposite of easy.
+//!
+//! The marker is written above the strings below and nowhere in this
+//! prose, because `sign-copy` strikes the token off whatever line it finds
+//! it on. A sentence that quotes it comes back with a hole in it, which is
+//! what the sentence above had.
 //!
 //! So drafted copy is written here and read from here. The hash moves
 //! when the words move and at no other time.
@@ -53,7 +58,6 @@ pub const WATCHMAN_LETS_YOU_BY: &str =
 /// more, and `tests::the_help_names_every_option_the_arcade_takes` holds
 /// this list against the one the code actually reads.
 pub const OPTIONS: &str = "\
-[COPY - Jake]
 The arcade takes these of its own:
 
   --done                   every question on the trail already answered, so
