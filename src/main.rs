@@ -32,6 +32,7 @@ mod noise;
 mod orrery;
 mod parked;
 mod people;
+mod roofing;
 mod room;
 mod says;
 mod sign;

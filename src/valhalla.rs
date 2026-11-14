@@ -350,6 +350,14 @@ pub const TURF_COURSE: f32 = 0.62;
 pub const TURF_GAP: f32 = 0.07;
 pub const TURF_OUT: f32 = 0.12;
 
+/// And how wide one sod is across the roof.
+///
+/// **Because a course in one piece is a plank**, which is what the village's
+/// roofs were and what `roofing::coursed` is for. Wider than a shingle and a
+/// little wider than a course is deep, because sod is cut with a spade and
+/// carried by hand where a shingle is split off a block.
+pub const TURF_WIDE: f32 = 0.78;
+
 /// The courses on one roof: where each sits, how big, its lean and its tone.
 pub fn turfing(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
     let run = slope_run(one);
@@ -370,15 +378,22 @@ pub fn turfing(one: &Built) -> Vec<(Vec3, Vec3, f32, f32)> {
             // the pitch's face rather than inside it
             let deep = (PITCH_DEEP + TURF_OUT) * 0.5;
             let up = vec3(side * slope.sin() * deep, slope.cos() * deep, 0.0);
-            let seed = along * 17.0 + side * 3.0 + one.at.z * 0.9;
-            let tone = 1.0 + (seed * 2.1).sin() * 0.1 + (seed * 0.61).sin() * 0.07;
+            // **Across the roof in sods, not in one band**, which is the
+            // same cutting the village's shingles get.
+            let long = over * 2.0 - 0.04;
 
-            out.push((
-                vec3(on.x + up.x, on.y + up.y, one.at.z),
-                vec3(run / courses as f32 - TURF_GAP, TURF_OUT, over * 2.0 - 0.04),
-                -side * slope,
-                tone,
-            ));
+            for (at_z, wide) in crate::roofing::coursed(long, TURF_WIDE, TURF_GAP, course) {
+                let at_z = one.at.z + at_z;
+                let seed = along * 17.0 + side * 3.0 + at_z * 1.3;
+                let tone = 1.0 + (seed * 2.1).sin() * 0.1 + (seed * 0.61).sin() * 0.07;
+
+                out.push((
+                    vec3(on.x + up.x, on.y + up.y, at_z),
+                    vec3(run / courses as f32 - TURF_GAP, TURF_OUT, wide),
+                    -side * slope,
+                    tone,
+                ));
+            }
         }
     }
 
@@ -1392,6 +1407,56 @@ mod tests {
     use crate::trail::Asked;
 
     const REACHES: f32 = 20.0;
+
+    /// Spec 0068: a roof is pieces, and two courses do not line up.
+    ///
+    /// **Which is a look, so this holds the two things under it.** A course
+    /// in one piece has no vertical joint anywhere in it, and that is a
+    /// sawn board however many you stack; courses that line up are a seam
+    /// running up the pitch. Jake, 2026-11-13: make the village roofs read
+    /// as shingle, not planks.
+    ///
+    /// Where the pieces fall is `roofing::coursed`'s own business and its
+    /// own tests. What this holds is that `turfing` asks for them and hands
+    /// it the course it is on.
+    #[test]
+    fn a_roof_is_pieces_and_two_courses_do_not_line_up() {
+        for one in built(REACHES) {
+            // one pitch of it, since both carry the same courses at the
+            // same heights and merging them says nothing
+            let mut courses: Vec<(f32, Vec<f32>)> = Vec::new();
+
+            for (at, _, _, _) in turfing(&one).into_iter().filter(|one| one.2 < 0.0) {
+                match courses.iter_mut().find(|(up, _)| (up - at.y).abs() < 1e-3) {
+                    Some((_, along)) => along.push(at.z),
+                    None => courses.push((at.y, vec![at.z])),
+                }
+            }
+
+            courses.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+            for (_, along) in courses.iter() {
+                assert!(
+                    along.len() > 1,
+                    "a course of a {:.1} by {:.1} roof is one piece across the whole of it",
+                    one.wide,
+                    one.long
+                );
+            }
+
+            for pair in courses.windows(2) {
+                assert!(
+                    pair[0].1.len() != pair[1].1.len()
+                        || pair[0]
+                            .1
+                            .iter()
+                            .zip(pair[1].1.iter())
+                            .any(|(under, over)| (under - over).abs() > 1e-3),
+                    "two courses next to each other have their pieces in the same places"
+                );
+            }
+        }
+    }
 
     /// Spec 0068: a course lies on the face of its pitch, not inside it.
     ///
