@@ -41,3 +41,40 @@ pub const BIFROST: &str = "BIFROST";
 /// four and wrote this one in its place.
 pub const WATCHMAN_LETS_YOU_BY: &str =
     "I have stood at this gate since the beginning of time. You may go on through.";
+
+/// What `--help` says about the arcade's own options, above the engine's.
+///
+/// **One block with one marker on a line of its own**, which is the form
+/// that leaves nothing behind when `sign-copy` takes the marker out. A
+/// marker per line would sign off into eight stray gaps.
+///
+/// Spec 0069: every one of these was an environment variable until Jake
+/// said the arguments seem to belong in different places. They do not any
+/// more, and `tests::the_help_names_every_option_the_arcade_takes` holds
+/// this list against the one the code actually reads.
+pub const OPTIONS: &str = "\
+[COPY - Jake]
+The arcade takes these of its own:
+
+  --done                   every question on the trail already answered, so
+                           the bridge and the hall at the top of it are there
+  --pose <seven numbers>   stand here, at this moment, rather than at the
+                           door in the afternoon: the line the plate prints
+                           under M, with or without commas
+  --where                  print where you are standing, twice a second, on
+                           stderr
+  --at <0 to 1>            what time it is when the run starts: nought dawn,
+                           a quarter noon, a half dusk
+  --day <seconds>          how long a day lasts
+  --sky <name>             hold the weather: clear, fair, overcast or storm
+  --fly                    fly rather than walk
+  --open-case              hold the hall of mirrors' bookcase open
+  --dump-mirrors           write every mirror's view into /tmp, once
+  --screenshot [<name>]    take the poster, or one of the others by name
+  --screenshots            print the pictures and their files, and stop
+  --walk <route>           walk a written route with no window, and fail if
+                           it no longer goes where it says
+  --tour <x,y,z>           work a route out to a place, and print it
+  --film <clip>            film a clip
+
+";

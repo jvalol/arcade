@@ -1459,12 +1459,12 @@ impl Room {
 
         // the hall of mirrors' pair, at the same pace: it is the same four
         // hundred books on the same hinges
-        // `OPENCASE` holds the hall of mirrors' bookcase open from the
-        // first frame, next to `POSE` and `DUMP`. Everything behind it is
+        // `--open-case` holds the hall of mirrors' bookcase open from the
+        // first frame, next to `--pose` and `--dump-mirrors`. Everything behind it is
         // reachable only by pulling the book, so a posed camera arrives in
         // a corridor with a wall where its way through should be, and four
         // different faults were chased this way before anybody noticed.
-        let to = if self.mirror_open || std::env::var("OPENCASE").is_ok() {
+        let to = if self.mirror_open || blitzkit::asked_for("--open-case") {
             1.0
         } else {
             0.0

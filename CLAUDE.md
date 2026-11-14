@@ -22,10 +22,19 @@ Or `./check-all` from `blitzkit-project`, which runs that for every crate and
 then checks the copy markers, the spec citations and the listings.
 
 ```
-WHERE=1 cargo run --release 2> /tmp/arcade.log
+cargo run --release -- --help
 ```
 
-`WHERE=1` prints where you are standing, twice a second, with the room the
+Every option this building takes is a flag and that prints the list, its own
+first and the engine's under it. Spec 0069: they were half environment
+variables and half flags until Jake said the arguments seem to belong in
+different places. `--name value` and `--name=value` are both read.
+
+```
+cargo run --release -- --where 2> /tmp/arcade.log
+```
+
+`--where` prints where you are standing, twice a second, with the room the
 building thinks you are in. It is for the slow half of fixing what somebody
 can see: a fault here arrives as a picture, and a picture has to be matched to
 a camera before anything can be measured. Stand in the thing, read the last

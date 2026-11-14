@@ -1099,7 +1099,7 @@ mod tests {
     /// shot of it.
     ///
     /// Found by walking the building rather than by a picture from Jake: the
-    /// `WHERE` log said Hall while the screen showed the columns.
+    /// `--where` log said Hall while the screen showed the columns.
     #[test]
     fn the_space_behind_the_wall_is_its_own_room() {
         let reaches = 9.0;

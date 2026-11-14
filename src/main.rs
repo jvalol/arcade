@@ -258,7 +258,7 @@ struct Filming {
 /// the shell script that films it would be a second account of every one of
 /// them. `tour::clip` reads the owners.
 fn filmed(room: &room::Room) -> Option<Result<Vec<tour::Step>, String>> {
-    let given = std::env::args().find_map(|arg| arg.strip_prefix("--film=").map(str::to_owned))?;
+    let given = blitzkit::one_argument("--film")?;
 
     Some(if given == "clip" {
         Ok(tour::clip(room, done_already()))
@@ -268,7 +268,10 @@ fn filmed(room: &room::Room) -> Option<Result<Vec<tour::Step>, String>> {
 }
 
 fn staged() -> bool {
-    std::env::args().any(|arg| arg.starts_with("--screenshot"))
+    // **The bare flag or the named one.** `--screenshot` on its own carries
+    // nothing, so `one_argument` has nothing to find; the name is the other
+    // half. Spec 0069.
+    blitzkit::asked_for("--screenshot") || staged_as().is_some()
 }
 
 /// Whether this run starts with the building already done. `--done`.
@@ -279,9 +282,9 @@ fn staged() -> bool {
 /// This fills the trail at the door so you can walk out of the garden and
 /// see it.
 ///
-/// A flag and not an `FLY`-style variable because Jake asked for one, and
-/// because this is the one of these tools you reach for to look at
-/// something finished rather than to hunt a fault.
+/// The first of these to be a flag rather than a variable, because Jake
+/// asked for one, and the shape every other one took in the end: spec 0069
+/// moved the rest over.
 ///
 /// **It does not say the trail exists to anybody who has not been told.**
 /// Spec 0036 is plain that somebody who never finds the trail must not be
@@ -293,13 +296,13 @@ fn staged() -> bool {
 /// which comes to read the trail sees one consistent account of a building
 /// that has been done.
 fn done_already() -> bool {
-    std::env::args().any(|arg| arg == "--done")
+    blitzkit::asked_for("--done")
 }
 
-/// Whether this run flies rather than walks. `FLY=1`.
+/// Whether this run flies rather than walks. `--fly`.
 ///
 /// **Because the slow part of finding a fault in this building is getting to
-/// where you can see it.** `WHERE` solved the other half of that, which is
+/// where you can see it.** `--where` solved the other half of that, which is
 /// matching a picture to a camera; this is the half where the place you need
 /// to stand is the roof, or the air fifteen metres west of a wall, or inside
 /// a room you cannot walk into. Everything the outside of this building
@@ -322,10 +325,10 @@ fn done_already() -> bool {
 /// at the outside of a building that draws no ground and no sky the moment
 /// you leave the grass is not a tool.
 fn flying() -> bool {
-    std::env::var("FLY").is_ok()
+    blitzkit::asked_for("--fly")
 }
 
-/// How long a day lasts this run, in seconds. `DAY=120`.
+/// How long a day lasts this run, in seconds. `--day 120`.
 ///
 /// **Because a film is not a session.** `garden::DAY` is twenty seconds, set
 /// there so the sky can be watched while it is being worked on. The clip of
@@ -333,13 +336,12 @@ fn flying() -> bool {
 /// three days: every shot gets whichever sky its second falls on, and
 /// staging anything by the clock means pinning a number that every edit to
 /// the route re-rolls. So a film gets `tour::FILM_DAY` and sits inside one
-/// evening, and `DAY=` is here for the same job by hand.
+/// evening, and `--day` is here for the same job by hand.
 ///
 /// Said once, before the first frame, because `garden::runs_for` takes the
 /// first answer and keeps it.
 fn how_long_a_day_is() -> f32 {
-    std::env::var("DAY")
-        .ok()
+    blitzkit::one_argument("--day")
         .and_then(|said| said.trim().parse().ok())
         .unwrap_or(if filming() {
             tour::FILM_DAY
@@ -350,14 +352,14 @@ fn how_long_a_day_is() -> f32 {
 
 /// Whether this run is the clip being filmed.
 fn filming() -> bool {
-    std::env::args().any(|arg| arg.starts_with("--film="))
+    blitzkit::one_argument("--film").is_some()
 }
 
 /// What time it is when this run starts, as a share of a day: nought is
 /// dawn, a quarter noon, a half dusk, three quarters midnight.
-/// `AT=0.8`.
+/// `--at 0.8`.
 ///
-/// **The third of the set, after `FLY` and `POSE`.** Those two get the
+/// **The third of the set, after `--fly` and `--pose`.** Those two get the
 /// camera to the thing; this one gets the thing to the hour it is worth
 /// looking at. A day here is `garden::DAY` and a run begins at 0.4,
 /// mid-afternoon, so photographing anything the night does means sitting
@@ -366,7 +368,7 @@ fn filming() -> bool {
 /// this. It was eight minutes of sitting when a day was twenty; it is
 /// forty seconds now.
 fn starting_hour() -> Option<f32> {
-    let said = std::env::var("AT").ok();
+    let said = blitzkit::one_argument("--at");
 
     match said {
         Some(said) => said.trim().parse().ok().map(garden::when),
@@ -377,14 +379,14 @@ fn starting_hour() -> Option<f32> {
 }
 
 /// Where to stand this run, and when, instead of at the door in the
-/// afternoon. `POSE=x,y,z,eye,yaw,pitch,since`, which is the line the plate
+/// afternoon. `--pose x,y,z,eye,yaw,pitch,since`, which is the line the plate
 /// prints under M with commas for the gaps, or with the gaps left as they
 /// are.
 ///
-/// It sets the clock as well, so it outranks `AT`. That one stays for when
+/// It sets the clock as well, so it outranks `--at`. That one stays for when
 /// the hour is all you want.
 ///
-/// **The other half of `WHERE`.** That one answers where the camera was
+/// **The other half of `--where`.** That one answers where the camera was
 /// when you saw something; this one puts the camera back there. Together
 /// they are one round trip instead of six, which is the whole of what the
 /// walking skill is for.
@@ -396,7 +398,7 @@ fn starting_hour() -> Option<f32> {
 /// scaffolding did not survive needed running every time. A tool you write
 /// by hand that often is a tool.
 ///
-/// `FLY` is the neighbour of this and the two are usually wanted together:
+/// `--fly` is the neighbour of this and the two are usually wanted together:
 /// that one takes gravity and the floor away, and this one saves the
 /// flight.
 ///
@@ -404,7 +406,7 @@ fn starting_hour() -> Option<f32> {
 /// door, which is what it is for, and this is read once on the first frame
 /// rather than fought with.
 fn posed_at() -> Option<Pose> {
-    read_pose(&std::env::var("POSE").ok()?)
+    read_pose(&blitzkit::one_argument("--pose")?)
 }
 
 /// Everything a frame of this building needs to be stood up again.
@@ -536,10 +538,10 @@ fn staged_in_the_tesseract() -> bool {
 /// Which shot was asked for, if the argument named one.
 ///
 /// `--screenshot` on its own is the one that lands in `media/screenshot.png`.
-/// `--screenshot=<slug>` is one of the bodies in `beyond::SHOWN`, by the slug
-/// `beyond::slugged` gives it, and `--screenshot=hall` is the hall's own pose.
+/// `--screenshot <slug>` is one of the bodies in `beyond::SHOWN`, by the slug
+/// `beyond::slugged` gives it, and `--screenshot hall` is the hall's own pose.
 fn staged_as() -> Option<String> {
-    std::env::args().find_map(|arg| arg.strip_prefix("--screenshot=").map(str::to_owned))
+    blitzkit::one_argument("--screenshot")
 }
 
 /// Every shot this game can stage, as the argument to ask for it by and the
@@ -6861,21 +6863,27 @@ fn art_of(name: &str) -> Option<TextureData> {
 }
 
 impl Game for Arcade {
+    /// Spec 0069: this building's own options, which `--help` prints above
+    /// the engine's.
+    fn options(&self) -> &'static str {
+        says::OPTIONS
+    }
+
     /// Takes the cursor so the mouse can look, and gives it back when the
     /// window loses focus or a game is started in front of this one.
     ///
     /// Declared and never done at first, so `locked` stayed false and every
     /// mouse motion was dropped before it reached the camera.
     fn before_frame(&mut self, renderer: &mut Renderer) {
-        // **`DUMP` writes every mirror's targets out as pictures, once.**
-        // The same kind of tool as `WHERE` and `POSE`: a thing the game can
+        // **`--dump-mirrors` writes every mirror's targets out as pictures,
+        // once.** The same kind of tool as `--where` and `--pose`: a thing the game can
         // be asked for rather than a thing somebody has to add again. Engine
         // spec 0090's `target_picture`, which exists because a night was
         // spent reading targets through posters and getting it wrong.
         //
         // After a couple of seconds, so the room is built and the targets
         // hold a frame rather than their clear.
-        if std::env::var("DUMP").is_ok() && self.since > 2.0 && !self.dumped {
+        if blitzkit::asked_for("--dump-mirrors") && self.since > 2.0 && !self.dumped {
             self.dumped = true;
 
             for (n, pair) in self.glass_targets.iter().enumerate() {
@@ -7844,7 +7852,7 @@ impl Game for Arcade {
         // follower was caught crossing the imaginarium's aperture and
         // crossing straight back: in the log that is the number flipping
         // twice a second while the body paces the same four metres.
-        if std::env::var("WHERE").is_ok() {
+        if blitzkit::asked_for("--where") {
             self.said += dt;
             if self.said >= 0.5 {
                 self.said = 0.0;
@@ -12704,9 +12712,7 @@ fn main() {
     // place and that place is the game
     // and walked rather than told, for the same reason: the rule about which
     // arrows are yours lives in this binary, so the check does too
-    if let Some(route) =
-        std::env::args().find_map(|arg| arg.strip_prefix("--walk=").map(str::to_owned))
-    {
+    if let Some(route) = blitzkit::one_argument("--walk") {
         if !walked(&route) {
             std::process::exit(1);
         }
@@ -12718,9 +12724,7 @@ fn main() {
     // of `--walk`, and the opposite question. That one asks whether a
     // written route still goes where it says; this one is handed a place
     // and works the route out, which is the whole point of the spec.
-    if let Some(where_) =
-        std::env::args().find_map(|arg| arg.strip_prefix("--tour=").map(str::to_owned))
-    {
+    if let Some(where_) = blitzkit::one_argument("--tour") {
         if !toured(&where_) {
             std::process::exit(1);
         }
@@ -12746,7 +12750,7 @@ fn main() {
         }
     }
 
-    if std::env::args().any(|arg| arg == "--screenshots") {
+    if blitzkit::asked_for("--screenshots") {
         for (name, file) in shots() {
             println!("{}\t{}", name, file);
         }
@@ -15339,6 +15343,79 @@ mod tests {
                 Some(since),
             ),
         );
+    }
+
+    /// Spec 0069: every option the arcade reads is named in its help.
+    ///
+    /// **Because a help text is a second list of the first list.** The
+    /// whole of the spec is that there is one place to look, and a help
+    /// text that has fallen behind the parser is worse than none: it says
+    /// the list is complete and it is not.
+    ///
+    /// Read off the disk rather than written down again here, so a flag
+    /// added in a file nobody thought of is still found, and only the half
+    /// of each file that runs: an argument a test reads is not an argument
+    /// the game takes.
+    #[test]
+    fn the_help_names_every_option_the_arcade_takes() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut found: Vec<String> = Vec::new();
+        let mut files = 0usize;
+        let mut look = vec![src];
+
+        while let Some(at) = look.pop() {
+            for one in std::fs::read_dir(&at).expect("src") {
+                let one = one.expect("an entry").path();
+
+                if one.is_dir() {
+                    look.push(one);
+
+                    continue;
+                }
+                if one.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+
+                files += 1;
+
+                let whole = std::fs::read_to_string(&one).expect("a source file");
+                let running = match whole.find("\n#[cfg(test)]\nmod tests {") {
+                    Some(end) => whole[..end].to_string(),
+                    None => whole,
+                };
+
+                for call in ["one_argument(\"", "asked_for(\""] {
+                    let mut rest = running.as_str();
+
+                    while let Some(at) = rest.find(call) {
+                        rest = &rest[at + call.len()..];
+
+                        if let Some(end) = rest.find('"') {
+                            let flag = rest[..end].to_string();
+
+                            if flag.starts_with("--") && !found.contains(&flag) {
+                                found.push(flag);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(files > 20, "only read {} source files", files);
+        assert!(
+            found.len() > 10,
+            "found only {} options, so the reading is wrong",
+            found.len()
+        );
+
+        for flag in found {
+            assert!(
+                says::OPTIONS.contains(&flag),
+                "the arcade reads {} and --help does not name it",
+                flag
+            );
+        }
     }
 
     /// Spec 0027: the baths, from the corner by the tub, down the pool.

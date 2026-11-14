@@ -436,9 +436,9 @@ pub fn runs_for(seconds: f32) {
 
 static RUNS_FOR: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
 
-/// What `SKY=` names, if it names one of `SKIES`.
+/// What `--sky` names, if it names one of `SKIES`.
 fn pinned_sky() -> Option<usize> {
-    let said = std::env::var("SKY").ok()?;
+    let said = blitzkit::one_argument("--sky")?;
     let said = said.trim().to_lowercase();
 
     SKIES.iter().position(|sky| sky.name == said)
@@ -460,7 +460,7 @@ pub fn hour(since: f32) -> f32 {
 ///
 /// Nothing that runs used to want it: the game asks what the light is
 /// doing, which is `sunlit` and its neighbours, rather than what time it
-/// is. `AT` wants it, because the one place the hour itself is the
+/// is. `--at` wants it, because the one place the hour itself is the
 /// question is in setting the clock before a picture.
 pub fn when(hour: f32) -> f32 {
     (hour - OPENS_AT).rem_euclid(1.0) * day()
@@ -922,7 +922,7 @@ pub fn smoothstep(low: f32, high: f32, x: f32) -> f32 {
 /// over one field rather than four fields.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Weather {
-    /// What to call it, for `SKY=` and for a failing test's message.
+    /// What to call it, for `--sky` and for a failing test's message.
     pub name: &'static str,
     /// How much of the dome is cloud, nought to one.
     ///
@@ -1071,7 +1071,7 @@ pub fn nightfall(since: f32) -> i32 {
 /// Rolled per day and not carried over: clear can follow storm, which real
 /// weather does not do and nothing here is asking for a model of.
 ///
-/// `SKY` pins one by name, for looking at a particular sky without waiting
+/// `--sky` pins one by name, for looking at a particular sky without waiting
 /// for it to come round.
 /// How much of a day the sky takes to turn, as a share of one. Spec 0066.
 ///
@@ -1089,7 +1089,7 @@ pub const TURNS_OVER: f32 = 0.12;
 /// How far through its turn the sky is: nought while a weather holds, one
 /// once the next has fully arrived.
 ///
-/// Straight to one under `SKY=`, which pins a weather: a pinned sky has
+/// Straight to one under `--sky`, which pins a weather: a pinned sky has
 /// nothing to turn from.
 pub fn turning(since: f32) -> f32 {
     if PINNED.get_or_init(pinned_sky).is_some() {
@@ -1152,7 +1152,7 @@ pub fn weather(since: f32) -> &'static Weather {
 pub fn which_sky(since: f32) -> usize {
     // read once rather than once a frame. This is asked several times a
     // frame, by the backdrop, by the sun and by every strike within two
-    // slots, and `env::var` allocates on each of them.
+    // slots, and reading the command line allocates on each of them.
     if let Some(pinned) = PINNED.get_or_init(pinned_sky) {
         return *pinned;
     }
